@@ -1,0 +1,574 @@
+import type { ShapeItem } from "./shapes";
+
+export type OptionKey = string;
+
+export type EditorScope = "slide" | "selected" | "all";
+
+export interface QuizOption {
+  key: OptionKey;
+  text: string;
+}
+
+export interface SlideData {
+  id: string;
+  number: string;
+  question: string;
+  options: QuizOption[];
+  answer: OptionKey | null;
+  /** per slide override of the deck badge, empty = use deck badge */
+  badge?: string;
+  /** optional small note shown at the bottom of the board */
+  note?: string;
+  /** manual font scale for this slide only */
+  scale: number;
+  showAnswer: boolean;
+  /** shapes & text boxes drawn on this slide only */
+  shapes?: ShapeItem[];
+  /** per-slide background override (undefined = use the deck background) */
+  background?: BackgroundSettings;
+  /** Per-slide visual overrides. Unset fields continue to follow the deck. */
+  themeOverride?: Partial<ThemeSettings>;
+  /** Per-slide header/title overrides. */
+  headerOverride?: Partial<DeckHeader>;
+}
+
+export type OptionsLayout = "right" | "left" | "two-col" | "grid";
+
+/** Every movable element on the board. */
+export type ElementId =
+  | "logo" | "brand" | "title" | "badge" | "bullet" | "question" | "options" | "note";
+
+/** Per-box typeface override. Empty fields fall back to the deck fonts. */
+export interface BoxTypeface {
+  family?: string;
+  script?: "bangla" | "latin" | "arabic";
+  weight?: number;
+  italic?: boolean;
+  uppercase?: boolean | "inherit";
+  letterSpacing?: number;
+  /** size multiplier on top of the box's default (1 = unchanged) */
+  scale?: number;
+}
+
+export type BoxFonts = Partial<Record<ElementId, BoxTypeface>>;
+
+/**
+ * Position is stored as an *alignment fraction* (like background-position):
+ * x = 0 → flush to the left edge, 50 → centred, 100 → flush right.
+ * The same applies to y from top to bottom, so an element can never be
+ * dragged outside the board.
+ */
+export interface Box {
+  x: number;
+  y: number;
+  /** width as a percentage of the board */
+  w: number;
+  align: "left" | "center" | "right";
+  /**
+   * "align" → x/y are alignment fractions (0 = flush left/top … 100 = flush right/bottom)
+   * "free"  → x/y are the element's own left/top edge in % of the board; may go
+   *           past the edges (‑50 … 150), can have a fixed height and rotation.
+   */
+  mode?: "align" | "free";
+  /** fixed height in % of the board (free mode only, undefined = auto) */
+  h?: number;
+  /** rotation in degrees */
+  rot?: number;
+  /** stacking order */
+  z?: number;
+}
+
+export const FREE_MIN = -50;
+export const FREE_MAX = 150;
+
+export type LayoutMap = Record<ElementId, Box>;
+
+export const ELEMENT_LABELS: Record<ElementId, string> = {
+  logo: "Logo",
+  brand: "Brand text",
+  title: "Title",
+  badge: "Badge",
+  bullet: "Number bullet",
+  question: "Question",
+  options: "Options",
+  note: "Footnote",
+};
+
+export const DEFAULT_LAYOUT: LayoutMap = {
+  logo: { x: 1, y: 3, w: 6.5, align: "left" },
+  brand: { x: 9.5, y: 4, w: 21, align: "left" },
+  title: { x: 50, y: 3, w: 57, align: "center" },
+  badge: { x: 99, y: 5, w: 27, align: "right" },
+  bullet: { x: 3.5, y: 21, w: 5, align: "center" },
+  question: { x: 8.5, y: 18, w: 90, align: "left" },
+  options: { x: 88, y: 72, w: 42, align: "left" },
+  note: { x: 2, y: 97, w: 60, align: "left" },
+};
+
+export const cloneLayout = (l: LayoutMap = DEFAULT_LAYOUT): LayoutMap =>
+  Object.fromEntries(Object.entries(l).map(([k, v]) => [k, { ...v }])) as LayoutMap;
+
+/* ------------------------------------------------------------ banner */
+
+export type BannerShape = "glow" | "pill" | "rect" | "rounded" | "ribbon" | "underline" | "none";
+
+export interface GradientStop {
+  color: string;
+  /** 0–100 */
+  at: number;
+}
+
+export interface Gradient {
+  enabled: boolean;
+  type: "linear" | "radial";
+  /** degrees, linear only */
+  angle: number;
+  stops: GradientStop[];
+}
+
+export interface BannerSettings {
+  shape: BannerShape;
+  /** solid colour (used when gradient is disabled) */
+  color: string;
+  gradient: Gradient;
+  /** 0–1 */
+  opacity: number;
+  /** soft edge / blur strength 0–100 (glow shape) */
+  glow: number;
+  /** extra glow halo around the banner (any shape) 0–100 */
+  halo: number;
+  /** horizontal & vertical padding around the title text, in % of the title box */
+  padX: number;
+  padY: number;
+  /** corner radius for rounded / rect shapes, px */
+  radius: number;
+  border: { enabled: boolean; color: string; width: number };
+  /** title text: solid colour or gradient */
+  textGradient: Gradient;
+  /** text glow */
+  textGlow: number;
+  textShadow: boolean;
+  /** subtle animated shimmer in presenter mode (not exported) */
+  shimmer: boolean;
+}
+
+export const DEFAULT_BANNER: BannerSettings = {
+  shape: "glow",
+  color: "#1f5fd0",
+  gradient: {
+    enabled: false,
+    type: "linear",
+    angle: 90,
+    stops: [
+      { color: "#1f5fd0", at: 0 },
+      { color: "#5b8cff", at: 100 },
+    ],
+  },
+  opacity: 1,
+  glow: 65,
+  halo: 0,
+  padX: 6,
+  padY: 26,
+  radius: 18,
+  border: { enabled: false, color: "#ffd633", width: 2 },
+  textGradient: {
+    enabled: false,
+    type: "linear",
+    angle: 180,
+    stops: [
+      { color: "#fff2a8", at: 0 },
+      { color: "#ffb800", at: 100 },
+    ],
+  },
+  textGlow: 25,
+  textShadow: true,
+  shimmer: false,
+};
+
+export const cloneBanner = (b: BannerSettings = DEFAULT_BANNER): BannerSettings =>
+  JSON.parse(JSON.stringify(b)) as BannerSettings;
+
+/* ---------------------------------------------------------- background */
+
+export interface BackgroundSettings {
+  /** data-URL or http(s) URL; "" = no image */
+  src: string;
+  fit: "cover" | "contain" | "stretch" | "tile";
+  /** focal point in %, used with cover/contain */
+  posX: number;
+  posY: number;
+  /** 0–1 */
+  opacity: number;
+  /** px */
+  blur: number;
+  /** 0–100 extra zoom when fit = cover */
+  zoom: number;
+  flipH: boolean;
+  /** colour overlay / tint */
+  overlay: { enabled: boolean; color: string; opacity: number };
+  /** optional gradient beneath / instead of the image */
+  gradient: Gradient;
+  /** darken the board edges for legibility */
+  vignette: number;
+}
+
+export const DEFAULT_BACKGROUND: BackgroundSettings = {
+  src: "",
+  fit: "cover",
+  posX: 50,
+  posY: 50,
+  opacity: 1,
+  blur: 0,
+  zoom: 0,
+  flipH: false,
+  overlay: { enabled: false, color: "#000000", opacity: 0.35 },
+  gradient: {
+    enabled: false,
+    type: "linear",
+    angle: 180,
+    stops: [
+      { color: "#0b1226", at: 0 },
+      { color: "#050507", at: 100 },
+    ],
+  },
+  vignette: 0,
+};
+
+export const cloneBackground = (b: BackgroundSettings = DEFAULT_BACKGROUND): BackgroundSettings =>
+  JSON.parse(JSON.stringify(b)) as BackgroundSettings;
+
+/* ------------------------------------------------------------- frame ---- */
+
+export type FrameStyleId =
+  | "wood"
+  | "mahogany"
+  | "walnut"
+  | "ebony"
+  | "gold"
+  | "silver"
+  | "bronze"
+  | "copper"
+  | "baroque"
+  | "neon"
+  | "neonMagenta"
+  | "neonGreen"
+  | "cyberpunk"
+  | "solid"
+  | "gradient"
+  | "glass"
+  | "carbon"
+  | "double"
+  | "triple"
+  | "dashed"
+  | "dotted"
+  | "chalk"
+  | "groove"
+  | "ridge"
+  | "oak"
+  | "bamboo"
+  | "marble"
+  | "obsidian"
+  | "pearl"
+  | "ruby"
+  | "emerald"
+  | "sapphire"
+  | "leather"
+  | "velvet"
+  | "cinema"
+  | "polaroid"
+  | "comic"
+  | "pixel"
+  | "mosaic"
+  | "rainbow"
+  | "ice"
+  | "lava"
+  | "paper"
+  | "vintage"
+  | "artDeco"
+  | "celtic"
+  | "orichalcum"
+  | "hologram"
+  | "thin"
+  | "none";
+
+export interface FrameSettings {
+  /** rendering style of the frame */
+  style: FrameStyleId;
+  /** primary frame colour (wood/solid base) */
+  color: string;
+  /** optional two-stop gradient used by the "gradient" style */
+  gradient: { enabled: boolean; angle: number; from: string; to: string };
+  /** frame thickness in slide px */
+  width: number;
+  /** corner radius in px */
+  radius: number;
+  /** inner shadow / neon glow */
+  shadow: boolean;
+  /** overlay frame image url (photo or svg) */
+  image?: string;
+  /** inner opening as % of the slide (photo frames) */
+  imageInset?: number;
+  /**
+   * "fit" (default) = scale the inner board to fit strictly inside the frame opening
+   * so frame images NEVER cover the title, question, options, or any slide content.
+   * "overlay" = legacy behavior where the frame sits as an overlay on top.
+   */
+  imagePlacement?: "fit" | "overlay";
+}
+
+export const DEFAULT_FRAME: FrameSettings = {
+  style: "wood",
+  color: "#e6a15c",
+  gradient: { enabled: false, angle: 155, from: "#f2c98a", to: "#a86a24" },
+  width: 26,
+  radius: 14,
+  shadow: true,
+};
+
+export const cloneFrame = (f: FrameSettings = DEFAULT_FRAME): FrameSettings =>
+  JSON.parse(JSON.stringify(f)) as FrameSettings;
+
+export const FRAME_STYLES: { id: FrameStyleId; label: string }[] = [
+  { id: "wood", label: "Wood" },
+  { id: "mahogany", label: "Mahogany" },
+  { id: "walnut", label: "Walnut" },
+  { id: "ebony", label: "Ebony" },
+  { id: "gold", label: "Gold" },
+  { id: "silver", label: "Silver" },
+  { id: "bronze", label: "Bronze" },
+  { id: "copper", label: "Rose Gold" },
+  { id: "baroque", label: "Baroque" },
+  { id: "neon", label: "Neon Cyan" },
+  { id: "neonMagenta", label: "Synthwave" },
+  { id: "neonGreen", label: "Matrix" },
+  { id: "cyberpunk", label: "Cyber" },
+  { id: "solid", label: "Solid" },
+  { id: "gradient", label: "Gradient" },
+  { id: "glass", label: "Glass" },
+  { id: "carbon", label: "Carbon" },
+  { id: "double", label: "Double" },
+  { id: "triple", label: "Triple" },
+  { id: "dashed", label: "Dashed" },
+  { id: "dotted", label: "Dotted" },
+  { id: "chalk", label: "Chalk" },
+  { id: "groove", label: "Groove" },
+  { id: "ridge", label: "Ridge" },
+  { id: "oak", label: "Oak" },
+  { id: "bamboo", label: "Bamboo" },
+  { id: "marble", label: "Marble" },
+  { id: "obsidian", label: "Obsidian" },
+  { id: "pearl", label: "Pearl" },
+  { id: "ruby", label: "Ruby" },
+  { id: "emerald", label: "Emerald" },
+  { id: "sapphire", label: "Sapphire" },
+  { id: "leather", label: "Leather" },
+  { id: "velvet", label: "Velvet" },
+  { id: "cinema", label: "Cinema" },
+  { id: "polaroid", label: "Polaroid" },
+  { id: "comic", label: "Comic" },
+  { id: "pixel", label: "Pixel" },
+  { id: "mosaic", label: "Mosaic" },
+  { id: "rainbow", label: "Rainbow" },
+  { id: "ice", label: "Ice" },
+  { id: "lava", label: "Lava" },
+  { id: "paper", label: "Paper" },
+  { id: "vintage", label: "Vintage" },
+  { id: "artDeco", label: "Art Deco" },
+  { id: "celtic", label: "Celtic" },
+  { id: "orichalcum", label: "Orichalcum" },
+  { id: "hologram", label: "Hologram" },
+  { id: "thin", label: "Thin" },
+  { id: "none", label: "None" },
+];
+
+export interface ThemeSettings {
+  frameOuter: string;
+  frameInner: string;
+  board: string;
+  /** frame style / colour / gradient / thickness */
+  frame: FrameSettings;
+  titleColor: string;
+  titleBanner: string;
+  /** full title-banner design (shape, gradient, glow …) */
+  banner: BannerSettings;
+  /** deck-wide background (slides may override with their own) */
+  background: BackgroundSettings;
+  questionColor: string;
+  optionTextColor: string;
+  /** option-row style id (see lib/optionStyles) */
+  optionStyle: string;
+  /** option-row / badge colour */
+  optionAccent: string;
+  /** option bullet marker shape: circle and 23 alternatives */
+  optionBulletShape: string;
+  /** option bullet fill treatment */
+  optionBulletTreatment: string;
+  accent: string;
+  brandColor: string;
+  badgeColor: string;
+  bengaliFont: string;
+  /** preferred face for Arabic / Urdu text (Dakhil, Quranic quotes) */
+  arabicFont: string;
+  latinFont: string;
+  /** per-element typeface (title, question, options, brand, badge, note…) */
+  boxFonts: BoxFonts;
+  questionSize: number;
+  optionSize: number;
+  /** extra vertical gap between option rows, % of the board (0 = auto/tight) */
+  optionGap: number;
+  /** line-height of the option text (1 = tight, 2 = airy) */
+  optionLineHeight: number;
+  optionsLayout: OptionsLayout;
+  /** free positioning for every element (0–100 % both axes) */
+  layout: LayoutMap;
+  /** magnetic snapping while dragging */
+  snapEnabled: boolean;
+  /** grid step in % used by free mode snapping */
+  snapStep: number;
+  /** shapes snap to edges/centres of other shapes */
+  smartGuides: boolean;
+  showBullet: boolean;
+  showFrame: boolean;
+  showNumber: boolean;
+  /** the number bullet is its own movable element (default: off = attached to the question) */
+  bulletSeparate: boolean;
+  /** numbering style id (see lib/numberStyles) */
+  numberStyle: string;
+  /** bullet size in px */
+  bulletSize: number;
+  /** bullet design id */
+  answerStyle: "glow" | "tick" | "fill";
+}
+
+export interface DeckHeader {
+  title: string;
+  brandTop: string;
+  brandBottom: string;
+  badge: string;
+  logo: string | null;
+  showLogo: boolean;
+  showBanner: boolean;
+}
+
+export interface Deck {
+  header: DeckHeader;
+  theme: ThemeSettings;
+  slides: SlideData[];
+  /** shapes & text boxes that appear on every slide (watermarks, banners…) */
+  globalShapes?: ShapeItem[];
+}
+
+export const DEFAULT_LOGO = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE08A"/><stop offset="55%" stop-color="#F2B441"/><stop offset="100%" stop-color="#B9771B"/>
+    </linearGradient>
+  </defs>
+  <path d="M60 6 108 24v40c0 27-20 44-48 50C32 108 12 91 12 64V24z" fill="url(#g)"/>
+  <path d="M60 14 100 29v34c0 22-17 36-40 41-23-5-40-19-40-41V29z" fill="#0b0b0f"/>
+  <path d="M60 38 92 50 60 62 28 50z" fill="url(#g)"/>
+  <path d="M38 56v14c0 7 10 12 22 12s22-5 22-12V56L60 66z" fill="url(#g)" opacity="0.85"/>
+  <rect x="90" y="50" width="3" height="20" rx="1.5" fill="url(#g)"/>
+  <text x="60" y="103" font-family="Oswald, Impact, sans-serif" font-size="17" font-weight="700"
+        text-anchor="middle" fill="url(#g)" letter-spacing="1">ACADEMY</text>
+</svg>`)}`;
+
+export const DEFAULT_THEME: ThemeSettings = {
+  frameOuter: "#0a0a0c",
+  frameInner: "#e6a15c",
+  board: "#050507",
+  frame: cloneFrame(),
+  titleColor: "#ffd633",
+  titleBanner: "#1f5fd0",
+  banner: cloneBanner(),
+  background: cloneBackground(),
+  questionColor: "#ffd94a",
+  optionTextColor: "#ffffff",
+  optionStyle: "plain",
+  optionAccent: "#2f4fff",
+  optionBulletShape: "circle",
+  optionBulletTreatment: "auto",
+  accent: "#2f4fff",
+  brandColor: "#ffffff",
+  badgeColor: "#ffffff",
+  bengaliFont: "'Kalpurush', 'Anek Bangla', 'Noto Sans Bengali', sans-serif",
+  arabicFont: "'Noto Naskh Arabic'",
+  latinFont: "'Oswald', system-ui, sans-serif",
+  boxFonts: {},
+  questionSize: 34,
+  optionSize: 30,
+  optionGap: 0,
+  optionLineHeight: 1.45,
+  optionsLayout: "right",
+  layout: cloneLayout(),
+  snapEnabled: true,
+  snapStep: 1,
+  smartGuides: true,
+  showBullet: true,
+  showFrame: true,
+  showNumber: false,
+  bulletSeparate: false,
+  numberStyle: "circle",
+  bulletSize: 54,
+  answerStyle: "glow",
+};
+
+export const DEFAULT_HEADER: DeckHeader = {
+  title: "বহুনির্বাচনী",
+  brandTop: "LEARN WITH",
+  brandBottom: "FAYSAL SIR",
+  badge: "DAKHIL-26",
+  logo: DEFAULT_LOGO,
+  showLogo: true,
+  showBanner: true,
+};
+
+export const SAMPLE_INPUT = `১. $P(x,y) = 7x^5 + 5x^4y^4 + y^6$ বহুপদীর মাত্রা কত?
+ক) 5
+খ) 6
+গ) 7
+ঘ) 8
+উত্তর: ঘ
+
+২. $\\log_2 32$ এর মান কত?
+ক) 3
+খ) 4
+গ) 5
+ঘ) 6
+উত্তর: গ
+
+3. If $x + \\frac{1}{x} = 3$, then $x^2 + \\frac{1}{x^2}$ = ?
+a) 5
+b) 7
+c) 9
+d) 11
+Ans: b`;
+
+/** Shows off the universal character set: Arabic, Hindi, CJK, Greek, emoji. */
+export const MULTILINGUAL_SAMPLE = `১. সূরা আল-ফাতিহা (سورة الفاتحة) কত নম্বর সূরা?
+ক) ১
+খ) ২
+গ) ৩
+ঘ) ৪
+উত্তর: ক
+
+٢. كم عدد أركان الإسلام؟
+أ) ثلاثة
+ب) أربعة
+ج) خمسة
+د) ستة
+Ans: ج
+
+3. बहुपद $x^3 + 2x$ की घात क्या है?
+a) 1
+b) 2
+c) 3
+d) 4
+Ans: c
+
+4. Which symbols are correct? ✓ ✗ α β ∑ ∫ 😀 中文 Ελληνικά Русский
+a) All render ✓
+b) None
+Ans: a`;
+

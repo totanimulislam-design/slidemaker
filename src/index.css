@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #020617;
+  /* editor chrome also needs every script: previews, inputs and the paste box */
+  font-family: "Inter", "Noto Sans Bengali", "Noto Naskh Arabic", "Noto Sans Arabic",
+    "Noto Sans Devanagari", "Noto Sans", "Noto Sans Symbols 2", "Noto Sans Math",
+    "Noto Color Emoji", "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* inputs inherit the universal stack and auto-flip for RTL scripts */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+}
+textarea,
+input[type="text"] {
+  unicode-bidi: plaintext;
+}
+
+.math-seg {
+  display: inline;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.math-seg .katex {
+  font-size: 1.02em;
+  color: inherit;
+}
+.math-seg .katex-display {
+  margin: 0.25em 0;
+}
+
+/* thin scrollbars for the editor chrome */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 99px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* hover affordance for click-to-edit regions on the slide */
+.slide-editable [style*="cursor: pointer"]:hover {
+  outline-color: rgba(255, 255, 255, 0.4) !important;
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.print-root {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: 1280px 720px;
+    margin: 0;
+  }
+  body {
+    background: #ffffff;
+  }
+  .app-shell,
+  .offscreen-root {
+    display: none !important;
+  }
+  .print-root {
+    display: block !important;
+  }
+  .print-page {
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+}
+
+/* subtle moving highlight across the title banner */
+.banner-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  clip-path: inherit;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: bannerShimmer 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes bannerShimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
