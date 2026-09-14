@@ -2,8 +2,8 @@ import { memo, useRef, useState, type CSSProperties } from "react";
 import type { Box, DeckHeader, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { shade, withAlpha } from "../lib/color";
 import { isWideNumberStyle, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
-import { optionBadgeStyle, optionRowStyle, type OptionStyle } from "../lib/optionStyles";
-import { renderOptionBulletMarker, type OptionBulletShape } from "../lib/optionBulletShapes";
+import { optionRowStyle, type OptionStyle } from "../lib/optionStyles";
+import OptionBulletMarker from "./OptionBulletMarker";
 import { isRtlText } from "../lib/fonts";
 import { boxFontCss, boxStack, boxTypeface } from "../lib/boxFonts";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
@@ -700,8 +700,6 @@ function SlideBase({
               const oStyle = (theme.optionStyle ?? "plain") as OptionStyle;
               const oColor = theme.optionAccent || theme.accent;
               const chrome = optionRowStyle(oStyle, theme, oColor, highlight);
-              const bShape = (theme.optionBulletShape ?? "circle") as OptionBulletShape;
-              const marker = renderOptionBulletMarker(bShape, theme, oColor, circle, highlight, opt.key);
               return (
                 <div
                   key={`${opt.key}-${i}`}
@@ -718,16 +716,15 @@ function SlideBase({
                       L.options.align === "center" ? "center" : L.options.align === "right" ? "flex-end" : chrome.row.justifyContent,
                   }}
                 >
-                  <div
-                    style={{
-                      ...optionBadgeStyle(oStyle, theme, oColor, circle, highlight),
-                      ...marker.style,
-                      flex: "0 0 auto",
-                      fontFamily: boxStack(theme, "options"),
-                    }}
-                  >
-                    {marker.innerStyle ? <span style={marker.innerStyle}>{marker.content}</span> : marker.content}
-                  </div>
+                  <OptionBulletMarker
+                    theme={theme}
+                    color={oColor}
+                    size={circle}
+                    keyText={opt.key}
+                    highlight={highlight}
+                    optionStyle={oStyle}
+                    fontFamily={boxStack(theme, "options")}
+                  />
                   <MathText
                     text={opt.text}
                     style={{

@@ -2,7 +2,7 @@ import type PptxGenJSType from "pptxgenjs";
 import { SLIDE_W, SLIDE_H } from "../components/Slide";
 import type { Box, Deck, ElementId, SlideData } from "./types";
 import { mixedToRuns, type TextRun } from "./latexRuns";
-import { shade, withAlpha } from "./color";
+import { flatten, shade, withAlpha } from "./color";
 import { isRtlText } from "./fonts";
 import { boxStack, boxTypeface } from "./boxFonts";
 import type { ShapeItem } from "./shapes";
@@ -14,6 +14,7 @@ import { isWideNumberStyle, pptxGeometry, type NumberStyle } from "./numberStyle
 import { optionBadgeStyle } from "./optionStyles";
 import type { OptionStyle } from "./optionStyles";
 import { formatOptionKey, isMinimalOptionBulletShape, type OptionBulletShape } from "./optionBulletShapes";
+import { optionBulletBackdrop, optionBulletPalette } from "./optionBulletColors";
 
 /**
  * Editable PowerPoint export.
@@ -507,14 +508,21 @@ function buildSlide(
     const oStyle = (t.optionStyle ?? "plain") as OptionStyle;
     const oColor = t.optionAccent || t.accent;
     const highlight = correct && t.answerStyle !== "tick";
+    // the bullet's independent colour channels ("" = auto → follow oColor)
+    const pal = optionBulletPalette(t, highlight);
+    const plate = optionBulletBackdrop(t);
+    const plateOn = !!plate && (!highlight || t.optionBulletCustomOnAnswer === true);
+    const solidColor = (v: string | null) => (v && v !== "transparent" ? v : null);
     const rgbaOf = (hexColor: string, alpha: number) => {
       const h = hexColor.replace("#", "");
       const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     };
     // row background, style-aware (rounded card / pill / bar / panel …)
+    // …unless the bullet's background shape is scoped to the whole row
     const rowFill =
-      oStyle === "soft" ? rgbaOf(oColor, 0.14)
+      plateOn && plate?.scope === "row" ? flatten(plate.color, t.board, plate.opacity)
+      : oStyle === "soft" ? rgbaOf(oColor, 0.14)
       : oStyle === "card" || oStyle === "shadowed" ? shade(t.board, -0.25)
       : oStyle === "outline" || oStyle === "boxed" || oStyle === "dashed" || oStyle === "neon" ? shade(t.board, -0.3)
       : oStyle === "glass" ? rgbaOf("#ffffff", 0.1)
@@ -565,51 +573,85 @@ function buildSlide(
       });
     }
 
-    // letter badge
+    // letter badge — ink / fill / border each come from their own channel
     const badge = optionBadgeStyle(oStyle, t, oColor, dia, highlight);
-    const badgeFill = typeof badge.background === "string" && badge.background.startsWith("#")
-      ? badge.background
-      : typeof badge.background === "string" && badge.background.includes("gradient")
-        ? oColor
-        : oColor;
-
     const bShape = (t.optionBulletShape ?? "circle") as OptionBulletShape;
     const isMinimal = isMinimalOptionBulletShape(bShape);
     const keyLabel = formatOptionKey(opt.key, bShape);
     const bW = bShape === "pill" ? dia * 1.35 : dia;
 
-    if (!isMinimal) {
-      const geomType =
-        bShape === "square" || bShape === "outlineSquare"
-          ? pptx.ShapeType.rect
-          : bShape === "roundedSquare" || bShape === "pill"
-            ? pptx.ShapeType.roundRect
-            : bShape === "diamond"
-              ? pptx.ShapeType.diamond
-              : bShape === "hexagon"
-                ? pptx.ShapeType.hexagon
-                : bShape === "octagon"
-                  ? pptx.ShapeType.octagon
-                  : bShape === "pentagon"
-                    ? pptx.ShapeType.pentagon
-                    : bShape === "triangle"
-                      ? pptx.ShapeType.triangle
-                      : bShape === "shield" || bShape === "tag"
-                        ? pptx.ShapeType.homePlate
-                        : bShape === "star" || bShape === "burst"
-                          ? pptx.ShapeType.star5
-                          : bShape === "heart"
-                            ? pptx.ShapeType.heart
-                            : bShape === "drop"
-                              ? pptx.ShapeType.teardrop
-                              : pptx.ShapeType.ellipse;
+    const geomType =
+      bShape === "square" || bShape === "outlineSquare"
+        ? pptx.ShapeType.rect
+        : bShape === "roundedSquare" || bShape === "pill"
+          ? pptx.ShapeType.roundRect
+          : bShape === "diamond"
+            ? pptx.ShapeType.diamond
+            : bShape === "hexagon"
+              ? pptx.ShapeType.hexagon
+              : bShape === "octagon"
+                ? pptx.ShapeType.octagon
+                : bShape === "pentagon"
+                  ? pptx.ShapeType.pentagon
+                  : bShape === "triangle"
+                    ? pptx.ShapeType.triangle
+                    : bShape === "shield" || bShape === "tag"
+                      ? pptx.ShapeType.homePlate
+                      : bShape === "star" || bShape === "burst"
+                        ? pptx.ShapeType.star5
+                        : bShape === "heart"
+                          ? pptx.ShapeType.heart
+                          : bShape === "drop"
+                            ? pptx.ShapeType.teardrop
+                            : pptx.ShapeType.ellipse;
 
+    const customFill = pal.customWins ? solidColor(pal.fill) : null;
+    const customBorder = pal.customWins ? solidColor(pal.border) : null;
+    const customInk = pal.customWins ? solidColor(pal.ink) : null;
+    const autoFill =
+      typeof badge.background === "string" && badge.background.startsWith("#") ? badge.background : oColor;
+    const badgeFill = customFill ?? autoFill;
+
+    // the bullet's own background shape, painted underneath the marker
+    if (plate && plateOn && plate.scope === "marker") {
+      const boxSize = Math.max(6, Math.round(Math.max(dia, bW) * (plate.size / 100)));
+      const pW = Math.round(
+        plate.shape === "pill" || (plate.shape === "match" && bW > dia) ? boxSize * 1.9 : boxSize,
+      );
+      const plateGeom =
+        plate.shape === "square"
+          ? pptx.ShapeType.rect
+          : plate.shape === "rounded" || plate.shape === "pill"
+            ? pptx.ShapeType.roundRect
+            : plate.shape === "diamond"
+              ? pptx.ShapeType.diamond
+              : plate.shape === "hexagon"
+                ? pptx.ShapeType.hexagon
+                : plate.shape === "match"
+                  ? geomType
+                  : pptx.ShapeType.ellipse; // circle & soft glow
+      s.addShape(plateGeom, {
+        x: inch(left + (bW - pW) / 2),
+        y: inch(y + (rowH - boxSize) / 2),
+        w: inch(pW),
+        h: inch(boxSize),
+        fill: { color: hex(flatten(plate.color, t.board, plate.opacity)) },
+        line: { type: "none" },
+        rectRadius: plate.shape === "pill" ? 0.5 : 0.12,
+      });
+    }
+
+    if (!isMinimal) {
       const isOutlineOnly = bShape === "ring" || bShape === "doubleRing" || bShape === "outlineSquare";
-      const fillVal = isOutlineOnly ? { type: "none" as const } : { color: hex(badgeFill) };
-      const lineVal =
-        isOutlineOnly || (typeof badge.border === "string" && badge.border.includes("solid"))
-          ? { color: hex(oColor), width: 2 }
-          : { type: "none" as const };
+      const fillVal = isOutlineOnly && !customFill ? { type: "none" as const } : { color: hex(badgeFill) };
+      const wantsRing = isOutlineOnly || (typeof badge.border === "string" && badge.border.includes("solid"));
+      const lineVal = customBorder
+        ? { color: hex(customBorder), width: Math.max(0.75, +(dia * 0.07).toFixed(2)) }
+        : pal.customWins && pal.border === "transparent"
+          ? { type: "none" as const }
+          : wantsRing
+            ? { color: hex(oColor), width: 2 }
+            : { type: "none" as const };
 
       s.addShape(geomType, {
         x: inch(left),
@@ -622,6 +664,9 @@ function buildSlide(
       });
     }
 
+    const badgeInk =
+      typeof badge.color === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(badge.color) ? badge.color : null;
+
     s.addText(keyLabel, {
       x: inch(left),
       y: inch(y + (rowH - dia) / 2),
@@ -630,7 +675,7 @@ function buildSlide(
       fontFace: face("options", opts.bodyFont),
       fontSize: Math.round(optFont * (isMinimal ? 0.72 : 0.62)),
       bold: true,
-      color: correct ? "FFFFFF" : isMinimal ? hex(oColor) : hex(t.accent),
+      color: customInk ? hex(customInk) : badgeInk ? hex(badgeInk) : correct ? "FFFFFF" : hex(oColor),
       align: "center",
       valign: "middle",
       margin: 0,
