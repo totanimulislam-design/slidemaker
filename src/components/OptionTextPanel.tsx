@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { SlideData, ThemeSettings } from "../lib/types";
 import { AR_KEYS, BN_KEYS } from "../lib/parse";
 import { handleSmartPaste } from "../lib/richPaste";
@@ -20,6 +20,15 @@ interface Props {
 export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide, updateAll, onAnswerCopies }: Props) {
   const refs = useRef<Record<number, HTMLInputElement | null>>({});
   const currentNumbering = T.plainNumbering ?? DEFAULT_PLAIN_NUMBERING;
+  const optionFont = toSingleFamily(T.bengaliFont);
+
+  // a deck can be saved with any face from the library — make sure the one it
+  // uses is actually downloaded, not just listed in the picker
+  useEffect(() => {
+    const meta = FONT_BY_FAMILY.get(optionFont.toLowerCase());
+    if (meta) ensureFontStylesheet([meta]);
+  }, [optionFont]);
+
   if (!slide) return <p className="text-sm text-slate-500">No slide selected.</p>;
 
   return (
@@ -78,13 +87,13 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
       </Field>
       <FontPicker
         label="Option text font"
-        value={toSingleFamily(T.bengaliFont)}
+        value={optionFont}
         onChange={(family) => {
           const meta = FONT_BY_FAMILY.get(family.toLowerCase());
           if (meta) ensureFontStylesheet([meta]);
           setTheme({ bengaliFont: `'${family}', sans-serif` });
         }}
-        script="bangla"
+        script="all"
         compact
       />
       <div className="grid grid-cols-2 gap-2">

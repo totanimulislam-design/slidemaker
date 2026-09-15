@@ -432,6 +432,8 @@ function SlideBase({
   const allShapes = [...(globalShapes ?? []), ...(slide.shapes ?? [])];
 
   const bodyStack = boxStack(theme, "question");
+  /** option text + its plain numbering share one face: the option font */
+  const optionStack = boxStack(theme, "options");
   const qRtl = isRtlText(slide.question);
 
   const frame = theme.frame ?? DEFAULT_FRAME;
@@ -726,12 +728,15 @@ function SlideBase({
                     keyText={markerText}
                     highlight={highlight}
                     optionStyle={oStyle}
-                    fontFamily={boxStack(theme, "options")}
+                    fontFamily={optionStack}
                   />
                   <MathText
                     text={opt.text}
                     style={{
                       color: correct ? "#5cff9d" : theme.optionTextColor,
+                      // same face as its marker, so the option font (and its
+                      // per-box override) drives the text and the numbering alike
+                      fontFamily: optionStack,
                       fontSize: optSize,
                       fontWeight: 700,
                       lineHeight: optLineH,

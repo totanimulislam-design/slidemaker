@@ -1,5 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import { FONT_LIBRARY, type FontChoice, type FontChoice as FC } from "../lib/fonts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  FONT_BY_FAMILY,
+  FONT_GROUPS,
+  FONT_LIBRARY,
+  type FontChoice,
+  type FontChoice as FC,
+  type FontGroupId,
+  type FontScript,
+  fontGroupId,
+  previewStack,
+  sortGroupFonts,
+} from "../lib/fonts";
 import { addCustomFontFile, customFontChoices, listCustomFonts, onCustomFontsChanged, removeCustomFont, type CustomFont } from "../lib/customFonts";
 import { cn } from "../utils/cn";
 
@@ -8,11 +19,21 @@ interface Props {
   value: string;
   onChange: (family: string) => void;
   label: string;
-  script: FontChoice["script"];
+  /** one script, or `"all"` for every script filed under language groups */
+  script: FontScript | "all";
   /** restrict to a subset of kinds */
   kinds?: FontChoice["kind"][];
   /** compact height (used in the inspector) */
   compact?: boolean;
+  /** file the list under language headings (on by default when script is "all") */
+  grouped?: boolean;
+}
+
+/** one heading + its faces inside the dropdown (`flat` = the un-grouped list) */
+interface Section {
+  id: FontGroupId | "saved" | "flat";
+  label: string;
+  fonts: FontChoice[];
 }
 
 const KIND_LABEL: Record<FC["kind"], string> = {
@@ -26,7 +47,7 @@ const KIND_LABEL: Record<FC["kind"], string> = {
 
 import { ensureFontStylesheet, preloadFontLibrary } from "../lib/fonts";
 
-export default function FontPicker({ value, onChange, label, script, kinds, compact }: Props) {
+export default function FontPicker({ value, onChange, label, script, kinds, compact, grouped }: Props) {
   const current = value.split(",")[0]?.trim().replace(/^['"]|['"]$/g, "") || "";
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -34,20 +55,57 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
   const [custom, setCustom] = useState<CustomFont[]>(() => listCustomFonts());
   useEffect(() => onCustomFontsChanged(setCustom), []);
 
-  const list = useMemo(() => {
-    const mine = customFontChoices(script).filter(
-      (f) => !query || f.label.toLowerCase().includes(query.toLowerCase()),
-    );
+  const all = script === "all";
+  const showGroups = grouped ?? all;
+
+  /** every face the dropdown offers, in the order it will be shown */
+  const sections = useMemo<Section[]>(() => {
+    const hit = (f: FontChoice) => !query || f.label.toLowerCase().includes(query.toLowerCase());
+    const mine = customFontChoices(all ? undefined : script).filter(hit);
+    const taken = new Set(mine.map((f) => f.family.toLowerCase()));
     const builtIn = FONT_LIBRARY.filter(
       (f) =>
-        f.script === script &&
+        (all || f.script === script) &&
         (!kinds || kinds.includes(f.kind)) &&
-        (!query || f.label.toLowerCase().includes(query.toLowerCase())),
+        !taken.has(f.family.toLowerCase()) &&
+        hit(f),
     );
-    return [...mine, ...builtIn];
-  }, [script, kinds, query, custom]);
 
+    if (!showGroups) return [{ id: "flat", label: "", fonts: [...mine, ...builtIn] }];
+
+    const fonts = [...mine, ...builtIn];
+    const out: Section[] = [];
+    // a face saved on an older deck stays reachable even if it left the library
+    const known = fonts.some((f) => f.family.toLowerCase() === current.toLowerCase());
+    const saved: FontChoice | null =
+      current && !known
+        ? {
+            family: current,
+            label: current,
+            script: FONT_BY_FAMILY.get(current.toLowerCase())?.script ?? "bangla",
+            kind: "sans",
+            sample: "Aa বাংলا العربية",
+            weights: "400;500;600;700;800",
+          }
+        : null;
+    if (saved && hit(saved)) out.push({ id: "saved", label: "Saved font", fonts: [saved] });
+    for (const g of FONT_GROUPS) {
+      const inGroup = fonts.filter((f) => fontGroupId(f) === g.id);
+      if (inGroup.length) out.push({ id: g.id, label: g.label, fonts: sortGroupFonts(inGroup, g.id) });
+    }
+    return out;
+  }, [all, script, kinds, query, custom, showGroups, current]);
+
+  const list = sections.flatMap((s) => s.fonts);
   const chosen = FONT_LIBRARY.find((f) => f.family === current);
+
+  // the list is long once every script is included, so reveal the picked face
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const active = scrollRef.current?.querySelector<HTMLElement>('[data-active="true"]');
+    active?.scrollIntoView?.({ block: "nearest" });
+  }, [open]);
 
   return (
     <div className="space-y-1.5">
@@ -73,7 +131,11 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
       >
         <span
           className="min-w-0 flex-1 truncate text-slate-100"
-          style={{ fontFamily: `'${current}', sans-serif`, fontSize: compact ? 15 : 17, lineHeight: 1.2 }}
+          style={{
+            fontFamily: chosen ? previewStack(chosen) : `'${current}', sans-serif`,
+            fontSize: compact ? 15 : 17,
+            lineHeight: 1.2,
+          }}
         >
           {chosen ? chosen.sample : current || "Default"}
         </span>
@@ -90,28 +152,40 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
             placeholder={`Search ${list.length} fonts…`}
             className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-amber-400/60"
           />
-          <div className="max-h-64 space-y-0.5 overflow-y-auto rounded-lg border border-white/10 bg-slate-900/40 p-1">
-            {list.map((f) => (
-              <FontRow
-                key={f.family}
-                f={f}
-                active={f.family === current}
-                onPick={() => { onChange(f.family); setOpen(false); }}
-                onRemove={
-                  f.custom
-                    ? () => {
-                        removeCustomFont(f.family);
-                        if (current === f.family) onChange("");
-                      }
-                    : undefined
-                }
-              />
+          <div ref={scrollRef} className="max-h-64 space-y-0.5 overflow-y-auto rounded-lg border border-white/10 bg-slate-900/40 p-1">
+            {sections.map((s) => (
+              <div key={s.id} className="pt-1 first:pt-0">
+                {s.label && (
+                  <div className="sticky top-0 z-10 -mx-1 mb-0.5 rounded bg-slate-900/95 px-2 py-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase backdrop-blur-sm">
+                    {s.label}
+                  </div>
+                )}
+                {s.fonts.map((f) => (
+                  <FontRow
+                    key={f.family}
+                    f={f}
+                    active={f.family === current}
+                    onPick={() => { onChange(f.family); setOpen(false); }}
+                    onRemove={
+                      f.custom
+                        ? () => {
+                            removeCustomFont(f.family);
+                            if (current === f.family) onChange("");
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
             ))}
             {!list.length && <p className="p-3 text-center text-xs text-slate-600">No fonts match “{query}”.</p>}
           </div>
 
           {/* upload your own font file (Chhatrish July, SolaimanLipi, Charukola…) */}
-          <UploadRow script={script} onAdded={(family) => { onChange(family); }} />
+          <UploadRow
+            script={script === "all" ? (FONT_BY_FAMILY.get(current.toLowerCase())?.script ?? "bangla") : script}
+            onAdded={(family) => { onChange(family); }}
+          />
           <p className="px-1 text-[10px] leading-relaxed text-slate-500">
             Previews load on open. Any text still falls back through the universal chain, so mixed Bangla/Arabic/Latin
             always renders.
@@ -188,6 +262,7 @@ function FontRow({
     <button
       {...ref}
       onClick={onPick}
+      data-active={active ? "true" : undefined}
       className={cn(
         "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
         active ? "bg-amber-400/15 ring-1 ring-amber-400/50" : "hover:bg-white/5",
@@ -195,7 +270,7 @@ function FontRow({
     >
       <span
         className="min-w-0 flex-1 truncate text-[15px] leading-tight text-slate-100"
-        style={{ fontFamily: `'${f.family}', ${f.script === "arabic" ? "'Noto Naskh Arabic'" : "'Noto Sans Bengali'"}, sans-serif` }}
+        style={{ fontFamily: previewStack(f) }}
       >
         {f.sample}
       </span>
@@ -221,6 +296,7 @@ function FontRow({
           "shrink-0 rounded px-1 py-0.5 text-[9px]",
           f.script === "bangla" ? "bg-emerald-400/15 text-emerald-300"
           : f.script === "arabic" ? "bg-sky-400/15 text-sky-300"
+          : fontGroupId(f) === "multi" ? "bg-violet-400/15 text-violet-300"
           : "bg-white/10 text-slate-400",
         )}
       >
