@@ -45,16 +45,33 @@ export function Btn({
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <label className="block space-y-1.5">
+/**
+ * A captioned control. It renders as a `<label>` so clicking the caption focuses
+ * the field — but a block whose children are buttons (a picker, a swatch row)
+ * must pass `as="div"`: a `<label>` forwards its clicks to its first labelable
+ * descendant, which would silently activate that button.
+ */
+export function Field({
+  label,
+  hint,
+  children,
+  as = "label",
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+  as?: "label" | "div";
+}) {
+  const inner = (
+    <>
       <span className="flex items-baseline justify-between text-[11px] font-medium tracking-wide text-slate-400 uppercase">
         {label}
         {hint && <span className="text-[10px] normal-case text-slate-500">{hint}</span>}
       </span>
       {children}
-    </label>
+    </>
   );
+  return as === "div" ? <div className="block space-y-1.5">{inner}</div> : <label className="block space-y-1.5">{inner}</label>;
 }
 
 const base =
