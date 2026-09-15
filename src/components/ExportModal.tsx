@@ -1,48 +1,25 @@
 import { useState } from "react";
 import type { Deck } from "../lib/types";
-import { Btn, Field, SegButtons, TextInput, Toggle } from "./ui";
+import { Btn, Field, SegButtons, TextInput } from "./ui";
 import { cn } from "../utils/cn";
 
-export type ExportFormat = "pptx" | "pdf" | "png" | "zip";
+export type ExportFormat = "pdf" | "png" | "zip";
 
 export interface ExportSettings {
   format: ExportFormat;
   scope: "all" | "current";
   quality: number;
   fileName: string;
-  pptxBodyFont: string;
-  pptxDisplayFont: string;
-  pptxAnswerSlides: boolean;
-  pptxNotes: boolean;
 }
 
 export const DEFAULT_EXPORT: ExportSettings = {
-  format: "pptx",
+  format: "pdf",
   scope: "all",
   quality: 2,
   fileName: "mcq-slides",
-  pptxBodyFont: "Nirmala UI",
-  pptxDisplayFont: "Arial Narrow",
-  pptxAnswerSlides: false,
-  pptxNotes: true,
 };
 
-/** Fonts that ship with Windows/macOS and can render Bangla inside PowerPoint. */
-const PPTX_FONTS = [
-  { value: "Nirmala UI", note: "Bangla + Devanagari + Tamil (Windows)" },
-  { value: "Arial Unicode MS", note: "widest single-font coverage" },
-  { value: "Noto Sans", note: "install Noto for full Unicode" },
-  { value: "Vrinda", note: "Bangla (Windows)" },
-  { value: "Shonar Bangla", note: "Bangla (Windows)" },
-  { value: "Kalpurush", note: "Bangla (popular BD font)" },
-  { value: "SolaimanLipi", note: "Bangla (popular BD font)" },
-  { value: "Traditional Arabic", note: "Arabic / Urdu (Windows)" },
-  { value: "Sakkal Majalla", note: "Arabic (Windows)" },
-  { value: "Amiri", note: "Arabic naskh (Quranic)" },
-];
-
 const CARDS: { value: ExportFormat; icon: string; title: string; blurb: string }[] = [
-  { value: "pptx", icon: "📊", title: "PowerPoint", blurb: "Fully editable .pptx — real text boxes & shapes" },
   { value: "pdf", icon: "📄", title: "PDF", blurb: "One 16:9 page per slide, print-ready" },
   { value: "png", icon: "🖼", title: "PNG", blurb: "Current slide as a single image" },
   { value: "zip", icon: "🗂", title: "PNG ZIP", blurb: "Every slide as a numbered image" },
@@ -57,14 +34,11 @@ interface Props {
 }
 
 export default function ExportModal({ open, deck, busy, onClose, onExport }: Props) {
-  const [s, setS] = useState<ExportSettings>(() => ({ ...DEFAULT_EXPORT, pptxBodyFont: "Kalpurush" }));
+  const [s, setS] = useState<ExportSettings>(DEFAULT_EXPORT);
   if (!open) return null;
 
   const set = <K extends keyof ExportSettings>(k: K, v: ExportSettings[K]) => setS((p) => ({ ...p, [k]: v }));
-  const count = s.scope === "all" || s.format === "pptx" ? deck.slides.length : 1;
-  const pptxTotal = s.pptxAnswerSlides
-    ? deck.slides.length + deck.slides.filter((x) => !x.showAnswer && x.answer).length
-    : deck.slides.length;
+  const count = s.scope === "all" ? deck.slides.length : 1;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
@@ -109,52 +83,6 @@ export default function ExportModal({ open, deck, busy, onClose, onExport }: Pro
               </span>
             </div>
           </Field>
-
-          {s.format === "pptx" && (
-            <div className="space-y-3 rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] p-3.5">
-              <p className="text-xs leading-relaxed text-emerald-200">
-                ✓ Every element is a native PowerPoint object — text boxes, ovals and rectangles. Equations become
-                real characters with true superscripts, and right-to-left text (Arabic/Urdu) keeps its direction.
-              </p>
-              <Field label="Body font in PowerPoint" hint="must exist on the viewer's PC">
-                <select
-                  value={s.pptxBodyFont}
-                  onChange={(e) => set("pptxBodyFont", e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-400/60"
-                >
-                  {PPTX_FONTS.map((f) => (
-                    <option key={f.value} value={f.value}>
-                      {f.value} — {f.note}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Brand / badge font">
-                <select
-                  value={s.pptxDisplayFont}
-                  onChange={(e) => set("pptxDisplayFont", e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-400/60"
-                >
-                  {["Arial Narrow", "Oswald", "Impact", "Arial Black", "Bebas Neue", "Calibri"].map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Toggle
-                label="Add an answer slide after each question"
-                checked={s.pptxAnswerSlides}
-                onChange={(v) => set("pptxAnswerSlides", v)}
-              />
-              <Toggle
-                label="Put the correct answer in speaker notes"
-                checked={s.pptxNotes}
-                onChange={(v) => set("pptxNotes", v)}
-              />
-              <p className="text-[11px] text-slate-500">Will produce {pptxTotal} PowerPoint slides.</p>
-            </div>
-          )}
 
           {(s.format === "pdf" || s.format === "zip" || s.format === "png") && (
             <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3.5">
