@@ -4,11 +4,26 @@ import { withAlpha } from "./color";
 /** CSS gradient string (or a solid colour when the gradient is off). */
 export function gradientCss(g: Gradient, fallback: string): string {
   if (!g.enabled || g.stops.length < 2) return fallback;
-  const stops = [...g.stops]
-    .sort((a, b) => a.at - b.at)
-    .map((s) => `${s.color} ${s.at}%`)
-    .join(", ");
-  return g.type === "radial" ? `radial-gradient(ellipse at center, ${stops})` : `linear-gradient(${g.angle}deg, ${stops})`;
+  const sorted = [...g.stops].sort((a, b) => a.at - b.at);
+  const stops = sorted.map((s) => `${s.color} ${s.at}%`).join(", ");
+  if (g.type === "radial") {
+    // older saved gradients have no centre — default to the middle
+    const cx = g.cx ?? 50;
+    const cy = g.cy ?? 50;
+    return `radial-gradient(ellipse at ${cx}% ${cy}%, ${stops})`;
+  }
+  if (g.type === "mesh") {
+    // modern mesh look: soft radial colour blobs layered over a base.
+    // The base is a solid gradient (not a bare colour) so the string also
+    // works in `background-image` contexts such as gradient text.
+    const base = sorted[0]?.color ?? fallback;
+    const spots = ["18% 18%", "82% 14%", "85% 85%", "14% 86%", "50% 45%", "68% 28%"];
+    const layers = sorted.slice(1).map(
+      (s, i) => `radial-gradient(ellipse 58% 48% at ${spots[i % spots.length]}, ${s.color} 0%, transparent 72%)`,
+    );
+    return layers.length ? `${layers.join(", ")}, linear-gradient(${base}, ${base})` : base;
+  }
+  return `linear-gradient(${g.angle}deg, ${stops})`;
 }
 
 /** The dominant colour of a gradient (first stop) — used for glows/halos. */

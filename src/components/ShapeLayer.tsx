@@ -114,10 +114,12 @@ function GradientDefs({ s, id }: { s: ShapeItem; id: string }) {
   const g = s.gradient;
   if (!g?.enabled) return null;
   const stops = [...g.stops].sort((a, b) => a.at - b.at);
-  if (g.type === "radial") {
+  // mesh has no SVG equivalent — approximate it with a radial blend of all stops
+  const kind = g.type === "mesh" ? "radial" : g.type;
+  if (kind === "radial") {
     return (
       <defs>
-        <radialGradient id={id} cx="50%" cy="50%" r="60%">
+        <radialGradient id={id} cx={`${g.cx ?? 50}%`} cy={`${g.cy ?? 50}%`} r="65%">
           {stops.map((st, i) => (
             <stop key={i} offset={`${st.at}%`} stopColor={st.color} stopOpacity={s.fillOpacity} />
           ))}

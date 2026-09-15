@@ -129,12 +129,17 @@ export interface GradientStop {
   at: number;
 }
 
+export type GradientType = "linear" | "radial" | "mesh";
+
 export interface Gradient {
   enabled: boolean;
-  type: "linear" | "radial";
+  type: GradientType;
   /** degrees, linear only */
   angle: number;
   stops: GradientStop[];
+  /** radial centre in % of the box (defaults 50/50 when missing) */
+  cx?: number;
+  cy?: number;
 }
 
 export interface BannerSettings {
@@ -221,6 +226,20 @@ export interface BackgroundSettings {
   gradient: Gradient;
   /** darken the board edges for legibility */
   vignette: number;
+  /**
+   * Decorative vector design id (see lib/backgroundDesigns). "" = none.
+   * Rendered above the gradient, below the image.
+   */
+  design?: string;
+  /**
+   * Design size as % of the board (100 = natural). Width and height are
+   * independent so shapes can be stretched; keep them equal to scale
+   * uniformly. Percentages keep the design correct at any slide size.
+   */
+  designW?: number;
+  designH?: number;
+  /** design layer opacity 0–1 */
+  designOpacity?: number;
 }
 
 export const DEFAULT_BACKGROUND: BackgroundSettings = {
@@ -241,8 +260,14 @@ export const DEFAULT_BACKGROUND: BackgroundSettings = {
       { color: "#0b1226", at: 0 },
       { color: "#050507", at: 100 },
     ],
+    cx: 50,
+    cy: 50,
   },
   vignette: 0,
+  design: "",
+  designW: 100,
+  designH: 100,
+  designOpacity: 1,
 };
 
 export const cloneBackground = (b: BackgroundSettings = DEFAULT_BACKGROUND): BackgroundSettings =>
