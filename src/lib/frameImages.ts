@@ -7,34 +7,95 @@ export interface FrameImage {
   inset: number;
 }
 
-/** Photo and vector frame overlays. Paths are served from /frames/. */
+/**
+ * Vector frame overlays, served from /frames/. Each design is a full 1280×720
+ * SVG with a transparent opening so the slide board always shows through.
+ * The collection spans minimal, certificate, classic ornamental, modern
+ * geometric, Islamic and bold-band styles.
+ */
 export const FRAME_IMAGES: FrameImage[] = [
-  { id: "gold-baroque", name: "Gold Baroque", src: "/frames/gold-baroque.jpg", kind: "photo", inset: 11 },
-  { id: "floral-gold", name: "Floral Gold", src: "/frames/floral-gold.jpg", kind: "photo", inset: 12 },
-  { id: "vintage-gilt", name: "Vintage Gilt", src: "/frames/vintage-gilt.jpg", kind: "photo", inset: 11 },
-  { id: "carved-oak", name: "Carved Oak", src: "/frames/carved-oak.jpg", kind: "photo", inset: 10 },
-  { id: "dark-walnut", name: "Dark Walnut", src: "/frames/dark-walnut.jpg", kind: "photo", inset: 10 },
-  { id: "rustic-barn", name: "Rustic Barn", src: "/frames/rustic-barn.jpg", kind: "photo", inset: 10 },
-  { id: "silver-ornate", name: "Silver Ornate", src: "/frames/silver-ornate.jpg", kind: "photo", inset: 11 },
-  { id: "white-gallery", name: "White Gallery", src: "/frames/white-gallery.jpg", kind: "photo", inset: 9 },
-  { id: "black-lacquer", name: "Black Lacquer", src: "/frames/black-lacquer.jpg", kind: "photo", inset: 9 },
-  { id: "art-nouveau", name: "Art Nouveau", src: "/frames/art-nouveau.jpg", kind: "photo", inset: 11 },
-  { id: "svg-gold", name: "Gold Bevel", src: "/frames/svg-gold.svg", kind: "vector", inset: 8 },
-  { id: "svg-silver", name: "Silver Bevel", src: "/frames/svg-silver.svg", kind: "vector", inset: 8 },
-  { id: "svg-rose", name: "Rose Gold", src: "/frames/svg-rose.svg", kind: "vector", inset: 8 },
-  { id: "svg-emerald", name: "Emerald Bevel", src: "/frames/svg-emerald.svg", kind: "vector", inset: 8 },
-  { id: "svg-obsidian", name: "Obsidian", src: "/frames/svg-obsidian.svg", kind: "vector", inset: 8 },
-  { id: "svg-neon", name: "Neon Tube", src: "/frames/svg-neon.svg", kind: "vector", inset: 7 },
-  { id: "svg-double", name: "Certificate Lines", src: "/frames/svg-double-line.svg", kind: "vector", inset: 6 },
-  { id: "svg-deco", name: "Art Deco Corners", src: "/frames/svg-art-deco.svg", kind: "vector", inset: 8 },
-  { id: "svg-cinema", name: "Film Strip", src: "/frames/svg-cinema.svg", kind: "vector", inset: 8 },
-  { id: "svg-rainbow", name: "Rainbow Band", src: "/frames/svg-rainbow.svg", kind: "vector", inset: 7 },
-  { id: "svg-celtic", name: "Celtic Gold", src: "/frames/svg-celtic.svg", kind: "vector", inset: 8 },
-  { id: "svg-thin-gold", name: "Thin Gold Line", src: "/frames/svg-thin-gold.svg", kind: "vector", inset: 3 },
-  { id: "svg-dashed", name: "Blueprint Dash", src: "/frames/svg-dashed.svg", kind: "vector", inset: 4 },
-  { id: "svg-polaroid", name: "Polaroid Mat", src: "/frames/svg-polaroid.svg", kind: "vector", inset: 7 },
-  { id: "svg-ice", name: "Ice Crystal", src: "/frames/svg-ice.svg", kind: "vector", inset: 8 },
-  { id: "svg-lava", name: "Lava Band", src: "/frames/svg-lava.svg", kind: "vector", inset: 8 },
+  // ---- minimal / clean ----------------------------------------------------
+  { id: "hairline", name: "Hairline", src: "/frames/frame-hairline.svg", kind: "vector", inset: 3 },
+  { id: "thin-gold", name: "Thin Gold Rule", src: "/frames/frame-thin-gold.svg", kind: "vector", inset: 5 },
+  { id: "scholar", name: "Scholar", src: "/frames/frame-scholar.svg", kind: "vector", inset: 6 },
+  { id: "blueprint", name: "Blueprint Dash", src: "/frames/frame-blueprint.svg", kind: "vector", inset: 6 },
+  { id: "dotted", name: "Dotted Outline", src: "/frames/frame-dotted.svg", kind: "vector", inset: 6 },
+  // ---- certificate / academic ---------------------------------------------
+  { id: "double-rule", name: "Double Rule", src: "/frames/frame-double-rule.svg", kind: "vector", inset: 7 },
+  { id: "triple-rule", name: "Triple Rule", src: "/frames/frame-triple-rule.svg", kind: "vector", inset: 9 },
+  { id: "certificate", name: "Certificate", src: "/frames/frame-certificate.svg", kind: "vector", inset: 7 },
+  { id: "award-gold", name: "Award Gold", src: "/frames/frame-certificate-gold.svg", kind: "vector", inset: 8 },
+  { id: "academic", name: "Academic Navy", src: "/frames/frame-academic.svg", kind: "vector", inset: 9 },
+  // ---- classic / ornamental ------------------------------------------------
+  { id: "emerald", name: "Emerald Elegant", src: "/frames/frame-emerald.svg", kind: "vector", inset: 9 },
+  { id: "fleur", name: "Fleur Quatrefoil", src: "/frames/frame-fleur.svg", kind: "vector", inset: 7 },
+  { id: "arabesque", name: "Arabesque", src: "/frames/frame-arabesque.svg", kind: "vector", inset: 9 },
+  { id: "victorian", name: "Victorian Mahogany", src: "/frames/frame-victorian.svg", kind: "vector", inset: 10 },
+  { id: "baroque-gold", name: "Baroque Gold", src: "/frames/frame-baroque-gold.svg", kind: "vector", inset: 11 },
+  { id: "greek-key", name: "Greek Key", src: "/frames/frame-greek-key.svg", kind: "vector", inset: 10 },
+  // ---- modern / geometric ---------------------------------------------------
+  { id: "art-deco", name: "Art Deco", src: "/frames/frame-art-deco.svg", kind: "vector", inset: 9 },
+  { id: "corner-blocks", name: "Corner Blocks", src: "/frames/frame-geo-corners.svg", kind: "vector", inset: 8 },
+  { id: "corner-triangles", name: "Corner Triangles", src: "/frames/frame-geo-triangles.svg", kind: "vector", inset: 9 },
+  { id: "diagonal-cut", name: "Diagonal Cut", src: "/frames/frame-diagonal.svg", kind: "vector", inset: 9 },
+  // ---- islamic / elegant patterns --------------------------------------------
+  { id: "islamic-star", name: "Islamic Star Band", src: "/frames/frame-islamic-star.svg", kind: "vector", inset: 9 },
+  { id: "girih", name: "Girih Interlace", src: "/frames/frame-girih.svg", kind: "vector", inset: 10 },
+  { id: "mihrab", name: "Mihrab Arches", src: "/frames/frame-mihrab.svg", kind: "vector", inset: 10 },
+  // ---- bold bands / rounded ---------------------------------------------------
+  { id: "charcoal-mat", name: "Charcoal Mat", src: "/frames/frame-thick-band.svg", kind: "vector", inset: 10 },
+  { id: "two-tone", name: "Two-Tone Band", src: "/frames/frame-two-tone.svg", kind: "vector", inset: 10 },
+  { id: "rounded-card", name: "Rounded Card", src: "/frames/frame-rounded.svg", kind: "vector", inset: 8 },
+  { id: "rounded-double", name: "Rounded Double", src: "/frames/frame-rounded-double.svg", kind: "vector", inset: 10 },
 ];
 
 export const frameImageById = (id?: string) => FRAME_IMAGES.find((f) => f.id === id);
+
+/**
+ * Maps frame image sources saved by older versions of the app (photo frames
+ * and the previous SVG set) onto the closest design in the current collection,
+ * so previously saved decks keep showing a frame instead of a broken image.
+ */
+const LEGACY_FRAME_SRC: Record<string, string> = {
+  // retired photo frames
+  "/frames/gold-baroque.jpg": "/frames/frame-baroque-gold.svg",
+  "/frames/floral-gold.jpg": "/frames/frame-victorian.svg",
+  "/frames/vintage-gilt.jpg": "/frames/frame-certificate-gold.svg",
+  "/frames/carved-oak.jpg": "/frames/frame-victorian.svg",
+  "/frames/dark-walnut.jpg": "/frames/frame-thick-band.svg",
+  "/frames/rustic-barn.jpg": "/frames/frame-victorian.svg",
+  "/frames/silver-ornate.jpg": "/frames/frame-baroque-gold.svg",
+  "/frames/white-gallery.jpg": "/frames/frame-scholar.svg",
+  "/frames/black-lacquer.jpg": "/frames/frame-thick-band.svg",
+  "/frames/art-nouveau.jpg": "/frames/frame-arabesque.svg",
+  // retired vector frames
+  "/frames/svg-gold.svg": "/frames/frame-baroque-gold.svg",
+  "/frames/svg-silver.svg": "/frames/frame-scholar.svg",
+  "/frames/svg-rose.svg": "/frames/frame-fleur.svg",
+  "/frames/svg-emerald.svg": "/frames/frame-emerald.svg",
+  "/frames/svg-obsidian.svg": "/frames/frame-thick-band.svg",
+  "/frames/svg-neon.svg": "/frames/frame-geo-triangles.svg",
+  "/frames/svg-double-line.svg": "/frames/frame-double-rule.svg",
+  "/frames/svg-art-deco.svg": "/frames/frame-art-deco.svg",
+  "/frames/svg-cinema.svg": "/frames/frame-thick-band.svg",
+  "/frames/svg-rainbow.svg": "/frames/frame-two-tone.svg",
+  "/frames/svg-celtic.svg": "/frames/frame-greek-key.svg",
+  "/frames/svg-thin-gold.svg": "/frames/frame-thin-gold.svg",
+  "/frames/svg-dashed.svg": "/frames/frame-blueprint.svg",
+  "/frames/svg-polaroid.svg": "/frames/frame-rounded.svg",
+  "/frames/svg-ice.svg": "/frames/frame-scholar.svg",
+  "/frames/svg-lava.svg": "/frames/frame-diagonal.svg",
+};
+
+/**
+ * Normalises a stored frame image src. Current assets and user uploads
+ * (data:/http) pass through; retired built-in paths are remapped to their
+ * successor in the new collection, and unknown built-in paths are dropped so
+ * a stale reference can never render a broken frame.
+ */
+export function resolveFrameImageSrc(src?: string): string | undefined {
+  if (!src) return undefined;
+  if (FRAME_IMAGES.some((f) => f.src === src)) return src;
+  if (src.startsWith("/frames/")) return LEGACY_FRAME_SRC[src];
+  return src;
+}

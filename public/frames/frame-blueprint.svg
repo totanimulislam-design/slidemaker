@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">
+  <!-- Blueprint: dashed technical border with registration marks -->
+  <rect x="16" y="14" width="1248" height="692" fill="none" stroke="#0ea5e9" stroke-width="6" stroke-dasharray="22 14"/>
+  <rect x="36" y="32" width="1208" height="656" fill="none" stroke="#7dd3fc" stroke-width="2" stroke-dasharray="8 10"/>
+  <g stroke="#38bdf8" stroke-width="3">
+    <path d="M16 46h34M1264 46h-34M16 674h34M1264 674h-34"/>
+    <path d="M50 14v34M1230 14v34M50 706v-34M1230 706v-34"/>
+  </g>
+</svg>

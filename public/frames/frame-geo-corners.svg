@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">
+  <!-- Geometric Corners: hairline rule anchored by bold accent blocks -->
+  <rect x="16" y="14" width="1248" height="692" fill="none" stroke="#334155" stroke-width="3"/>
+  <g fill="#0ea5e9">
+    <rect x="0" y="0" width="72" height="72"/>
+    <rect x="1208" y="0" width="72" height="72"/>
+    <rect x="0" y="648" width="72" height="72"/>
+    <rect x="1208" y="648" width="72" height="72"/>
+  </g>
+  <g fill="#0f172a">
+    <rect x="72" y="0" width="34" height="34"/>
+    <rect x="0" y="72" width="34" height="34"/>
+    <rect x="1174" y="0" width="34" height="34"/>
+    <rect x="1246" y="72" width="34" height="34"/>
+    <rect x="72" y="686" width="34" height="34"/>
+    <rect x="0" y="614" width="34" height="34"/>
+    <rect x="1174" y="686" width="34" height="34"/>
+    <rect x="1246" y="614" width="34" height="34"/>
+  </g>
+</svg>

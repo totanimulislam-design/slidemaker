@@ -29,6 +29,7 @@ import { restoreCustomFonts } from "./lib/customFonts";
 import { downloadDataUrl, exportZip, slideToPng } from "./lib/exporter";
 import { convertMode } from "./lib/layoutMeasure";
 import { effectiveBackground } from "./lib/background";
+import { resolveFrameImageSrc } from "./lib/frameImages";
 import { effectiveHeader, effectiveTheme } from "./lib/overrides";
 import type { ApplySection } from "./lib/applyDesign";
 import { exportPdf } from "./lib/exportPdf";
@@ -504,11 +505,16 @@ export default function App() {
               },
               background: { ...deck.theme.background, ...(data.theme?.background ?? {}) },
               boxFonts: { ...deck.theme.boxFonts, ...(data.theme?.boxFonts ?? {}) },
-              frame: {
-                ...deck.theme.frame,
-                ...(data.theme?.frame ?? {}),
-                color: data.theme?.frame?.color ?? data.theme?.frameInner ?? deck.theme.frame.color,
-              },
+              frame: (() => {
+                const f = {
+                  ...deck.theme.frame,
+                  ...(data.theme?.frame ?? {}),
+                  color: data.theme?.frame?.color ?? data.theme?.frameInner ?? deck.theme.frame.color,
+                };
+                // decks exported with the retired frame collection keep working
+                f.image = resolveFrameImageSrc(f.image);
+                return f;
+              })(),
             },
             slides: data.slides,
             globalShapes: data.globalShapes ?? [],

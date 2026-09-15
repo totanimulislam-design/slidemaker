@@ -14,6 +14,7 @@ import { backgroundLayers } from "../lib/background";
 import type { BackgroundSettings } from "../lib/types";
 import { DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
 import { computeFrameCss } from "../lib/frameDesigns";
+import { resolveFrameImageSrc } from "../lib/frameImages";
 import { HANDLES, applyMove, applyResize, applyRotate, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
 import { measureElement } from "../lib/layoutMeasure";
 import MathText from "./MathText";
@@ -447,7 +448,8 @@ function SlideBase({
   const frameCss = computeFrameCss(frame, frameOn);
 
   // If a frame image is chosen, check its placement mode (defaults to "fit" so it NEVER overlaps slide content)
-  const hasFrameImage = !!frame.image;
+  const frameImageSrc = resolveFrameImageSrc(frame.image);
+  const hasFrameImage = !!frameImageSrc;
   const isImageOverlayMode = frame.imagePlacement === "overlay";
   const imageInsetPct = hasFrameImage && !isImageOverlayMode ? (frame.imageInset ?? 10) : 0;
   // Convert percentage inset into pixels for 1280x720:
@@ -480,11 +482,11 @@ function SlideBase({
             inset: 0,
             pointerEvents: "none",
             zIndex: isImageOverlayMode ? 80 : 0,
-            backgroundImage: `url(${frame.image})`,
+            backgroundImage: `url(${frameImageSrc})`,
             backgroundSize: "100% 100%",
             backgroundRepeat: "no-repeat",
             backgroundPosition: "center",
-            ...(isImageOverlayMode && frame.image?.toLowerCase().match(/\.(jpg|jpeg|png)(\?|$)/)
+            ...(isImageOverlayMode && frameImageSrc?.toLowerCase().match(/\.(jpg|jpeg|png)(\?|$)/)
               ? {
                   padding: `${frame.imageInset ?? 10}%`,
                   WebkitMask: "linear-gradient(#fff,#fff) content-box, linear-gradient(#fff,#fff)",
