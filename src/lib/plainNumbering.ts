@@ -86,6 +86,26 @@ function romanLabel(n: number): string {
 }
 
 /**
+ * The effective display label for an option.
+ *
+ * When the option is in "manual" mode the user's custom key is always shown.
+ * Otherwise the current Plain Numbering style generates the label; if the
+ * style is "none" the stored key is returned unchanged.
+ *
+ * This single function is used by the settings panel, the canvas (Slide.tsx)
+ * and the PPTX export so every surface always shows the same value.
+ */
+export function effectiveOptionLabel(
+  labelMode: "auto" | "manual" | undefined,
+  key: string,
+  plainNumbering: string | undefined | null,
+  index: number,
+): string {
+  if (labelMode === "manual") return key;
+  return plainNumberLabel(plainNumbering, index) ?? key;
+}
+
+/**
  * The marker text for the option at `index` (0-based), or `null` when the
  * style is "none"/unknown — callers then keep the option's own key.
  */

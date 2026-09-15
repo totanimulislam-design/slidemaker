@@ -2,7 +2,7 @@ import { memo, useRef, useState, type CSSProperties } from "react";
 import type { Box, DeckHeader, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { shade, withAlpha } from "../lib/color";
 import { isWideNumberStyle, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
-import { plainNumberLabel } from "../lib/plainNumbering";
+import { effectiveOptionLabel } from "../lib/plainNumbering";
 import { optionRowStyle, type OptionStyle } from "../lib/optionStyles";
 import OptionBulletMarker from "./OptionBulletMarker";
 import { isRtlText } from "../lib/fonts";
@@ -705,8 +705,8 @@ function SlideBase({
             {slide.options.map((opt, i) => {
               const correct = slide.showAnswer && slide.answer === opt.key;
               const highlight = correct && theme.answerStyle !== "tick";
-              // plain numbering, when set, replaces the option key inside the marker
-              const markerText = plainNumberLabel(theme.plainNumbering, i) ?? opt.key;
+              // effective label: manual edits always win; auto uses plain numbering
+              const markerText = effectiveOptionLabel(opt.labelMode, opt.key, theme.plainNumbering, i);
               const rtl = isRtlText(opt.text);
               const oStyle = (theme.optionStyle ?? "plain") as OptionStyle;
               const oColor = theme.optionAccent || theme.accent;
