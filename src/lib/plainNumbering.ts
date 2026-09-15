@@ -8,7 +8,14 @@
  * (see lib/numberStyles), a style is a pure function of (style, index), so it
  * renders identically on the canvas, in thumbnails, in PNG/PDF and in PPTX.
  * "none" (the default) keeps the existing option-key behaviour untouched.
+ *
+ * A typed marker is a per-option "manual" override that outranks the style,
+ * and `resetOptionLabels` below is what the single "Reset Labels" button calls
+ * to drop every one of those overrides at once.
  */
+
+import { AR_KEYS, BN_KEYS } from "./parse";
+import type { OptionKey, QuizOption } from "./types";
 
 export type PlainNumbering =
   | "none"
@@ -134,4 +141,54 @@ export function plainNumberLabel(style: string | undefined | null, index: number
     default:
       return null;
   }
+}
+
+/** Latin option letters — the family `lib/parse` reads for a-e papers */
+const EN_KEYS = ["a", "b", "c", "d", "e"];
+
+/**
+ * The label/key an option at `index` (0-based) should carry while it is in
+ * "auto" mode: the plain-numbering label for that position. With numbering
+ * set to "none" there is nothing to generate, so the option keeps the next
+ * member of the letter family the slide already uses (ক খ গ / a b c / أ ب ج)
+ * — the same sequence the parser and "+ Add option" produce, falling through
+ * to 1, 2, 3… once a five-letter family runs out.
+ */
+export function autoOptionKey(
+  plainNumbering: string | undefined | null,
+  index: number,
+  firstKey = "",
+): string {
+  const label = plainNumberLabel(plainNumbering, index);
+  if (label) return label;
+  const family = AR_KEYS.includes(firstKey) ? AR_KEYS : /^[a-e]$/i.test(firstKey) ? EN_KEYS : BN_KEYS;
+  return family[index] ?? String(index + 1);
+}
+
+/** True when at least one option on the slide carries a manual label override. */
+export const hasManualOptionLabels = (options: QuizOption[]): boolean =>
+  options.some((o) => o.labelMode === "manual");
+
+/**
+ * Drop every manual label override on one slide.
+ *
+ * Each option returns to "auto" mode and takes the label its position
+ * generates under `plainNumbering` — so "Reset Labels" restores the numbering
+ * without touching the numbering style itself. Nothing else moves: the option
+ * order, their text, the count and every typographic setting are untouched,
+ * and only `answer` is re-pointed at the correct option's new key so the
+ * highlight survives the rename.
+ */
+export function resetOptionLabels(
+  options: QuizOption[],
+  answer: OptionKey | null,
+  plainNumbering: string | undefined | null,
+): { options: QuizOption[]; answer: OptionKey | null } {
+  const firstKey = options[0]?.key ?? "";
+  const keys = options.map((_, i) => autoOptionKey(plainNumbering, i, firstKey));
+  const correctIndex = answer == null ? -1 : options.findIndex((o) => o.key === answer);
+  return {
+    options: options.map((o, i) => ({ ...o, key: keys[i], labelMode: "auto" as const })),
+    answer: correctIndex >= 0 ? keys[correctIndex] : answer,
+  };
 }
