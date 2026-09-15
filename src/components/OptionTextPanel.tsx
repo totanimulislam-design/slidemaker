@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { SlideData, ThemeSettings } from "../lib/types";
 import { AR_KEYS, BN_KEYS } from "../lib/parse";
 import { handleSmartPaste } from "../lib/richPaste";
-import { PLAIN_NUMBERING_STYLES, DEFAULT_PLAIN_NUMBERING } from "../lib/plainNumbering";
+import { PLAIN_NUMBERING_STYLES, DEFAULT_PLAIN_NUMBERING, effectiveOptionLabel, plainNumberLabel } from "../lib/plainNumbering";
 import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
 import { boxFontLabel, setBoxFont } from "../lib/boxFonts";
 import FontPicker from "./FontPicker";
@@ -44,6 +44,7 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
       <div className="space-y-2">
         {slide.options.map((opt, i) => {
           const correct = slide.answer === opt.key;
+          const displayLabel = effectiveOptionLabel(opt.labelMode, opt.key, currentNumbering, i);
           return (
             <div key={i} className="flex items-center gap-1.5">
               <button
@@ -54,10 +55,11 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
                 {correct ? "✓" : ""}
               </button>
               <input
-                value={opt.key}
+                value={displayLabel}
                 onChange={(e) => {
-                  const options = slide.options.map((o, j) => j === i ? { ...o, key: e.target.value } : o);
-                  updateSlide(slide.id, { options, answer: correct ? e.target.value : slide.answer });
+                  const newKey = e.target.value;
+                  const options = slide.options.map((o, j) => j === i ? { ...o, key: newKey, labelMode: "manual" as const } : o);
+                  updateSlide(slide.id, { options, answer: correct ? newKey : slide.answer });
                 }}
                 className="w-10 rounded-lg border border-white/10 bg-slate-900/70 px-1 py-2 text-center text-sm text-amber-200 outline-none"
               />
@@ -78,9 +80,17 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
         <Btn
           size="sm"
           onClick={() => {
-            const first = slide.options[0]?.key ?? "";
-            const family = AR_KEYS.includes(first) ? AR_KEYS : /^[a-e]$/i.test(first) ? ["a", "b", "c", "d", "e"] : BN_KEYS;
-            updateSlide(slide.id, { options: [...slide.options, { key: family[slide.options.length] ?? String(slide.options.length + 1), text: "" }] });
+            const nextIndex = slide.options.length;
+            let newKey: string;
+            if (currentNumbering !== "none") {
+              // When plain numbering is active, generate the auto label as the key
+              newKey = plainNumberLabel(currentNumbering, nextIndex) ?? String(nextIndex + 1);
+            } else {
+              const first = slide.options[0]?.key ?? "";
+              const family = AR_KEYS.includes(first) ? AR_KEYS : /^[a-e]$/i.test(first) ? ["a", "b", "c", "d", "e"] : BN_KEYS;
+              newKey = family[slide.options.length] ?? String(slide.options.length + 1);
+            }
+            updateSlide(slide.id, { options: [...slide.options, { key: newKey, text: "", labelMode: "auto" }] });
           }}
         >
           + Add option

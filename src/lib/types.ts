@@ -7,6 +7,17 @@ export type EditorScope = "slide" | "selected" | "all";
 export interface QuizOption {
   key: OptionKey;
   text: string;
+  /**
+   * How the option's display label is determined:
+   *   "auto"   — the label is generated from the deck's Plain Numbering setting.
+   *              When numbering is "none", the stored `key` is shown as-is.
+   *   "manual" — the user has explicitly typed a custom label; it always takes
+   *              priority over Plain Numbering.
+   *
+   * `undefined` (missing) is treated as `"auto"` for backward compatibility
+   * with decks saved before this field existed.
+   */
+  labelMode?: "auto" | "manual";
 }
 
 export interface SlideData {
