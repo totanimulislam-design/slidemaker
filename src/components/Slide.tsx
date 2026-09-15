@@ -6,7 +6,7 @@ import { plainNumberLabel } from "../lib/plainNumbering";
 import { optionRowStyle, type OptionStyle } from "../lib/optionStyles";
 import OptionBulletMarker from "./OptionBulletMarker";
 import { isRtlText } from "../lib/fonts";
-import { boxFontCss, boxStack, boxTypeface } from "../lib/boxFonts";
+import { boxFontCss, boxStack, boxTypeface, deckStack, optionTextStack } from "../lib/boxFonts";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
 import { ELEMENT_DEFAULT_Z } from "../lib/layers";
 import { bannerCss } from "../lib/banner";
@@ -432,8 +432,14 @@ function SlideBase({
   const allShapes = [...(globalShapes ?? []), ...(slide.shapes ?? [])];
 
   const bodyStack = boxStack(theme, "question");
-  /** option text + its plain numbering share one face: the option font */
-  const optionStack = boxStack(theme, "options");
+  /**
+   * Option text only — applied directly to the element that paints an option's
+   * text, never to the options container or the slide, so the choice cannot
+   * inherit into the question, header, title, note or any shape.
+   */
+  const optionStack = optionTextStack(theme);
+  /** The marker / plain numbering keep the deck face, independent of the option font. */
+  const optionMarkerStack = deckStack(theme, "options");
   const qRtl = isRtlText(slide.question);
 
   const frame = theme.frame ?? DEFAULT_FRAME;
@@ -728,14 +734,16 @@ function SlideBase({
                     keyText={markerText}
                     highlight={highlight}
                     optionStyle={oStyle}
-                    fontFamily={optionStack}
+                    // the marker / plain numbering keep the deck face: the
+                    // option text font must not reach them
+                    fontFamily={optionMarkerStack}
                   />
                   <MathText
                     text={opt.text}
                     style={{
                       color: correct ? "#5cff9d" : theme.optionTextColor,
-                      // same face as its marker, so the option font (and its
-                      // per-box override) drives the text and the numbering alike
+                      // the OPTION TEXT FONT lands here and nowhere else — this
+                      // element is the only consumer of `optionStack`
                       fontFamily: optionStack,
                       fontSize: optSize,
                       fontWeight: 700,

@@ -4,7 +4,7 @@ import type { Box, Deck, ElementId, SlideData } from "./types";
 import { mixedToRuns, type TextRun } from "./latexRuns";
 import { flatten, shade, withAlpha } from "./color";
 import { isRtlText } from "./fonts";
-import { boxStack, boxTypeface } from "./boxFonts";
+import { boxStack, deckStack, optionTextStack, boxTypeface } from "./boxFonts";
 import type { ShapeItem } from "./shapes";
 import { sortedLayers } from "./layers";
 import { DEFAULT_BANNER, type Gradient } from "./types";
@@ -293,6 +293,13 @@ function buildSlide(
    * ------------------------------------------------------------------ */
   const emit: Record<string, () => void> = {};
   const face = (id: ElementId, fallback: string) => firstFamily(boxStack(t, id), fallback);
+  /**
+   * Deck face of a box, ignoring that box's own typeface override — used by the
+   * option marker/plain numbering so the OPTION TEXT FONT stays on option text.
+   */
+  const baseFace = (id: ElementId, fallback: string) => firstFamily(deckStack(t, id), fallback);
+  /** option text only: the same face the canvas puts on the option's text node */
+  const optionFace = () => firstFamily(optionTextStack(t), opts.bodyFont);
   const tfBold = (id: ElementId, fallback = true) => {
     const w = boxTypeface(t, id).weight;
     return w ? w >= 600 : fallback;
@@ -673,7 +680,8 @@ function buildSlide(
       y: inch(y + (rowH - dia) / 2),
       w: inch(bW),
       h: inch(dia),
-      fontFace: face("options", opts.bodyFont),
+      // the marker keeps the deck face: the option text font must not repaint it
+      fontFace: baseFace("options", opts.bodyFont),
       fontSize: Math.round(optFont * (isMinimal ? 0.72 : 0.62)),
       bold: true,
       color: customInk ? hex(customInk) : badgeInk ? hex(badgeInk) : correct ? "FFFFFF" : hex(oColor),
@@ -685,7 +693,7 @@ function buildSlide(
     const oRtl = isRtlText(opt.text);
     s.addText(
       toPptxRuns(opt.text, {
-        fontFace: face("options", opts.bodyFont),
+        fontFace: optionFace(),
         fontSize: optFont,
         bold: tfBold("options"),
         italic: tfItalic("options"),
