@@ -27,20 +27,3 @@ export function readableOn(hex: string): string {
   const [r, g, b] = parseHex(hex);
   return (r * 299 + g * 587 + b * 114) / 1000 > 140 ? "#101014" : "#ffffff";
 }
-
-/**
- * Blend `fg` over `bg` at `alpha` into a solid hex colour — for export formats
- * (PPTX) that cannot carry alpha.
- */
-export function flatten(fg: string, bg: string, alpha: number): string {
-  const a = Math.max(0, Math.min(1, alpha));
-  const [r1, g1, b1] = parseHex(fg);
-  const [r2, g2, b2] = parseHex(bg);
-  return `#${[
-    clamp(r1 * a + r2 * (1 - a)),
-    clamp(g1 * a + g2 * (1 - a)),
-    clamp(b1 * a + b2 * (1 - a)),
-  ]
-    .map((c) => c.toString(16).padStart(2, "0"))
-    .join("")}`;
-}

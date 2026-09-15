@@ -6,7 +6,7 @@
  * the option's position, so a deck can count 1, 2, 3 — or ক খ গ, ١ ٢ ٣, I II
  * III — without touching the stored keys. Like the question-bullet numbering
  * (see lib/numberStyles), a style is a pure function of (style, index), so it
- * renders identically on the canvas, in thumbnails, in PNG/PDF and in PPTX.
+ * renders identically on the canvas, in thumbnails and in PNG/PDF exports.
  * "none" (the default) keeps the existing option-key behaviour untouched.
  *
  * A typed marker is a per-option "manual" override that outranks the style,
@@ -142,8 +142,8 @@ function romanLabel(n: number): string {
  * Otherwise the current Plain Numbering style generates the label; if the
  * style is "none" the stored key is returned unchanged.
  *
- * This single function is used by the settings panel, the canvas (Slide.tsx)
- * and the PPTX export so every surface always shows the same value.
+ * This single function is used by the settings panel and the canvas (Slide.tsx)
+ * so every surface always shows the same value.
  */
 export function effectiveOptionLabel(
   labelMode: "auto" | "manual" | undefined,

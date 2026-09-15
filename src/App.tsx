@@ -33,7 +33,6 @@ import { resolveFrameImageSrc } from "./lib/frameImages";
 import { effectiveHeader, effectiveTheme } from "./lib/overrides";
 import type { ApplySection } from "./lib/applyDesign";
 import { exportPdf } from "./lib/exportPdf";
-import { exportPptx } from "./lib/exportPptx";
 import { normalizeSource } from "./lib/richPaste";
 import { cn } from "./utils/cn";
 
@@ -416,19 +415,6 @@ export default function App() {
   const runExport = async (cfg: ExportSettings) => {
     const name = (cfg.fileName || "mcq-slides").replace(/[\\/:*?"<>|]+/g, "").trim() || "mcq-slides";
     try {
-      if (cfg.format === "pptx") {
-        setBusy("Building PowerPoint…");
-        await exportPptx(deck, {
-          bodyFont: cfg.pptxBodyFont,
-          displayFont: cfg.pptxDisplayFont,
-          answerSlides: cfg.pptxAnswerSlides,
-          speakerNotes: cfg.pptxNotes,
-          fileName: `${name}.pptx`,
-        });
-        setExportOpen(false);
-        return;
-      }
-
       setBusy("Preparing slides…");
       await mountOffscreen();
 
@@ -600,7 +586,7 @@ export default function App() {
           <div className="mx-1 h-6 w-px bg-white/10" />
 
           <Btn variant="success" onClick={() => setExportOpen(true)} disabled={!deck.slides.length || !!busy}>
-            ⬇ Export — PPTX · PDF · PNG
+            ⬇ Export — PDF · PNG
           </Btn>
           <Btn variant="soft" onClick={() => setPresenting(true)} disabled={!slide}>
             ▶ Present
