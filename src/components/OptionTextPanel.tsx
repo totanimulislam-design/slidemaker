@@ -3,7 +3,8 @@ import type { SlideData, ThemeSettings } from "../lib/types";
 import { AR_KEYS, BN_KEYS } from "../lib/parse";
 import { handleSmartPaste } from "../lib/richPaste";
 import { PLAIN_NUMBERING_STYLES, DEFAULT_PLAIN_NUMBERING } from "../lib/plainNumbering";
-import { FONT_BY_FAMILY, ensureFontStylesheet, toSingleFamily } from "../lib/fonts";
+import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
+import { boxFontLabel, setBoxFont } from "../lib/boxFonts";
 import FontPicker from "./FontPicker";
 import { Btn, ColorInput, Field, Slider, TextInput } from "./ui";
 import { cn } from "../utils/cn";
@@ -20,7 +21,13 @@ interface Props {
 export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide, updateAll, onAnswerCopies }: Props) {
   const refs = useRef<Record<number, HTMLInputElement | null>>({});
   const currentNumbering = T.plainNumbering ?? DEFAULT_PLAIN_NUMBERING;
-  const optionFont = toSingleFamily(T.bengaliFont);
+  /**
+   * The option face lives on the options box only (boxFonts.options) — writing
+   * it to the deck's Bengali font would repaint every text box on the slide.
+   * With no override the box still follows the deck Bangla font, so decks saved
+   * before this was scoped keep rendering exactly as they did.
+   */
+  const optionFont = boxFontLabel(T, "options");
 
   // a deck can be saved with any face from the library — make sure the one it
   // uses is actually downloaded, not just listed in the picker
@@ -91,7 +98,9 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
         onChange={(family) => {
           const meta = FONT_BY_FAMILY.get(family.toLowerCase());
           if (meta) ensureFontStylesheet([meta]);
-          setTheme({ bengaliFont: `'${family}', sans-serif` });
+          // patch the options box only (family, nothing else) — the deck's
+          // Bengali/Latin/Arabic fonts and every other box stay untouched
+          setTheme({ boxFonts: setBoxFont(T.boxFonts, "options", { family }) });
         }}
         script="all"
         compact
