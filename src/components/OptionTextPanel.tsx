@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { SlideData, ThemeSettings } from "../lib/types";
 import { AR_KEYS, BN_KEYS } from "../lib/parse";
 import { handleSmartPaste } from "../lib/richPaste";
+import { PLAIN_NUMBERING_STYLES, DEFAULT_PLAIN_NUMBERING } from "../lib/plainNumbering";
 import { FONT_BY_FAMILY, ensureFontStylesheet, toSingleFamily } from "../lib/fonts";
 import FontPicker from "./FontPicker";
 import { Btn, ColorInput, Field, Slider, TextInput } from "./ui";
@@ -18,6 +19,7 @@ interface Props {
 
 export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide, updateAll, onAnswerCopies }: Props) {
   const refs = useRef<Record<number, HTMLInputElement | null>>({});
+  const currentNumbering = T.plainNumbering ?? DEFAULT_PLAIN_NUMBERING;
   if (!slide) return <p className="text-sm text-slate-500">No slide selected.</p>;
 
   return (
@@ -87,8 +89,20 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
       />
       <div className="grid grid-cols-2 gap-2">
         <ColorInput label="Option text" value={T.optionTextColor} onChange={(v) => setTheme({ optionTextColor: v })} />
-        <ColorInput label="Option marker" value={T.optionAccent} onChange={(v) => setTheme({ optionAccent: v })} />
       </div>
+      <Field label="Plain numbering" hint={PLAIN_NUMBERING_STYLES.find((s) => s.id === currentNumbering)?.example}>
+        <select
+          value={currentNumbering}
+          onChange={(e) => setTheme({ plainNumbering: e.target.value })}
+          className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-400/60"
+        >
+          {PLAIN_NUMBERING_STYLES.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </Field>
       <div className="grid grid-cols-2 gap-2">
         <Btn size="sm" onClick={() => updateAll({ showAnswer: true })}>Reveal all</Btn>
         <Btn size="sm" onClick={() => updateAll({ showAnswer: false })}>Hide all</Btn>

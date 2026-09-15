@@ -75,6 +75,7 @@ export function applySlideDesign(
         optionTextColor: effTheme.optionTextColor,
         optionGap: effTheme.optionGap,
         optionLineHeight: effTheme.optionLineHeight,
+        plainNumbering: effTheme.plainNumbering,
         answerStyle: effTheme.answerStyle,
       };
     }
@@ -167,6 +168,7 @@ export function applySlideDesign(
           optionTextColor: effTheme.optionTextColor,
           optionGap: effTheme.optionGap,
           optionLineHeight: effTheme.optionLineHeight,
+          plainNumbering: effTheme.plainNumbering,
           answerStyle: effTheme.answerStyle,
         });
       } else if (section === "frame") {

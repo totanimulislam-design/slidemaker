@@ -450,6 +450,8 @@ export interface ThemeSettings {
   optionGap: number;
   /** line-height of the option text (1 = tight, 2 = airy) */
   optionLineHeight: number;
+  /** plain numbering painted over the option markers (see lib/plainNumbering) — "none" keeps the option keys */
+  plainNumbering: string;
   optionsLayout: OptionsLayout;
   /** free positioning for every element (0–100 % both axes) */
   layout: LayoutMap;
@@ -541,6 +543,7 @@ export const DEFAULT_THEME: ThemeSettings = {
   optionSize: 30,
   optionGap: 0,
   optionLineHeight: 1.45,
+  plainNumbering: "none",
   optionsLayout: "right",
   layout: cloneLayout(),
   snapEnabled: true,

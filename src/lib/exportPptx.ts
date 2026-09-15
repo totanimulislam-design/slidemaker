@@ -14,6 +14,7 @@ import { isWideNumberStyle, pptxGeometry, type NumberStyle } from "./numberStyle
 import { optionBadgeStyle } from "./optionStyles";
 import type { OptionStyle } from "./optionStyles";
 import { formatOptionKey, isMinimalOptionBulletShape, type OptionBulletShape } from "./optionBulletShapes";
+import { plainNumberLabel } from "./plainNumbering";
 import { optionBulletBackdrop, optionBulletPalette } from "./optionBulletColors";
 
 /**
@@ -577,7 +578,7 @@ function buildSlide(
     const badge = optionBadgeStyle(oStyle, t, oColor, dia, highlight);
     const bShape = (t.optionBulletShape ?? "circle") as OptionBulletShape;
     const isMinimal = isMinimalOptionBulletShape(bShape);
-    const keyLabel = formatOptionKey(opt.key, bShape);
+    const keyLabel = formatOptionKey(plainNumberLabel(t.plainNumbering, i) ?? opt.key, bShape);
     const bW = bShape === "pill" ? dia * 1.35 : dia;
 
     const geomType =
