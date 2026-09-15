@@ -9,6 +9,7 @@ import type { ShapeItem } from "./shapes";
 import { sortedLayers } from "./layers";
 import { DEFAULT_BANNER, type Gradient } from "./types";
 import { effectiveBackground } from "./background";
+import { resolveFrameImageSrc } from "./frameImages";
 import { effectiveHeader, effectiveTheme } from "./overrides";
 import { isWideNumberStyle, pptxGeometry, type NumberStyle } from "./numberStyles";
 import { optionBadgeStyle } from "./optionStyles";
@@ -200,7 +201,7 @@ function buildSlide(
     }
   }
   // If a custom frame image is active and in "fit" mode, offset the inner slide content so the frame never overlaps
-  const hasFrameImage = !!frame.image;
+  const hasFrameImage = !!resolveFrameImageSrc(frame.image);
   const isImageOverlayMode = frame.imagePlacement === "overlay";
   const imageInsetPct = hasFrameImage && !isImageOverlayMode ? (frame.imageInset ?? 10) : 0;
   const imageInsetX = Math.round((imageInsetPct / 100) * SLIDE_W);

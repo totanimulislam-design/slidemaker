@@ -15,6 +15,7 @@ import {
   type ThemeSettings,
 } from "./types";
 import { emptySlide, parseQuestions } from "./parse";
+import { resolveFrameImageSrc } from "./frameImages";
 import { makeImageShape, makeShape, shapeId, type ShapeItem, type ShapeKind } from "./shapes";
 import { useHistory } from "./useHistory";
 import { effectiveTheme, mergeThemeOverride } from "./overrides";
@@ -59,6 +60,14 @@ function initialDeck(): Deck {
     if (raw) {
       const parsed = JSON.parse(raw) as Deck;
       if (parsed?.slides?.length) {
+        const frame = {
+          ...DEFAULT_FRAME,
+          ...(parsed.theme?.frame ?? {}),
+          color: parsed.theme?.frame?.color ?? parsed.theme?.frameInner ?? DEFAULT_FRAME.color,
+        };
+        // decks saved with the retired frame collection keep working: remap
+        // old built-in image paths onto the new designs
+        frame.image = resolveFrameImageSrc(frame.image);
         return normalizeDeckZ({
           header: { ...DEFAULT_HEADER, ...parsed.header },
           theme: {
@@ -79,11 +88,7 @@ function initialDeck(): Deck {
             },
             background: { ...DEFAULT_BACKGROUND, ...(parsed.theme?.background ?? {}) },
             boxFonts: { ...(parsed.theme?.boxFonts ?? {}) },
-            frame: {
-              ...DEFAULT_FRAME,
-              ...(parsed.theme?.frame ?? {}),
-              color: parsed.theme?.frame?.color ?? parsed.theme?.frameInner ?? DEFAULT_FRAME.color,
-            },
+            frame,
           },
           slides: parsed.slides,
           globalShapes: parsed.globalShapes ?? [],

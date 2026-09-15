@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">
+  <!-- Dotted Outline: soft rounded dot border for playful decks -->
+  <rect x="18" y="16" width="1244" height="688" rx="26" fill="none" stroke="#a78bfa" stroke-width="7" stroke-linecap="round" stroke-dasharray="1 20"/>
+  <rect x="38" y="34" width="1204" height="652" rx="18" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 14"/>
+</svg>

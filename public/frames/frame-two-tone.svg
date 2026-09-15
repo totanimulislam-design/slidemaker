@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">
+  <!-- Two-Tone Band: deep slate band with a warm amber accent stripe -->
+  <path fill="#1e293b" d="M0 0h1280v720H0zM70 62h1140v596H70z" fill-rule="evenodd"/>
+  <path fill="#f59e0b" d="M0 0h1280v720H0zM56 50h1168v620H56z" fill-rule="evenodd"/>
+  <path fill="#1e293b" d="M0 0h1280v720H0zM40 36h1200v648H40z" fill-rule="evenodd"/>
+  <rect x="12" y="10" width="1256" height="700" fill="none" stroke="#fbbf24" stroke-width="3"/>
+</svg>

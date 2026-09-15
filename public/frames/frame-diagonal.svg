@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">
+  <!-- Diagonal Cut: chamfered corners with an amber accent notch -->
+  <path fill="none" stroke="#312e81" stroke-width="10"
+        d="M62 12 H1218 L1268 62 V658 L1218 708 H62 L12 658 V62 Z"/>
+  <path fill="none" stroke="#818cf8" stroke-width="3"
+        d="M74 34 H1206 L1246 74 V646 L1206 686 H74 L34 646 V74 Z"/>
+  <g fill="#f59e0b">
+    <path d="M62 12 L112 12 L12 112 L12 62 Z"/>
+    <path d="M1218 12 L1168 12 L1268 112 L1268 62 Z"/>
+    <path d="M62 708 L112 708 L12 608 L12 658 Z"/>
+    <path d="M1218 708 L1168 708 L1268 608 L1268 658 Z"/>
+  </g>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1280 720" preserveAspectRatio="none">
+  <!-- Arabesque: gold double rule with scrolling corner flourishes -->
+  <defs>
+    <g id="cnr">
+      <g fill="none" stroke="#c9a227" stroke-width="3.5" stroke-linecap="round">
+        <path d="M4 64 C4 30 30 4 64 4"/>
+        <path d="M18 64 C18 38 38 18 64 18"/>
+        <path d="M32 60 C32 44 44 32 60 32"/>
+      </g>
+      <circle cx="12" cy="12" r="5.5" fill="#c9a227"/>
+      <circle cx="46" cy="46" r="4" fill="#efd98f"/>
+    </g>
+  </defs>
+  <rect x="16" y="14" width="1248" height="692" fill="none" stroke="#c9a227" stroke-width="6"/>
+  <rect x="78" y="72" width="1124" height="576" fill="none" stroke="#efd98f" stroke-width="2"/>
+  <g>
+    <use href="#cnr" xlink:href="#cnr" transform="translate(28,26)"/>
+    <use href="#cnr" xlink:href="#cnr" transform="translate(1252,26) scale(-1,1)"/>
+    <use href="#cnr" xlink:href="#cnr" transform="translate(28,694) scale(1,-1)"/>
+    <use href="#cnr" xlink:href="#cnr" transform="translate(1252,694) scale(-1,-1)"/>
+  </g>
+</svg>
