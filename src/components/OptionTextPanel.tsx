@@ -1,8 +1,14 @@
 import { useEffect, useRef } from "react";
 import type { SlideData, ThemeSettings } from "../lib/types";
-import { AR_KEYS, BN_KEYS } from "../lib/parse";
 import { handleSmartPaste } from "../lib/richPaste";
-import { PLAIN_NUMBERING_STYLES, DEFAULT_PLAIN_NUMBERING, effectiveOptionLabel, plainNumberLabel } from "../lib/plainNumbering";
+import {
+  PLAIN_NUMBERING_STYLES,
+  DEFAULT_PLAIN_NUMBERING,
+  effectiveOptionLabel,
+  autoOptionKey,
+  resetOptionLabels,
+  hasManualOptionLabels,
+} from "../lib/plainNumbering";
 import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
 import { boxFontLabel, setBoxFont } from "../lib/boxFonts";
 import FontPicker from "./FontPicker";
@@ -77,24 +83,33 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
             </div>
           );
         })}
-        <Btn
-          size="sm"
-          onClick={() => {
-            const nextIndex = slide.options.length;
-            let newKey: string;
-            if (currentNumbering !== "none") {
-              // When plain numbering is active, generate the auto label as the key
-              newKey = plainNumberLabel(currentNumbering, nextIndex) ?? String(nextIndex + 1);
-            } else {
-              const first = slide.options[0]?.key ?? "";
-              const family = AR_KEYS.includes(first) ? AR_KEYS : /^[a-e]$/i.test(first) ? ["a", "b", "c", "d", "e"] : BN_KEYS;
-              newKey = family[slide.options.length] ?? String(slide.options.length + 1);
+        <div className="flex items-center gap-2">
+          <Btn
+            size="sm"
+            onClick={() => {
+              const nextIndex = slide.options.length;
+              // the new option joins in AUTO mode, so it is born labelled by
+              // whatever plain numbering the deck is set to
+              const newKey = autoOptionKey(currentNumbering, nextIndex, slide.options[0]?.key ?? "");
+              updateSlide(slide.id, { options: [...slide.options, { key: newKey, text: "", labelMode: "auto" }] });
+            }}
+          >
+            + Add option
+          </Btn>
+          {/* one global reset for every label — individual rows stay untouched
+              (they keep their ✕ delete button and their editable label field) */}
+          <Btn
+            size="sm"
+            onClick={() => updateSlide(slide.id, resetOptionLabels(slide.options, slide.answer, currentNumbering))}
+            title={
+              hasManualOptionLabels(slide.options)
+                ? "Clear all custom labels and go back to Plain Numbering"
+                : "Regenerate every label from the current Plain Numbering"
             }
-            updateSlide(slide.id, { options: [...slide.options, { key: newKey, text: "", labelMode: "auto" }] });
-          }}
-        >
-          + Add option
-        </Btn>
+          >
+            ↻ Reset Labels
+          </Btn>
+        </div>
       </div>
       <Field label="Option font size" hint={`${T.optionSize}px`}>
         <Slider min={16} max={46} value={T.optionSize} onChange={(v) => setTheme({ optionSize: v })} />
