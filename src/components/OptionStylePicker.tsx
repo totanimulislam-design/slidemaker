@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { ThemeSettings } from "../lib/types";
-import { OPTION_STYLES, optionBadgeStyle, optionRowStyle, type OptionStyle } from "../lib/optionStyles";
+import { OPTION_STYLES, optionRowStyle, type OptionStyle } from "../lib/optionStyles";
+import OptionBulletMarker from "./OptionBulletMarker";
 import { cn } from "../utils/cn";
 
 const KEYS = ["ক", "খ", "গ", "ঘ"];
@@ -35,22 +36,15 @@ export function OptionStylePreview({
         pointerEvents: "none",
       }}
     >
-      <span
-        style={{
-          ...optionBadgeStyle(id, theme, color, circle, correct),
-          width: circle,
-          height: circle,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: 700,
-          fontSize: Math.round(fs * 0.7),
-          lineHeight: 1,
-          flex: "0 0 auto",
-        }}
-      >
-        {KEYS[index % KEYS.length]}
-      </span>
+      <OptionBulletMarker
+        theme={theme}
+        color={color}
+        size={circle}
+        keyText={KEYS[index % KEYS.length]}
+        highlight={correct}
+        optionStyle={id}
+        style={{ fontSize: Math.round(fs * 0.7) }}
+      />
       <span
         style={{
           color: correct ? "#5cff9d" : theme.optionTextColor,

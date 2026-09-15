@@ -11,6 +11,16 @@ const __dirname = path.dirname(__filename);
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), viteSingleFile()],
+  server: {
+    host: true,
+    port: 5173,
+    /**
+     * The app is often opened through a hosted preview proxy, which reaches the
+     * dev server on a `*.e2b.app` host. Vite blocks unknown Host headers by
+     * default, so allow that one suffix (dev server only, never affects build).
+     */
+    allowedHosts: [".e2b.app"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

@@ -381,6 +381,20 @@ export const FRAME_STYLES: { id: FrameStyleId; label: string }[] = [
   { id: "none", label: "None" },
 ];
 
+/** where the option bullet's background shape is painted */
+export type OptionBulletBgScope = "marker" | "row";
+
+/** silhouette of the option bullet's background shape */
+export type OptionBulletBgShape =
+  | "match"
+  | "circle"
+  | "rounded"
+  | "square"
+  | "pill"
+  | "diamond"
+  | "hexagon"
+  | "soft";
+
 export interface ThemeSettings {
   frameOuter: string;
   frameInner: string;
@@ -403,6 +417,24 @@ export interface ThemeSettings {
   optionBulletShape: string;
   /** option bullet fill treatment */
   optionBulletTreatment: string;
+  /** letter inside the bullet marker — "" = auto (marker colour), "transparent" = hidden */
+  optionBulletInk: string;
+  /** background / fill of the bullet marker — "" = auto, "transparent" = no fill */
+  optionBulletFill: string;
+  /** outline / ring of the bullet marker — "" = auto, "transparent" = no ring */
+  optionBulletBorder: string;
+  /** keep the picked ink / fill / border colours on the revealed correct answer */
+  optionBulletCustomOnAnswer: boolean;
+  /** colour of the bullet's background shape — "" = off */
+  optionBulletBgColor: string;
+  /** paint that shape behind the marker, or as the option-row background */
+  optionBulletBgScope: OptionBulletBgScope;
+  /** silhouette of that background shape */
+  optionBulletBgShape: OptionBulletBgShape;
+  /** size of the background shape, % of the marker box */
+  optionBulletBgSize: number;
+  /** background shape opacity, 0–100 */
+  optionBulletBgOpacity: number;
   accent: string;
   brandColor: string;
   badgeColor: string;
@@ -489,6 +521,15 @@ export const DEFAULT_THEME: ThemeSettings = {
   optionAccent: "#2f4fff",
   optionBulletShape: "circle",
   optionBulletTreatment: "auto",
+  optionBulletInk: "",
+  optionBulletFill: "",
+  optionBulletBorder: "",
+  optionBulletCustomOnAnswer: false,
+  optionBulletBgColor: "",
+  optionBulletBgScope: "marker",
+  optionBulletBgShape: "match",
+  optionBulletBgSize: 150,
+  optionBulletBgOpacity: 30,
   accent: "#2f4fff",
   brandColor: "#ffffff",
   badgeColor: "#ffffff",
