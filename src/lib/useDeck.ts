@@ -116,6 +116,7 @@ const THEME_LABELS: Partial<Record<keyof ThemeSettings, string>> = {
   optionBulletBgOpacity: "Option bullet background opacity",
   optionGap: "Option spacing",
   optionLineHeight: "Option line height",
+  plainNumbering: "Plain numbering",
   optionsLayout: "Options layout",
   bengaliFont: "Bangla font",
   arabicFont: "Arabic font",
