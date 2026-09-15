@@ -841,7 +841,7 @@ export function useDeck() {
             };
           }
           const ids = new Set(scope === "slide" ? [slideId ?? ""] : scope);
-          const deckHasBg = !!d.theme.background?.src || !!d.theme.background?.gradient?.enabled ||
+          const deckHasBg = !!d.theme.background?.src || !!d.theme.background?.design || !!d.theme.background?.gradient?.enabled ||
             !!d.theme.background?.overlay?.enabled || (d.theme.background?.vignette ?? 0) > 0;
           return {
             ...d,

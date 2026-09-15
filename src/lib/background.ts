@@ -1,21 +1,56 @@
 import type { CSSProperties } from "react";
-import type { BackgroundSettings, Deck, SlideData } from "./types";
+import type { BackgroundSettings, Deck, Gradient, SlideData } from "./types";
 import { DEFAULT_BACKGROUND } from "./types";
 import { gradientCss } from "./banner";
 import { withAlpha } from "./color";
 import { effectiveTheme } from "./overrides";
+import { designLayer } from "./backgroundDesigns";
+
+/**
+ * Fills in every field a saved background may be missing (decks stored before
+ * the design layer, radial centre or mesh gradients existed) so old designs
+ * keep rendering exactly as before.
+ */
+export function normalizeGradient(g: Gradient | undefined): Gradient {
+  const base = DEFAULT_BACKGROUND.gradient;
+  if (!g) return { ...base, stops: base.stops.map((s) => ({ ...s })) };
+  const stops = g.stops?.length
+    ? g.stops.map((s) => ({ color: s.color || "#ffffff", at: Math.max(0, Math.min(100, s.at ?? 0)) }))
+    : base.stops.map((s) => ({ ...s }));
+  return {
+    enabled: !!g.enabled,
+    type: g.type === "radial" || g.type === "mesh" ? g.type : "linear",
+    angle: Number.isFinite(g.angle) ? g.angle : base.angle,
+    stops,
+    cx: Number.isFinite(g.cx) ? g.cx : 50,
+    cy: Number.isFinite(g.cy) ? g.cy : 50,
+  };
+}
+
+export function normalizeBackground(b: Partial<BackgroundSettings> | undefined): BackgroundSettings {
+  return {
+    ...DEFAULT_BACKGROUND,
+    ...b,
+    gradient: normalizeGradient(b?.gradient),
+    overlay: { ...DEFAULT_BACKGROUND.overlay, ...(b?.overlay ?? {}) },
+    design: b?.design ?? "",
+    designW: Number.isFinite(b?.designW) ? b!.designW : 100,
+    designH: Number.isFinite(b?.designH) ? b!.designH : 100,
+    designOpacity: Number.isFinite(b?.designOpacity) ? b!.designOpacity : 1,
+  };
+}
 
 /** The background that applies to a slide: its own override, else the deck's. */
 export function effectiveBackground(deck: Deck, slide: SlideData | undefined): BackgroundSettings {
-  const base = { ...DEFAULT_BACKGROUND, ...(effectiveTheme(deck, slide).background ?? {}) };
-  return slide?.background ? { ...base, ...slide.background } : base;
+  const themeBg = effectiveTheme(deck, slide).background;
+  return normalizeBackground({ ...themeBg, ...(slide?.background ?? {}) });
 }
 
-export const hasBackground = (b: BackgroundSettings) => !!b.src || b.gradient.enabled;
+export const hasBackground = (b: BackgroundSettings) => !!b.src || !!b.design || b.gradient.enabled;
 
 /**
  * Layered CSS for the board background:
- *   [gradient] → [image] → [overlay tint] → [vignette]
+ *   [gradient] → [vector design] → [image] → [overlay tint] → [vignette]
  * Everything is inline so exports render identically.
  */
 export function backgroundLayers(b: BackgroundSettings, boardColor: string): CSSProperties[] {
@@ -23,6 +58,9 @@ export function backgroundLayers(b: BackgroundSettings, boardColor: string): CSS
   const common: CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none" };
 
   if (b.gradient.enabled) layers.push({ ...common, background: gradientCss(b.gradient, boardColor) });
+
+  const art = designLayer(b.design, b.designW, b.designH, b.designOpacity);
+  if (art) layers.push(art);
 
   if (b.src) {
     const zoom = b.fit === "cover" ? 1 + b.zoom / 100 : 1;
@@ -60,21 +98,6 @@ export function backgroundLayers(b: BackgroundSettings, boardColor: string): CSS
 }
 
 /* ------------------------------------------------------------- presets */
-
-export interface BackgroundPreset {
-  name: string;
-  swatch: string;
-  bg: Partial<BackgroundSettings>;
-}
-
-export const BACKGROUND_PRESETS: BackgroundPreset[] = [
-  { name: "Board only", swatch: "#050507", bg: { src: "", gradient: { ...DEFAULT_BACKGROUND.gradient, enabled: false }, overlay: { ...DEFAULT_BACKGROUND.overlay, enabled: false }, vignette: 0 } },
-  { name: "Night sky", swatch: "linear-gradient(180deg,#0b1226,#050507)", bg: { gradient: { enabled: true, type: "linear", angle: 180, stops: [{ color: "#0b1226", at: 0 }, { color: "#050507", at: 100 }] } } },
-  { name: "Deep green", swatch: "linear-gradient(160deg,#0f3d2e,#06140f)", bg: { gradient: { enabled: true, type: "linear", angle: 160, stops: [{ color: "#0f3d2e", at: 0 }, { color: "#06140f", at: 100 }] } } },
-  { name: "Royal", swatch: "linear-gradient(135deg,#2a0a3d,#0b0620)", bg: { gradient: { enabled: true, type: "linear", angle: 135, stops: [{ color: "#2a0a3d", at: 0 }, { color: "#0b0620", at: 100 }] } } },
-  { name: "Spotlight", swatch: "radial-gradient(circle,#1e293b,#020617)", bg: { gradient: { enabled: true, type: "radial", angle: 0, stops: [{ color: "#1e293b", at: 0 }, { color: "#020617", at: 100 }] } } },
-  { name: "Paper", swatch: "linear-gradient(180deg,#fdfaf3,#efe7d6)", bg: { gradient: { enabled: true, type: "linear", angle: 180, stops: [{ color: "#fdfaf3", at: 0 }, { color: "#efe7d6", at: 100 }] } } },
-];
 
 /** Image treatments — applied on top of whatever image is set. */
 export const IMAGE_TREATMENTS: { name: string; bg: Partial<BackgroundSettings> }[] = [

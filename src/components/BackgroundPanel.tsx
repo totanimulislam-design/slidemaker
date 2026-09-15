@@ -1,6 +1,8 @@
 import { useState } from "react";
-import type { BackgroundSettings, Deck, SlideData } from "../lib/types";
-import { BACKGROUND_PRESETS, IMAGE_TREATMENTS, backgroundLayers, effectiveBackground } from "../lib/background";
+import type { BackgroundSettings, Deck, Gradient, SlideData } from "../lib/types";
+import { IMAGE_TREATMENTS, backgroundLayers, effectiveBackground } from "../lib/background";
+import { BG_CATEGORIES, BG_PRESETS, designName, designThumb } from "../lib/backgroundDesigns";
+import { gradientCss } from "../lib/banner";
 import { inlineRemoteImage, loadImageFile, shrinkDataUrl, type ShapeItem } from "../lib/shapes";
 import GradientEditor from "./GradientEditor";
 import { Btn, ColorInput, Field, SegButtons, Slider, Toggle } from "./ui";
@@ -20,17 +22,61 @@ interface Props {
   managedScope?: boolean;
 }
 
+const sameGradient = (a: Gradient, b: Gradient) =>
+  a.enabled === b.enabled &&
+  a.type === b.type &&
+  a.angle === b.angle &&
+  (a.cx ?? 50) === (b.cx ?? 50) &&
+  (a.cy ?? 50) === (b.cy ?? 50) &&
+  a.stops.length === b.stops.length &&
+  a.stops.every((s, i) => s.color.toLowerCase() === b.stops[i].color.toLowerCase() && s.at === b.stops[i].at);
+
 export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSlide, onRemoveShape, managedScope = false }: Props) {
   const [scope, setScope] = useState<Scope>("slide");
   const [picked, setPicked] = useState<string[]>([]);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [presetCat, setPresetCat] = useState<string>("All");
+  const [presetQuery, setPresetQuery] = useState("");
+  const [linkShapeSize, setLinkShapeSize] = useState(true);
 
   const bg = effectiveBackground(deck, slide);
   const hasOverride = !!slide?.background;
   const target: "deck" | "slide" | string[] = managedScope ? "slide" : scope === "deck" ? "deck" : scope === "slide" ? "slide" : picked;
   const targetReady = scope !== "selected" || picked.length > 0;
   const set = (p: Partial<BackgroundSettings>) => targetReady && onSet(p, target);
+
+  const isPresetActive = (design: string, gradient: Gradient) =>
+    (bg.design || "") === design && sameGradient(bg.gradient, gradient);
+  const activeLightPreset = BG_PRESETS.find((p) => p.light && isPresetActive(p.design, p.gradient));
+  const usingDesign = !!bg.design;
+
+  const visiblePresets = BG_PRESETS.filter(
+    (p) =>
+      (presetCat === "All" || p.category === presetCat) &&
+      (!presetQuery.trim() || p.name.toLowerCase().includes(presetQuery.trim().toLowerCase())),
+  );
+
+  const applyPreset = (design: string, gradient: Gradient) =>
+    set({
+      gradient: { ...gradient, stops: gradient.stops.map((s) => ({ ...s })) },
+      design,
+      designW: 100,
+      designH: 100,
+      designOpacity: 1,
+    });
+
+  const clearToBoard = () =>
+    set({
+      src: "",
+      design: "",
+      designW: 100,
+      designH: 100,
+      designOpacity: 1,
+      gradient: { ...bg.gradient, enabled: false },
+      overlay: { ...bg.overlay, enabled: false },
+      vignette: 0,
+    });
 
   const importFile = async (file?: File | null) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -63,6 +109,14 @@ export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSl
   );
 
   const scopeText = scope === "deck" ? "every slide" : scope === "selected" ? `${picked.length} selected slide${picked.length === 1 ? "" : "s"}` : "this slide";
+  const statusParts = [
+    bg.design ? designName(bg.design) : null,
+    bg.gradient.enabled ? `${bg.gradient.type} gradient` : null,
+    bg.src ? "Image" : null,
+  ].filter(Boolean);
+
+  const shapeW = bg.designW ?? 100;
+  const shapeH = bg.designH ?? 100;
 
   return (
     <div className="space-y-4">
@@ -71,9 +125,9 @@ export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSl
         {backgroundLayers(bg, deck.theme.board).map((st, i) => (
           <div key={i} style={st} />
         ))}
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/40 px-2 py-1 text-[10px] text-slate-300">
-          <span>{bg.src ? "Image background" : bg.gradient.enabled ? "Gradient background" : "Board colour only"}</span>
-          <span>{hasOverride ? "this slide's own background" : "from deck (all slides)"}</span>
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-black/40 px-2 py-1 text-[10px] text-slate-300">
+          <span className="truncate">{statusParts.length ? statusParts.join(" · ") : "Board colour only"}</span>
+          <span className="shrink-0">{hasOverride ? "this slide's own background" : "from deck (all slides)"}</span>
         </div>
       </div>
 
@@ -132,6 +186,158 @@ export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSl
           Editing this slide's background preview. Use the main Apply Changes button to copy it to selected or all slides.
         </p>
       )}
+
+      {/* --------------------------- background presets ----------------------- */}
+      <div className="space-y-2 rounded-xl border border-violet-400/25 bg-violet-400/[0.06] p-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold tracking-wide text-violet-200 uppercase">Background presets</span>
+          <span className="text-[10px] text-slate-500">{visiblePresets.length} designs</span>
+        </div>
+        <input
+          value={presetQuery}
+          onChange={(e) => setPresetQuery(e.target.value)}
+          placeholder="Search designs… (wave, islamic, pastel)"
+          className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-violet-400/60"
+        />
+        <div className="flex gap-1 overflow-x-auto pb-0.5">
+          {["All", ...BG_CATEGORIES].map((c) => (
+            <button
+              key={c}
+              onClick={() => setPresetCat(c)}
+              className={cn(
+                "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                presetCat === c
+                  ? "border-violet-300 bg-violet-400 text-slate-950"
+                  : "border-white/10 text-slate-400 hover:bg-white/10",
+              )}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+        <div className="grid max-h-72 grid-cols-3 gap-1.5 overflow-y-auto pr-0.5">
+          <button
+            onClick={clearToBoard}
+            title="Plain board colour — clears gradient, shapes and image"
+            className={cn(
+              "flex flex-col items-center gap-1 rounded-lg border bg-white/[0.03] p-1.5 text-[10px] text-slate-300 hover:border-amber-400/60",
+              !bg.design && !bg.gradient.enabled && !bg.src ? "border-amber-400 ring-1 ring-amber-400" : "border-white/10",
+            )}
+          >
+            <span className="h-10 w-full rounded border border-white/10" style={{ background: deck.theme.board }} />
+            <span className="w-full truncate text-center">None</span>
+          </button>
+          {visiblePresets.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => applyPreset(p.design, p.gradient)}
+              title={`${p.name} (${p.category})`}
+              className={cn(
+                "flex flex-col items-center gap-1 rounded-lg border bg-white/[0.03] p-1.5 text-[10px] text-slate-300 hover:border-amber-400/60",
+                isPresetActive(p.design, p.gradient) ? "border-amber-400 ring-1 ring-amber-400" : "border-white/10",
+              )}
+            >
+              <span
+                className="relative block h-10 w-full overflow-hidden rounded border border-white/10"
+                style={{ background: gradientCss(p.gradient, deck.theme.board) }}
+              >
+                {p.design ? <span className="absolute inset-0 block" style={designThumb(p.design)} /> : null}
+              </span>
+              <span className="w-full truncate text-center">{p.name}</span>
+            </button>
+          ))}
+          {!visiblePresets.length && (
+            <p className="col-span-3 rounded-lg border border-white/10 px-2 py-4 text-center text-[11px] text-slate-500">
+              No designs match “{presetQuery}”.
+            </p>
+          )}
+        </div>
+        {activeLightPreset && (
+          <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1.5 text-[10px] leading-relaxed text-amber-200">
+            Light background — dark question / option text reads best (change colours in the Question and Option text tabs).
+          </p>
+        )}
+        {bg.src && (
+          <p className="text-[10px] leading-relaxed text-slate-500">
+            Presets style the gradient + shape layers <i>under</i> your image — remove the image below to see them fully.
+          </p>
+        )}
+      </div>
+
+      {/* ------------------------- background shape size ---------------------- */}
+      <div className="space-y-2.5 rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] p-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold tracking-wide text-emerald-200 uppercase">Background shapes</span>
+          {usingDesign && (
+            <button
+              onClick={() => setLinkShapeSize((v) => !v)}
+              title={linkShapeSize ? "Unlock: resize width and height independently" : "Lock: keep width and height together"}
+              className={cn(
+                "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                linkShapeSize ? "border-emerald-300 bg-emerald-400 text-slate-950" : "border-white/10 text-slate-400 hover:bg-white/10",
+              )}
+            >
+              {linkShapeSize ? "🔗 Linked" : "⛓ Unlinked"}
+            </button>
+          )}
+        </div>
+        {!usingDesign ? (
+          <p className="rounded-lg border border-white/10 bg-slate-900/40 px-2.5 py-2 text-[11px] leading-relaxed text-slate-400">
+            No shapes in this background — pick a patterned preset above (waves, geometric, islamic, texture…) to enable shape sizing.
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-slate-900/40 px-2.5 py-1.5">
+              <span className="truncate text-xs text-slate-200">{designName(bg.design)}</span>
+              <button
+                onClick={() => set({ design: "", designW: 100, designH: 100, designOpacity: 1 })}
+                className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300 hover:bg-rose-500/15 hover:text-rose-300"
+              >
+                Remove shapes
+              </button>
+            </div>
+            {linkShapeSize ? (
+              <Field label="Shape size" hint={`${Math.round((shapeW + shapeH) / 2)}%`}>
+                <Slider
+                  min={20}
+                  max={300}
+                  value={Math.round((shapeW + shapeH) / 2)}
+                  onChange={(v) => set({ designW: v, designH: v })}
+                />
+              </Field>
+            ) : (
+              <>
+                <Field label="Shape width" hint={`${shapeW}%`}>
+                  <Slider min={20} max={300} value={shapeW} onChange={(v) => set({ designW: v })} />
+                </Field>
+                <Field label="Shape height" hint={`${shapeH}%`}>
+                  <Slider min={20} max={300} value={shapeH} onChange={(v) => set({ designH: v })} />
+                </Field>
+              </>
+            )}
+            <Field label="Shape opacity" hint={`${Math.round((bg.designOpacity ?? 1) * 100)}%`}>
+              <Slider
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={bg.designOpacity ?? 1}
+                onChange={(v) => set({ designOpacity: v })}
+              />
+            </Field>
+            <Btn size="sm" onClick={() => set({ designW: 100, designH: 100, designOpacity: 1 })}>
+              ↺ Reset shape size
+            </Btn>
+          </>
+        )}
+      </div>
+
+      {/* -------------------------------- gradient --------------------------- */}
+      <GradientEditor
+        label="Background gradient (under shapes & image)"
+        value={bg.gradient}
+        fallback={deck.theme.board}
+        onChange={(gr) => set({ gradient: gr })}
+      />
 
       {/* --------------------------------- image ----------------------------- */}
       <div className="space-y-2 rounded-xl border border-sky-400/25 bg-sky-400/[0.06] p-3">
@@ -299,28 +505,6 @@ export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSl
           <Slider min={0} max={100} value={bg.vignette} onChange={(v) => set({ vignette: v })} />
         </Field>
       </div>
-
-      {/* -------------------------------- gradient --------------------------- */}
-      <Field label="Colour presets">
-        <div className="grid grid-cols-3 gap-1.5">
-          {BACKGROUND_PRESETS.map((p) => (
-            <button
-              key={p.name}
-              onClick={() => set(p.bg)}
-              className="flex flex-col items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1.5 text-[10px] text-slate-300 hover:border-amber-400/60"
-            >
-              <span className="h-6 w-full rounded border border-white/10" style={{ background: p.swatch }} />
-              {p.name}
-            </button>
-          ))}
-        </div>
-      </Field>
-      <GradientEditor
-        label="Gradient background (under the image)"
-        value={bg.gradient}
-        fallback={deck.theme.board}
-        onChange={(g) => set({ gradient: g })}
-      />
 
       <div className="space-y-1.5 border-t border-white/10 pt-3">
         <div className="flex flex-wrap gap-2">
