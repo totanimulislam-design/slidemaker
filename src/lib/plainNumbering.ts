@@ -12,6 +12,10 @@
  * A typed marker is a per-option "manual" override that outranks the style,
  * and `resetOptionLabels` below is what the single "Reset Labels" button calls
  * to drop every one of those overrides at once.
+ *
+ * The picker (components/PlainNumberingPicker) offers these styles as directly
+ * selectable chips, each drawn with `plainNumberingSample` — the first labels of
+ * the very function the board calls, so a chip can only ever show real output.
  */
 
 import { AR_KEYS, BN_KEYS } from "./parse";
@@ -31,25 +35,64 @@ export type PlainNumbering =
 
 export interface PlainNumberingDef {
   id: PlainNumbering;
+  /** full name — the caption of a picker chip and the first half of its tooltip */
   label: string;
-  /** shown next to the picker label, and under the dropdown */
+  /** the caption under the preview; only "Default" needs the extra wording */
+  caption?: string;
+  /** the sequence the style really generates — shown as the picker hint / tooltip */
   example: string;
 }
 
+/**
+ * The pickable styles, in picker order. `id`s are the stored values, so they
+ * never change: a deck saved with any of these keeps working as-is.
+ */
 export const PLAIN_NUMBERING_STYLES: PlainNumberingDef[] = [
-  { id: "none", label: "None", example: "keep the option keys" },
+  {
+    id: "none",
+    label: "Default",
+    caption: "Default · none",
+    example: "keep each option's own key",
+  },
   { id: "number", label: "Number", example: "1, 2, 3, 4, 5…" },
+  { id: "roman-upper", label: "Roman Capital", example: "I, II, III, IV, V, VI…" },
+  { id: "roman-lower", label: "Roman Small", example: "i, ii, iii, iv, v, vi…" },
   { id: "en-upper", label: "English Capital Letter", example: "A, B, C, D, E…" },
   { id: "en-lower", label: "English Small Letter", example: "a, b, c, d, e…" },
   { id: "bn-number", label: "Bangla Number", example: "১, ২, ৩, ৪, ৫…" },
   { id: "bn-letter", label: "Bangla Letter", example: "ক, খ, গ, ঘ, ঙ…" },
   { id: "ar-number", label: "Arabic Number", example: "١, ٢, ٣, ٤, ٥…" },
   { id: "ar-letter", label: "Arabic Letter", example: "أ, ب, ج, د, ه…" },
-  { id: "roman-upper", label: "Roman Capital Number", example: "I, II, III, IV…" },
-  { id: "roman-lower", label: "Roman Small Number", example: "i, ii, iii, iv…" },
 ];
 
 export const DEFAULT_PLAIN_NUMBERING: PlainNumbering = "none";
+
+/**
+ * The def a stored value points at. A value that isn't a style any more (an
+ * older deck, hand-written JSON) resolves to the default, so the picker always
+ * has something active and the board keeps painting the option keys.
+ */
+export function plainNumberingDef(style: string | undefined | null): PlainNumberingDef {
+  return PLAIN_NUMBERING_STYLES.find((s) => s.id === style) ?? PLAIN_NUMBERING_STYLES[0];
+}
+
+/**
+ * The first few labels a style produces — what a picker chip draws, so the
+ * control shows real output instead of a name. The samples come out of
+ * `plainNumberLabel` itself, which is why a chip can never drift from the board.
+ * "Default" paints no numbering, so it previews the slide's own option keys.
+ */
+export function plainNumberingSample(
+  style: PlainNumbering,
+  count = 3,
+  ownKeys: string[] = [],
+): string[] {
+  if (style === "none") {
+    const keys = ownKeys.filter(Boolean).slice(0, count);
+    return keys.length === count ? keys : BN_KEYS.slice(0, count);
+  }
+  return Array.from({ length: count }, (_, i) => plainNumberLabel(style, i) ?? String(i + 1));
+}
 
 const EN_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 /** the traditional Bangla consonant sequence used to letter-list options */
