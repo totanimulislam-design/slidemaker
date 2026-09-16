@@ -1,12 +1,11 @@
-import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useRef, useState, type CSSProperties } from "react";
 import type { Box, DeckHeader, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { shade, withAlpha } from "../lib/color";
 import { isWideNumberStyle, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
-import { effectiveOptionLabel } from "../lib/plainNumbering";
-import { optionRowStyle, type OptionStyle } from "../lib/optionStyles";
-import OptionBulletMarker from "./OptionBulletMarker";
+import { optionBadgeStyle, optionRowStyle, type OptionStyle } from "../lib/optionStyles";
+import { renderOptionBulletMarker, type OptionBulletShape } from "../lib/optionBulletShapes";
 import { isRtlText } from "../lib/fonts";
-import { boxFontCss, boxStack, boxTypeface, deckStack, optionTextStack } from "../lib/boxFonts";
+import { boxFontCss, boxStack, boxTypeface } from "../lib/boxFonts";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
 import { ELEMENT_DEFAULT_Z } from "../lib/layers";
 import { bannerCss } from "../lib/banner";
@@ -14,9 +13,7 @@ import { backgroundLayers } from "../lib/background";
 import type { BackgroundSettings } from "../lib/types";
 import { DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
 import { computeFrameCss } from "../lib/frameDesigns";
-import { resolveFrameImageSrc } from "../lib/frameImages";
-import { boxesOverlap } from "../lib/groups";
-import { HANDLES, applyMove, applyResize, applyRotate, DRAG_THRESHOLD_PX, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
+import { HANDLES, applyMove, applyResize, applyRotate, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
 import { measureElement } from "../lib/layoutMeasure";
 import MathText from "./MathText";
 import ShapeLayer from "./ShapeLayer";
@@ -52,16 +49,9 @@ interface Props {
   onSelect?: (id: ElementId | null) => void;
   /** deck-wide shapes rendered beneath the slide's own */
   globalShapes?: ShapeItem[];
-  /** ids of the selected drawn items (multi-select / whole groups) */
-  selectedShapeIds?: string[];
-  onSelectShapeIds?: (ids: string[]) => void;
+  selectedShape?: string | null;
+  onSelectShape?: (id: string | null) => void;
   onShapeChange?: (id: string, patch: Partial<ShapeItem>) => void;
-  /** batched patches from group / multi-selection gestures */
-  onShapesChange?: (updates: { id: string; patch: Partial<ShapeItem> }[]) => void;
-  onGroupShapes?: (ids: string[]) => void;
-  onUngroupShapes?: (ids: string[]) => void;
-  /** Alt+click on any layer: select the layer beneath it (overlap navigation) */
-  onLayerCycle?: (clientX: number, clientY: number) => void;
   /** called when a drag/resize/rotate finishes — closes the undo coalescing window */
   onGestureEnd?: () => void;
   /** effective background for this slide (deck default merged with the slide override) */
@@ -90,35 +80,15 @@ function SlideBase({
   selected,
   onSelect,
   globalShapes,
-  selectedShapeIds,
-  onSelectShapeIds,
+  selectedShape,
+  onSelectShape,
   onShapeChange,
-  onShapesChange,
-  onGroupShapes,
-  onUngroupShapes,
-  onLayerCycle,
   onGestureEnd,
   background,
 }: Props) {
   const boardRef = useRef<HTMLDivElement>(null);
-  type PointerDrag = {
-    isPointerDown: boolean;
-    isDragging: boolean;
-    pointerId: number;
-    dragStartX: number;
-    dragStartY: number;
-    initialObjectX: number;
-    initialObjectY: number;
-    gesture: FreeGesture;
-  };
-  const drag = useRef<PointerDrag | null>(null);
-  const bound = useRef(false);
-  const applyGestureRef = useRef<(e: PointerEvent) => void>(() => {});
-  const endDragRef = useRef<(commit?: boolean) => void>(() => {});
+  const gesture = useRef<FreeGesture | null>(null);
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
-  // drag-marquee (rubber-band selection) state
-  const marq = useRef<{ x0: number; y0: number; x1: number; y1: number; px: number; py: number; moved: boolean } | null>(null);
-  const [marqRect, setMarqRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const editable = !!onField;
   const movable = !!onLayoutChange;
@@ -224,84 +194,32 @@ function SlideBase({
       }
     : undefined;
 
-  const onDocMove = useRef((e: PointerEvent) => applyGestureRef.current(e)).current;
-  const onDocUp = useRef(() => endDragRef.current(true)).current;
-
-  const unbindDoc = () => {
-    if (!bound.current) return;
-    bound.current = false;
-    window.removeEventListener("pointermove", onDocMove);
-    window.removeEventListener("pointerup", onDocUp);
-    window.removeEventListener("pointercancel", onDocUp);
-    window.removeEventListener("blur", onDocUp);
-  };
-
-  const bindDoc = () => {
-    if (bound.current) return;
-    bound.current = true;
-    window.addEventListener("pointermove", onDocMove);
-    window.addEventListener("pointerup", onDocUp);
-    window.addEventListener("pointercancel", onDocUp);
-    window.addEventListener("blur", onDocUp);
-  };
-
-  const endDrag = (commit = true) => {
-    const s = drag.current;
-    unbindDoc();
-    if (!s) return;
-    drag.current = null;
-    frozenRect.current = null;
-    if (commit && s.isDragging) onGestureEnd?.();
-    setGuides({ x: null, y: null });
-  };
-
-  useEffect(() => {
-    return () => endDragRef.current(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const begin = (gesture: FreeGesture, e: React.PointerEvent, startDragging: boolean, initial: { x: number; y: number }) => {
-    drag.current = {
-      isPointerDown: true,
-      isDragging: startDragging,
-      pointerId: e.pointerId,
-      dragStartX: e.clientX,
-      dragStartY: e.clientY,
-      initialObjectX: initial.x,
-      initialObjectY: initial.y,
-      gesture,
-    };
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* window listeners still drive the drag */
-    }
-    bindDoc();
-  };
-
   const startDrag = (id: ElementId) => (e: React.PointerEvent<HTMLDivElement>) => {
     if (editable) {
       e.stopPropagation();
-      if (e.altKey) {
-        // Alt+click digs to the layer beneath this element
-        onLayerCycle?.(e.clientX, e.clientY);
-        return;
-      }
       onSelect?.(id);
-      onSelectShapeIds?.([]);
+      onSelectShape?.(null);
       onField?.(FIELD_OF[id]);
     }
     if (!movable || e.button !== 0) return;
-    // snapshot visual position only — do NOT promote to free / move on click
-    const r = freeRectOf(id);
-    begin({ kind: "move", id, dx: 0, dy: 0 }, e, false, { x: r.x, y: r.y });
+    const b = boardRef.current?.getBoundingClientRect();
+    if (!b) return;
+    const r = ensureFree(id);
+    gesture.current = {
+      kind: "move",
+      id,
+      dx: e.clientX - (b.left + (r.x / 100) * b.width),
+      dy: e.clientY - (b.top + (r.y / 100) * b.height),
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const startResize = (id: ElementId, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!movable || e.button !== 0) return;
     const r = ensureFree(id);
-    begin({ kind: "resize", id, handle, sx: e.clientX, sy: e.clientY, start: r, ratio: r.h > 0 ? r.w / r.h : 1 }, e, true, { x: r.x, y: r.y });
+    gesture.current = { kind: "resize", id, handle, sx: e.clientX, sy: e.clientY, start: r, ratio: r.h > 0 ? r.w / r.h : 1 };
+    e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const startRotate = (id: ElementId) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -312,39 +230,22 @@ function SlideBase({
     const r = ensureFree(id);
     const cx = b.left + ((r.x + r.w / 2) / 100) * b.width;
     const cy = b.top + ((r.y + r.h / 2) / 100) * b.height;
-    begin({ kind: "rotate", id, cx, cy, start: Math.atan2(e.clientY - cy, e.clientX - cx), rot0: r.rot }, e, true, { x: r.x, y: r.y });
+    gesture.current = { kind: "rotate", id, cx, cy, start: Math.atan2(e.clientY - cy, e.clientX - cx), rot0: r.rot };
+    e.currentTarget.setPointerCapture(e.pointerId);
   };
 
-  const applyGesture = (e: PointerEvent) => {
-    const s = drag.current;
-    if (!s?.isPointerDown) return;
-    if (e.pointerId !== s.pointerId) return;
-    if (e.buttons === 0) {
-      endDrag(true);
-      return;
-    }
-
-    const g = s.gesture;
-    if (!s.isDragging) {
-      if (g.kind === "move") {
-        const dist = Math.hypot(e.clientX - s.dragStartX, e.clientY - s.dragStartY);
-        if (dist < DRAG_THRESHOLD_PX) return;
-        // first real drag: promote aligned deck elements to free mode once
-        ensureFree(g.id as ElementId);
-      }
-      s.isDragging = true;
-    }
-    if (!s.isDragging) return;
-
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = gesture.current;
     const b = boardRef.current?.getBoundingClientRect();
-    if (!b) return;
+    if (!g || !b) return;
+    e.preventDefault();
     const id = g.id as ElementId;
     const freeMove = e.altKey;
 
     if (g.kind === "move") {
       const r = freeRectOf(id); // frozen size → stable snapping while dragging
-      const rawX = s.initialObjectX + ((e.clientX - s.dragStartX) / b.width) * 100;
-      const rawY = s.initialObjectY + ((e.clientY - s.dragStartY) / b.height) * 100;
+      const rawX = ((e.clientX - g.dx - b.left) / b.width) * 100;
+      const rawY = ((e.clientY - g.dy - b.top) / b.height) * 100;
       const res = applyMove(r, rawX, rawY, {
         grid: gridSnap,
         others: theme.smartGuides === false ? undefined : snapTargets(`element:${id}`),
@@ -365,15 +266,27 @@ function SlideBase({
     onLayoutChange?.(id, { rot: applyRotate(g, e.clientX, e.clientY, e.shiftKey) });
   };
 
-  applyGestureRef.current = applyGesture;
-  endDragRef.current = endDrag;
+  const endGesture = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (gesture.current) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* pointer already released */
+      }
+      onGestureEnd?.();
+    }
+    gesture.current = null;
+    frozenRect.current = null;
+    setGuides({ x: null, y: null });
+  };
 
   const handlers = editable
     ? (id: ElementId) => ({
         "data-el": id,
         onPointerDown: startDrag(id),
-        onPointerUp: () => endDrag(true),
-        onPointerCancel: () => endDrag(true),
+        onPointerMove,
+        onPointerUp: endGesture,
+        onPointerCancel: endGesture,
       })
     : (id: ElementId) => ({ "data-el": id });
 
@@ -422,16 +335,18 @@ function SlideBase({
             key={h}
             title="Drag to resize · Shift keeps ratio · Alt disables snapping"
             onPointerDown={startResize(id, h)}
-            onPointerUp={() => endDrag(true)}
-            onPointerCancel={() => endDrag(true)}
+            onPointerMove={onPointerMove}
+            onPointerUp={endGesture}
+            onPointerCancel={endGesture}
             style={{ ...handleBase, ...hs, cursor, background: "#5ef2ff", borderRadius: h.length === 1 ? 8 : 3 }}
           />
         ))}
         <div
           title="Rotate · Shift snaps to 15°"
           onPointerDown={startRotate(id)}
-          onPointerUp={() => endDrag(true)}
-          onPointerCancel={() => endDrag(true)}
+          onPointerMove={onPointerMove}
+          onPointerUp={endGesture}
+          onPointerCancel={endGesture}
           style={{ ...handleBase, left: "50%", top: -34, marginLeft: -8, borderRadius: "50%", background: "#5ef2ff", cursor: "grab" }}
         />
         <div style={{ position: "absolute", left: "50%", top: -18, width: 2, height: 16, marginLeft: -1, background: "rgba(94,242,255,.8)" }} />
@@ -515,78 +430,7 @@ function SlideBase({
     : undefined;
   const allShapes = [...(globalShapes ?? []), ...(slide.shapes ?? [])];
 
-  /* ---------------------- drag-marquee selection ---------------------- */
-  const pctPoint = (clientX: number, clientY: number) => {
-    const b = boardRef.current?.getBoundingClientRect();
-    if (!b || !b.width || !b.height) return null;
-    return { x: ((clientX - b.left) / b.width) * 100, y: ((clientY - b.top) / b.height) * 100 };
-  };
-  const boardDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!editable || e.button !== 0) return;
-    const p = pctPoint(e.clientX, e.clientY);
-    if (!p) return;
-    marq.current = { x0: p.x, y0: p.y, x1: p.x, y1: p.y, px: e.clientX, py: e.clientY, moved: false };
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* capture unsupported — marquee just won't extend past the board */
-    }
-  };
-  const boardMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const m = marq.current;
-    if (!m) return;
-    if (!m.moved && Math.hypot(e.clientX - m.px, e.clientY - m.py) < 4) return;
-    m.moved = true;
-    const p = pctPoint(e.clientX, e.clientY);
-    if (!p) return;
-    m.x1 = p.x;
-    m.y1 = p.y;
-    setMarqRect({ x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) });
-    e.preventDefault();
-  };
-  const boardUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    const m = marq.current;
-    marq.current = null;
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      /* already released */
-    }
-    if (!m) return;
-    if (!m.moved) {
-      // a plain click on the empty slide clears the selection (element, shape, and any field)
-      setMarqRect(null);
-      onSelectShapeIds?.([]);
-      onSelect?.(null);
-      onField?.(null);
-      return;
-    }
-    const r = { x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) };
-    setMarqRect(null);
-    // every shape (locked included) whose box touches the band joins the set;
-    // group members are pulled in together
-    const hit = new Set<string>();
-    allShapes.forEach((s) => {
-      if (boxesOverlap(r, { x: s.x, y: s.y, w: s.w, h: s.h })) {
-        hit.add(s.id);
-        if (s.groupId) allShapes.forEach((o) => o.groupId === s.groupId && hit.add(o.id));
-      }
-    });
-    const ids = allShapes.filter((s) => hit.has(s.id)).map((s) => s.id);
-    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
-    const base = additive ? (selectedShapeIds ?? []) : [];
-    onSelectShapeIds?.([...new Set([...base, ...ids])]);
-  };
-
   const bodyStack = boxStack(theme, "question");
-  /**
-   * Option text only — applied directly to the element that paints an option's
-   * text, never to the options container or the slide, so the choice cannot
-   * inherit into the question, header, title, note or any shape.
-   */
-  const optionStack = optionTextStack(theme);
-  /** The marker / plain numbering keep the deck face, independent of the option font. */
-  const optionMarkerStack = deckStack(theme, "options");
   const qRtl = isRtlText(slide.question);
 
   const frame = theme.frame ?? DEFAULT_FRAME;
@@ -594,8 +438,7 @@ function SlideBase({
   const frameCss = computeFrameCss(frame, frameOn);
 
   // If a frame image is chosen, check its placement mode (defaults to "fit" so it NEVER overlaps slide content)
-  const frameImageSrc = resolveFrameImageSrc(frame.image);
-  const hasFrameImage = !!frameImageSrc;
+  const hasFrameImage = !!frame.image;
   const isImageOverlayMode = frame.imagePlacement === "overlay";
   const imageInsetPct = hasFrameImage && !isImageOverlayMode ? (frame.imageInset ?? 10) : 0;
   // Convert percentage inset into pixels for 1280x720:
@@ -628,11 +471,11 @@ function SlideBase({
             inset: 0,
             pointerEvents: "none",
             zIndex: isImageOverlayMode ? 80 : 0,
-            backgroundImage: `url(${frameImageSrc})`,
+            backgroundImage: `url(${frame.image})`,
             backgroundSize: "100% 100%",
             backgroundRepeat: "no-repeat",
             backgroundPosition: "center",
-            ...(isImageOverlayMode && frameImageSrc?.toLowerCase().match(/\.(jpg|jpeg|png)(\?|$)/)
+            ...(isImageOverlayMode && frame.image?.toLowerCase().match(/\.(jpg|jpeg|png)(\?|$)/)
               ? {
                   padding: `${frame.imageInset ?? 10}%`,
                   WebkitMask: "linear-gradient(#fff,#fff) content-box, linear-gradient(#fff,#fff)",
@@ -662,10 +505,13 @@ function SlideBase({
         <div
           ref={boardRef}
           data-board=""
-          onPointerDown={boardDown}
-          onPointerMove={boardMove}
-          onPointerUp={boardUp}
-          onPointerCancel={boardUp}
+          onPointerDown={() => {
+            if (!editable) return;
+            // clicking empty slide clears the selection (element, shape, and any field)
+            onSelectShape?.(null);
+            onSelect?.(null);
+            onField?.(null);
+          }}
           style={{
             width: "100%",
             height: "100%",
@@ -699,25 +545,6 @@ function SlideBase({
               style={{
                 position: "absolute", left: 0, right: 0, top: `${guides.y}%`,
                 height: 1, background: "rgba(255,214,51,.85)", zIndex: BAND_UI, pointerEvents: "none",
-              }}
-            />
-          )}
-
-          {/* rubber-band marquee while dragging over empty slide */}
-          {editable && marqRect && marqRect.w > 0.2 && marqRect.h > 0.2 && (
-            <div
-              data-marquee=""
-              style={{
-                position: "absolute",
-                left: `${marqRect.x}%`,
-                top: `${marqRect.y}%`,
-                width: `${marqRect.w}%`,
-                height: `${marqRect.h}%`,
-                border: "1.5px dashed rgba(94,242,255,.95)",
-                background: "rgba(94,242,255,.10)",
-                pointerEvents: "none",
-                zIndex: BAND_UI + 30,
-                boxSizing: "border-box",
               }}
             />
           )}
@@ -869,12 +696,12 @@ function SlideBase({
             {slide.options.map((opt, i) => {
               const correct = slide.showAnswer && slide.answer === opt.key;
               const highlight = correct && theme.answerStyle !== "tick";
-              // effective label: manual edits always win; auto uses plain numbering
-              const markerText = effectiveOptionLabel(opt.labelMode, opt.key, theme.plainNumbering, i);
               const rtl = isRtlText(opt.text);
               const oStyle = (theme.optionStyle ?? "plain") as OptionStyle;
               const oColor = theme.optionAccent || theme.accent;
               const chrome = optionRowStyle(oStyle, theme, oColor, highlight);
+              const bShape = (theme.optionBulletShape ?? "circle") as OptionBulletShape;
+              const marker = renderOptionBulletMarker(bShape, theme, oColor, circle, highlight, opt.key);
               return (
                 <div
                   key={`${opt.key}-${i}`}
@@ -891,24 +718,20 @@ function SlideBase({
                       L.options.align === "center" ? "center" : L.options.align === "right" ? "flex-end" : chrome.row.justifyContent,
                   }}
                 >
-                  <OptionBulletMarker
-                    theme={theme}
-                    color={oColor}
-                    size={circle}
-                    keyText={markerText}
-                    highlight={highlight}
-                    optionStyle={oStyle}
-                    // the marker / plain numbering keep the deck face: the
-                    // option text font must not reach them
-                    fontFamily={optionMarkerStack}
-                  />
+                  <div
+                    style={{
+                      ...optionBadgeStyle(oStyle, theme, oColor, circle, highlight),
+                      ...marker.style,
+                      flex: "0 0 auto",
+                      fontFamily: boxStack(theme, "options"),
+                    }}
+                  >
+                    {marker.innerStyle ? <span style={marker.innerStyle}>{marker.content}</span> : marker.content}
+                  </div>
                   <MathText
                     text={opt.text}
                     style={{
                       color: correct ? "#5cff9d" : theme.optionTextColor,
-                      // the OPTION TEXT FONT lands here and nowhere else — this
-                      // element is the only consumer of `optionStack`
-                      fontFamily: optionStack,
                       fontSize: optSize,
                       fontWeight: 700,
                       lineHeight: optLineH,
@@ -945,13 +768,9 @@ function SlideBase({
               shapes={allShapes}
               boardRef={boardRef}
               editable={editable}
-              selectedIds={selectedShapeIds ?? []}
-              onSelect={(ids) => onSelectShapeIds?.(ids)}
+              selectedId={selectedShape ?? null}
+              onSelect={onSelectShape}
               onChange={onShapeChange}
-              onBatchChange={onShapesChange}
-              onGroup={onGroupShapes}
-              onUngroup={onUngroupShapes}
-              onLayerCycle={onLayerCycle}
               fontFamily={bodyStack}
               snap={shapeSnap}
               smartGuides={theme.smartGuides ?? true}

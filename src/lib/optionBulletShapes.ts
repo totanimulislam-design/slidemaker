@@ -1,13 +1,6 @@
 import type { CSSProperties } from "react";
 import type { ThemeSettings } from "./types";
 import { shade, withAlpha } from "./color";
-import {
-  BULLET_COLOR_NONE,
-  optionBulletBackdrop,
-  optionBulletPalette,
-  optionBulletPlateStyle,
-  type OptionBulletBackdrop,
-} from "./optionBulletColors";
 
 export type OptionBulletShape =
   | "circle"
@@ -98,22 +91,6 @@ export const isWideOptionBulletShape = (s: OptionBulletShape) => WIDE_OPTION_SHA
 export const MINIMAL_OPTION_SHAPES: OptionBulletShape[] = ["paren", "bracket", "dot", "plain"];
 export const isMinimalOptionBulletShape = (s: OptionBulletShape) => MINIMAL_OPTION_SHAPES.includes(s);
 
-/** shapes whose perimeter is cut with clip-path — a CSS border would be clipped away */
-export const CLIPPED_OPTION_SHAPES: OptionBulletShape[] = [
-  "diamond",
-  "hexagon",
-  "octagon",
-  "pentagon",
-  "triangle",
-  "shield",
-  "tag",
-  "star",
-  "burst",
-  "leaf",
-  "heart",
-];
-export const isClippedOptionBulletShape = (s: OptionBulletShape) => CLIPPED_OPTION_SHAPES.includes(s);
-
 export function formatOptionKey(key: string, shape: OptionBulletShape): string {
   switch (shape) {
     case "paren":
@@ -127,25 +104,10 @@ export function formatOptionKey(key: string, shape: OptionBulletShape): string {
   }
 }
 
-/**
- * Clipped silhouettes can't carry a real border (the clip cuts it off), so the
- * outline is painted as four hairline shadows hugging the shape.
- */
-export function outlineFilter(color: string, thickness: number): string {
-  const t = Math.max(0.6, Math.round(thickness * 10) / 10);
-  return [`${t}px 0`, `-${t}px 0`, `0 ${t}px`, `0 -${t}px`]
-    .map((o) => `drop-shadow(${o} 0 ${color})`)
-    .join(" ");
-}
-
 export interface OptionBulletRender {
   style: CSSProperties;
   innerStyle?: CSSProperties;
   content: string;
-  /** background shape painted behind the marker (undefined when off / row-scoped) */
-  backplate?: CSSProperties;
-  /** the resolved colour channels, handy for previews and exports */
-  palette: ReturnType<typeof optionBulletPalette>;
 }
 
 export function renderOptionBulletMarker(
@@ -160,55 +122,25 @@ export function renderOptionBulletMarker(
   const treatment = theme.optionBulletTreatment ?? "auto";
   const content = formatOptionKey(keyText, shape);
 
-  /* --- the three independent channels ("" = auto, "transparent" = nothing) --- */
-  const pal = optionBulletPalette(theme, highlight);
-  const ink = pal.customWins ? pal.ink : null;
-  const fill = pal.customWins ? pal.fill : null;
-  const ring = pal.customWins ? pal.border : null;
-
-  /** marker background: the picked fill wins over the treatment-derived paint */
-  const paint = (auto: string) => fill ?? auto;
-  /** ring with an explicit colour, or "none" when nothing was picked */
-  const ringOf = (w: number, auto: string) => `${Math.max(1.5, w)}px solid ${ring ?? auto}`;
-  /** a shape that normally has no border, but gets one when the user picks a colour */
-  const ringOrNone = (w: number) => (ring ? `${Math.max(1.5, w)}px solid ${ring}` : "none");
-  /** glow / shadow colour follows the picked channel, else the treatment's own colour */
-  const glow =
-    ring && ring !== BULLET_COLOR_NONE
-      ? ring
-      : fill && fill !== BULLET_COLOR_NONE
-        ? fill
-        : highlight
-          ? accent
-          : color;
-  const plate = optionBulletBackdrop(theme);
-  const plateOn = plate && plate.scope === "marker" && (!highlight || theme.optionBulletCustomOnAnswer === true);
-
   // Minimal / Typography shapes (paren, bracket, dot, plain)
   if (isMinimalOptionBulletShape(shape)) {
-    const w = Math.round(size * 0.9);
     return {
       style: {
         width: "auto",
-        minWidth: w,
+        minWidth: Math.round(size * 0.9),
         height: size,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: paint("transparent"),
-        border: ringOrNone(size * 0.06),
-        borderRadius: ring ? Math.round(size * 0.24) : 0,
+        background: "transparent",
+        border: "none",
         boxShadow: "none",
-        color: ink ?? (highlight ? "#5cff9d" : color),
+        color: highlight ? "#5cff9d" : color,
         fontWeight: 800,
         fontSize: Math.round(size * (shape === "plain" ? 0.8 : 0.68)),
-        lineHeight: 1,
-        padding: ring ? "0 6px" : "0 4px",
-        boxSizing: "border-box",
+        padding: "0 4px",
       },
       content,
-      backplate: plateOn ? optionBulletPlateStyle(plate as OptionBulletBackdrop, w, size, Math.round(size * 0.24), undefined) : undefined,
-      palette: pal,
     };
   }
 
@@ -244,37 +176,35 @@ export function renderOptionBulletMarker(
   const isGlow = !highlight && treatment === "glow";
 
   let background: string;
-  let border: string;
+  let border: string = "none";
   let colorValue: string;
   let boxShadow: string | undefined = undefined;
 
   if (highlight) {
     background = `radial-gradient(circle at 32% 28%, ${shade(accent, 0.45)}, ${accent} 70%)`;
-    border = ringOf(Math.max(2, size * 0.06), "#ffffff");
-    boxShadow = `0 0 22px ${withAlpha(glow, 0.85)}, 0 0 0 2px ${withAlpha("#000000", 0.5)}`;
+    border = `${Math.max(2, size * 0.06)}px solid #ffffff`;
+    boxShadow = `0 0 22px ${withAlpha(accent, 0.85)}, 0 0 0 2px ${withAlpha("#000000", 0.5)}`;
     colorValue = "#ffffff";
   } else if (isGlow) {
-    background = paint(withAlpha(color, 0.18));
-    border = ringOf(2, color);
-    boxShadow = `0 0 14px ${withAlpha(glow, 0.75)}`;
+    background = withAlpha(color, 0.18);
+    border = `2px solid ${color}`;
+    boxShadow = `0 0 14px ${withAlpha(color, 0.75)}`;
     colorValue = color;
   } else if (isFilled) {
-    background = paint(`radial-gradient(circle at 32% 28%, ${shade(color, 0.35)}, ${color} 75%)`);
-    border = ringOf(Math.max(2, size * 0.06), withAlpha("#ffffff", 0.7));
-    boxShadow = `0 2px 8px ${withAlpha(glow, 0.45)}`;
+    background = `radial-gradient(circle at 32% 28%, ${shade(color, 0.35)}, ${color} 75%)`;
+    border = `${Math.max(2, size * 0.06)}px solid ${withAlpha("#ffffff", 0.7)}`;
+    boxShadow = `0 2px 8px ${withAlpha(color, 0.45)}`;
     colorValue = "#ffffff";
   } else if (isSoft) {
-    background = paint(withAlpha(color, 0.18));
-    border = ringOf(1.5, withAlpha(color, 0.55));
+    background = withAlpha(color, 0.18);
+    border = `1.5px solid ${withAlpha(color, 0.55)}`;
     colorValue = color;
   } else {
     // outlined (default)
-    background = paint(withAlpha("#ffffff", 0.04));
-    border = ringOf(2.5, color);
+    background = withAlpha("#ffffff", 0.04);
+    border = `2.5px solid ${color}`;
     colorValue = color;
   }
-  // the ink colour of the letter is the one channel that always follows the pick
-  if (ink) colorValue = ink;
 
   const style: CSSProperties = {
     ...base,
@@ -285,68 +215,55 @@ export function renderOptionBulletMarker(
   };
 
   let innerStyle: CSSProperties | undefined = undefined;
-  let plateRadius: string | number | undefined = undefined;
-  let plateClip: string | undefined = undefined;
 
   // Apply shape geometry
   switch (shape) {
     case "circle":
       style.borderRadius = "50%";
-      plateRadius = "50%";
       break;
 
     case "ring":
       style.borderRadius = "50%";
-      plateRadius = "50%";
-      style.background = paint("transparent");
-      style.border = ringOf(Math.max(2.5, size * 0.08), highlight ? "#ffffff" : color);
-      if (highlight && !fill) style.background = accent;
+      style.background = "transparent";
+      style.border = `${Math.max(2.5, size * 0.08)}px solid ${highlight ? "#ffffff" : color}`;
+      if (highlight) style.background = accent;
       break;
 
     case "doubleRing":
       style.borderRadius = "50%";
-      plateRadius = "50%";
-      style.border = ringOf(2, highlight ? "#ffffff" : color);
-      style.boxShadow = `0 0 0 2px ${withAlpha(glow, 0.25)}, 0 0 0 ${Math.max(4, size * 0.12)}px ${glow}`;
+      style.border = `2px solid ${highlight ? "#ffffff" : color}`;
+      style.boxShadow = `0 0 0 2px ${withAlpha(color, 0.25)}, 0 0 0 ${Math.max(4, size * 0.12)}px ${highlight ? accent : color}`;
       break;
 
     case "roundedSquare":
       style.borderRadius = Math.round(size * 0.28);
-      plateRadius = Math.round(size * 0.28);
       break;
 
     case "square":
       style.borderRadius = 0;
-      plateRadius = 0;
       break;
 
     case "outlineSquare":
       style.borderRadius = 4;
-      plateRadius = 4;
-      style.background = paint(highlight ? accent : "transparent");
-      style.border = ringOf(Math.max(2.5, size * 0.08), highlight ? "#ffffff" : color);
+      style.background = highlight ? accent : "transparent";
+      style.border = `${Math.max(2.5, size * 0.08)}px solid ${highlight ? "#ffffff" : color}`;
       break;
 
     case "pill":
       style.borderRadius = 999;
-      plateRadius = 999;
       break;
 
     case "badge":
       style.borderRadius = "50%";
-      plateRadius = "50%";
-      style.background = paint(
-        highlight
-          ? accent
-          : `conic-gradient(from 0deg, ${color}, ${shade(color, 0.4)}, ${color}, ${shade(color, -0.3)}, ${color})`,
-      );
-      style.boxShadow = ring ? "none" : `inset 0 0 0 2px rgba(255,255,255,0.85), 0 3px 8px rgba(0,0,0,0.45)`;
-      style.color = ink ?? "#ffffff";
+      style.background = highlight
+        ? accent
+        : `conic-gradient(from 0deg, ${color}, ${shade(color, 0.4)}, ${color}, ${shade(color, -0.3)}, ${color})`;
+      style.boxShadow = `inset 0 0 0 2px rgba(255,255,255,0.85), 0 3px 8px rgba(0,0,0,0.45)`;
+      style.color = "#ffffff";
       break;
 
     case "drop":
       style.borderRadius = "50% 50% 50% 0";
-      plateRadius = "50%";
       style.transform = "rotate(-45deg)";
       innerStyle = { transform: "rotate(45deg)", display: "inline-block" };
       break;
@@ -365,34 +282,19 @@ export function renderOptionBulletMarker(
       if (CLIPS[shape]) {
         style.clipPath = CLIPS[shape];
         style.borderRadius = 0;
-        plateClip = CLIPS[shape];
         style.border = "none"; // Clip-path handles the perimeter cleanly
         if (shape === "triangle") style.paddingTop = Math.round(size * 0.25);
         if (shape === "pentagon") style.paddingTop = Math.round(size * 0.1);
         if (shape === "shield" || shape === "leaf") style.paddingBottom = Math.round(size * 0.12);
         if (shape === "tag") style.paddingRight = Math.round(size * 0.18);
         if (shape === "heart") style.paddingBottom = Math.round(size * 0.14);
-        // a picked outline still reads: draw it as a silhouette shadow
-        if (ring && ring !== BULLET_COLOR_NONE) {
-          const t = Math.max(1.5, size * 0.06);
-          style.filter = outlineFilter(ring, t);
-          style.width = width - t * 2;
-          style.height = height - t * 2;
-        }
       }
       break;
 
     default:
       style.borderRadius = "50%";
-      plateRadius = "50%";
       break;
   }
 
-  return {
-    style,
-    innerStyle,
-    content,
-    backplate: plateOn ? optionBulletPlateStyle(plate as OptionBulletBackdrop, width, height, plateRadius, plateClip) : undefined,
-    palette: pal,
-  };
+  return { style, innerStyle, content };
 }

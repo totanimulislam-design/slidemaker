@@ -1,7 +1,6 @@
 import type { CSSProperties } from "react";
 import type { ThemeSettings } from "./types";
 import { shade, withAlpha } from "./color";
-import { BULLET_COLOR_NONE, optionRowBackdrop, optionBulletPalette } from "./optionBulletColors";
 
 /**
  * Option-row styles.
@@ -62,8 +61,6 @@ export function optionRowStyle(
   const accent = theme.accent;
   const board = theme.board;
   const hlBg = withAlpha(accent, 0.22);
-  // a picked "background shape" colour replaces the style's own row tint
-  const backdrop = optionRowBackdrop(theme, highlight);
 
   const base: CSSProperties = {
     display: "flex",
@@ -74,32 +71,16 @@ export function optionRowStyle(
     background: "transparent",
     justifyContent: "flex-start",
   };
-  const row = (over: CSSProperties): OptionChrome => {
-    // a custom row background replaces the style's own paint entirely
-    const cleaned: CSSProperties = backdrop
-      ? {
-          ...over,
-          backgroundImage: undefined,
-          backgroundPosition: undefined,
-          backgroundRepeat: undefined,
-          backgroundSize: undefined,
-        }
-      : over;
-    return {
-      row: {
-        ...base,
-        ...cleaned,
-        // correct-answer highlight always reads, whatever the style
-        background: backdrop
-          ? backdrop.background
-          : highlight && !over.background
-            ? hlBg
-            : over.background,
-        boxShadow: backdrop?.boxShadow ?? over.boxShadow,
-      },
-      badge: { borderRadius: "50%" },
-    };
-  };
+  const row = (over: CSSProperties): OptionChrome => ({
+    row: {
+      ...base,
+      ...over,
+      // correct-answer highlight always reads, whatever the style
+      background: highlight && !over.background ? hlBg : over.background,
+      boxShadow: highlight && over.boxShadow ? over.boxShadow : over.boxShadow,
+    },
+    badge: { borderRadius: "50%" },
+  });
 
   switch (id) {
     case "plain":
@@ -259,8 +240,6 @@ export function optionBadgeStyle(
   highlight: boolean,
 ): CSSProperties {
   const accent = theme.accent;
-  /** the bullet's own ink / fill / border channels, when the user picked any */
-  const pal = optionBulletPalette(theme, highlight);
   const filled: CSSProperties = {
     background: `radial-gradient(circle at 32% 28%, ${shade(highlight ? accent : color, 0.4)}, ${highlight ? accent : color} 72%)`,
     color: "#ffffff",
@@ -299,13 +278,5 @@ export function optionBadgeStyle(
       Object.assign(out, outlined, { borderRadius: "50%" });
   }
   if (highlight) out.boxShadow = `0 0 22px ${withAlpha(accent, 0.85)}`;
-  if (pal.customWins) {
-    if (pal.fill) out.background = pal.fill === BULLET_COLOR_NONE ? "transparent" : pal.fill;
-    if (pal.ink) out.color = pal.ink === BULLET_COLOR_NONE ? "transparent" : pal.ink;
-    if (pal.border) {
-      const w = Math.max(1.5, size * 0.06);
-      out.border = pal.border === BULLET_COLOR_NONE ? "none" : `${w}px solid ${pal.border}`;
-    }
-  }
   return out;
 }

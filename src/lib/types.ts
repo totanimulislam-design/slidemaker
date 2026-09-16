@@ -7,17 +7,6 @@ export type EditorScope = "slide" | "selected" | "all";
 export interface QuizOption {
   key: OptionKey;
   text: string;
-  /**
-   * How the option's display label is determined:
-   *   "auto"   — the label is generated from the deck's Plain Numbering setting.
-   *              When numbering is "none", the stored `key` is shown as-is.
-   *   "manual" — the user has explicitly typed a custom label; it always takes
-   *              priority over Plain Numbering.
-   *
-   * `undefined` (missing) is treated as `"auto"` for backward compatibility
-   * with decks saved before this field existed.
-   */
-  labelMode?: "auto" | "manual";
 }
 
 export interface SlideData {
@@ -129,17 +118,12 @@ export interface GradientStop {
   at: number;
 }
 
-export type GradientType = "linear" | "radial" | "mesh";
-
 export interface Gradient {
   enabled: boolean;
-  type: GradientType;
+  type: "linear" | "radial";
   /** degrees, linear only */
   angle: number;
   stops: GradientStop[];
-  /** radial centre in % of the box (defaults 50/50 when missing) */
-  cx?: number;
-  cy?: number;
 }
 
 export interface BannerSettings {
@@ -226,20 +210,6 @@ export interface BackgroundSettings {
   gradient: Gradient;
   /** darken the board edges for legibility */
   vignette: number;
-  /**
-   * Decorative vector design id (see lib/backgroundDesigns). "" = none.
-   * Rendered above the gradient, below the image.
-   */
-  design?: string;
-  /**
-   * Design size as % of the board (100 = natural). Width and height are
-   * independent so shapes can be stretched; keep them equal to scale
-   * uniformly. Percentages keep the design correct at any slide size.
-   */
-  designW?: number;
-  designH?: number;
-  /** design layer opacity 0–1 */
-  designOpacity?: number;
 }
 
 export const DEFAULT_BACKGROUND: BackgroundSettings = {
@@ -260,14 +230,8 @@ export const DEFAULT_BACKGROUND: BackgroundSettings = {
       { color: "#0b1226", at: 0 },
       { color: "#050507", at: 100 },
     ],
-    cx: 50,
-    cy: 50,
   },
   vignette: 0,
-  design: "",
-  designW: 100,
-  designH: 100,
-  designOpacity: 1,
 };
 
 export const cloneBackground = (b: BackgroundSettings = DEFAULT_BACKGROUND): BackgroundSettings =>
@@ -417,20 +381,6 @@ export const FRAME_STYLES: { id: FrameStyleId; label: string }[] = [
   { id: "none", label: "None" },
 ];
 
-/** where the option bullet's background shape is painted */
-export type OptionBulletBgScope = "marker" | "row";
-
-/** silhouette of the option bullet's background shape */
-export type OptionBulletBgShape =
-  | "match"
-  | "circle"
-  | "rounded"
-  | "square"
-  | "pill"
-  | "diamond"
-  | "hexagon"
-  | "soft";
-
 export interface ThemeSettings {
   frameOuter: string;
   frameInner: string;
@@ -453,24 +403,6 @@ export interface ThemeSettings {
   optionBulletShape: string;
   /** option bullet fill treatment */
   optionBulletTreatment: string;
-  /** letter inside the bullet marker — "" = auto (marker colour), "transparent" = hidden */
-  optionBulletInk: string;
-  /** background / fill of the bullet marker — "" = auto, "transparent" = no fill */
-  optionBulletFill: string;
-  /** outline / ring of the bullet marker — "" = auto, "transparent" = no ring */
-  optionBulletBorder: string;
-  /** keep the picked ink / fill / border colours on the revealed correct answer */
-  optionBulletCustomOnAnswer: boolean;
-  /** colour of the bullet's background shape — "" = off */
-  optionBulletBgColor: string;
-  /** paint that shape behind the marker, or as the option-row background */
-  optionBulletBgScope: OptionBulletBgScope;
-  /** silhouette of that background shape */
-  optionBulletBgShape: OptionBulletBgShape;
-  /** size of the background shape, % of the marker box */
-  optionBulletBgSize: number;
-  /** background shape opacity, 0–100 */
-  optionBulletBgOpacity: number;
   accent: string;
   brandColor: string;
   badgeColor: string;
@@ -486,8 +418,6 @@ export interface ThemeSettings {
   optionGap: number;
   /** line-height of the option text (1 = tight, 2 = airy) */
   optionLineHeight: number;
-  /** plain numbering painted over the option markers (see lib/plainNumbering) — "none" keeps the option keys */
-  plainNumbering: string;
   optionsLayout: OptionsLayout;
   /** free positioning for every element (0–100 % both axes) */
   layout: LayoutMap;
@@ -559,15 +489,6 @@ export const DEFAULT_THEME: ThemeSettings = {
   optionAccent: "#2f4fff",
   optionBulletShape: "circle",
   optionBulletTreatment: "auto",
-  optionBulletInk: "",
-  optionBulletFill: "",
-  optionBulletBorder: "",
-  optionBulletCustomOnAnswer: false,
-  optionBulletBgColor: "",
-  optionBulletBgScope: "marker",
-  optionBulletBgShape: "match",
-  optionBulletBgSize: 150,
-  optionBulletBgOpacity: 30,
   accent: "#2f4fff",
   brandColor: "#ffffff",
   badgeColor: "#ffffff",
@@ -579,7 +500,6 @@ export const DEFAULT_THEME: ThemeSettings = {
   optionSize: 30,
   optionGap: 0,
   optionLineHeight: 1.45,
-  plainNumbering: "none",
   optionsLayout: "right",
   layout: cloneLayout(),
   snapEnabled: true,

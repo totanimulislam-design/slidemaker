@@ -125,41 +125,19 @@ export function universalStack(primary: string, arabic?: string): string {
 
 /* --------------------------------------------------------- font library */
 
-/** the script a face is designed for — also drives the single-script pickers */
-export type FontScript = "bangla" | "latin" | "arabic";
-
-/**
- * Heading a face sits under in the picker.
- * `latin`/`bangla`/`arabic` mirror the script; `multi` collects the pan-Unicode
- * faces (Noto Sans, Noto Serif…) that cover many scripts at once.
- */
-export type FontGroupId = FontScript | "multi";
-
 export interface FontChoice {
   family: string;
   label: string;
   /** user-uploaded font */
   custom?: boolean;
   /** which script this face is primarily for */
-  script: FontScript;
-  /**
-   * Overrides the group this face is listed under in the multi-script picker.
-   * Defaults to `script` — so a face stays in its script picker *and* can be
-   * filed under “Multi-language” (e.g. Noto Sans).
-   */
-  group?: FontGroupId;
+  script: "bangla" | "latin" | "arabic";
   /** short classification for grouping in the picker */
   kind: "display" | "sans" | "serif" | "hand" | "mono" | "traditional";
   /** sample text shown in the picker */
   sample: string;
   /** weights to request from Google Fonts */
   weights: string;
-  /**
-   * Real Google-Fonts family to download instead of `family`.
-   * Google has no “Noto Serif Arabic” — its Arabic serif is “Noto Naskh Arabic”,
-   * so that file is fetched and re-registered under the friendlier name.
-   */
-  aliasFor?: string;
 }
 
 const bn = (family: string, kind: FontChoice["kind"]): FontChoice => ({
@@ -171,66 +149,6 @@ const en = (family: string, kind: FontChoice["kind"]): FontChoice => ({
 const ar = (family: string, kind: FontChoice["kind"]): FontChoice => ({
   family, label: family, script: "arabic", kind, sample: "العربية", weights: "400;500;600;700",
 });
-/** pan-Unicode faces — filed under “Multi-language” but still script `latin` */
-const multi = (family: string, kind: FontChoice["kind"]): FontChoice => ({
-  family, label: family, script: "latin", group: "multi", kind, sample: "Aa বাংলا العربية", weights: "400;500;600;700;800",
-});
-
-/** The group a face belongs to in the multi-script picker. */
-export const fontGroupId = (f: Pick<FontChoice, "script" | "group">): FontGroupId => f.group ?? f.script;
-
-/** Group order + label for the grouped picker; `priority` pins faces to the top. */
-export interface FontGroupDef {
-  id: FontGroupId;
-  label: string;
-  /** families shown first, in this order (everything else follows A→Z) */
-  priority: string[];
-}
-
-export const FONT_GROUPS: FontGroupDef[] = [
-  {
-    id: "latin",
-    label: "English / Latin",
-    priority: ["Inter", "Roboto", "Open Sans", "Lato", "Poppins", "Montserrat", "Nunito", "Merriweather"],
-  },
-  {
-    id: "bangla",
-    label: "Bangla",
-    priority: ["Noto Sans Bengali", "Noto Serif Bengali", "Hind Siliguri", "Baloo Da 2", "Atma", "Tiro Bangla", "Kalpurush"],
-  },
-  {
-    id: "arabic",
-    label: "Arabic",
-    priority: ["Noto Sans Arabic", "Noto Serif Arabic", "Cairo", "Tajawal", "Amiri", "Almarai"],
-  },
-  {
-    id: "multi",
-    label: "Multi-language",
-    priority: ["Noto Sans", "Noto Serif", "Noto Sans Display", "Noto Serif Display"],
-  },
-];
-
-/** Pinned faces first (in the order above), then the rest alphabetically. */
-export function sortGroupFonts(fonts: FontChoice[], id: FontGroupId): FontChoice[] {
-  const priority = FONT_GROUPS.find((g) => g.id === id)?.priority ?? [];
-  const rank = (f: FontChoice) => {
-    const i = priority.indexOf(f.family);
-    return i < 0 ? priority.length : i;
-  };
-  // Array#sort is stable, so ties keep the library order
-  return [...fonts].sort((a, b) => rank(a) - rank(b) || a.family.localeCompare(b.family, "en"));
-}
-
-/**
- * CSS font-family for a *preview* of one face: the face itself, then a
- * script-appropriate safety net so a sample never shows tofu boxes while the
- * real file is still downloading (or when it covers only some scripts).
- */
-export function previewStack(f: Pick<FontChoice, "family" | "script" | "group">): string {
-  if (f.script === "arabic") return `'${f.family}', 'Noto Naskh Arabic', sans-serif`;
-  if (fontGroupId(f) === "multi") return `'${f.family}', 'Noto Sans', 'Noto Sans Bengali', 'Noto Naskh Arabic', sans-serif`;
-  return `'${f.family}', 'Noto Sans Bengali', sans-serif`;
-}
 
 /** Curated, all verified on Google Fonts. */
 export const FONT_LIBRARY: FontChoice[] = [
@@ -302,12 +220,14 @@ export const FONT_LIBRARY: FontChoice[] = [
   en("Jost", "sans"),
   en("Overpass", "sans"),
   en("Exo 2", "sans"),
+  en("Sora", "sans"),
   // neutral / UI
   en("Roboto", "sans"),
   en("Open Sans", "sans"),
   en("Lato", "sans"),
   en("Source Sans 3", "sans"),
   en("IBM Plex Sans", "sans"),
+  en("Noto Sans", "sans"),
   en("Public Sans", "sans"),
   en("Libre Franklin", "sans"),
   en("Fira Sans", "sans"),
@@ -334,9 +254,6 @@ export const FONT_LIBRARY: FontChoice[] = [
 
   /* ------------------------------- Arabic ------------------------------- */
   ar("Noto Naskh Arabic", "traditional"),
-  // Google ships no "Noto Serif Arabic" — its Arabic serif is Naskh, downloaded
-  // and re-registered under that name (see `aliasFor` / `loadAlias`).
-  { family: "Noto Serif Arabic", label: "Noto Serif Arabic", script: "arabic", kind: "serif", sample: "العربية", weights: "400;500;600;700", aliasFor: "Noto Naskh Arabic" },
   ar("Amiri", "traditional"),
   ar("Scheherazade New", "traditional"),
   ar("Lateef", "traditional"),
@@ -358,29 +275,12 @@ export const FONT_LIBRARY: FontChoice[] = [
   ar("IBM Plex Sans Arabic", "sans"),
   ar("Readex Pro", "sans"),
   ar("Alexandria", "sans"),
-
-  /* ---------------------------- Multi-language --------------------------- */
-  // pan-Unicode Noto faces — Latin, Greek, Cyrillic, Vietnamese… in one file.
-  // They cover no Bengali/Arabic, so those scripts still fall through the
-  // universal chain to the Bengali / Naskh fallback faces.
-  multi("Noto Sans", "sans"),
-  multi("Noto Serif", "serif"),
-  multi("Noto Sans Display", "sans"),
-  multi("Noto Serif Display", "serif"),
 ];
 
 export const FONT_BY_FAMILY = new Map(FONT_LIBRARY.map((f) => [f.family.toLowerCase(), f]));
 
 /** families already requested (kept so we never inject the same link twice) */
 const loadedFamilies = new Set<string>();
-
-/** anything a loader can fetch: a library face, or a subset of its fields */
-export interface LoadableFont {
-  family: string;
-  weights: string;
-  /** download `aliasFor` from Google but register it as `family` */
-  aliasFor?: string;
-}
 
 /** Google Fonts <link> for the given families (deduplicated). */
 export function fontHref(families: { family: string; weights: string }[]): string {
@@ -408,67 +308,26 @@ export function toSingleFamily(value: string): string {
 export const familiesLoaded = (families: string[]) => families.every((f) => loadedFamilies.has(f));
 export const markLoaded = (families: string[]) => families.forEach((f) => loadedFamilies.add(f));
 
-/**
- * Aliased faces: Google's CSS is fetched and every mention of the real family
- * is renamed, then injected as a <style> so `family` becomes a usable face.
- * Fails silently (offline / CORS) — the universal chain still covers the script.
- */
-const aliasRequested = new Set<string>();
-
-function loadAlias(font: LoadableFont) {
-  const source = font.aliasFor;
-  if (typeof document === "undefined" || !source || aliasRequested.has(font.family)) return;
-  aliasRequested.add(font.family);
-  if (document.querySelector(`style[data-ff="alias:${font.family}"]`)) return;
-  fetch(fontHref([{ family: source, weights: font.weights }]))
-    .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`font ${font.family}`))))
-    .then((css) => {
-      const style = document.createElement("style");
-      style.setAttribute("data-ff", `alias:${font.family}`);
-      // the CSS only names the family in its font-family declarations
-      style.textContent = css.split(source).join(font.family);
-      document.head.appendChild(style);
-      document.fonts?.ready?.then(() => listeners.forEach((l) => l()));
-    })
-    .catch(() => {
-      /* nothing to do: the fallback chain renders the script anyway */
-    });
-}
-
-/** chunks already retried family-by-family after a failed request */
-const retriedChunks = new Set<string>();
-
 /** Requests a stylesheet for the given families (deduplicated by content). */
-export function ensureFontStylesheet(families: LoadableFont[]) {
+export function ensureFontStylesheet(families: { family: string; weights: string }[]) {
   if (typeof document === "undefined" || !families.length) return;
   // Kalpurush is declared in index.html with a local file; nothing to fetch.
   const remote = families.filter((f) => !/^kalpurush/i.test(f.family));
   markLoaded(families.map((f) => f.family));
-  remote.forEach((f) => {
-    if (f.aliasFor) loadAlias(f);
-  });
-  const direct = remote.filter((f) => !f.aliasFor);
-  if (!direct.length) {
+  if (!remote.length) {
     document.fonts?.ready?.then(() => listeners.forEach((l) => l()));
     return;
   }
-  const key = `ff:${direct.map((f) => f.family).sort().join("|")}`;
+  const key = `ff:${remote.map((f) => f.family).sort().join("|")}`;
   if (document.querySelector(`link[data-ff="${key}"]`)) return;
   const link = document.createElement("link");
   link.rel = "stylesheet";
   link.crossOrigin = "anonymous";
   link.setAttribute("data-ff", key);
-  link.href = fontHref(direct);
+  link.href = fontHref(remote);
   link.addEventListener("load", () => {
-    markLoaded(direct.map((f) => f.family));
+    markLoaded(remote.map((f) => f.family));
     document.fonts?.ready?.then(() => listeners.forEach((l) => l()));
-  });
-  link.addEventListener("error", () => {
-    // one unavailable family makes Google reject the whole request, which would
-    // silently drop the other eleven — retry them one by one instead
-    if (retriedChunks.has(key)) return;
-    retriedChunks.add(key);
-    direct.forEach((f) => ensureFontStylesheet([f]));
   });
   document.head.appendChild(link);
 }

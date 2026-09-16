@@ -62,12 +62,6 @@ interface Props {
     global: ShapeItem[];
     selectedId: string | null;
     onSelect: (id: string | null) => void;
-    /** full multi-selection on the canvas (group members included) */
-    selectedIds: string[];
-    onGroup: (ids: string[]) => void;
-    onUngroup: (ids: string[]) => void;
-    onRemoveIds: (ids: string[]) => void;
-    onDuplicateIds: (ids: string[]) => void;
     onAdd: (kind: ShapeKind, scope: InsertScope) => void;
     onChange: (id: string, patch: Partial<ShapeItem>) => void;
     onRemove: (id: string) => void;
@@ -540,11 +534,6 @@ export default function Inspector({
             slideShapes={shapes.slide}
             globalShapes={shapes.global}
             selectedId={shapes.selectedId}
-            selectedIds={shapes.selectedIds}
-            onGroup={shapes.onGroup}
-            onUngroup={shapes.onUngroup}
-            onRemoveIds={shapes.onRemoveIds}
-            onDuplicateIds={shapes.onDuplicateIds}
             onSelect={shapes.onSelect}
             onAdd={shapes.onAdd}
             onChange={shapes.onChange}

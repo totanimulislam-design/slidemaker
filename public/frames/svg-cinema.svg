@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">
+  <path fill="#111" d="M0 0h1280v720H0zM90 70h1100v580H90z" fill-rule="evenodd"/>
+  <g fill="#fbbf24">
+    <rect x="18" y="16" width="22" height="28"/>
+    <rect x="18" y="62" width="22" height="28"/>
+    <rect x="18" y="108" width="22" height="28"/>
+    <rect x="18" y="154" width="22" height="28"/>
+    <rect x="18" y="200" width="22" height="28"/>
+    <rect x="18" y="246" width="22" height="28"/>
+    <rect x="18" y="292" width="22" height="28"/>
+    <rect x="18" y="338" width="22" height="28"/>
+    <rect x="18" y="384" width="22" height="28"/>
+    <rect x="18" y="430" width="22" height="28"/>
+    <rect x="18" y="476" width="22" height="28"/>
+    <rect x="18" y="522" width="22" height="28"/>
+    <rect x="18" y="568" width="22" height="28"/>
+    <rect x="18" y="614" width="22" height="28"/>
+    <rect x="18" y="660" width="22" height="28"/>
+    <rect x="1240" y="16" width="22" height="28"/>
+    <rect x="1240" y="62" width="22" height="28"/>
+    <rect x="1240" y="108" width="22" height="28"/>
+    <rect x="1240" y="154" width="22" height="28"/>
+    <rect x="1240" y="200" width="22" height="28"/>
+    <rect x="1240" y="246" width="22" height="28"/>
+    <rect x="1240" y="292" width="22" height="28"/>
+    <rect x="1240" y="338" width="22" height="28"/>
+    <rect x="1240" y="384" width="22" height="28"/>
+    <rect x="1240" y="430" width="22" height="28"/>
+    <rect x="1240" y="476" width="22" height="28"/>
+    <rect x="1240" y="522" width="22" height="28"/>
+    <rect x="1240" y="568" width="22" height="28"/>
+    <rect x="1240" y="614" width="22" height="28"/>
+    <rect x="1240" y="660" width="22" height="28"/>
+  </g>
+</svg>

@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">
-  <!-- Scholar: clean academic double rule with corner ticks -->
-  <rect x="14" y="12" width="1252" height="696" fill="none" stroke="#94a3b8" stroke-width="4"/>
-  <rect x="34" y="30" width="1212" height="660" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>
-  <g stroke="#64748b" stroke-width="4" stroke-linecap="square">
-    <path d="M14 60h26M14 660h26M1266 60h-26M1266 660h-26"/>
-    <path d="M60 12v26M1220 12v26M60 708v-26M1220 708v-26"/>
-  </g>
-</svg>

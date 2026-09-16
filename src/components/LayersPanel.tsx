@@ -242,11 +242,6 @@ export default function LayersPanel({
                 </span>
                 <span className="truncate">{l.label}</span>
                 {l.hidden && <span className="text-[9px] text-slate-500">(hidden)</span>}
-                {!!l.groupId && (
-                  <span className="shrink-0 text-[9px] text-sky-300" title="Part of a group — clicking this row selects the item alone">
-                    ⧉
-                  </span>
-                )}
               </button>
               {l.global && !isElement && <span className="rounded bg-black/30 px-1 text-[8px]">ALL</span>}
               {l.ref.kind === "shape" && onToggleLock && (

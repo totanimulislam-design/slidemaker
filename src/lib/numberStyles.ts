@@ -6,7 +6,7 @@ import { shade, withAlpha } from "./color";
  * Numbering styles for the question bullet.
  *
  * A style is a pure function of (theme, size, number) → styles + content, so it
- * renders identically on the canvas, in thumbnails and in PNG/PDF exports.
+ * renders identically on the canvas, in thumbnails, in PNG/PDF and in PPTX.
  * Everything derives from `theme.accent`, so recolouring the deck restyles all.
  */
 
@@ -238,5 +238,29 @@ export function renderNumberStyle(
 
     default:
       return renderNumberStyle("circle", theme, size, rawNumber);
+  }
+}
+
+/** PPTX shape mapping (pptxgenjs geometry names) */
+export function pptxGeometry(
+  id: NumberStyle,
+  pptx: { ShapeType: Record<string, string> },
+): { shape: string; fillable: boolean; radius?: number } {
+  switch (id) {
+    case "circle": case "ring": case "glow": case "gradient":
+      return { shape: pptx.ShapeType.ellipse, fillable: id !== "ring" };
+    case "square": return { shape: pptx.ShapeType.rect, fillable: true };
+    case "rounded": case "pill": return { shape: pptx.ShapeType.roundRect, fillable: true, radius: id === "pill" ? 0.5 : 0.3 };
+    case "diamond": return { shape: pptx.ShapeType.diamond, fillable: true };
+    case "hexagon": return { shape: pptx.ShapeType.hexagon, fillable: true };
+    case "kite": return { shape: pptx.ShapeType.diamond, fillable: true };
+    case "star": return { shape: pptx.ShapeType.star5, fillable: true };
+    case "burst": return { shape: pptx.ShapeType.star12, fillable: true };
+    case "shield": return { shape: pptx.ShapeType.roundRect, fillable: true, radius: 0.2 };
+    case "ribbon": case "banner": return { shape: pptx.ShapeType.chevron, fillable: true };
+    case "underline": case "bar": return { shape: pptx.ShapeType.roundRect, fillable: true, radius: 0.5 };
+    case "bracket": return { shape: pptx.ShapeType.rect, fillable: false };
+    case "none": return { shape: pptx.ShapeType.rect, fillable: false };
+    default: return { shape: pptx.ShapeType.ellipse, fillable: true };
   }
 }
