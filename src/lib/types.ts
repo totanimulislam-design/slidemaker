@@ -51,6 +51,9 @@ export type ElementId =
 
 /** Per-box typeface override. Empty fields fall back to the deck fonts. */
 export interface BoxTypeface {
+  color?: string;
+  underline?: boolean;
+  strikethrough?: boolean;
   family?: string;
   script?: "bangla" | "latin" | "arabic";
   weight?: number;

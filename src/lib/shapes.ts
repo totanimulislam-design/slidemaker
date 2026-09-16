@@ -86,6 +86,8 @@ export interface ShapeItem {
   padding?: number;
   /** font family override for this item's text (single family name) */
   fontFamily?: string;
+  underline?: boolean;
+  strikethrough?: boolean;
 
   /* ---------------------------- image only ---------------------------- */
   /** data-URL or http(s) URL */

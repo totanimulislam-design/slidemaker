@@ -64,8 +64,10 @@ export function optionTextStack(theme: ThemeSettings): string {
 export function boxFontCss(theme: ThemeSettings, id: ElementId, extras: CSSProperties = {}): CSSProperties {
   const tf = boxTypeface(theme, id);
   const out: CSSProperties = { ...extras, fontFamily: boxStack(theme, id) };
+  if (tf.color) { out.color = tf.color; out.WebkitTextFillColor = tf.color; }
+  if (tf.underline !== undefined || tf.strikethrough !== undefined) out.textDecoration = [tf.underline && "underline", tf.strikethrough && "line-through"].filter(Boolean).join(" ") || "none";
   if (tf.weight) out.fontWeight = tf.weight;
-  if (tf.italic) out.fontStyle = "italic";
+  if (tf.italic !== undefined) out.fontStyle = tf.italic ? "italic" : "normal";
   if (tf.letterSpacing !== undefined) out.letterSpacing = tf.letterSpacing;
   if (tf.uppercase === true) out.textTransform = "uppercase";
   if (tf.uppercase === false) out.textTransform = "none";

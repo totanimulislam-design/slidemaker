@@ -75,6 +75,8 @@ export async function runSmokeTests(): Promise<CaseResult[]> {
   out.push({ name: "the editor mounts", pass: !!doc.querySelector(".slide-editable [data-board]"), detail: `board=${!!doc.querySelector(".slide-editable [data-board]")}` });
   out.push({ name: "deck shape from the store is rendered", pass: !!doc.querySelector('.slide-editable [data-shape="g1"]'), detail: `shape=${!!doc.querySelector('.slide-editable [data-shape="g1"]')}` });
 
+  out.push({ name: "toolbar is hidden without selection", pass: !doc.querySelector(".context-toolbar") });
+
   // waving the mouse across the whole board must leave the deck shape alone
   const shape = doc.querySelector('.slide-editable [data-shape="g1"]') as HTMLElement;
   const before = `${shape.style.left},${shape.style.top}`;
@@ -90,6 +92,7 @@ export async function runSmokeTests(): Promise<CaseResult[]> {
   // selection still works: clicking shows the selection frame (its edit options)
   fire(shape, "pointerdown", rect.left + rect.width * 0.3, rect.top + rect.height * 0.25, 1);
   fire(shape, "pointerup", rect.left + rect.width * 0.3, rect.top + rect.height * 0.25, 0);
+  out.push({ name: "shape selection shows contextual shape tools", pass: !!doc.querySelector('.context-toolbar [aria-label="Fill"]') && !doc.querySelector('.context-toolbar [aria-label="Font"]') });
   const frame = doc.querySelector('.slide-editable [data-sel="g1"]');
   out.push({ name: "clicking a deck shape selects it and shows its handles", pass: !!frame && frame.querySelectorAll("[data-handle]").length === 8, detail: `frame=${!!frame} handles=${frame?.querySelectorAll("[data-handle]").length ?? 0}` });
   const still = `${shape.style.left},${shape.style.top}`;
@@ -104,6 +107,12 @@ export async function runSmokeTests(): Promise<CaseResult[]> {
   for (let i = 0; i < 6; i++) fire(shape, "pointermove", rect.left + 900, rect.top + 400, 0);
   out.push({ name: "…and stops when the button is released", pass: `${shape.style.left},${shape.style.top}` === moved, detail: `now=${shape.style.left},${shape.style.top}` });
 
+  const question = doc.querySelector('.slide-editable [data-el="question"]')!;
+  fire(question, "pointerdown", 120, 160, 1);
+  fire(question, "pointerup", 120, 160, 0);
+  out.push({ name: "text selection immediately replaces shape tools", pass: !!doc.querySelector('.context-toolbar [aria-label="Bold"]') && !doc.querySelector('.context-toolbar [aria-label="Fill"]') });
+  act(() => win.dispatchEvent(new win.KeyboardEvent('keydown', {key:'Escape', bubbles:true})));
+  out.push({ name: "Escape hides the toolbar", pass: !doc.querySelector('.context-toolbar') });
   out.push({ name: "no uncaught errors while interacting", pass: errors.length === 0, detail: errors.join(" | ") });
   win.removeEventListener("error", onErr as EventListener);
   act(() => {

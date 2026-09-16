@@ -6,10 +6,9 @@ import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
 import { applyResize } from "../lib/freeTransform";
 import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
 import {
-  anyGrouped,
   fillsBox,
-  groupMembersOf,
   isWholeGroup,
+  groupMembersOf,
   moveMembers,
   rotateMembers,
   scaleMembers,
@@ -330,8 +329,6 @@ export default function ShapeLayer({
   onSelect,
   onChange,
   onBatchChange,
-  onGroup,
-  onUngroup,
   onLayerCycle,
   fontFamily,
   snap,
@@ -662,19 +659,6 @@ export default function ShapeLayer({
     pointerEvents: "auto",
   };
 
-  const chipStyle: CSSProperties = {
-    padding: "3px 8px",
-    borderRadius: 6,
-    background: "rgba(10,10,12,.85)",
-    border: "1px solid rgba(255,214,51,.55)",
-    color: "#ffd633",
-    fontSize: 11,
-    fontWeight: 700,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    pointerEvents: "auto",
-  };
-
   const bounds = selectionBounds(selectedShapes);
 
   return (
@@ -944,31 +928,6 @@ export default function ShapeLayer({
             boxSizing: "border-box",
           }}
         >
-          {/* Group / Ungroup chips — the existing pattern, right on the frame */}
-          <div style={{ position: "absolute", right: 0, top: -34, display: "flex", gap: 4 }}>
-            {anyGrouped(shapes, selectedIds) && onUngroup && (
-              <button
-                data-chip="ungroup"
-                title="Break this group — every member becomes independently selectable (Ctrl/⌘+Shift+G)"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => onUngroup(selectedShapes.map((x) => x.id))}
-                style={chipStyle}
-              >
-                ⧉ Ungroup
-              </button>
-            )}
-            {onGroup && !isWholeGroup(shapes, selectedIds) && selectedShapes.filter((x) => !x.locked).length > 1 && (
-              <button
-                data-chip="group"
-                title="Combine the selected items into one group (Ctrl/⌘+G)"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => onGroup(selectedShapes.map((x) => x.id))}
-                style={chipStyle}
-              >
-                ⧉ Group {selectedShapes.length}
-              </button>
-            )}
-          </div>
           {selectedShapes.some((x) => !x.locked) && (
             <>
               {HANDLES.map(({ h, style, cursor }) => (

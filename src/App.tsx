@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import ContextToolbar from "./components/ContextToolbar";
 import Slide, { SLIDE_H, SLIDE_W, type SlideField } from "./components/Slide";
 import {
   FREE_MAX,
@@ -18,9 +19,9 @@ import type { InspectorTab } from "./components/Inspector";
 import type { InsertScope } from "./components/ShapesPanel";
 import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, shrinkDataUrl, type ShapeItem, type ShapeKind } from "./lib/shapes";
 import type { AlignOp } from "./lib/shapeAlign";
-import { canMove, Z_LABELS, type ZOp } from "./lib/zorder";
-import { layerKey, parseLayerKey, visibleStack, type LayerRef } from "./lib/layers";
-import { boardLayerChain } from "./lib/groups";
+import { type ZOp } from "./lib/zorder";
+import { parseLayerKey, visibleStack, type LayerRef } from "./lib/layers";
+import { boardLayerChain, selectionBounds, moveMembers } from "./lib/groups";
 import HistoryPanel from "./components/HistoryPanel";
 import AnswerKeyModal from "./components/AnswerKeyModal";
 import { Btn } from "./components/ui";
@@ -103,9 +104,10 @@ export default function App() {
   const [answersOpen, setAnswersOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [activeField, setActiveField] = useState<SlideField | null>(null);
-  const [selectedEl, setSelectedEl] = useState<ElementId | null>("title");
+  const [selectedEl, setSelectedEl] = useState<ElementId | null>(null);
   /** multi-selection of drawn items; a group is selected as a unit (all member ids) */
   const [selectedShapes, setSelectedShapes] = useState<string[]>([]);
+  const [surface, setSurface] = useState<"frame" | "background" | null>(null);
   const [forceTab, setForceTab] = useState<InspectorTab | null>(null);
   const [editScope, setEditScope] = useState<"slide" | "selected" | "all">("slide");
   const [scopeSlideIds, setScopeSlideIds] = useState<string[]>([]);
@@ -125,6 +127,8 @@ export default function App() {
   const insertImage = useCallback(
     (src: string, ratio: number, scope: InsertScope | boolean, at?: { x: number; y: number }) => {
       const id = addImage(src, ratio, resolveScope(scope), at);
+      setSurface(null);
+      setSelectedEl(null);
       setSelectedShapes([id]);
       setForceTab("shapes");
     },
@@ -136,6 +140,7 @@ export default function App() {
 
   /** select shapes from the canvas; a group arrives already expanded */
   const selectShapeIds = useCallback((ids: string[]) => {
+    if (ids.length) setSurface(null);
     setSelectedShapes(ids);
     // selecting a drawn shape clears any built-in element selection
     if (ids.length) {
@@ -157,7 +162,9 @@ export default function App() {
   }, [deck, current]);
 
   const selectLayer = useCallback((ref: LayerRef) => {
+    setSurface(null);
     if (ref.kind === "shape") {
+      setSelectedEl(null);
       setSelectedShapes([ref.id]);
       setForceTab("shapes");
     } else {
@@ -250,6 +257,8 @@ export default function App() {
   const insertShape = useCallback(
     (kind: ShapeKind, scope: InsertScope | boolean) => {
       const id = addShape(kind, resolveScope(scope));
+      setSurface(null);
+      setSelectedEl(null);
       setSelectedShapes([id]);
       setForceTab("shapes");
     },
@@ -261,6 +270,7 @@ export default function App() {
 
   const index = Math.min(current, Math.max(0, deck.slides.length - 1));
   const slide = deck.slides[index];
+  useEffect(() => { setSelectedShapes([]); setSelectedEl(null); setSurface(null); setActiveField(null); }, [current]);
   const currentTheme = effectiveTheme(deck, slide);
   const currentHeader = effectiveHeader(deck, slide);
   const editorDeck = { ...deck, theme: currentTheme, header: currentHeader };
@@ -329,6 +339,7 @@ export default function App() {
 
       // Escape clears the whole selection (element + shapes + active field)
       if (e.key === "Escape") {
+        setSurface(null);
         setSelectedShapes([]);
         setSelectedEl(null);
         setActiveField(null);
@@ -770,6 +781,35 @@ export default function App() {
           <main className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(60%_60%_at_50%_0%,#141a2b_0%,#020617_70%)]">
             {slide ? (
               <>
+                {(surface || selectedLayer) && <ContextToolbar
+                  key={`${slide.id}:${surface}:${selectedEl}:${selectedShapes.join(',')}`}
+                  shape={[...(slide.shapes ?? []), ...(deck.globalShapes ?? [])].find(s => s.id === selectedShape)}
+                  element={selectedEl} surface={surface} count={selectedShapes.length} grouped={selectedGrouped}
+                  theme={currentTheme} background={effectiveBackground(deck, slide)}
+                  patchShape={patch => selectedShape && updateShapeOnSlide(selectedShape, patch, slide.id)}
+                  patchTheme={patch => setThemeScoped(patch, "slide", [slide.id])}
+                  patchBox={patch => selectedEl && patchLayoutScoped(selectedEl, patch, "slide", [slide.id])}
+                  patchBackground={patch => setBackground(patch, "slide", slide.id)}
+                  align={op => {
+                    if (selectedShapes.length < 2) { alignSelected(op); return; }
+                    const members = [...(slide.shapes ?? []), ...(deck.globalShapes ?? [])].filter(s => selectedShapes.includes(s.id));
+                    if (members.some(s => s.locked)) return;
+                    const b = selectionBounds(members);
+                    if (!b) return;
+                    const dx = op === 'left' ? -b.x : op === 'right' ? 100-b.x-b.w : op === 'hcenter' ? 50-b.x-b.w/2 : 0;
+                    const dy = op === 'top' ? -b.y : op === 'bottom' ? 100-b.y-b.h : op === 'vcenter' ? 50-b.y-b.h/2 : 0;
+                    updateShapesOnSlide(moveMembers(members.map(s => ({id:s.id, geo:s})), dx, dy), slide.id);
+                  }}
+                  reorder={op => {
+                    if (selectedShapes.length < 2) { reorderSelected(op); return; }
+                    const keys = currentStack.map(l => parseLayerKey(l.id)).filter((ref): ref is LayerRef => !!ref && ref.kind === 'shape' && selectedShapes.includes(ref.id));
+                    if (op === 'back' || op === 'forward') keys.reverse();
+                    keys.forEach(ref => reorderLayerRef(ref, op));
+                  }}
+                  group={() => groupShapes(selectedShapes)} ungroup={() => { ungroupShapes(selectedShapes); setSelectedShapes([]); }}
+                  duplicate={() => setSelectedShapes(duplicateShapes(selectedShapes))}
+                  remove={() => { removeShapes(selectedShapes); setSelectedShapes([]); }}
+                />}
                 <div
                   className="relative flex min-h-0 flex-1 flex-col"
                   onDragOver={(e) => {
@@ -821,7 +861,8 @@ export default function App() {
                     activeField={activeField}
                     onLayoutChange={moveElement}
                     selected={selectedEl}
-                    onSelect={setSelectedEl}
+                    onSelect={id => { setSelectedEl(id); if (id) { setSurface(null); setSelectedShapes([]); } }}
+                    onSurfaceSelect={value => { setSurface(value); setSelectedEl(null); setSelectedShapes([]); setActiveField(null); }}
                     globalShapes={deck.globalShapes}
                     selectedShapeIds={selectedShapes}
                     onSelectShapeIds={selectShapeIds}
@@ -868,94 +909,7 @@ export default function App() {
                       </button>
                     ),
                   )}
-                  {selectedLayer && (
-                    <>
-                      <div className="mx-1 h-5 w-px bg-white/10" />
-                      <span className="text-[10px] font-medium tracking-wide text-slate-500 uppercase">
-                        Align{selectedLayer.kind === "element" ? ` · ${selectedLayer.id}` : ""}
-                      </span>
-                      {(
-                        [
-                          ["left", "⇤", "Align to left edge of slide"],
-                          ["hcenter", "⫿", "Center horizontally on slide"],
-                          ["right", "⇥", "Align to right edge of slide"],
-                          ["top", "⤒", "Align to top of slide"],
-                          ["vcenter", "⩵", "Center vertically on slide"],
-                          ["bottom", "⤓", "Align to bottom of slide"],
-                          ["center", "✛", "Center on slide (both axes)"],
-                        ] as [AlignOp | "center", string, string][]
-                      ).map(([op, icon, title]) => (
-                        <button
-                          key={op}
-                          title={title}
-                          onClick={() => alignSelected(op)}
-                          className="h-8 min-w-8 rounded-md border border-white/10 bg-white/[0.04] px-2 text-sm text-slate-200 hover:border-amber-400/60 hover:bg-white/10"
-                        >
-                          {icon}
-                        </button>
-                      ))}
-                      <div className="mx-1 h-5 w-px bg-white/10" />
-                      <span className="text-[10px] font-medium tracking-wide text-slate-500 uppercase">Layer</span>
-                      {(["back", "backward", "forward", "front"] as ZOp[]).map((op) => {
-                        const enabled = canMove(currentStack, layerKey(selectedLayer), op);
-                        return (
-                          <button
-                            key={op}
-                            disabled={!enabled}
-                            title={`${Z_LABELS[op].label} — ${Z_LABELS[op].hint}`}
-                            onClick={() => reorderSelected(op)}
-                            className="h-8 min-w-8 rounded-md border border-white/10 bg-white/[0.04] px-2 text-sm text-slate-200 hover:border-amber-400/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
-                          >
-                            {Z_LABELS[op].icon}
-                          </button>
-                        );
-                      })}
-                    </>
-                  )}
-                  {selectedShapes.length > 0 && (
-                    <>
-                      <div className="mx-1 h-5 w-px bg-white/10" />
-                      {selectedShapes.length >= 2 && !selectedGrouped && (
-                        <Btn
-                          size="sm"
-                          variant="soft"
-                          title="Combine the selected items into one group (Ctrl/⌘+G) — they then move, resize and rotate as a unit"
-                          onClick={() => groupShapes(selectedShapes)}
-                        >
-                          ⧉ Group {selectedShapes.length}
-                        </Btn>
-                      )}
-                      {selectedGrouped && (
-                        <Btn
-                          size="sm"
-                          variant="soft"
-                          title="Break the group (Ctrl/⌘+Shift+G) — every member keeps its exact position, size, rotation, style and content and becomes independently selectable"
-                          onClick={() => ungroupShapes(selectedShapes)}
-                        >
-                          ⧉ Ungroup
-                        </Btn>
-                      )}
-                      <Btn
-                        size="sm"
-                        onClick={() => {
-                          const ids = duplicateShapes(selectedShapes);
-                          if (ids.length) setSelectedShapes(ids);
-                        }}
-                      >
-                        ⧉ Duplicate
-                      </Btn>
-                      <Btn
-                        size="sm"
-                        variant="danger"
-                        onClick={() => {
-                          removeShapes(selectedShapes);
-                          setSelectedShapes([]);
-                        }}
-                      >
-                        ✕ Delete{selectedShapes.length > 1 ? ` ${selectedShapes.length}` : ""}
-                      </Btn>
-                    </>
-                  )}
+
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 bg-slate-950/70 px-4 py-2.5">
                   <Btn size="sm" onClick={() => setCurrent(Math.max(0, index - 1))} disabled={index === 0}>
@@ -1044,7 +998,7 @@ export default function App() {
             onFixFormatting={fixFormatting}
             scripts={scripts}
             selectedEl={selectedEl ?? "title"}
-            onSelectEl={setSelectedEl}
+            onSelectEl={id => { setSelectedEl(id); setSelectedShapes([]); setSurface(null); }}
             forceTab={forceTab}
             shapes={{
               slide: slide?.shapes ?? [],
@@ -1052,7 +1006,7 @@ export default function App() {
               selectedId: selectedShape,
               selectedIds: selectedShapes,
               // panel picks are exact: a group member can be selected alone
-              onSelect: (id) => setSelectedShapes(id ? [id] : []),
+              onSelect: (id) => selectShapeIds(id ? [id] : []),
               onGroup: (ids) => groupShapes(ids),
               onUngroup: (ids) => ungroupShapes(ids),
               onRemoveIds: (ids) => {
