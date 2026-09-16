@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { DRAG_THRESHOLD_PX, usePointerDrag } from "../lib/dragSession";
 import type { Box, Deck, DeckHeader, ElementId, LayoutMap, SlideData, ThemeSettings } from "../lib/types";
 import { DEFAULT_LOGO } from "../lib/types";
 import LayoutPanel from "./LayoutPanel";
@@ -185,7 +186,16 @@ export default function Inspector({
     const v = Number(localStorage.getItem("inspector:w"));
     return v >= 300 && v <= 720 ? v : 368;
   });
-  const dragW = useRef<{ sx: number; w: number } | null>(null);
+  /**
+   * Panel width follows the pointer ONLY inside a real drag: the same guarded
+   * session the slide board uses, so the edge can never start resizing on hover
+   * if a pointer-up was ever missed.
+   */
+  const { begin: beginEdge, end: endEdge } = usePointerDrag({
+    threshold: DRAG_THRESHOLD_PX,
+    onMove: (e, st) =>
+      setWidth(Math.max(300, Math.min(720, st.initialObjectX - (e.clientX - st.dragStartX)))),
+  });
   useEffect(() => {
     localStorage.setItem("inspector:w", String(width));
   }, [width]);
@@ -201,22 +211,9 @@ export default function Inspector({
       <div
         title="Drag to resize panel · double-click to reset"
         onDoubleClick={() => setWidth(368)}
-        onPointerDown={(e) => {
-          dragW.current = { sx: e.clientX, w: width };
-          e.currentTarget.setPointerCapture(e.pointerId);
-        }}
-        onPointerMove={(e) => {
-          if (!dragW.current) return;
-          setWidth(Math.max(300, Math.min(720, dragW.current.w - (e.clientX - dragW.current.sx))));
-        }}
-        onPointerUp={(e) => {
-          dragW.current = null;
-          try {
-            e.currentTarget.releasePointerCapture(e.pointerId);
-          } catch {
-            /* ignore */
-          }
-        }}
+        onPointerDown={(e) => beginEdge(e, { x: width, y: 0 })}
+        onPointerUp={endEdge}
+        onPointerCancel={endEdge}
         className="group absolute top-0 bottom-0 -left-1.5 z-20 w-3 cursor-col-resize select-none"
         style={{ touchAction: "none" }}
       >

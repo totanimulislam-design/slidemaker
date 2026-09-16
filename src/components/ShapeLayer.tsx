@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { polygonPoints, type ShapeItem } from "../lib/shapes";
 import { withAlpha } from "../lib/color";
 import { cssBorder, dashArray, hasGradientFill, itemStyle, shapeFill, textStyle } from "../lib/shapeDesign";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
-import { applyResize, DRAG_THRESHOLD_PX } from "../lib/freeTransform";
+import { applyResize } from "../lib/freeTransform";
+import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
 import {
   anyGrouped,
   fillsBox,
@@ -44,23 +45,14 @@ interface Props {
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 type Gesture =
-  | { kind: "move"; id: string; initialObjectX: number; initialObjectY: number; others: ShapeItem[] }
+  /** the press point and the object position are held by the pointer session */
+  | { kind: "move"; id: string; others: ShapeItem[] }
   | { kind: "resize"; id: string; handle: Handle; sx: number; sy: number; x0: number; y0: number; w0: number; h0: number; ratio: number }
   | { kind: "rotate"; id: string; cx: number; cy: number; start: number; rot0: number }
   /** whole selection (multi / group) — every member gets patched by the same transform */
   | { kind: "set"; mode: "move"; ids: string[]; start: Record<string, MemberGeo> }
   | { kind: "set"; mode: "resize"; ids: string[]; start: Record<string, MemberGeo>; handle: Handle; sx: number; sy: number; bounds: { x: number; y: number; w: number; h: number } }
   | { kind: "set"; mode: "rotate"; ids: string[]; start: Record<string, MemberGeo>; cx: number; cy: number; startAngle: number; board: { left: number; top: number; width: number; height: number } };
-
-/** Pointer session — a shape never moves unless isDragging is true. */
-type PointerDrag = {
-  isPointerDown: boolean;
-  isDragging: boolean;
-  pointerId: number;
-  dragStartX: number;
-  dragStartY: number;
-  gesture: Gesture;
-};
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const GUIDE_TOL = 0.8; // % of board
@@ -347,11 +339,9 @@ export default function ShapeLayer({
   onGestureEnd,
   extraTargets,
 }: Props) {
-  const drag = useRef<PointerDrag | null>(null);
-  const bound = useRef(false);
-  const applyGestureRef = useRef<(e: PointerEvent) => void>(() => {});
-  const endDragRef = useRef<(commit?: boolean) => void>(() => {});
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
+  /** the gesture the armed pointer session drives; null = no gesture armed */
+  const gesture = useRef<Gesture | null>(null);
 
   const board = () => boardRef.current?.getBoundingClientRect();
 
@@ -376,225 +366,28 @@ export default function ShapeLayer({
   const memberList = (ids: string[], start: Record<string, MemberGeo>) =>
     ids.map((id) => ({ id, geo: start[id] })).filter((m): m is { id: string; geo: MemberGeo } => !!m.geo);
 
-  const onDocMove = useRef((e: PointerEvent) => applyGestureRef.current(e)).current;
-  const onDocUp = useRef(() => endDragRef.current(true)).current;
-
-  const unbindDoc = () => {
-    if (!bound.current) return;
-    bound.current = false;
-    window.removeEventListener("pointermove", onDocMove);
-    window.removeEventListener("pointerup", onDocUp);
-    window.removeEventListener("pointercancel", onDocUp);
-    window.removeEventListener("blur", onDocUp);
-  };
-
-  const bindDoc = () => {
-    if (bound.current) return;
-    bound.current = true;
-    window.addEventListener("pointermove", onDocMove);
-    window.addEventListener("pointerup", onDocUp);
-    window.addEventListener("pointercancel", onDocUp);
-    window.addEventListener("blur", onDocUp);
-  };
-
-  const endDrag = (commit = true) => {
-    const s = drag.current;
-    unbindDoc();
-    if (!s) return;
-    drag.current = null;
-    if (commit && s.isDragging) onGestureEnd?.();
-    setGuides({ x: null, y: null });
-  };
-
-  /** capture on the actual hit child (and the box) so painted-only targets keep the cursor */
-  const grab = (e: React.PointerEvent<Element>) => {
-    const pid = e.pointerId;
-    try {
-      e.currentTarget.setPointerCapture(pid);
-    } catch {
-      /* capture unsupported — window listeners still drive the drag */
-    }
-    const t = e.target as Element | null;
-    if (t && t !== e.currentTarget && typeof t.setPointerCapture === "function") {
-      try {
-        t.setPointerCapture(pid);
-      } catch {
-        /* ignore */
-      }
-    }
-  };
-
-  const begin = (gesture: Gesture, e: React.PointerEvent, startDragging: boolean) => {
-    drag.current = {
-      isPointerDown: true,
-      isDragging: startDragging,
-      pointerId: e.pointerId,
-      dragStartX: e.clientX,
-      dragStartY: e.clientY,
-      gesture,
-    };
-    grab(e);
-    bindDoc();
-  };
-
-  useEffect(() => {
-    return () => endDragRef.current(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* ------------------------------- gestures ------------------------------ */
-  const down = (s: ShapeItem) => (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!editable) return;
-    e.stopPropagation();
-    if (e.altKey && onLayerCycle) {
-      // Alt+click: dig through the layers at this point instead of grabbing
-      onLayerCycle(e.clientX, e.clientY);
-      return;
-    }
-    if (s.locked) return;
-    // click on a group (or a shape that is part of one) acts on the whole group;
-    // an already-selected member keeps the exact selection (precise editing),
-    // Ctrl/⌘ toggles this shape's group into a multi-selection
-    const members = groupMembersOf(shapes, s.id);
-    const additive = e.ctrlKey || e.metaKey;
-    let targets: string[];
-    if (additive) {
-      const allOn = members.every((id) => selectedIds.includes(id));
-      targets = allOn
-        ? selectedIds.filter((id) => !members.includes(id))
-        : [...new Set([...selectedIds, ...members])];
-      onSelect?.(targets);
-    } else if (selectedIds.includes(s.id)) {
-      targets = selectedIds;
-    } else {
-      targets = members;
-      onSelect?.(targets);
-    }
-    if (e.button !== 0) return;
-    const movable = targets.filter((id) => shapes.some((x) => x.id === id && !x.locked));
-    if (!movable.length) return;
-    // prepare a possible drag — position is NOT updated until the pointer
-    // actually moves past the threshold (isDragging becomes true)
-    if (movable.length === 1 && targets.length === 1) {
-      const it = shapes.find((x) => x.id === movable[0])!;
-      begin(
-        {
-          kind: "move",
-          id: it.id,
-          initialObjectX: it.x,
-          initialObjectY: it.y,
-          others: [...shapes.filter((o) => o.id !== it.id), ...((extraTargets ?? []) as ShapeItem[])],
-        },
-        e,
-        false,
-      );
-    } else {
-      begin({ kind: "set", mode: "move", ids: movable, start: snapshot(movable) }, e, false);
-    }
-  };
-
-  const resizeDown = (s: ShapeItem, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    if (e.button !== 0) return;
-    begin(
-      {
-        kind: "resize",
-        id: s.id,
-        handle,
-        sx: e.clientX,
-        sy: e.clientY,
-        x0: s.x,
-        y0: s.y,
-        w0: s.w,
-        h0: s.h,
-        ratio: s.h > 0 ? s.w / s.h : 1,
-      },
-      e,
-      true,
-    );
-  };
-
-  const rotateDown = (s: ShapeItem) => (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    if (e.button !== 0) return;
-    const b = board();
-    if (!b) return;
-    const cx = b.left + ((s.x + s.w / 2) / 100) * b.width;
-    const cy = b.top + ((s.y + s.h / 2) / 100) * b.height;
-    begin({ kind: "rotate", id: s.id, cx, cy, start: Math.atan2(e.clientY - cy, e.clientX - cx), rot0: s.rot }, e, true);
-  };
-
-  /** resize / rotate handles of the multi-selection (group) frame */
-  const setResizeDown = (handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    if (e.button !== 0) return;
-    const ids = selectedShapes.filter((x) => !x.locked).map((x) => x.id);
-    if (!ids.length) return;
-    const start = snapshot(ids);
-    const bounds = selectionBounds(memberList(ids, start).map((m) => m.geo));
-    begin({ kind: "set", mode: "resize", ids, handle, start, sx: e.clientX, sy: e.clientY, bounds }, e, true);
-  };
-
-  const setRotateDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    if (e.button !== 0) return;
-    const b = board();
-    if (!b) return;
-    const ids = selectedShapes.filter((x) => !x.locked).map((x) => x.id);
-    if (!ids.length) return;
-    const start = snapshot(ids);
-    const bd = selectionBounds(memberList(ids, start).map((m) => m.geo));
-    begin(
-      {
-        kind: "set",
-        mode: "rotate",
-        ids,
-        start,
-        cx: b.left + ((bd.x + bd.w / 2) / 100) * b.width,
-        cy: b.top + ((bd.y + bd.h / 2) / 100) * b.height,
-        startAngle: Math.atan2(e.clientY - (b.top + ((bd.y + bd.h / 2) / 100) * b.height), e.clientX - (b.left + ((bd.x + bd.w / 2) / 100) * b.width)),
-        board: { left: b.left, top: b.top, width: b.width, height: b.height },
-      },
-      e,
-      true,
-    );
-  };
-
-  const applyGesture = (e: PointerEvent) => {
-    const s = drag.current;
-    if (!s?.isPointerDown) return;
-    if (e.pointerId !== s.pointerId) return;
-    // hover / leftover sessions must never move anything
-    if (e.buttons === 0) {
-      endDrag(true);
-      return;
-    }
-
-    const g = s.gesture;
-    const isMove = g.kind === "move" || (g.kind === "set" && g.mode === "move");
-    if (!s.isDragging) {
-      if (isMove) {
-        const dist = Math.hypot(e.clientX - s.dragStartX, e.clientY - s.dragStartY);
-        if (dist < DRAG_THRESHOLD_PX) return;
-      }
-      s.isDragging = true;
-    }
-    if (!s.isDragging) return;
-
+  /* ------------------------------ geometry ------------------------------- */
+  /**
+   * The single write path of a gesture. It is only ever called by the pointer
+   * session while `state.isDragging === true`, i.e. after a real mouse-down on
+   * this item plus movement past DRAG_THRESHOLD_PX. Hovering, entering,
+   * leaving or selecting can never reach it.
+   */
+  const applyGesture = (e: PointerEvent, st: Readonly<DragState>) => {
+    const g = gesture.current;
+    if (!g) return;
     const b = board();
     if (!b) return;
     const freeMove = e.altKey; // Alt = ignore all snapping
+    const dx = ((e.clientX - st.dragStartX) / b.width) * 100;
+    const dy = ((e.clientY - st.dragStartY) / b.height) * 100;
 
     if (g.kind === "set") {
       if (g.mode === "move") {
-        const dx = ((e.clientX - s.dragStartX) / b.width) * 100;
-        const dy = ((e.clientY - s.dragStartY) / b.height) * 100;
         emitUpdates(moveMembers(memberList(g.ids, g.start), dx, dy));
         return;
       }
       if (g.mode === "resize") {
-        const dx = ((e.clientX - g.sx) / b.width) * 100;
-        const dy = ((e.clientY - g.sy) / b.height) * 100;
         const nb = applyResize(
           {
             kind: "resize",
@@ -615,16 +408,14 @@ export default function ShapeLayer({
       const a = Math.atan2(e.clientY - g.cy, e.clientX - g.cx);
       let delta = ((a - g.startAngle) * 180) / Math.PI;
       if (e.shiftKey) delta = Math.round(delta / 15) * 15;
-      emitUpdates(
-        rotateMembers(memberList(g.ids, g.start), { x: g.cx - g.board.left, y: g.cy - g.board.top }, delta, g.board),
-      );
+      emitUpdates(rotateMembers(memberList(g.ids, g.start), { x: g.cx - g.board.left, y: g.cy - g.board.top }, delta, g.board));
       return;
     }
 
     if (g.kind === "move") {
       const me = shapes.find((x) => x.id === g.id);
-      let x = g.initialObjectX + ((e.clientX - s.dragStartX) / b.width) * 100;
-      let y = g.initialObjectY + ((e.clientY - s.dragStartY) / b.height) * 100;
+      let x = st.initialObjectX + dx;
+      let y = st.initialObjectY + dy;
       let gx: number | null = null;
       let gy: number | null = null;
       if (!freeMove) {
@@ -647,8 +438,6 @@ export default function ShapeLayer({
     }
 
     if (g.kind === "resize") {
-      const dx = ((e.clientX - g.sx) / b.width) * 100;
-      const dy = ((e.clientY - g.sy) / b.height) * 100;
       let { x0: x, y0: y, w0: w, h0: h } = g;
       const hnd = g.handle;
 
@@ -711,8 +500,154 @@ export default function ShapeLayer({
     onChange?.(g.id, { rot: deg });
   };
 
-  applyGestureRef.current = applyGesture;
-  endDragRef.current = endDrag;
+  /* --------------------------- pointer session --------------------------- */
+  /**
+   * One guarded session for every drawn item on this board. `begin` only arms
+   * it (no geometry is written), the threshold decides click vs drag, and any
+   * release / cancel / blur disarms it — so a shape can never keep following
+   * the pointer after the button is up.
+   */
+  const { begin, end, handleLeave } = usePointerDrag({
+    threshold: DRAG_THRESHOLD_PX,
+    enabled: () => editable,
+    onMove: applyGesture,
+    onEnd: (moved) => {
+      gesture.current = null;
+      if (moved) onGestureEnd?.();
+      setGuides({ x: null, y: null });
+    },
+  });
+
+  /** releasing the pointer over the item (or dragging off it) ends cleanly */
+  const leave = (e: React.PointerEvent) => handleLeave({ pointerId: e.pointerId, buttons: e.buttons });
+
+  /** arm a possible gesture for `g`; a plain click simply never crosses it */
+  const arm = (g: Gesture, e: React.PointerEvent, initial: { x: number; y: number }) => {
+    // arm the session first: it may finish a stale gesture, which clears ours
+    if (!begin(e, initial)) return;
+    gesture.current = g;
+  };
+
+  /* ------------------------------- gestures ------------------------------ */
+  const down = (s: ShapeItem) => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!editable) return;
+    e.stopPropagation();
+    if (e.altKey && onLayerCycle) {
+      // Alt+click: dig through the layers at this point instead of grabbing
+      onLayerCycle(e.clientX, e.clientY);
+      return;
+    }
+    if (s.locked) return;
+    // click on a group (or a shape that is part of one) acts on the whole group;
+    // an already-selected member keeps the exact selection (precise editing),
+    // Ctrl/⌘ toggles this shape's group into a multi-selection
+    const members = groupMembersOf(shapes, s.id);
+    const additive = e.ctrlKey || e.metaKey;
+    let targets: string[];
+    if (additive) {
+      const allOn = members.every((id) => selectedIds.includes(id));
+      targets = allOn
+        ? selectedIds.filter((id) => !members.includes(id))
+        : [...new Set([...selectedIds, ...members])];
+      onSelect?.(targets);
+    } else if (selectedIds.includes(s.id)) {
+      targets = selectedIds;
+    } else {
+      targets = members;
+      onSelect?.(targets);
+    }
+    if (e.button !== 0) return;
+    const movable = targets.filter((id) => shapes.some((x) => x.id === id && !x.locked));
+    if (!movable.length) return;
+    // Arm a POSSIBLE drag at most: nothing is written unless the pointer is
+    // held down AND travels past the threshold (see DragSession). A click, a
+    // hover, or re-selecting this shape leaves every coordinate untouched.
+    if (movable.length === 1 && targets.length === 1) {
+      const it = shapes.find((x) => x.id === movable[0])!;
+      arm(
+        {
+          kind: "move",
+          id: it.id,
+          others: [...shapes.filter((o) => o.id !== it.id), ...((extraTargets ?? []) as ShapeItem[])],
+        },
+        e,
+        { x: it.x, y: it.y },
+      );
+    } else {
+      arm({ kind: "set", mode: "move", ids: movable, start: snapshot(movable) }, e, { x: 0, y: 0 });
+    }
+  };
+
+  const resizeDown = (s: ShapeItem, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    // same rule as a move: the box is only resized once the pointer travels
+    arm(
+      {
+        kind: "resize",
+        id: s.id,
+        handle,
+        sx: e.clientX,
+        sy: e.clientY,
+        x0: s.x,
+        y0: s.y,
+        w0: s.w,
+        h0: s.h,
+        ratio: s.h > 0 ? s.w / s.h : 1,
+      },
+      e,
+      { x: s.x, y: s.y },
+    );
+  };
+
+  const rotateDown = (s: ShapeItem) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    const b = board();
+    if (!b) return;
+    const cx = b.left + ((s.x + s.w / 2) / 100) * b.width;
+    const cy = b.top + ((s.y + s.h / 2) / 100) * b.height;
+    arm({ kind: "rotate", id: s.id, cx, cy, start: Math.atan2(e.clientY - cy, e.clientX - cx), rot0: s.rot }, e, {
+      x: s.x,
+      y: s.y,
+    });
+  };
+
+  /** resize / rotate handles of the multi-selection (group) frame */
+  const setResizeDown = (handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    const ids = selectedShapes.filter((x) => !x.locked).map((x) => x.id);
+    if (!ids.length) return;
+    const start = snapshot(ids);
+    const bounds = selectionBounds(memberList(ids, start).map((m) => m.geo));
+    arm({ kind: "set", mode: "resize", ids, handle, start, sx: e.clientX, sy: e.clientY, bounds }, e, { x: 0, y: 0 });
+  };
+
+  const setRotateDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    const b = board();
+    if (!b) return;
+    const ids = selectedShapes.filter((x) => !x.locked).map((x) => x.id);
+    if (!ids.length) return;
+    const start = snapshot(ids);
+    const bd = selectionBounds(memberList(ids, start).map((m) => m.geo));
+    arm(
+      {
+        kind: "set",
+        mode: "rotate",
+        ids,
+        start,
+        cx: b.left + ((bd.x + bd.w / 2) / 100) * b.width,
+        cy: b.top + ((bd.y + bd.h / 2) / 100) * b.height,
+        startAngle: Math.atan2(e.clientY - (b.top + ((bd.y + bd.h / 2) / 100) * b.height), e.clientX - (b.left + ((bd.x + bd.w / 2) / 100) * b.width)),
+        board: { left: b.left, top: b.top, width: b.width, height: b.height },
+      },
+      e,
+      { x: 0, y: 0 },
+    );
+  };
 
   const handleBase: CSSProperties = {
     position: "absolute",
@@ -762,8 +697,9 @@ export default function ShapeLayer({
             key={s.id}
             data-shape={s.id}
             onPointerDown={down(s)}
-            onPointerUp={() => endDrag(true)}
-            onPointerCancel={() => endDrag(true)}
+            onPointerUp={end}
+            onPointerCancel={end}
+            onPointerLeave={leave}
             onDoubleClick={
               clickable && s.groupId
                 ? (e) => {
@@ -929,8 +865,8 @@ export default function ShapeLayer({
                       data-handle={h}
                       title="Drag to resize · Shift keeps ratio · Alt disables snapping"
                       onPointerDown={resizeDown(s, h)}
-                      onPointerUp={() => endDrag(true)}
-                      onPointerCancel={() => endDrag(true)}
+                      onPointerUp={end}
+                      onPointerCancel={end}
                       style={{
                         ...handleBase,
                         ...style,
@@ -944,8 +880,8 @@ export default function ShapeLayer({
                     data-rotate=""
                     title="Rotate · Shift snaps to 15°"
                     onPointerDown={rotateDown(s)}
-                    onPointerUp={() => endDrag(true)}
-                    onPointerCancel={() => endDrag(true)}
+                    onPointerUp={end}
+                    onPointerCancel={end}
                     style={{
                       ...handleBase,
                       left: "50%",
@@ -1041,8 +977,8 @@ export default function ShapeLayer({
                   data-handle={h}
                   title="Drag to resize the whole selection"
                   onPointerDown={setResizeDown(h)}
-                  onPointerUp={() => endDrag(true)}
-                  onPointerCancel={() => endDrag(true)}
+                  onPointerUp={end}
+                  onPointerCancel={end}
                   style={{
                     ...handleBase,
                     ...style,
@@ -1055,8 +991,8 @@ export default function ShapeLayer({
                 data-rotate=""
                 title="Rotate the whole selection · Shift snaps to 15°"
                 onPointerDown={setRotateDown}
-                onPointerUp={() => endDrag(true)}
-                onPointerCancel={() => endDrag(true)}
+                onPointerUp={end}
+                onPointerCancel={end}
                 style={{
                   ...handleBase,
                   left: "50%",
