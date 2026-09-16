@@ -20,20 +20,45 @@ export function boxTypeface(theme: ThemeSettings, id: ElementId): BoxTypeface {
   return theme.boxFonts?.[id] ?? {};
 }
 
+/** The deck face a script uses — the fallback every box starts from. */
+export function scriptStack(
+  theme: ThemeSettings,
+  script: NonNullable<BoxTypeface["script"]>,
+): string {
+  const primary =
+    script === "latin" ? theme.latinFont : script === "arabic" ? theme.arabicFont : theme.bengaliFont;
+  return universalStack(primary, theme.arabicFont);
+}
+
 /** CSS font-family stack for a box, honouring its override then the deck defaults. */
 export function boxStack(theme: ThemeSettings, id: ElementId): string {
   const tf = boxTypeface(theme, id);
-  const script = tf.script ?? BOX_DEFAULT_SCRIPT[id] ?? "bangla";
-  const family = tf.family;
-  const primary =
-    family
-      ? `'${family}'`
-      : script === "latin"
-        ? theme.latinFont
-        : script === "arabic"
-          ? theme.arabicFont
-          : theme.bengaliFont;
-  return universalStack(primary, theme.arabicFont);
+  if (tf.family) return universalStack(`'${tf.family}'`, theme.arabicFont);
+  return scriptStack(theme, tf.script ?? BOX_DEFAULT_SCRIPT[id] ?? "bangla");
+}
+
+/**
+ * The deck face of a box *ignoring* that box's own typeface override.
+ *
+ * Parts that belong to a box but are not its text — option markers, plain
+ * numbering — resolve their face here, so a per-box font override stays scoped
+ * to the text it was picked for and never reaches the numbering.
+ */
+export function deckStack(theme: ThemeSettings, id: ElementId): string {
+  return scriptStack(theme, boxTypeface(theme, id).script ?? BOX_DEFAULT_SCRIPT[id] ?? "bangla");
+}
+
+/**
+ * The option-text face and nothing else.
+ *
+ * Strictly scoped: this is applied to the single element that renders an
+ * option's text, never to the option container, a parent group or the slide —
+ * that is what made the old deck-wide `bengaliFont` assignment repaint the
+ * whole board. Question, header, title, note and the option markers each
+ * resolve their own face and are unaffected by it.
+ */
+export function optionTextStack(theme: ThemeSettings): string {
+  return boxStack(theme, "options");
 }
 
 export function boxFontCss(theme: ThemeSettings, id: ElementId, extras: CSSProperties = {}): CSSProperties {

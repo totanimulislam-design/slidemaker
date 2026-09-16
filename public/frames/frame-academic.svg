@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">
+  <!-- Academic Navy: solid band, gold hairline and a white inner rule -->
+  <path fill="#16324f" d="M0 0h1280v720H0zM58 52h1164v616H58z" fill-rule="evenodd"/>
+  <rect x="10" y="8" width="1260" height="704" fill="none" stroke="#0b1f33" stroke-width="6"/>
+  <rect x="44" y="40" width="1192" height="640" fill="none" stroke="#d4af37" stroke-width="2.5"/>
+  <rect x="66" y="60" width="1148" height="600" fill="none" stroke="#ffffff" stroke-width="2" opacity=".8"/>
+</svg>

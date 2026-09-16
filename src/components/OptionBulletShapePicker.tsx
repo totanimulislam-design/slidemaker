@@ -1,13 +1,9 @@
 import { useState } from "react";
 import type { ThemeSettings } from "../lib/types";
-import {
-  OPTION_BULLET_SHAPES,
-  renderOptionBulletMarker,
-  type OptionBulletShape,
-  type OptionBulletTreatment,
-} from "../lib/optionBulletShapes";
+import { OPTION_BULLET_SHAPES, type OptionBulletShape, type OptionBulletTreatment } from "../lib/optionBulletShapes";
 import { cn } from "../utils/cn";
 import { Field, SegButtons } from "./ui";
+import OptionBulletMarker from "./OptionBulletMarker";
 
 interface Props {
   theme: ThemeSettings;
@@ -58,7 +54,7 @@ export default function OptionBulletShapePicker({ theme, setTheme }: Props) {
       <div className="grid grid-cols-4 gap-1.5 max-h-56 overflow-y-auto p-0.5">
         {filtered.map((s) => {
           const isSelected = currentShape === s.id;
-          const preview = renderOptionBulletMarker(s.id, theme, color, 24, false, "ক");
+          const prev = { ...theme, optionBulletShape: s.id };
           return (
             <button
               key={s.id}
@@ -72,10 +68,14 @@ export default function OptionBulletShapePicker({ theme, setTheme }: Props) {
                   : "border-white/10 bg-slate-900/60 hover:border-white/25 hover:bg-slate-900",
               )}
             >
-              <div className="flex flex-1 items-center justify-center w-full py-0.5">
-                <div style={{ ...preview.style, width: preview.style.width || 24, height: 24, fontSize: 13, pointerEvents: "none" }}>
-                  <span style={preview.innerStyle}>{preview.content}</span>
-                </div>
+              <div className="relative flex flex-1 items-center justify-center w-full py-0.5 overflow-visible">
+                <OptionBulletMarker
+                  theme={prev}
+                  color={color}
+                  size={24}
+                  keyText="ক"
+                  style={{ fontSize: 13, pointerEvents: "none" }}
+                />
               </div>
               <span className="w-full truncate text-[9px] font-medium text-slate-300 leading-tight">
                 {s.label.split(" ")[0]}

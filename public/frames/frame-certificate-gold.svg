@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1280 720" preserveAspectRatio="none">
+  <!-- Award Certificate: gold rules with rosettes at the corners -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff3b0"/><stop offset="45%" stop-color="#d4af37"/>
+      <stop offset="100%" stop-color="#8c6b00"/>
+    </linearGradient>
+    <g id="rosette">
+      <circle r="19" fill="none" stroke="url(#gold)" stroke-width="3"/>
+      <circle r="8" fill="url(#gold)"/>
+      <g stroke="url(#gold)" stroke-width="2.5" stroke-linecap="round">
+        <path d="M0 -30V-22"/><path d="M0 30V22"/><path d="M-30 0h8"/><path d="M30 0h-8"/>
+        <path d="M-21 -21l6 6"/><path d="M21 21l-6 -6"/><path d="M21 -21l-6 6"/><path d="M-21 21l6 -6"/>
+      </g>
+    </g>
+  </defs>
+  <rect x="16" y="14" width="1248" height="692" fill="none" stroke="url(#gold)" stroke-width="10"/>
+  <rect x="36" y="32" width="1208" height="656" fill="none" stroke="#d4af37" stroke-width="2.5"/>
+  <rect x="48" y="44" width="1184" height="632" fill="none" stroke="#f1d98a" stroke-width="1.5"/>
+  <g>
+    <use href="#rosette" xlink:href="#rosette" transform="translate(46,42)"/>
+    <use href="#rosette" xlink:href="#rosette" transform="translate(1234,42)"/>
+    <use href="#rosette" xlink:href="#rosette" transform="translate(46,678)"/>
+    <use href="#rosette" xlink:href="#rosette" transform="translate(1234,678)"/>
+  </g>
+</svg>

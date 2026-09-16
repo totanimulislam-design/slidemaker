@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Deck } from "./types";
 import { detectScripts, ensureFontsFor, onFontsChanged, type ScriptId } from "./fonts";
+import { effectiveOptionLabel } from "./plainNumbering";
+import { effectiveTheme } from "./overrides";
 import { resetFontCache } from "./exporter";
 
 /**
@@ -18,8 +20,15 @@ export function useFontCoverage(deck: Deck): { scripts: ScriptId[]; revision: nu
       deck.header.badge,
     ];
     deck.slides.forEach((s) => {
+      // the numbering of a slide is the theme it actually paints with, so a
+      // per-slide override counts too
+      const t = effectiveTheme(deck, s);
       parts.push(s.question, s.note ?? "", s.badge ?? "");
-      s.options.forEach((o) => parts.push(o.key, o.text));
+      s.options.forEach((o, i) =>
+        // the effective label, not just the stored key: plain numbering can put
+        // Bangla/Arabic/Roman glyphs on the board that no key contains
+        parts.push(o.key, o.text, effectiveOptionLabel(o.labelMode, o.key, t.plainNumbering, i)),
+      );
     });
     return parts.join("\n");
   }, [deck]);

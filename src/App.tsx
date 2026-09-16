@@ -16,10 +16,11 @@ import Presenter from "./components/Presenter";
 import ExportModal, { type ExportSettings } from "./components/ExportModal";
 import type { InspectorTab } from "./components/Inspector";
 import type { InsertScope } from "./components/ShapesPanel";
-import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, shrinkDataUrl, type ShapeKind } from "./lib/shapes";
+import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, shrinkDataUrl, type ShapeItem, type ShapeKind } from "./lib/shapes";
 import type { AlignOp } from "./lib/shapeAlign";
 import { canMove, Z_LABELS, type ZOp } from "./lib/zorder";
-import { layerKey, visibleStack, type LayerRef } from "./lib/layers";
+import { layerKey, parseLayerKey, visibleStack, type LayerRef } from "./lib/layers";
+import { boardLayerChain } from "./lib/groups";
 import HistoryPanel from "./components/HistoryPanel";
 import AnswerKeyModal from "./components/AnswerKeyModal";
 import { Btn } from "./components/ui";
@@ -29,10 +30,10 @@ import { restoreCustomFonts } from "./lib/customFonts";
 import { downloadDataUrl, exportZip, slideToPng } from "./lib/exporter";
 import { convertMode } from "./lib/layoutMeasure";
 import { effectiveBackground } from "./lib/background";
+import { resolveFrameImageSrc } from "./lib/frameImages";
 import { effectiveHeader, effectiveTheme } from "./lib/overrides";
 import type { ApplySection } from "./lib/applyDesign";
 import { exportPdf } from "./lib/exportPdf";
-import { exportPptx } from "./lib/exportPptx";
 import { normalizeSource } from "./lib/richPaste";
 import { cn } from "./utils/cn";
 
@@ -58,8 +59,13 @@ export default function App() {
     addShape,
     addImage,
     copyShapeTo,
-    updateShape,
     updateShapeOnSlide,
+    updateShapesOnSlide,
+    updateShapes,
+    groupShapes,
+    ungroupShapes,
+    removeShapes,
+    duplicateShapes,
     applyShapeDesign,
     reorderShape,
     reorderLayerOp,
@@ -98,7 +104,8 @@ export default function App() {
   const [presenting, setPresenting] = useState(false);
   const [activeField, setActiveField] = useState<SlideField | null>(null);
   const [selectedEl, setSelectedEl] = useState<ElementId | null>("title");
-  const [selectedShape, setSelectedShape] = useState<string | null>(null);
+  /** multi-selection of drawn items; a group is selected as a unit (all member ids) */
+  const [selectedShapes, setSelectedShapes] = useState<string[]>([]);
   const [forceTab, setForceTab] = useState<InspectorTab | null>(null);
   const [editScope, setEditScope] = useState<"slide" | "selected" | "all">("slide");
   const [scopeSlideIds, setScopeSlideIds] = useState<string[]>([]);
@@ -118,16 +125,20 @@ export default function App() {
   const insertImage = useCallback(
     (src: string, ratio: number, scope: InsertScope | boolean, at?: { x: number; y: number }) => {
       const id = addImage(src, ratio, resolveScope(scope), at);
-      setSelectedShape(id);
+      setSelectedShapes([id]);
       setForceTab("shapes");
     },
     [addImage, resolveScope],
   );
 
-  const selectShape = useCallback((id: string | null) => {
-    setSelectedShape(id);
+  /** the "primary" selected drawn item — what the inspector edits */
+  const selectedShape = selectedShapes.length ? selectedShapes[selectedShapes.length - 1] : null;
+
+  /** select shapes from the canvas; a group arrives already expanded */
+  const selectShapeIds = useCallback((ids: string[]) => {
+    setSelectedShapes(ids);
     // selecting a drawn shape clears any built-in element selection
-    if (id) {
+    if (ids.length) {
       setSelectedEl(null);
       setForceTab("shapes");
     }
@@ -147,14 +158,32 @@ export default function App() {
 
   const selectLayer = useCallback((ref: LayerRef) => {
     if (ref.kind === "shape") {
-      setSelectedShape(ref.id);
+      setSelectedShapes([ref.id]);
       setForceTab("shapes");
     } else {
-      setSelectedShape(null);
+      setSelectedShapes([]);
       setSelectedEl(ref.id);
       setForceTab("layout");
     }
   }, []);
+
+  /**
+   * Alt+click on any layer: walks to the layer directly BENEATH the current
+   * selection at that point — the practical way to grab an element that is
+   * covered by another one (or by a background container).
+   */
+  const cycleLayers = useCallback((clientX: number, clientY: number) => {
+    const chain = boardLayerChain(clientX, clientY);
+    if (!chain.length) return;
+    const sel = new Set<string>([
+      ...selectedShapes.map((id) => `shape:${id}`),
+      ...(selectedEl ? [`element:${selectedEl}`] : []),
+    ]);
+    const idx = chain.findIndex((r) => sel.has(`${r.kind}:${r.id}`));
+    const ref = idx < 0 ? chain[0] : chain[(idx + 1) % chain.length];
+    if (ref.kind === "shape") selectLayer({ kind: "shape", id: ref.id });
+    else selectLayer({ kind: "element", id: ref.id as ElementId });
+  }, [selectedShapes, selectedEl, selectLayer]);
 
   const reorderLayerRef = useCallback(
     (ref: LayerRef, op: ZOp) => {
@@ -221,7 +250,7 @@ export default function App() {
   const insertShape = useCallback(
     (kind: ShapeKind, scope: InsertScope | boolean) => {
       const id = addShape(kind, resolveScope(scope));
-      setSelectedShape(id);
+      setSelectedShapes([id]);
       setForceTab("shapes");
     },
     [addShape, resolveScope],
@@ -298,30 +327,67 @@ export default function App() {
       }
       if (inField) return;
 
-      // Escape clears the whole selection (element + shape + active field)
+      // Escape clears the whole selection (element + shapes + active field)
       if (e.key === "Escape") {
-        setSelectedShape(null);
+        setSelectedShapes([]);
         setSelectedEl(null);
         setActiveField(null);
         return;
       }
 
-      // shape shortcuts
-      if (selectedShape) {
+      // Ctrl/⌘+A selects every drawn item on this slide
+      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "a") {
+        const ids = [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])].map((x) => x.id);
+        if (ids.length) {
+          e.preventDefault();
+          selectShapeIds(ids);
+        }
+        return;
+      }
+
+      // Tab / Shift+Tab walks the unified layer stack (every element + shape),
+      // so a covered item is always reachable without ungrouping anything.
+      // Only hijacked on slides that actually have drawn items, so normal
+      // keyboard focus travel is untouched everywhere else.
+      const slideShapeCount = (deck.globalShapes?.length ?? 0) + (slide?.shapes?.length ?? 0);
+      if (e.key === "Tab" && !mod && currentStack.length && slideShapeCount > 0) {
+        e.preventDefault();
+        const selKeys = new Set<string>([
+          ...selectedShapes.map((id) => `shape:${id}`),
+          ...(selectedEl ? [`element:${selectedEl}`] : []),
+        ]);
+        const step = e.shiftKey ? -1 : 1;
+        let idx = currentStack.findIndex((s) => selKeys.has(s.id));
+        if (idx < 0) idx = step === 1 ? -1 : currentStack.length;
+        const next = currentStack[(idx + step + currentStack.length) % currentStack.length];
+        const ref = parseLayerKey(next.id);
+        if (ref) selectLayer(ref);
+        return;
+      }
+
+      // Ctrl/⌘+G groups the selection; Ctrl/⌘+Shift+G ungroups it (lossless)
+      if (mod && !e.altKey && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (selectedShapes.length) ungroupShapes(selectedShapes);
+        } else if (selectedShapes.length >= 2) {
+          groupShapes(selectedShapes);
+        }
+        return;
+      }
+
+      // shape shortcuts — single, group or multi-selection
+      if (selectedShapes.length) {
         if (e.key === "Delete" || e.key === "Backspace") {
           e.preventDefault();
-          removeShape(selectedShape);
-          setSelectedShape(null);
+          removeShapes(selectedShapes);
+          setSelectedShapes([]);
           return;
         }
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        if (mod && e.key.toLowerCase() === "d") {
           e.preventDefault();
-          const id = duplicateShape(selectedShape);
-          if (id) setSelectedShape(id);
-          return;
-        }
-        if (e.key === "Escape") {
-          setSelectedShape(null);
+          const ids = duplicateShapes(selectedShapes);
+          if (ids.length) setSelectedShapes(ids);
           return;
         }
         // Ctrl+] / Ctrl+[ = forward / backward; add Shift for front / back
@@ -335,14 +401,18 @@ export default function App() {
           e.preventDefault();
           const step = e.shiftKey ? 5 : e.altKey ? 0.2 : 1;
           const all = [...(deck.globalShapes ?? []), ...deck.slides.flatMap((x) => x.shapes ?? [])];
-          const sh = all.find((x) => x.id === selectedShape);
-          if (!sh || sh.locked) return;
           const dx = e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0;
           const dy = e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0;
-          updateShape(selectedShape, {
-            x: Math.round((sh.x + dx) * 10) / 10,
-            y: Math.round((sh.y + dy) * 10) / 10,
-          });
+          // one batched update → every unlocked member of the selection nudges
+          // together and undo steps back over the whole set at once
+          const updates = selectedShapes
+            .map((id) => all.find((x) => x.id === id))
+            .filter((sh): sh is ShapeItem => !!sh && !sh.locked)
+            .map((sh) => ({
+              id: sh.id,
+              patch: { x: Math.round((sh.x + dx) * 10) / 10, y: Math.round((sh.y + dy) * 10) / 10 },
+            }));
+          updateShapes(updates, "Move shape");
           return;
         }
       }
@@ -381,17 +451,23 @@ export default function App() {
     deck.slides,
     deck.globalShapes,
     deck.theme.layout,
+    slide,
     index,
     presenting,
     pasteOpen,
     answersOpen,
     selectedEl,
-    selectedShape,
+    selectedShapes,
+    currentStack,
     moveElement,
     setCurrent,
-    removeShape,
-    duplicateShape,
-    updateShape,
+    selectShapeIds,
+    selectLayer,
+    groupShapes,
+    ungroupShapes,
+    removeShapes,
+    duplicateShapes,
+    updateShapes,
     reorderSelected,
     undo,
     redo,
@@ -415,19 +491,6 @@ export default function App() {
   const runExport = async (cfg: ExportSettings) => {
     const name = (cfg.fileName || "mcq-slides").replace(/[\\/:*?"<>|]+/g, "").trim() || "mcq-slides";
     try {
-      if (cfg.format === "pptx") {
-        setBusy("Building PowerPoint…");
-        await exportPptx(deck, {
-          bodyFont: cfg.pptxBodyFont,
-          displayFont: cfg.pptxDisplayFont,
-          answerSlides: cfg.pptxAnswerSlides,
-          speakerNotes: cfg.pptxNotes,
-          fileName: `${name}.pptx`,
-        });
-        setExportOpen(false);
-        return;
-      }
-
       setBusy("Preparing slides…");
       await mountOffscreen();
 
@@ -504,11 +567,16 @@ export default function App() {
               },
               background: { ...deck.theme.background, ...(data.theme?.background ?? {}) },
               boxFonts: { ...deck.theme.boxFonts, ...(data.theme?.boxFonts ?? {}) },
-              frame: {
-                ...deck.theme.frame,
-                ...(data.theme?.frame ?? {}),
-                color: data.theme?.frame?.color ?? data.theme?.frameInner ?? deck.theme.frame.color,
-              },
+              frame: (() => {
+                const f = {
+                  ...deck.theme.frame,
+                  ...(data.theme?.frame ?? {}),
+                  color: data.theme?.frame?.color ?? data.theme?.frameInner ?? deck.theme.frame.color,
+                };
+                // decks exported with the retired frame collection keep working
+                f.image = resolveFrameImageSrc(f.image);
+                return f;
+              })(),
             },
             slides: data.slides,
             globalShapes: data.globalShapes ?? [],
@@ -527,6 +595,13 @@ export default function App() {
     const withAnswer = deck.slides.filter((s) => s.answer).length;
     return { total: deck.slides.length, withAnswer };
   }, [deck.slides]);
+
+  /** do any of the selected drawn items belong to a group? (drives the Ungroup chip) */
+  const selectedGrouped = useMemo(() => {
+    if (!selectedShapes.length) return false;
+    const set = new Set(selectedShapes);
+    return [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])].some((x) => set.has(x.id) && !!x.groupId);
+  }, [selectedShapes, deck.globalShapes, slide]);
 
   return (
     <>
@@ -594,7 +669,7 @@ export default function App() {
           <div className="mx-1 h-6 w-px bg-white/10" />
 
           <Btn variant="success" onClick={() => setExportOpen(true)} disabled={!deck.slides.length || !!busy}>
-            ⬇ Export — PPTX · PDF · PNG
+            ⬇ Export — PDF · PNG
           </Btn>
           <Btn variant="soft" onClick={() => setPresenting(true)} disabled={!slide}>
             ▶ Present
@@ -748,9 +823,13 @@ export default function App() {
                     selected={selectedEl}
                     onSelect={setSelectedEl}
                     globalShapes={deck.globalShapes}
-                    selectedShape={selectedShape}
-                    onSelectShape={selectShape}
+                    selectedShapeIds={selectedShapes}
+                    onSelectShapeIds={selectShapeIds}
                     onShapeChange={(id, patch) => slide && updateShapeOnSlide(id, patch, slide.id)}
+                    onShapesChange={(updates) => slide && updateShapesOnSlide(updates, slide.id)}
+                    onGroupShapes={(ids) => groupShapes(ids)}
+                    onUngroupShapes={(ids) => ungroupShapes(ids)}
+                    onLayerCycle={cycleLayers}
                     onGestureEnd={history.commit}
                     background={effectiveBackground(deck, slide)}
                   />
@@ -833,14 +912,34 @@ export default function App() {
                       })}
                     </>
                   )}
-                  {selectedShape && (
+                  {selectedShapes.length > 0 && (
                     <>
                       <div className="mx-1 h-5 w-px bg-white/10" />
+                      {selectedShapes.length >= 2 && !selectedGrouped && (
+                        <Btn
+                          size="sm"
+                          variant="soft"
+                          title="Combine the selected items into one group (Ctrl/⌘+G) — they then move, resize and rotate as a unit"
+                          onClick={() => groupShapes(selectedShapes)}
+                        >
+                          ⧉ Group {selectedShapes.length}
+                        </Btn>
+                      )}
+                      {selectedGrouped && (
+                        <Btn
+                          size="sm"
+                          variant="soft"
+                          title="Break the group (Ctrl/⌘+Shift+G) — every member keeps its exact position, size, rotation, style and content and becomes independently selectable"
+                          onClick={() => ungroupShapes(selectedShapes)}
+                        >
+                          ⧉ Ungroup
+                        </Btn>
+                      )}
                       <Btn
                         size="sm"
                         onClick={() => {
-                          const n = duplicateShape(selectedShape);
-                          if (n) setSelectedShape(n);
+                          const ids = duplicateShapes(selectedShapes);
+                          if (ids.length) setSelectedShapes(ids);
                         }}
                       >
                         ⧉ Duplicate
@@ -849,11 +948,11 @@ export default function App() {
                         size="sm"
                         variant="danger"
                         onClick={() => {
-                          removeShape(selectedShape);
-                          setSelectedShape(null);
+                          removeShapes(selectedShapes);
+                          setSelectedShapes([]);
                         }}
                       >
-                        ✕ Delete
+                        ✕ Delete{selectedShapes.length > 1 ? ` ${selectedShapes.length}` : ""}
                       </Btn>
                     </>
                   )}
@@ -951,16 +1050,28 @@ export default function App() {
               slide: slide?.shapes ?? [],
               global: deck.globalShapes ?? [],
               selectedId: selectedShape,
-              onSelect: setSelectedShape,
+              selectedIds: selectedShapes,
+              // panel picks are exact: a group member can be selected alone
+              onSelect: (id) => setSelectedShapes(id ? [id] : []),
+              onGroup: (ids) => groupShapes(ids),
+              onUngroup: (ids) => ungroupShapes(ids),
+              onRemoveIds: (ids) => {
+                removeShapes(ids);
+                setSelectedShapes([]);
+              },
+              onDuplicateIds: (ids) => {
+                const n = duplicateShapes(ids);
+                setSelectedShapes(n);
+              },
               onAdd: (kind) => insertShape(kind, { mode: "this" }),
               onChange: (id, patch) => slide && updateShapeOnSlide(id, patch, slide.id),
               onRemove: (id) => {
                 removeShape(id);
-                setSelectedShape(null);
+                setSelectedShapes([]);
               },
               onDuplicate: (id) => {
                 const n = duplicateShape(id);
-                if (n) setSelectedShape(n);
+                if (n) setSelectedShapes([n]);
               },
               onToggleScope: (id) => slide && toggleShapeScope(id, slide.id),
               onAddImage: (src, ratio) => insertImage(src, ratio, { mode: "this" }),

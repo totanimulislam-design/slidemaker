@@ -16,6 +16,12 @@ interface Props {
   slideShapes: ShapeItem[];
   globalShapes: ShapeItem[];
   selectedId: string | null;
+  /** full multi-selection from the canvas (a group arrives as all its members) */
+  selectedIds: string[];
+  onGroup: (ids: string[]) => void;
+  onUngroup: (ids: string[]) => void;
+  onRemoveIds: (ids: string[]) => void;
+  onDuplicateIds: (ids: string[]) => void;
   onSelect: (id: string | null) => void;
   onAdd: (kind: ShapeKind, scope: InsertScope) => void;
   onChange: (id: string, patch: Partial<ShapeItem>) => void;
@@ -46,6 +52,11 @@ export default function ShapesPanel({
   slideShapes,
   globalShapes,
   selectedId,
+  selectedIds,
+  onGroup,
+  onUngroup,
+  onRemoveIds,
+  onDuplicateIds,
   onSelect,
   onAdd,
   onChange,
@@ -341,6 +352,11 @@ export default function ShapesPanel({
                       {x.kind === "text" && x.text ? x.text.replace(/\n/g, " ") : SHAPE_LABELS[x.kind]}
                     </span>
                     {g && <span className="rounded bg-black/20 px-1 text-[9px]">ALL</span>}
+                    {x.groupId && (
+                      <span className="text-[10px] text-sky-300" title="Part of a group — click here selects this item alone">
+                        ⧉
+                      </span>
+                    )}
                     {x.locked && <span className="text-[10px]">🔒</span>}
                   </button>
                 );
@@ -349,20 +365,135 @@ export default function ShapesPanel({
         </Field>
       )}
 
-      {!sel && (
+      {selectedIds.length === 0 && !sel && (
         <p className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-relaxed text-slate-400">
-          Insert a shape or text box, then drag it anywhere on the slide. Eight handles resize from any edge or
+          Click any shape, text box or image on the slide to select it. Eight handles resize from any edge or
           corner (hold <b>Shift</b> to keep the ratio), the blue handle rotates (<b>Shift</b> snaps to 15°),{" "}
-          <b>Alt</b> disables snapping. <b>Delete</b> removes, <b>Ctrl/⌘ + D</b> duplicates, arrows nudge.
+          <b>Alt</b> disables snapping. <b>Delete</b> removes, <b>Ctrl/⌘ + D</b> duplicates, arrows nudge.{" "}
+          <b>Ctrl/⌘ + click</b> or drag on the empty slide for multi-select, <b>Ctrl/⌘ + G</b> groups,{" "}
+          <b>Ctrl/⌘ + Shift + G</b> ungroups, <b>Alt + click</b> / <b>Tab</b> pick layers hidden underneath.
         </p>
       )}
 
+      {/* ---------------------------- multi-selection ------------------------ */}
+      {selectedIds.length > 1 &&
+        (() => {
+          const items = all.filter((x) => selectedIds.includes(x.id));
+          if (items.length < 2) return null;
+          const bounds = boundsOf(items);
+          const gid = items[0].groupId;
+          const grouped = !!gid && items.every((x) => x.groupId === gid);
+          const run = (op: AlignOp) => items.forEach((it) => !it.locked && onChange(it.id, alignShape(it, op, bounds)));
+          return (
+            <div className="space-y-2.5 rounded-xl border border-amber-400/40 bg-amber-400/[0.07] p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-amber-200">
+                  ⧉ {items.length} items selected{grouped ? " · grouped as one" : ""}
+                </span>
+                <div className="flex gap-1">
+                  <Btn size="sm" onClick={() => onDuplicateIds(items.map((x) => x.id))} title="Duplicate selection (Ctrl+D)">
+                    ⧉
+                  </Btn>
+                  <Btn size="sm" variant="danger" onClick={() => onRemoveIds(items.map((x) => x.id))} title="Delete selection">
+                    ✕
+                  </Btn>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {!grouped && (
+                  <Btn
+                    size="sm"
+                    variant="primary"
+                    onClick={() => onGroup(items.map((x) => x.id))}
+                    title="Group them — they then move / resize / rotate as one unit and are selected together (Ctrl+G)"
+                  >
+                    ⧉ Group {items.length}
+                  </Btn>
+                )}
+                {grouped && (
+                  <Btn
+                    size="sm"
+                    variant="primary"
+                    onClick={() => onUngroup(items.map((x) => x.id))}
+                    title="Ungroup — every member stays exactly where it is and becomes independently selectable (Ctrl+Shift+G)"
+                  >
+                    ⧉ Ungroup
+                  </Btn>
+                )}
+                <Btn
+                  size="sm"
+                  onClick={() => items.forEach((it) => onChange(it.id, { locked: !it.locked }))}
+                  title="Lock / unlock every selected item"
+                >
+                  🔒 Lock all
+                </Btn>
+              </div>
+              <p className="text-[10.5px] leading-relaxed text-slate-400">
+                Drag any selected item (or the yellow bounds frame) to move the whole set; handles scale every
+                member from the opposite edge. Aligning or distributing below edits the selected items.
+              </p>
+              <div className="grid grid-cols-6 gap-1">
+                {(
+                  [
+                    ["left", "⇤", "Align left edges"],
+                    ["hcenter", "⫿", "Center horizontally"],
+                    ["right", "⇥", "Align right edges"],
+                    ["top", "⤒", "Align top edges"],
+                    ["vcenter", "⩵", "Center vertically"],
+                    ["bottom", "⤓", "Align bottom edges"],
+                  ] as [AlignOp, string, string][]
+                ).map(([op, label, title]) => (
+                  <button
+                    key={op}
+                    onClick={() => run(op)}
+                    title={title}
+                    className="rounded-md border border-white/10 bg-white/[0.04] py-1.5 text-sm text-slate-200 hover:border-amber-400/60 hover:bg-white/10"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {items.length >= 3 && (
+                <div className="grid grid-cols-2 gap-1">
+                  <Btn
+                    size="sm"
+                    onClick={() =>
+                      distributeShapes(items.filter((x) => !x.locked), "h").forEach((d) => onChange(d.id, d.patch))
+                    }
+                    title="Equal horizontal gaps between the selected items"
+                  >
+                    ⋯ Distribute ↔
+                  </Btn>
+                  <Btn
+                    size="sm"
+                    onClick={() =>
+                      distributeShapes(items.filter((x) => !x.locked), "v").forEach((d) => onChange(d.id, d.patch))
+                    }
+                    title="Equal vertical gaps between the selected items"
+                  >
+                    ⋮ Distribute ↕
+                  </Btn>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
       {/* ------------------------------- properties -------------------------- */}
-      {sel && (
+      {sel && selectedIds.length <= 1 && (
         <>
           <div className="flex items-center justify-between rounded-lg border border-amber-400/30 bg-amber-400/[0.07] px-3 py-2">
-            <span className="text-sm font-medium text-amber-200">
+            <span className="flex items-center gap-1.5 text-sm font-medium text-amber-200">
               {SHAPE_ICONS[sel.kind]} {SHAPE_LABELS[sel.kind]}
+              {sel.groupId && (
+                <button
+                  onClick={() => onUngroup([sel.id])}
+                  title="This item belongs to a group — click Ungroup to separate it (its position, size, rotation, style and content are untouched)"
+                  className="rounded bg-sky-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-sky-200 hover:bg-sky-400/35"
+                >
+                  ⧉ grouped — Ungroup
+                </button>
+              )}
             </span>
             <div className="flex gap-1">
               <Btn size="sm" onClick={() => onDuplicate(sel.id)} title="Duplicate (Ctrl+D)">

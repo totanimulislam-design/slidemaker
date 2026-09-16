@@ -4,7 +4,7 @@ import type { Gradient } from "./types";
  * User-drawn overlays: shapes and free text boxes.
  *
  * Coordinates are percentages of the board (same as free-mode layout), so an
- * item keeps its place at any zoom, in thumbnails and in PPTX/PDF exports.
+ * item keeps its place at any zoom, in thumbnails and in PDF/PNG exports.
  */
 
 export type ShapeKind =
@@ -47,6 +47,12 @@ export interface ShapeItem {
   locked?: boolean;
   /** render beneath the slide's question/options/title (backdrops, highlights) */
   behind?: boolean;
+  /**
+   * Group tag: shapes sharing a groupId move / resize / rotate as one unit.
+   * Members keep their own geometry and style, so ungrouping is lossless and
+   * every member stays individually selectable and editable.
+   */
+  groupId?: string;
 
   /* ----------------------------- design ------------------------------ */
   /** gradient fill (overrides `fill` when enabled) */
@@ -215,7 +221,7 @@ export function probeImage(src: string): Promise<number> {
 }
 
 /**
- * Fetches a remote image and converts it to a data URL so exports (PNG/PDF/PPTX)
+ * Fetches a remote image and converts it to a data URL so exports (PNG/PDF)
  * don't hit CORS. Falls back to the original URL when the host blocks fetch.
  */
 export async function inlineRemoteImage(url: string): Promise<{ src: string; ratio: number }> {

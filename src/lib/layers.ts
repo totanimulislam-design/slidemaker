@@ -29,6 +29,8 @@ export interface LayerEntry {
   global: boolean;
   locked?: boolean;
   hidden?: boolean;
+  /** drawn item: id of the group it belongs to, when grouped */
+  groupId?: string;
 }
 
 export const layerKey = (r: LayerRef) => `${r.kind}:${r.id}`;
@@ -100,6 +102,7 @@ export function collectLayers(deck: Deck, slide: SlideData | undefined): LayerEn
       icon: SHAPE_ICONS[s.kind],
       global,
       locked: s.locked,
+      groupId: s.groupId,
     });
   (deck.globalShapes ?? []).forEach((s) => pushShape(s, true));
   (slide?.shapes ?? []).forEach((s) => pushShape(s, false));
