@@ -3,15 +3,34 @@ import { polygonPoints, type ShapeItem } from "../lib/shapes";
 import { withAlpha } from "../lib/color";
 import { cssBorder, dashArray, hasGradientFill, itemStyle, shapeFill, textStyle } from "../lib/shapeDesign";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
+import { applyResize } from "../lib/freeTransform";
+import {
+  anyGrouped,
+  fillsBox,
+  groupMembersOf,
+  isWholeGroup,
+  moveMembers,
+  rotateMembers,
+  scaleMembers,
+  selectionBounds,
+  type MemberGeo,
+} from "../lib/groups";
 import MathText from "./MathText";
 
 interface Props {
   shapes: ShapeItem[];
   boardRef: React.RefObject<HTMLDivElement | null>;
   editable: boolean;
-  selectedId: string | null;
-  onSelect?: (id: string | null) => void;
+  /** current multi-selection of drawn items; a group is selected as a unit */
+  selectedIds: string[];
+  onSelect?: (ids: string[]) => void;
   onChange?: (id: string, patch: Partial<ShapeItem>) => void;
+  /** batched patches — keeps a group/multi drag inside ONE undo step */
+  onBatchChange?: (updates: { id: string; patch: Partial<ShapeItem> }[]) => void;
+  onGroup?: (ids: string[]) => void;
+  onUngroup?: (ids: string[]) => void;
+  /** Alt+click: walk to the layer *below* the point (overlapping selection) */
+  onLayerCycle?: (clientX: number, clientY: number) => void;
   fontFamily: string;
   /** snapping is applied only when this is provided AND the user isn't holding Alt */
   snap?: (v: number) => number;
@@ -27,7 +46,11 @@ type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 type Gesture =
   | { kind: "move"; id: string; dx: number; dy: number; others: ShapeItem[] }
   | { kind: "resize"; id: string; handle: Handle; sx: number; sy: number; x0: number; y0: number; w0: number; h0: number; ratio: number }
-  | { kind: "rotate"; id: string; cx: number; cy: number; start: number; rot0: number };
+  | { kind: "rotate"; id: string; cx: number; cy: number; start: number; rot0: number }
+  /** whole selection (multi / group) — every member gets patched by the same transform */
+  | { kind: "set"; mode: "move"; ids: string[]; start: Record<string, MemberGeo>; px0: number; py0: number }
+  | { kind: "set"; mode: "resize"; ids: string[]; start: Record<string, MemberGeo>; handle: Handle; sx: number; sy: number; bounds: { x: number; y: number; w: number; h: number } }
+  | { kind: "set"; mode: "rotate"; ids: string[]; start: Record<string, MemberGeo>; cx: number; cy: number; startAngle: number; board: { left: number; top: number; width: number; height: number } };
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const GUIDE_TOL = 0.8; // % of board
@@ -66,6 +89,8 @@ function ImageGraphic({ s }: { s: ShapeItem }) {
         overflow: "hidden",
         border,
         boxSizing: "border-box",
+        // follow the wrapper: never clickable while the wrapper is transparent (locked shapes)
+        pointerEvents: "inherit",
         background: hasGradientFill(s) ? shapeFill(s) : s.fill ? withAlpha(s.fill, s.fillOpacity) : undefined,
         boxShadow: s.shadow && !mask ? "0 12px 30px rgba(0,0,0,.55)" : undefined,
       }}
@@ -97,6 +122,7 @@ function ImageGraphic({ s }: { s: ShapeItem }) {
             justifyContent: "center",
             color: "rgba(255,255,255,.5)",
             fontSize: 22,
+            pointerEvents: "inherit",
             background: "repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 10px, transparent 10px 20px)",
             border: "2px dashed rgba(255,255,255,.35)",
             boxSizing: "border-box",
@@ -144,8 +170,14 @@ function GradientDefs({ s, id }: { s: ShapeItem; id: string }) {
   );
 }
 
-/** SVG for geometric shapes; text-only boxes render no SVG at all. */
-function ShapeGraphic({ s }: { s: ShapeItem }) {
+/**
+ * SVG for geometric shapes; text-only boxes render no SVG at all.
+ * `paintedHit` = the wrapper must not swallow clicks over unpainted pixels:
+ * the root svg is transparent to pointer events and only the *painted*
+ * fill/stroke of each primitive stays clickable, so outline-only shapes and
+ * background containers can't block the elements underneath them.
+ */
+function ShapeGraphic({ s, paintedHit = false }: { s: ShapeItem; paintedHit?: boolean }) {
   if (s.kind === "image") return <ImageGraphic s={s} />;
   const gradId = `g-${s.id}`;
   const fill = hasGradientFill(s) ? `url(#${gradId})` : s.fill ? withAlpha(s.fill, s.fillOpacity) : "none";
@@ -161,6 +193,7 @@ function ShapeGraphic({ s }: { s: ShapeItem }) {
     strokeLinejoin: join,
     strokeLinecap: (s.lineStyle === "dotted" ? "round" : "butt") as "round" | "butt",
     vectorEffect: "non-scaling-stroke" as const,
+    pointerEvents: (paintedHit ? "visiblePainted" : "inherit") as "visiblePainted" | "inherit",
   };
 
   if (s.kind === "text") {
@@ -177,6 +210,7 @@ function ShapeGraphic({ s }: { s: ShapeItem }) {
           border,
           borderRadius: s.cornerRadius ?? 10,
           boxSizing: "border-box",
+          pointerEvents: "inherit",
         }}
       />
     );
@@ -185,7 +219,7 @@ function ShapeGraphic({ s }: { s: ShapeItem }) {
   if (s.kind === "line" || s.kind === "arrow") {
     const id = `arr-${s.id}`;
     return (
-      <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, overflow: "visible" }}>
+      <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, overflow: "visible", pointerEvents: "inherit" }}>
         <GradientDefs s={s} id={gradId} />
         {s.kind === "arrow" && (
           <defs>
@@ -220,17 +254,39 @@ function ShapeGraphic({ s }: { s: ShapeItem }) {
       preserveAspectRatio="none"
       width="100%"
       height="100%"
-      style={{ position: "absolute", inset: 0, overflow: "visible" }}
+      style={{ position: "absolute", inset: 0, overflow: "visible", pointerEvents: paintedHit ? "none" : "inherit" }}
     >
       <GradientDefs s={s} id={gradId} />
       {(s.kind === "rect" || s.kind === "rounded") && <rect x="0" y="0" width="100" height="100" rx={rx} ry={rx} {...common} />}
       {s.kind === "ellipse" && <ellipse cx="50" cy="50" rx="50" ry="50" {...common} />}
       {poly && <polygon points={poly} {...common} />}
       {double && (s.kind === "rect" || s.kind === "rounded") && (
-        <rect x="6" y="8" width="88" height="84" rx={rx} ry={rx} fill="none" stroke={stroke} strokeWidth={Math.max(1, sw * 0.6)} vectorEffect="non-scaling-stroke" />
+        <rect
+          x="6"
+          y="8"
+          width="88"
+          height="84"
+          rx={rx}
+          ry={rx}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={Math.max(1, sw * 0.6)}
+          vectorEffect="non-scaling-stroke"
+          style={{ pointerEvents: paintedHit ? "visiblePainted" : "inherit" }}
+        />
       )}
       {double && s.kind === "ellipse" && (
-        <ellipse cx="50" cy="50" rx="44" ry="44" fill="none" stroke={stroke} strokeWidth={Math.max(1, sw * 0.6)} vectorEffect="non-scaling-stroke" />
+        <ellipse
+          cx="50"
+          cy="50"
+          rx="44"
+          ry="44"
+          fill="none"
+          stroke={stroke}
+          strokeWidth={Math.max(1, sw * 0.6)}
+          vectorEffect="non-scaling-stroke"
+          style={{ pointerEvents: paintedHit ? "visiblePainted" : "inherit" }}
+        />
       )}
     </svg>
   );
@@ -268,9 +324,13 @@ export default function ShapeLayer({
   shapes,
   boardRef,
   editable,
-  selectedId,
+  selectedIds,
   onSelect,
   onChange,
+  onBatchChange,
+  onGroup,
+  onUngroup,
+  onLayerCycle,
   fontFamily,
   snap,
   smartGuides = true,
@@ -280,25 +340,93 @@ export default function ShapeLayer({
   const gesture = useRef<Gesture | null>(null);
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
 
-
   const board = () => boardRef.current?.getBoundingClientRect();
+
+  /** valid (still-present) shapes of the current selection, any order kept */
+  const selectedShapes = shapes.filter((s) => selectedIds.includes(s.id));
+  const single = selectedShapes.length === 1 ? selectedShapes[0] : null;
+
+  const emitUpdates = (updates: { id: string; patch: Partial<ShapeItem> }[]) => {
+    if (!updates.length) return;
+    if (onBatchChange) onBatchChange(updates);
+    else updates.forEach((u) => onChange?.(u.id, u.patch));
+  };
+
+  const snapshot = (ids: string[]): Record<string, MemberGeo> => {
+    const out: Record<string, MemberGeo> = {};
+    for (const id of ids) {
+      const s = shapes.find((x) => x.id === id);
+      if (s) out[id] = { x: s.x, y: s.y, w: s.w, h: s.h, rot: s.rot };
+    }
+    return out;
+  };
+  const memberList = (ids: string[], start: Record<string, MemberGeo>) =>
+    ids.map((id) => ({ id, geo: start[id] })).filter((m): m is { id: string; geo: MemberGeo } => !!m.geo);
+
+  /** capture on the actual hit child (and the box) so painted-only targets keep dragging */
+  const grab = (e: React.PointerEvent<Element>) => {
+    const pid = e.pointerId;
+    try {
+      e.currentTarget.setPointerCapture(pid);
+    } catch {
+      /* capture unsupported here — move events still bubble while over the item */
+    }
+    const t = e.target as Element | null;
+    if (t && t !== e.currentTarget && typeof t.setPointerCapture === "function") {
+      try {
+        t.setPointerCapture(pid);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
 
   /* ------------------------------- gestures ------------------------------ */
   const down = (s: ShapeItem) => (e: React.PointerEvent<HTMLDivElement>) => {
     if (!editable) return;
     e.stopPropagation();
-    onSelect?.(s.id);
-    if (e.button !== 0 || s.locked) return;
+    if (e.altKey && onLayerCycle) {
+      // Alt+click: dig through the layers at this point instead of grabbing
+      onLayerCycle(e.clientX, e.clientY);
+      return;
+    }
+    if (s.locked) return;
+    // click on a group (or a shape that is part of one) acts on the whole group;
+    // an already-selected member keeps the exact selection (precise editing),
+    // Ctrl/⌘ toggles this shape's group into a multi-selection
+    const members = groupMembersOf(shapes, s.id);
+    const additive = e.ctrlKey || e.metaKey;
+    let targets: string[];
+    if (additive) {
+      const allOn = members.every((id) => selectedIds.includes(id));
+      targets = allOn
+        ? selectedIds.filter((id) => !members.includes(id))
+        : [...new Set([...selectedIds, ...members])];
+      onSelect?.(targets);
+    } else if (selectedIds.includes(s.id)) {
+      targets = selectedIds;
+    } else {
+      targets = members;
+      onSelect?.(targets);
+    }
+    if (e.button !== 0) return;
+    const movable = targets.filter((id) => shapes.some((x) => x.id === id && !x.locked));
+    if (!movable.length) return;
     const b = board();
     if (!b) return;
-    gesture.current = {
-      kind: "move",
-      id: s.id,
-      dx: e.clientX - (b.left + (s.x / 100) * b.width),
-      dy: e.clientY - (b.top + (s.y / 100) * b.height),
-      others: [...shapes.filter((o) => o.id !== s.id), ...((extraTargets ?? []) as ShapeItem[])],
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (movable.length === 1 && targets.length === 1) {
+      const it = shapes.find((x) => x.id === movable[0])!;
+      gesture.current = {
+        kind: "move",
+        id: it.id,
+        dx: e.clientX - (b.left + (it.x / 100) * b.width),
+        dy: e.clientY - (b.top + (it.y / 100) * b.height),
+        others: [...shapes.filter((o) => o.id !== it.id), ...((extraTargets ?? []) as ShapeItem[])],
+      };
+    } else {
+      gesture.current = { kind: "set", mode: "move", ids: movable, start: snapshot(movable), px0: e.clientX, py0: e.clientY };
+    }
+    grab(e);
   };
 
   const resizeDown = (s: ShapeItem, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -330,12 +458,82 @@ export default function ShapeLayer({
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
+  /** resize / rotate handles of the multi-selection (group) frame */
+  const setResizeDown = (handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    const ids = selectedShapes.filter((x) => !x.locked).map((x) => x.id);
+    if (!ids.length) return;
+    const start = snapshot(ids);
+    const bounds = selectionBounds(memberList(ids, start).map((m) => m.geo));
+    gesture.current = { kind: "set", mode: "resize", ids, handle, start, sx: e.clientX, sy: e.clientY, bounds };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const setRotateDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    const b = board();
+    if (!b) return;
+    const ids = selectedShapes.filter((x) => !x.locked).map((x) => x.id);
+    if (!ids.length) return;
+    const start = snapshot(ids);
+    const bd = selectionBounds(memberList(ids, start).map((m) => m.geo));
+    gesture.current = {
+      kind: "set",
+      mode: "rotate",
+      ids,
+      start,
+      cx: b.left + ((bd.x + bd.w / 2) / 100) * b.width,
+      cy: b.top + ((bd.y + bd.h / 2) / 100) * b.height,
+      startAngle: Math.atan2(e.clientY - (b.top + ((bd.y + bd.h / 2) / 100) * b.height), e.clientX - (b.left + ((bd.x + bd.w / 2) / 100) * b.width)),
+      board: { left: b.left, top: b.top, width: b.width, height: b.height },
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
   const move = (e: React.PointerEvent<HTMLDivElement>) => {
     const g = gesture.current;
     const b = board();
     if (!g || !b) return;
     e.preventDefault();
     const freeMove = e.altKey; // Alt = ignore all snapping
+
+    if (g.kind === "set") {
+      if (g.mode === "move") {
+        const dx = ((e.clientX - g.px0) / b.width) * 100;
+        const dy = ((e.clientY - g.py0) / b.height) * 100;
+        emitUpdates(moveMembers(memberList(g.ids, g.start), dx, dy));
+        return;
+      }
+      if (g.mode === "resize") {
+        const dx = ((e.clientX - g.sx) / b.width) * 100;
+        const dy = ((e.clientY - g.sy) / b.height) * 100;
+        const nb = applyResize(
+          {
+            kind: "resize",
+            id: "selection",
+            handle: g.handle,
+            sx: g.sx,
+            sy: g.sy,
+            start: { ...g.bounds, rot: 0 },
+            ratio: g.bounds.h > 0 ? g.bounds.w / g.bounds.h : 1,
+          },
+          dx,
+          dy,
+          { keepRatio: false, free: true, minW: 2, minH: 0.6 },
+        );
+        emitUpdates(scaleMembers(memberList(g.ids, g.start), g.bounds, nb));
+        return;
+      }
+      const a = Math.atan2(e.clientY - g.cy, e.clientX - g.cx);
+      let delta = ((a - g.startAngle) * 180) / Math.PI;
+      if (e.shiftKey) delta = Math.round(delta / 15) * 15;
+      emitUpdates(
+        rotateMembers(memberList(g.ids, g.start), { x: g.cx - g.board.left, y: g.cy - g.board.top }, delta, g.board),
+      );
+      return;
+    }
 
     if (g.kind === "move") {
       const me = shapes.find((x) => x.id === g.id);
@@ -434,8 +632,16 @@ export default function ShapeLayer({
       } catch {
         /* already released */
       }
+      const t = e.target as Element | null;
+      if (t && typeof t.releasePointerCapture === "function") {
+        try {
+          t.releasePointerCapture(e.pointerId);
+        } catch {
+          /* not held by the child */
+        }
+      }
+      onGestureEnd?.();
     }
-    if (gesture.current) onGestureEnd?.();
     gesture.current = null;
     setGuides({ x: null, y: null });
   };
@@ -453,6 +659,21 @@ export default function ShapeLayer({
     pointerEvents: "auto",
   };
 
+  const chipStyle: CSSProperties = {
+    padding: "3px 8px",
+    borderRadius: 6,
+    background: "rgba(10,10,12,.85)",
+    border: "1px solid rgba(255,214,51,.55)",
+    color: "#ffd633",
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    pointerEvents: "auto",
+  };
+
+  const bounds = selectionBounds(selectedShapes);
+
   return (
     <>
       {/* smart guide lines */}
@@ -466,6 +687,8 @@ export default function ShapeLayer({
       {shapes.map((s) => {
         const isText = s.kind === "text";
         const thinLine = s.kind === "line" || s.kind === "arrow";
+        const solid = fillsBox(s); // captures clicks across its whole box?
+        const clickable = editable && !s.locked;
         return (
           <div
             key={s.id}
@@ -474,6 +697,15 @@ export default function ShapeLayer({
             onPointerMove={move}
             onPointerUp={up}
             onPointerCancel={up}
+            onDoubleClick={
+              clickable && s.groupId
+                ? (e) => {
+                    // double-click digs into a group: select just this member
+                    e.stopPropagation();
+                    onSelect?.([s.id]);
+                  }
+                : undefined
+            }
             style={{
               position: "absolute",
               left: `${s.x}%`,
@@ -487,11 +719,14 @@ export default function ShapeLayer({
               ...itemStyle(s),
               cursor: editable ? (s.locked ? "default" : "move") : undefined,
               touchAction: editable ? "none" : undefined,
-              pointerEvents: editable ? "auto" : "none",
+              // dragging on painted glyphs must not start native text selection
+              userSelect: editable ? "none" : undefined,
+              // transparent/unpainted areas must not block the layers below
+              pointerEvents: !clickable ? "none" : solid ? "auto" : "none",
             }}
           >
-            {thinLine && editable && <div style={{ position: "absolute", left: 0, right: 0, top: -14, bottom: -14 }} />}
-            <ShapeGraphic s={s} />
+            {thinLine && clickable && <div style={{ position: "absolute", left: 0, right: 0, top: -14, bottom: -14 }} />}
+            <ShapeGraphic s={s} paintedHit={clickable && !solid} />
 
             {(isText || s.text) && (
               <div
@@ -515,6 +750,8 @@ export default function ShapeLayer({
                     fontStyle: s.italic ? "italic" : "normal",
                     textAlign: s.align,
                     width: "100%",
+                    // painted-only mode: only the glyphs themselves are clickable
+                    ...(clickable && !solid ? { pointerEvents: "auto" as const } : { pointerEvents: "inherit" as const }),
                     ...textStyle(s),
                   }}
                 />
@@ -525,125 +762,280 @@ export default function ShapeLayer({
         );
       })}
 
+      {/* per-member outlines while several items (or a group) are selected */}
+      {editable &&
+        selectedShapes.length > 1 &&
+        selectedShapes.map((s) => (
+          <div
+            key={`out-${s.id}`}
+            data-member={s.id}
+            style={{
+              position: "absolute",
+              left: `${s.x}%`,
+              top: `${s.y}%`,
+              width: `${s.w}%`,
+              height: `${s.h}%`,
+              transform: s.rot ? `rotate(${s.rot}deg)` : undefined,
+              transformOrigin: "center center",
+              zIndex: BAND_UI + 13,
+              pointerEvents: "none",
+              outline: "1.5px dashed rgba(255,214,51,.8)",
+              boxSizing: "border-box",
+            }}
+          />
+        ))}
+
       {/* ---- selection frame + handles: drawn on the top band so a shape that
            sits behind an opaque image/rectangle is still visible & grabbable ---- */}
       {editable &&
-        shapes
-          .filter((s) => s.id === selectedId)
-          .map((s) => {
-            const thinLine = s.kind === "line" || s.kind === "arrow";
-            const covered = shapes.some(
-              (o) =>
-                o.id !== s.id &&
-                safeZ(o.z) > safeZ(s.z) &&
-                o.x < s.x + s.w && o.x + o.w > s.x && o.y < s.y + s.h && o.y + o.h > s.y &&
-                (o.kind === "image" || (o.fill && o.fillOpacity > 0.6)),
-            );
-            return (
-              <div
-                key={`sel-${s.id}`}
-                style={{
-                  position: "absolute",
-                  left: `${s.x}%`,
-                  top: `${s.y}%`,
-                  width: `${s.w}%`,
-                  height: `${s.h}%`,
-                  transform: s.rot ? `rotate(${s.rot}deg)` : undefined,
-                  transformOrigin: "center center",
-                  zIndex: BAND_UI + 15,
-                  pointerEvents: "none",
-                  outline: `1.5px ${covered ? "dashed" : "solid"} rgba(255,214,51,.95)`,
-                  outlineOffset: thinLine ? 10 : 2,
-                  boxSizing: "border-box",
-                }}
-              >
-                {covered && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      top: -30,
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                      background: "rgba(255,214,51,.95)",
-                      color: "#0a0a0c",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    behind another item — use Bring Forward
-                  </div>
-                )}
-                {!s.locked && (
-                  <>
-                    {(thinLine ? HANDLES.filter((h) => h.h === "e" || h.h === "w") : HANDLES).map(({ h, style, cursor }) => (
-                      <div
-                        key={h}
-                        title="Drag to resize · Shift keeps ratio · Alt disables snapping"
-                        onPointerDown={resizeDown(s, h)}
-                        onPointerMove={move}
-                        onPointerUp={up}
-                        onPointerCancel={up}
-                        style={{
-                          ...handleBase,
-                          ...style,
-                          ...(thinLine ? { top: "50%", marginTop: -8 } : {}),
-                          cursor,
-                          borderRadius: h.length === 1 ? 8 : 3,
-                        }}
-                      />
-                    ))}
+        single &&
+        (() => {
+          const s = single;
+          const thinLine = s.kind === "line" || s.kind === "arrow";
+          const covered = shapes.some(
+            (o) =>
+              o.id !== s.id &&
+              safeZ(o.z) > safeZ(s.z) &&
+              o.x < s.x + s.w && o.x + o.w > s.x && o.y < s.y + s.h && o.y + o.h > s.y &&
+              (o.kind === "image" || (o.fill && o.fillOpacity > 0.6)),
+          );
+          return (
+            <div
+              key={`sel-${s.id}`}
+              data-sel={s.id}
+              style={{
+                position: "absolute",
+                left: `${s.x}%`,
+                top: `${s.y}%`,
+                width: `${s.w}%`,
+                height: `${s.h}%`,
+                transform: s.rot ? `rotate(${s.rot}deg)` : undefined,
+                transformOrigin: "center center",
+                zIndex: BAND_UI + 15,
+                pointerEvents: "none",
+                outline: `1.5px ${covered ? "dashed" : "solid"} rgba(255,214,51,.95)`,
+                outlineOffset: thinLine ? 10 : 2,
+                boxSizing: "border-box",
+              }}
+            >
+              {s.groupId && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: -30,
+                    padding: "2px 6px",
+                    borderRadius: 4,
+                    background: "rgba(94,242,255,.9)",
+                    color: "#0a0a0c",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  ⧉ grouped — double-click edits this item alone
+                </div>
+              )}
+              {covered && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: s.groupId ? -52 : -30,
+                    padding: "2px 6px",
+                    borderRadius: 4,
+                    background: "rgba(255,214,51,.95)",
+                    color: "#0a0a0c",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  behind another item — Alt+click cycles the layers below
+                </div>
+              )}
+              {!s.locked && (
+                <>
+                  {(thinLine ? HANDLES.filter((h) => h.h === "e" || h.h === "w") : HANDLES).map(({ h, style, cursor }) => (
                     <div
-                      title="Rotate · Shift snaps to 15°"
-                      onPointerDown={rotateDown(s)}
+                      key={h}
+                      data-handle={h}
+                      title="Drag to resize · Shift keeps ratio · Alt disables snapping"
+                      onPointerDown={resizeDown(s, h)}
                       onPointerMove={move}
                       onPointerUp={up}
                       onPointerCancel={up}
                       style={{
                         ...handleBase,
-                        left: "50%",
-                        top: thinLine ? -44 : -34,
-                        marginLeft: -8,
-                        borderRadius: "50%",
-                        background: "#5ef2ff",
-                        cursor: "grab",
+                        ...style,
+                        ...(thinLine ? { top: "50%", marginTop: -8 } : {}),
+                        cursor,
+                        borderRadius: h.length === 1 ? 8 : 3,
                       }}
                     />
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: "50%",
-                        top: thinLine ? -28 : -18,
-                        width: 2,
-                        height: 16,
-                        marginLeft: -1,
-                        background: "rgba(94,242,255,.8)",
-                      }}
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        bottom: -30,
-                        padding: "2px 6px",
-                        borderRadius: 4,
-                        background: "rgba(0,0,0,.75)",
-                        color: "#ffd633",
-                        fontFamily: "monospace",
-                        fontSize: 11,
-                        whiteSpace: "nowrap",
-                        transform: s.rot ? `rotate(${-s.rot}deg)` : undefined,
-                        transformOrigin: "left top",
-                      }}
-                    >
-                      {r1(s.x)}, {r1(s.y)} · {r1(s.w)}×{r1(s.h)}{s.rot ? ` · ${s.rot}°` : ""}
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
+                  ))}
+                  <div
+                    data-rotate=""
+                    title="Rotate · Shift snaps to 15°"
+                    onPointerDown={rotateDown(s)}
+                    onPointerMove={move}
+                    onPointerUp={up}
+                    onPointerCancel={up}
+                    style={{
+                      ...handleBase,
+                      left: "50%",
+                      top: thinLine ? -44 : -34,
+                      marginLeft: -8,
+                      borderRadius: "50%",
+                      background: "#5ef2ff",
+                      cursor: "grab",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: "50%",
+                      top: thinLine ? -28 : -18,
+                      width: 2,
+                      height: 16,
+                      marginLeft: -1,
+                      background: "rgba(94,242,255,.8)",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      bottom: -30,
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      background: "rgba(0,0,0,.75)",
+                      color: "#ffd633",
+                      fontFamily: "monospace",
+                      fontSize: 11,
+                      whiteSpace: "nowrap",
+                      transform: s.rot ? `rotate(${-s.rot}deg)` : undefined,
+                      transformOrigin: "left top",
+                    }}
+                  >
+                    {r1(s.x)}, {r1(s.y)} · {r1(s.w)}×{r1(s.h)}{s.rot ? ` · ${s.rot}°` : ""}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
+      {/* ---- group / multi-selection frame: bounds + handles move the set ---- */}
+      {editable && selectedShapes.length > 1 && (
+        <div
+          data-set-frame=""
+          style={{
+            position: "absolute",
+            left: `${bounds.x}%`,
+            top: `${bounds.y}%`,
+            width: `${bounds.w}%`,
+            height: `${bounds.h}%`,
+            zIndex: BAND_UI + 15,
+            pointerEvents: "none",
+            outline: "1.5px solid rgba(255,214,51,.95)",
+            outlineOffset: 3,
+            boxSizing: "border-box",
+          }}
+        >
+          {/* Group / Ungroup chips — the existing pattern, right on the frame */}
+          <div style={{ position: "absolute", right: 0, top: -34, display: "flex", gap: 4 }}>
+            {anyGrouped(shapes, selectedIds) && onUngroup && (
+              <button
+                data-chip="ungroup"
+                title="Break this group — every member becomes independently selectable (Ctrl/⌘+Shift+G)"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onUngroup(selectedShapes.map((x) => x.id))}
+                style={chipStyle}
+              >
+                ⧉ Ungroup
+              </button>
+            )}
+            {onGroup && !isWholeGroup(shapes, selectedIds) && selectedShapes.filter((x) => !x.locked).length > 1 && (
+              <button
+                data-chip="group"
+                title="Combine the selected items into one group (Ctrl/⌘+G)"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onGroup(selectedShapes.map((x) => x.id))}
+                style={chipStyle}
+              >
+                ⧉ Group {selectedShapes.length}
+              </button>
+            )}
+          </div>
+          {selectedShapes.some((x) => !x.locked) && (
+            <>
+              {HANDLES.map(({ h, style, cursor }) => (
+                <div
+                  key={h}
+                  data-handle={h}
+                  title="Drag to resize the whole selection"
+                  onPointerDown={setResizeDown(h)}
+                  onPointerMove={move}
+                  onPointerUp={up}
+                  onPointerCancel={up}
+                  style={{
+                    ...handleBase,
+                    ...style,
+                    cursor,
+                    borderRadius: h.length === 1 ? 8 : 3,
+                  }}
+                />
+              ))}
+              <div
+                data-rotate=""
+                title="Rotate the whole selection · Shift snaps to 15°"
+                onPointerDown={setRotateDown}
+                onPointerMove={move}
+                onPointerUp={up}
+                onPointerCancel={up}
+                style={{
+                  ...handleBase,
+                  left: "50%",
+                  top: -34,
+                  marginLeft: -8,
+                  borderRadius: "50%",
+                  background: "#5ef2ff",
+                  cursor: "grab",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: -18,
+                  width: 2,
+                  height: 16,
+                  marginLeft: -1,
+                  background: "rgba(94,242,255,.8)",
+                }}
+              />
+            </>
+          )}
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              bottom: -30,
+              padding: "2px 6px",
+              borderRadius: 4,
+              background: "rgba(0,0,0,.75)",
+              color: "#ffd633",
+              fontFamily: "monospace",
+              fontSize: 11,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {selectedShapes.length} items{isWholeGroup(shapes, selectedIds) ? " · grouped" : " · selected"} · drag to
+            move all
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { emptySlide, parseQuestions } from "./parse";
 import { resolveFrameImageSrc } from "./frameImages";
 import { makeImageShape, makeShape, shapeId, type ShapeItem, type ShapeKind } from "./shapes";
+import { groupUid } from "./groups";
 import { useHistory } from "./useHistory";
 import { effectiveTheme, mergeThemeOverride } from "./overrides";
 import { applySlideDesign, revertSlideDesign, type ApplySection } from "./applyDesign";
@@ -28,6 +29,39 @@ import { DEFAULT_LAYOUT as LAYOUT_DEFAULTS } from "./types";
 import { measureElement } from "./layoutMeasure";
 
 const KEY = "mcq-slide-studio-v2";
+
+type ShapeUpdate = { id: string; patch: Partial<ShapeItem> };
+
+/**
+ * Patch one shape as edited from a specific slide. Deck-wide ("global")
+ * shapes are first fanned out into independent per-slide copies so the live
+ * edit cannot leak to the rest of the deck before Apply Changes is clicked.
+ * Pure — returns the next deck.
+ */
+function patchShapeOnSlide(d: Deck, id: string, patch: Partial<ShapeItem>, slideId: string): Deck {
+  const global = d.globalShapes?.find((x) => x.id === id);
+  if (!global) {
+    return {
+      ...d,
+      slides: d.slides.map((s) =>
+        s.id === slideId && s.shapes?.some((x) => x.id === id)
+          ? { ...s, shapes: s.shapes.map((x) => (x.id === id ? { ...x, ...patch } : x)) }
+          : s,
+      ),
+    };
+  }
+  return {
+    ...d,
+    globalShapes: d.globalShapes?.filter((x) => x.id !== id),
+    slides: d.slides.map((s) => {
+      const copy = { ...global, id: s.id === slideId ? id : shapeId() };
+      return {
+        ...s,
+        shapes: [...(s.shapes ?? []), s.id === slideId ? { ...copy, ...patch } : copy],
+      };
+    }),
+  };
+}
 
 /**
  * Repairs stacking data written by earlier versions: shapes are renumbered
@@ -612,34 +646,178 @@ export function useDeck() {
   const updateShapeOnSlide = useCallback(
     (id: string, patch: Partial<ShapeItem>, slideId: string) => {
       setDeckH(
-        (d) => {
-          const global = d.globalShapes?.find((x) => x.id === id);
-          if (!global) {
-            return {
-              ...d,
-              slides: d.slides.map((s) =>
-                s.id === slideId && s.shapes?.some((x) => x.id === id)
-                  ? { ...s, shapes: s.shapes.map((x) => (x.id === id ? { ...x, ...patch } : x)) }
-                  : s,
-              ),
-            };
-          }
-
-          return {
-            ...d,
-            globalShapes: d.globalShapes?.filter((x) => x.id !== id),
-            slides: d.slides.map((s) => {
-              const copy = { ...global, id: s.id === slideId ? id : shapeId() };
-              return {
-                ...s,
-                shapes: [...(s.shapes ?? []), s.id === slideId ? { ...copy, ...patch } : copy],
-              };
-            }),
-          };
-        },
+        (d) => patchShapeOnSlide(d, id, patch, slideId),
         "Edit shape on this slide",
         `shape-slide:${slideId}:${id}:${Object.keys(patch)[0] ?? "style"}`,
       );
+    },
+    [setDeckH],
+  );
+
+  /**
+   * Same as updateShapeOnSlide but for MANY shapes in one deck update, so a
+   * group / multi-selection drag stays a single undo step and never churns
+   * the history with one snapshot per member.
+   */
+  const updateShapesOnSlide = useCallback(
+    (updates: ShapeUpdate[], slideId: string) => {
+      if (!updates.length) return;
+      const keys = Object.keys(updates[0]?.patch ?? {});
+      const label =
+        keys.includes("w") || keys.includes("h")
+          ? `Resize ${updates.length} items`
+          : keys.includes("rot")
+            ? `Rotate ${updates.length} items`
+            : `Move ${updates.length} items`;
+      setDeckH(
+        (d) => {
+          let next = d;
+          for (const u of updates) next = patchShapeOnSlide(next, u.id, u.patch, slideId);
+          return next;
+        },
+        label,
+        `shapes-slide:${slideId}:${keys[0] ?? "geo"}`,
+      );
+    },
+    [setDeckH],
+  );
+
+  /** deck-wide batch patch (keeps every entry in ONE undo step) */
+  const updateShapes = useCallback(
+    (updates: ShapeUpdate[], label = "Move shapes") => {
+      if (!updates.length) return;
+      setDeckH(
+        (d) => {
+          const byId = new Map(updates.map((u) => [u.id, u.patch]));
+          const fix = (x: ShapeItem): ShapeItem => {
+            const p = byId.get(x.id);
+            return p ? { ...x, ...p } : x;
+          };
+          return {
+            ...d,
+            globalShapes: d.globalShapes?.map(fix),
+            slides: d.slides.map((s) =>
+              s.shapes?.some((x) => byId.has(x.id)) ? { ...s, shapes: s.shapes.map(fix) } : s,
+            ),
+          };
+        },
+        label,
+        `shapes-batch:${updates
+          .map((u) => u.id)
+          .sort()
+          .join(",")}:${Object.keys(updates[0]?.patch ?? {})[0] ?? "geo"}`,
+      );
+    },
+    [setDeckH],
+  );
+
+  /**
+   * Group the given shapes: only a shared tag is written, each member keeps
+   * its exact position, size, rotation, style and content — so Ungroup is
+   * lossless and members stay independently editable afterwards.
+   */
+  const groupShapes = useCallback(
+    (ids: string[]): string | null => {
+      if (ids.length < 2) return null;
+      const gid = groupUid();
+      setDeckH((d) => {
+        const set = new Set(ids);
+        const fix = (x: ShapeItem): ShapeItem => (set.has(x.id) ? { ...x, groupId: gid } : x);
+        return {
+          ...d,
+          globalShapes: d.globalShapes?.map(fix),
+          slides: d.slides.map((s) =>
+            s.shapes?.some((x) => set.has(x.id)) ? { ...s, shapes: s.shapes.map(fix) } : s,
+          ),
+        };
+      }, `Group ${ids.length} items`);
+      return gid;
+    },
+    [setDeckH],
+  );
+
+  /** Remove the group tag from every group the selection touches. */
+  const ungroupShapes = useCallback(
+    (ids: string[]) => {
+      if (!ids.length) return;
+      setDeckH((d) => {
+        const set = new Set(ids);
+        const all = [...(d.globalShapes ?? []), ...d.slides.flatMap((s) => s.shapes ?? [])];
+        const gids = new Set(all.filter((x) => set.has(x.id) && x.groupId).map((x) => x.groupId as string));
+        if (!gids.size) return d;
+        const fix = (x: ShapeItem): ShapeItem => (x.groupId && gids.has(x.groupId) ? { ...x, groupId: undefined } : x);
+        return {
+          ...d,
+          globalShapes: d.globalShapes?.map(fix),
+          slides: d.slides.map((s) =>
+            s.shapes?.some((x) => x.groupId && gids.has(x.groupId))
+              ? { ...s, shapes: s.shapes.map(fix) }
+              : s,
+          ),
+        };
+      }, "Ungroup items");
+    },
+    [setDeckH],
+  );
+
+  /** batch delete — one undo step for the whole set */
+  const removeShapes = useCallback(
+    (ids: string[]) => {
+      if (!ids.length) return;
+      const set = new Set(ids);
+      setDeckH(
+        (d) => ({
+          ...d,
+          globalShapes: d.globalShapes?.filter((x) => !set.has(x.id)),
+          slides: d.slides.map((s) =>
+            s.shapes?.some((x) => set.has(x.id)) ? { ...s, shapes: s.shapes.filter((x) => !set.has(x.id)) } : s,
+          ),
+        }),
+        ids.length > 1 ? `Delete ${ids.length} shapes` : "Delete shape",
+      );
+    },
+    [setDeckH],
+  );
+
+  /**
+   * Batch duplicate. Clones keep every property of the source; if the
+   * sources were one group, the clones become their own new group.
+   */
+  const duplicateShapes = useCallback(
+    (ids: string[]): string[] => {
+      if (!ids.length) return [];
+      const pairs = ids.map((id) => ({ src: id, dst: shapeId() }));
+      setDeckH((d) => {
+        const gnew = new Map<string, string>();
+        const ownerOf = (id: string) => d.slides.find((s) => s.shapes?.some((x) => x.id === id))?.id ?? null;
+        const made: { slideId: string | null; item: ShapeItem }[] = [];
+        pairs.forEach((p, i) => {
+          const src =
+            d.globalShapes?.find((x) => x.id === p.src) ??
+            d.slides.flatMap((s) => s.shapes ?? []).find((x) => x.id === p.src);
+          if (!src) return;
+          let g: string | undefined = src.groupId;
+          if (g) {
+            let fresh = gnew.get(g);
+            if (!fresh) gnew.set(g, (fresh = groupUid()));
+            g = gnew.get(g);
+          }
+          made.push({
+            slideId: d.globalShapes?.some((x) => x.id === p.src) ? null : ownerOf(p.src),
+            item: { ...src, id: p.dst, x: src.x + 3, y: src.y + 3, z: topZ(d) + 1 + i, groupId: g },
+          });
+        });
+        const globals = made.filter((m) => m.slideId === null).map((m) => m.item);
+        return {
+          ...d,
+          globalShapes: globals.length ? [...(d.globalShapes ?? []), ...globals] : d.globalShapes,
+          slides: d.slides.map((s) => {
+            const own = made.filter((m) => m.slideId === s.id).map((m) => m.item);
+            return own.length ? { ...s, shapes: [...(s.shapes ?? []), ...own] } : s;
+          }),
+        };
+      }, ids.length > 1 ? `Duplicate ${ids.length} items` : "Duplicate shape");
+      return pairs.map((p) => p.dst);
     },
     [setDeckH],
   );
@@ -938,6 +1116,12 @@ export function useDeck() {
     copyShapeTo,
     updateShape,
     updateShapeOnSlide,
+    updateShapesOnSlide,
+    updateShapes,
+    groupShapes,
+    ungroupShapes,
+    removeShapes,
+    duplicateShapes,
     applyShapeDesign,
     reorderShape,
     reorderLayerOp,

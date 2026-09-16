@@ -47,6 +47,12 @@ export interface ShapeItem {
   locked?: boolean;
   /** render beneath the slide's question/options/title (backdrops, highlights) */
   behind?: boolean;
+  /**
+   * Group tag: shapes sharing a groupId move / resize / rotate as one unit.
+   * Members keep their own geometry and style, so ungrouping is lossless and
+   * every member stays individually selectable and editable.
+   */
+  groupId?: string;
 
   /* ----------------------------- design ------------------------------ */
   /** gradient fill (overrides `fill` when enabled) */
