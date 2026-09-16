@@ -19,8 +19,9 @@ import type { InsertScope } from "./components/ShapesPanel";
 import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, shrinkDataUrl, type ShapeItem, type ShapeKind } from "./lib/shapes";
 import type { AlignOp } from "./lib/shapeAlign";
 import { canMove, Z_LABELS, type ZOp } from "./lib/zorder";
-import { layerKey, parseLayerKey, visibleStack, type LayerRef } from "./lib/layers";
-import { boardLayerChain } from "./lib/groups";
+import { collectLayers, layerKey, parseLayerKey, visibleStack, type LayerRef } from "./lib/layers";
+import { boardLayerChain, groupOf, type Groupable } from "./lib/groups";
+import { partInfo } from "./lib/parts";
 import HistoryPanel from "./components/HistoryPanel";
 import AnswerKeyModal from "./components/AnswerKeyModal";
 import { Btn } from "./components/ui";
@@ -28,7 +29,7 @@ import { normalizeDeckZ, useDeck } from "./lib/useDeck";
 import { useFontCoverage } from "./lib/useFontCoverage";
 import { restoreCustomFonts } from "./lib/customFonts";
 import { downloadDataUrl, exportZip, slideToPng } from "./lib/exporter";
-import { convertMode } from "./lib/layoutMeasure";
+import { convertMode, measurePart } from "./lib/layoutMeasure";
 import { effectiveBackground } from "./lib/background";
 import { resolveFrameImageSrc } from "./lib/frameImages";
 import { effectiveHeader, effectiveTheme } from "./lib/overrides";
@@ -62,8 +63,11 @@ export default function App() {
     updateShapeOnSlide,
     updateShapesOnSlide,
     updateShapes,
-    groupShapes,
-    ungroupShapes,
+    groupLayers,
+    ungroupLayers,
+    patchPartLayoutScoped,
+    updateLayerGeoOnSlide,
+    resetParts,
     removeShapes,
     duplicateShapes,
     applyShapeDesign,
@@ -103,9 +107,23 @@ export default function App() {
   const [answersOpen, setAnswersOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [activeField, setActiveField] = useState<SlideField | null>(null);
-  const [selectedEl, setSelectedEl] = useState<ElementId | null>("title");
+  /**
+   * Built-in elements (question, options block, title, badge, note…) are fully
+   * selectable objects, so the selection holds a LIST of them: a marquee or a
+   * group can contain several built-in elements next to parts and shapes.
+   */
+  const [selectedEls, setSelectedEls] = useState<ElementId[]>(["title"]);
+  /** the primary element of the selection — what the layout inspector edits */
+  const selectedEl: ElementId | null = selectedEls.length ? selectedEls[selectedEls.length - 1] : null;
   /** multi-selection of drawn items; a group is selected as a unit (all member ids) */
   const [selectedShapes, setSelectedShapes] = useState<string[]>([]);
+  /**
+   * multi-selection of the slide's BUILT-IN parts — option rows, option text,
+   * option numbering markers, the number bullet, the title banner, the frame and
+   * the decorative background layers (see lib/parts.ts). They are selected,
+   * moved, resized, rotated and grouped exactly like drawn shapes.
+   */
+  const [selectedParts, setSelectedParts] = useState<string[]>([]);
   const [forceTab, setForceTab] = useState<InspectorTab | null>(null);
   const [editScope, setEditScope] = useState<"slide" | "selected" | "all">("slide");
   const [scopeSlideIds, setScopeSlideIds] = useState<string[]>([]);
@@ -122,68 +140,133 @@ export default function App() {
     [current, deck.slides],
   );
 
+  /** the "primary" selected drawn item — what the inspector edits */
+  const selectedShape = selectedShapes.length ? selectedShapes[selectedShapes.length - 1] : null;
+  /** the primary selected built-in part (single selection only) */
+  const selectedPart = selectedParts.length === 1 ? selectedParts[0] : null;
+
+  /**
+   * The WHOLE canvas selection as one list: built-in elements, built-in parts
+   * and drawn shapes. Group / ungroup, the selection frame and every set
+   * gesture work on this list, so any mix of layers behaves like one object.
+   */
+  const selectedRefs = useMemo<LayerRef[]>(
+    () => [
+      ...selectedEls.map((id) => ({ kind: "element", id }) as LayerRef),
+      ...selectedParts.map((id) => ({ kind: "part", id }) as LayerRef),
+      ...selectedShapes.map((id) => ({ kind: "shape", id }) as LayerRef),
+    ],
+    [selectedEls, selectedParts, selectedShapes],
+  );
+
+  /** the slide the canvas shows (kept here because the memos below need it) */
+  const curSlide = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
+
+  /** every grouped layer of the current slide — a click on one member selects all */
+  const groupables = useMemo<Groupable[]>(
+    () =>
+      collectLayers(deck, curSlide)
+        .filter((l) => !!l.groupId)
+        .map((l) => ({ kind: l.ref.kind, id: l.ref.id, groupId: l.groupId } as Groupable)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deck, current],
+  );
+
+  /** expands a selection so no group is ever half-selected */
+  const expandGroupRefs = useCallback(
+    (refs: LayerRef[]): LayerRef[] => {
+      if (!groupables.length) return refs;
+      const out = new Map<string, LayerRef>();
+      refs.forEach((r) => out.set(layerKey(r), r));
+      refs.forEach((r) => {
+        const g = groupables.find((x) => x.kind === r.kind && x.id === r.id);
+        if (!g?.groupId) return;
+        groupOf(groupables, g).forEach((m) =>
+          out.set(`${m.kind}:${m.id}`, { kind: m.kind, id: m.id } as LayerRef),
+        );
+      });
+      return [...out.values()];
+    },
+    [groupables],
+  );
+
+  /** writes one selection into the three stores and points the inspector at it */
+  const applySelection = useCallback((refs: LayerRef[]) => {
+    setSelectedShapes(refs.filter((r) => r.kind === "shape").map((r) => r.id));
+    setSelectedParts(refs.filter((r) => r.kind === "part").map((r) => r.id));
+    const els = refs.filter((r) => r.kind === "element");
+    setSelectedEls(els.map((r) => r.id as ElementId));
+    const el = els[0];
+    // the inspector follows the most specific pick: shape → part → element
+    const primary = refs.find((r) => r.kind === "shape") ?? refs.find((r) => r.kind === "part") ?? el ?? null;
+    if (!primary) {
+      setActiveField(null);
+      return;
+    }
+    if (primary.kind === "shape") {
+      setForceTab("shapes");
+      return;
+    }
+    if (primary.kind === "element") {
+      setForceTab("layout");
+      return;
+    }
+    const info = partInfo(primary.id);
+    setForceTab(info.tab);
+    setActiveField(info.field);
+  }, []);
+
+  /** canvas selection callback — groups arrive expanded unless it is a dig-in */
+  const selectRefs = useCallback(
+    (refs: LayerRef[], opts?: { exact?: boolean }) => applySelection(opts?.exact ? refs : expandGroupRefs(refs)),
+    [applySelection, expandGroupRefs],
+  );
+
+  const selectShapeIds = useCallback((ids: string[]) => applySelection(ids.map((id) => ({ kind: "shape", id }) as LayerRef)), [applySelection]);
+
   const insertImage = useCallback(
     (src: string, ratio: number, scope: InsertScope | boolean, at?: { x: number; y: number }) => {
       const id = addImage(src, ratio, resolveScope(scope), at);
-      setSelectedShapes([id]);
-      setForceTab("shapes");
+      selectShapeIds([id]);
     },
-    [addImage, resolveScope],
+    [addImage, resolveScope, selectShapeIds],
   );
-
-  /** the "primary" selected drawn item — what the inspector edits */
-  const selectedShape = selectedShapes.length ? selectedShapes[selectedShapes.length - 1] : null;
-
-  /** select shapes from the canvas; a group arrives already expanded */
-  const selectShapeIds = useCallback((ids: string[]) => {
-    setSelectedShapes(ids);
-    // selecting a drawn shape clears any built-in element selection
-    if (ids.length) {
-      setSelectedEl(null);
-      setForceTab("shapes");
-    }
-  }, []);
 
   /** what's currently selected in the unified layer stack */
   const selectedLayer: LayerRef | null = useMemo(
-    () => (selectedShape ? { kind: "shape", id: selectedShape } : selectedEl ? { kind: "element", id: selectedEl } : null),
-    [selectedShape, selectedEl],
+    () =>
+      selectedShape
+        ? { kind: "shape", id: selectedShape }
+        : selectedPart
+          ? { kind: "part", id: selectedPart }
+          : selectedParts.length
+            ? { kind: "part", id: selectedParts[0] }
+            : selectedEl
+              ? { kind: "element", id: selectedEl }
+              : null,
+    [selectedShape, selectedPart, selectedParts, selectedEl],
   );
 
-  /** unified stack (elements + drawn items) visible on the current slide */
-  const currentStack = useMemo(() => {
-    const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
-    return visibleStack(deck, sl);
-  }, [deck, current]);
+  /** unified stack (elements + built-in parts + drawn items) on the current slide */
+  const currentStack = useMemo(() => visibleStack(deck, curSlide), [deck, curSlide]);
 
-  const selectLayer = useCallback((ref: LayerRef) => {
-    if (ref.kind === "shape") {
-      setSelectedShapes([ref.id]);
-      setForceTab("shapes");
-    } else {
-      setSelectedShapes([]);
-      setSelectedEl(ref.id);
-      setForceTab("layout");
-    }
-  }, []);
+  /** layers-panel pick: always exact, so one member of a group stays reachable */
+  const selectLayer = useCallback((ref: LayerRef) => applySelection([ref]), [applySelection]);
 
   /**
    * Alt+click on any layer: walks to the layer directly BENEATH the current
    * selection at that point — the practical way to grab an element that is
-   * covered by another one (or by a background container).
+   * covered by another one (or by a background container). The chain reaches
+   * built-in parts too (option text → marker → row → options block → artwork).
    */
   const cycleLayers = useCallback((clientX: number, clientY: number) => {
     const chain = boardLayerChain(clientX, clientY);
     if (!chain.length) return;
-    const sel = new Set<string>([
-      ...selectedShapes.map((id) => `shape:${id}`),
-      ...(selectedEl ? [`element:${selectedEl}`] : []),
-    ]);
+    const sel = new Set<string>(selectedRefs.map(layerKey));
     const idx = chain.findIndex((r) => sel.has(`${r.kind}:${r.id}`));
     const ref = idx < 0 ? chain[0] : chain[(idx + 1) % chain.length];
-    if (ref.kind === "shape") selectLayer({ kind: "shape", id: ref.id });
-    else selectLayer({ kind: "element", id: ref.id as ElementId });
-  }, [selectedShapes, selectedEl, selectLayer]);
+    selectLayer({ kind: ref.kind, id: ref.id } as LayerRef);
+  }, [selectedRefs, selectLayer]);
 
   const reorderLayerRef = useCallback(
     (ref: LayerRef, op: ZOp) => {
@@ -250,10 +333,9 @@ export default function App() {
   const insertShape = useCallback(
     (kind: ShapeKind, scope: InsertScope | boolean) => {
       const id = addShape(kind, resolveScope(scope));
-      setSelectedShapes([id]);
-      setForceTab("shapes");
+      selectShapeIds([id]);
     },
-    [addShape, resolveScope],
+    [addShape, resolveScope, selectShapeIds],
   );
 
   const [offscreen, setOffscreen] = useState(false);
@@ -288,6 +370,73 @@ export default function App() {
   const moveElement = useCallback(
     (id: ElementId, patch: Partial<Box>) => scopedPatchLayout(id, patch),
     [scopedPatchLayout],
+  );
+  /** same, for a built-in PART (option row, option text, marker, banner, artwork…) */
+  const scopedPatchPartLayout = useCallback(
+    (id: string, patch: Partial<Box>, label?: string) =>
+      patchPartLayoutScoped(id, patch, "slide", thisSlideId, label),
+    [patchPartLayoutScoped, thisSlideId],
+  );
+  const movePart = useCallback(
+    (id: string, patch: Partial<Box>) => scopedPatchPartLayout(id, patch),
+    [scopedPatchPartLayout],
+  );
+  /** one batched geometry write for a mixed selection / group gesture */
+  const moveLayers = useCallback(
+    (updates: { ref: LayerRef; patch: Partial<Box> }[]) => {
+      if (!slide) return;
+      const n = updates.length;
+      const key = Object.keys(updates[0]?.patch ?? {})[0];
+      const label =
+        key === "rot"
+          ? `Rotate ${n} item${n === 1 ? "" : "s"}`
+          : key === "w" || key === "h"
+            ? `Resize ${n} item${n === 1 ? "" : "s"}`
+            : `Move ${n} item${n === 1 ? "" : "s"}`;
+      updateLayerGeoOnSlide(updates, slide.id, label);
+    },
+    [slide, updateLayerGeoOnSlide],
+  );
+
+  /**
+   * Inline text editing on the canvas (double-click any text object): writes
+   * straight into the field that object paints, so question / option / title /
+   * badge / note editing keeps working exactly as it does from the inspector.
+   */
+  const setFieldText = useCallback(
+    (field: SlideField, value: string) => {
+      if (!slide) return;
+      switch (field) {
+        case "question":
+          updateSlide(slide.id, { question: value });
+          return;
+        case "note":
+          updateSlide(slide.id, { note: value });
+          return;
+        case "title":
+          scopedHeader({ title: value });
+          return;
+        case "brandTop":
+          scopedHeader({ brandTop: value });
+          return;
+        case "brandBottom":
+          scopedHeader({ brandBottom: value });
+          return;
+        case "badge":
+          scopedHeader({ badge: value });
+          return;
+        default: {
+          const s = String(field);
+          if (!s.startsWith("option:")) return;
+          const i = Number(s.slice(7));
+          if (!slide.options[i]) return;
+          updateSlide(slide.id, {
+            options: slide.options.map((o, j) => (j === i ? { ...o, text: value } : o)),
+          });
+        }
+      }
+    },
+    [slide, updateSlide, scopedHeader],
   );
 
   const handleApplyDesign = useCallback(
@@ -329,8 +478,7 @@ export default function App() {
 
       // Escape clears the whole selection (element + shapes + active field)
       if (e.key === "Escape") {
-        setSelectedShapes([]);
-        setSelectedEl(null);
+        applySelection([]);
         setActiveField(null);
         return;
       }
@@ -345,6 +493,13 @@ export default function App() {
         return;
       }
 
+      // Ctrl/⌘+Shift+A selects literally everything on the slide, built-ins included
+      if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        applySelection(currentStack.map((l) => parseLayerKey(l.id)).filter((r): r is LayerRef => !!r));
+        return;
+      }
+
       // Tab / Shift+Tab walks the unified layer stack (every element + shape),
       // so a covered item is always reachable without ungrouping anything.
       // Only hijacked on slides that actually have drawn items, so normal
@@ -352,10 +507,7 @@ export default function App() {
       const slideShapeCount = (deck.globalShapes?.length ?? 0) + (slide?.shapes?.length ?? 0);
       if (e.key === "Tab" && !mod && currentStack.length && slideShapeCount > 0) {
         e.preventDefault();
-        const selKeys = new Set<string>([
-          ...selectedShapes.map((id) => `shape:${id}`),
-          ...(selectedEl ? [`element:${selectedEl}`] : []),
-        ]);
+        const selKeys = new Set<string>(selectedRefs.map(layerKey));
         const step = e.shiftKey ? -1 : 1;
         let idx = currentStack.findIndex((s) => selKeys.has(s.id));
         if (idx < 0) idx = step === 1 ? -1 : currentStack.length;
@@ -365,13 +517,14 @@ export default function App() {
         return;
       }
 
-      // Ctrl/⌘+G groups the selection; Ctrl/⌘+Shift+G ungroups it (lossless)
+      // Ctrl/⌘+G groups the selection; Ctrl/⌘+Shift+G ungroups it (lossless).
+      // Groups can mix drawn shapes with built-in elements and built-in parts.
       if (mod && !e.altKey && e.key.toLowerCase() === "g") {
         e.preventDefault();
         if (e.shiftKey) {
-          if (selectedShapes.length) ungroupShapes(selectedShapes);
-        } else if (selectedShapes.length >= 2) {
-          groupShapes(selectedShapes);
+          if (selectedRefs.length) ungroupLayers(selectedRefs);
+        } else if (selectedRefs.length >= 2) {
+          groupLayers(selectedRefs);
         }
         return;
       }
@@ -381,13 +534,13 @@ export default function App() {
         if (e.key === "Delete" || e.key === "Backspace") {
           e.preventDefault();
           removeShapes(selectedShapes);
-          setSelectedShapes([]);
+          applySelection(selectedRefs.filter((r) => r.kind !== "shape"));
           return;
         }
         if (mod && e.key.toLowerCase() === "d") {
           e.preventDefault();
           const ids = duplicateShapes(selectedShapes);
-          if (ids.length) setSelectedShapes(ids);
+          if (ids.length) selectShapeIds(ids);
           return;
         }
         // Ctrl+] / Ctrl+[ = forward / backward; add Shift for front / back
@@ -425,21 +578,52 @@ export default function App() {
         return;
       }
 
-      // Shift + arrows nudge the selected element; plain arrows change slides
-      if (e.shiftKey && e.key.startsWith("Arrow") && selectedEl) {
-        e.preventDefault();
+      // Shift + arrows nudge the selection — built-in elements and built-in
+      // parts together, in ONE undo step. Plain arrows still change slides.
+      if (e.shiftKey && e.key.startsWith("Arrow") && selectedRefs.length) {
         const step = e.altKey ? 0.2 : 1;
-        const b = deck.theme.layout[selectedEl];
-        if (!b) return;
         const dx = e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0;
         const dy = e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0;
-        const free = (b.mode ?? "align") === "free";
-        const lo = free ? FREE_MIN : 0;
-        const hi = free ? FREE_MAX : 100;
-        moveElement(selectedEl, {
-          x: Math.max(lo, Math.min(hi, Math.round((b.x + dx) * 10) / 10)),
-          y: Math.max(lo, Math.min(hi, Math.round((b.y + dy) * 10) / 10)),
+        const ups: { ref: LayerRef; patch: Partial<Box> }[] = [];
+        selectedRefs.forEach((ref) => {
+          if (ref.kind === "shape") return; // drawn items are nudged above
+          const b =
+            ref.kind === "part"
+              ? currentTheme.partLayout?.[ref.id]
+              : currentTheme.layout[ref.id as ElementId];
+          const free = (b?.mode ?? "align") === "free";
+          if (ref.kind === "part" && !free) {
+            // still laid out by the slide: nudge it from where it is painted,
+            // which promotes it to a free object (exactly like dragging it)
+            const m = measurePart(ref.id);
+            if (!m) return;
+            ups.push({
+              ref,
+              patch: {
+                mode: "free",
+                w: Math.round(m.w * 10) / 10,
+                h: Math.round(m.h * 10) / 10,
+                x: Math.max(FREE_MIN, Math.min(FREE_MAX, Math.round((m.left + dx) * 10) / 10)),
+                y: Math.max(FREE_MIN, Math.min(FREE_MAX, Math.round((m.top + dy) * 10) / 10)),
+              },
+            });
+            return;
+          }
+          if (!b) return;
+          const lo = free ? FREE_MIN : 0;
+          const hi = free ? FREE_MAX : 100;
+          ups.push({
+            ref,
+            patch: {
+              x: Math.max(lo, Math.min(hi, Math.round((b.x + dx) * 10) / 10)),
+              y: Math.max(lo, Math.min(hi, Math.round((b.y + dy) * 10) / 10)),
+            },
+          });
         });
+        if (ups.length) {
+          e.preventDefault();
+          moveLayers(ups);
+        }
         return;
       }
       if (e.key === "ArrowRight") setCurrent(Math.min(deck.slides.length - 1, index + 1));
@@ -456,15 +640,23 @@ export default function App() {
     presenting,
     pasteOpen,
     answersOpen,
-    selectedEl,
     selectedShapes,
+    selectedRefs,
     currentStack,
-    moveElement,
+    currentTheme,
+    moveLayers,
+    scopedPatchPartLayout,
+    applySelection,
     setCurrent,
     selectShapeIds,
     selectLayer,
-    groupShapes,
-    ungroupShapes,
+    groupLayers,
+    ungroupLayers,
+    groupLayers,
+    ungroupLayers,
+    patchPartLayoutScoped,
+    updateLayerGeoOnSlide,
+    resetParts,
     removeShapes,
     duplicateShapes,
     updateShapes,
@@ -596,12 +788,15 @@ export default function App() {
     return { total: deck.slides.length, withAnswer };
   }, [deck.slides]);
 
-  /** do any of the selected drawn items belong to a group? (drives the Ungroup chip) */
+  /**
+   * Does the selection contain a grouped layer? Drives the Ungroup button for
+   * ANY mix of drawn shapes, built-in elements and built-in parts.
+   */
   const selectedGrouped = useMemo(() => {
-    if (!selectedShapes.length) return false;
-    const set = new Set(selectedShapes);
-    return [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])].some((x) => set.has(x.id) && !!x.groupId);
-  }, [selectedShapes, deck.globalShapes, slide]);
+    if (!selectedRefs.length) return false;
+    const keys = new Set(selectedRefs.map(layerKey));
+    return groupables.some((g) => !!g.groupId && keys.has(`${g.kind}:${g.id}`));
+  }, [selectedRefs, groupables]);
 
   return (
     <>
@@ -820,15 +1015,17 @@ export default function App() {
                     onField={setActiveField}
                     activeField={activeField}
                     onLayoutChange={moveElement}
-                    selected={selectedEl}
-                    onSelect={setSelectedEl}
+                    onPartChange={movePart}
+                    selectedRefs={selectedRefs}
+                    onSelectRefs={selectRefs}
                     globalShapes={deck.globalShapes}
-                    selectedShapeIds={selectedShapes}
-                    onSelectShapeIds={selectShapeIds}
                     onShapeChange={(id, patch) => slide && updateShapeOnSlide(id, patch, slide.id)}
                     onShapesChange={(updates) => slide && updateShapesOnSlide(updates, slide.id)}
-                    onGroupShapes={(ids) => groupShapes(ids)}
-                    onUngroupShapes={(ids) => ungroupShapes(ids)}
+                    onLayerGeo={moveLayers}
+                    onGroupRefs={(refs) => groupLayers(refs)}
+                    onUngroupRefs={(refs) => ungroupLayers(refs)}
+                    groupables={groupables}
+                    onTextChange={setFieldText}
                     onLayerCycle={cycleLayers}
                     onGestureEnd={history.commit}
                     background={effectiveBackground(deck, slide)}
@@ -915,14 +1112,14 @@ export default function App() {
                   {selectedShapes.length > 0 && (
                     <>
                       <div className="mx-1 h-5 w-px bg-white/10" />
-                      {selectedShapes.length >= 2 && !selectedGrouped && (
+                      {selectedRefs.length >= 2 && !selectedGrouped && (
                         <Btn
                           size="sm"
                           variant="soft"
-                          title="Combine the selected items into one group (Ctrl/⌘+G) — they then move, resize and rotate as a unit"
-                          onClick={() => groupShapes(selectedShapes)}
+                          title="Combine the selected items into one group (Ctrl/⌘+G) — they then move, resize and rotate as a unit. Built-in parts (option rows, markers, banner…) can be grouped with shapes."
+                          onClick={() => groupLayers(selectedRefs)}
                         >
-                          ⧉ Group {selectedShapes.length}
+                          ⧉ Group {selectedRefs.length}
                         </Btn>
                       )}
                       {selectedGrouped && (
@@ -930,16 +1127,28 @@ export default function App() {
                           size="sm"
                           variant="soft"
                           title="Break the group (Ctrl/⌘+Shift+G) — every member keeps its exact position, size, rotation, style and content and becomes independently selectable"
-                          onClick={() => ungroupShapes(selectedShapes)}
+                          onClick={() => ungroupLayers(selectedRefs)}
                         >
                           ⧉ Ungroup
+                        </Btn>
+                      )}
+                      {selectedParts.length > 0 && (
+                        <Btn
+                          size="sm"
+                          title="Put the selected built-in elements back where the design places them (nothing is deleted)"
+                          onClick={() => {
+                            resetParts(selectedParts, slide?.id ?? null);
+                            applySelection(selectedRefs.filter((r) => r.kind !== "part"));
+                          }}
+                        >
+                          ⟲ Reset position
                         </Btn>
                       )}
                       <Btn
                         size="sm"
                         onClick={() => {
                           const ids = duplicateShapes(selectedShapes);
-                          if (ids.length) setSelectedShapes(ids);
+                          if (ids.length) selectShapeIds(ids);
                         }}
                       >
                         ⧉ Duplicate
@@ -949,7 +1158,7 @@ export default function App() {
                         variant="danger"
                         onClick={() => {
                           removeShapes(selectedShapes);
-                          setSelectedShapes([]);
+                          applySelection(selectedRefs.filter((r) => r.kind !== "shape"));
                         }}
                       >
                         ✕ Delete{selectedShapes.length > 1 ? ` ${selectedShapes.length}` : ""}
@@ -1044,7 +1253,8 @@ export default function App() {
             onFixFormatting={fixFormatting}
             scripts={scripts}
             selectedEl={selectedEl ?? "title"}
-            onSelectEl={setSelectedEl}
+            onSelectEl={(id) => applySelection([{ kind: "element", id }])}
+            selectedPart={selectedPart}
             forceTab={forceTab}
             shapes={{
               slide: slide?.shapes ?? [],
@@ -1052,26 +1262,26 @@ export default function App() {
               selectedId: selectedShape,
               selectedIds: selectedShapes,
               // panel picks are exact: a group member can be selected alone
-              onSelect: (id) => setSelectedShapes(id ? [id] : []),
-              onGroup: (ids) => groupShapes(ids),
-              onUngroup: (ids) => ungroupShapes(ids),
+              onSelect: (id) => applySelection(id ? [{ kind: "shape", id }] : []),
+              onGroup: (ids) => groupLayers(ids.map((id) => ({ kind: "shape", id }) as LayerRef)),
+              onUngroup: (ids) => ungroupLayers(ids.map((id) => ({ kind: "shape", id }) as LayerRef)),
               onRemoveIds: (ids) => {
                 removeShapes(ids);
-                setSelectedShapes([]);
+                applySelection(selectedRefs.filter((r) => r.kind !== "shape"));
               },
               onDuplicateIds: (ids) => {
                 const n = duplicateShapes(ids);
-                setSelectedShapes(n);
+                selectShapeIds(n);
               },
               onAdd: (kind) => insertShape(kind, { mode: "this" }),
               onChange: (id, patch) => slide && updateShapeOnSlide(id, patch, slide.id),
               onRemove: (id) => {
                 removeShape(id);
-                setSelectedShapes([]);
+                applySelection(selectedRefs.filter((r) => !(r.kind === "shape" && r.id === id)));
               },
               onDuplicate: (id) => {
                 const n = duplicateShape(id);
-                if (n) setSelectedShapes([n]);
+                if (n) selectShapeIds([n]);
               },
               onToggleScope: (id) => slide && toggleShapeScope(id, slide.id),
               onAddImage: (src, ratio) => insertImage(src, ratio, { mode: "this" }),

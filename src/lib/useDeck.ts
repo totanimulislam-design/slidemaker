@@ -17,20 +17,85 @@ import {
 import { emptySlide, parseQuestions } from "./parse";
 import { resolveFrameImageSrc } from "./frameImages";
 import { makeImageShape, makeShape, shapeId, type ShapeItem, type ShapeKind } from "./shapes";
-import { groupUid } from "./groups";
+import { groupUid, type Groupable } from "./groups";
 import { useHistory } from "./useHistory";
 import { effectiveTheme, mergeThemeOverride } from "./overrides";
 import { applySlideDesign, revertSlideDesign, type ApplySection } from "./applyDesign";
 import { sortByZ, Z_BASE, Z_LABELS, type ZOp } from "./zorder";
-import { alignLayer, distributeLayers, normalizeUnifiedZ, reorderLayer, topZ, type LayerRect, type LayerRef } from "./layers";
+import { alignLayer, DEFAULT_PART_BOX, distributeLayers, normalizeUnifiedZ, reorderLayer, topZ, type LayerRect, type LayerRef } from "./layers";
 import type { AlignOp } from "./shapeAlign";
-import type { BackgroundSettings, Box, ElementId, LayoutMap } from "./types";
+import type { BackgroundSettings, Box, ElementId, LayoutMap, PartLayoutMap } from "./types";
 import { DEFAULT_LAYOUT as LAYOUT_DEFAULTS } from "./types";
 import { measureElement } from "./layoutMeasure";
 
 const KEY = "mcq-slide-studio-v2";
 
 type ShapeUpdate = { id: string; patch: Partial<ShapeItem> };
+
+/** one geometry patch for ANY layer: a drawn shape, a built-in element or a built-in part */
+export type LayerGeoUpdate = { ref: LayerRef; patch: Partial<Box> };
+
+/**
+ * Every groupable layer of a deck with its current group tag: drawn shapes
+ * (per slide and deck-wide), built-in elements and built-in parts. Used to
+ * expand a click on one group member into the whole group, and to ungroup
+ * completely (no member is ever left behind in a half-broken group).
+ */
+export function allGroupables(d: Deck): Groupable[] {
+  const out: Groupable[] = [];
+  (Object.keys(d.theme.layout) as ElementId[]).forEach((id) => {
+    out.push({ kind: "element", id, groupId: d.theme.layout[id]?.groupId });
+  });
+  Object.entries(d.theme.partLayout ?? {}).forEach(([id, b]) => {
+    if (b?.groupId) out.push({ kind: "part", id, groupId: b.groupId });
+  });
+  (d.globalShapes ?? []).forEach((s) => out.push({ kind: "shape", id: s.id, groupId: s.groupId }));
+  d.slides.forEach((s) => (s.shapes ?? []).forEach((x) => out.push({ kind: "shape", id: x.id, groupId: x.groupId })));
+  return out;
+}
+
+/** Writes (or clears, when `gid` is undefined) a group tag on any layer refs. */
+function applyGroupTag(d: Deck, refs: LayerRef[], gid: string | undefined): Deck {
+  const shapeIds = new Set(refs.filter((r) => r.kind === "shape").map((r) => r.id));
+  const elementIds = refs.filter((r) => r.kind === "element").map((r) => r.id as ElementId);
+  const partIds = refs.filter((r) => r.kind === "part").map((r) => r.id);
+  let next = d;
+  if (shapeIds.size) {
+    const fix = (x: ShapeItem): ShapeItem => (shapeIds.has(x.id) ? { ...x, groupId: gid } : x);
+    next = {
+      ...next,
+      globalShapes: next.globalShapes?.map(fix),
+      slides: next.slides.map((s) =>
+        s.shapes?.some((x) => shapeIds.has(x.id)) ? { ...s, shapes: s.shapes.map(fix) } : s,
+      ),
+    };
+  }
+  if (elementIds.length || partIds.length) {
+    const layout = { ...next.theme.layout };
+    elementIds.forEach((id) => {
+      const cur = layout[id];
+      // untagging never invents a layout entry — it only clears an existing tag
+      if (gid === undefined) {
+        if (cur?.groupId) layout[id] = { ...cur, groupId: undefined };
+        return;
+      }
+      layout[id] = { ...(cur ?? LAYOUT_DEFAULTS[id]), groupId: gid };
+    });
+    const partLayout = { ...(next.theme.partLayout ?? {}) };
+    partIds.forEach((id) => {
+      const cur = partLayout[id];
+      if (gid === undefined) {
+        if (cur?.groupId) partLayout[id] = { ...cur, groupId: undefined };
+        return;
+      }
+      // only the tag is written: no geometry, so the part stays laid out by the
+      // slide until the user actually moves it
+      partLayout[id] = { ...(cur ?? DEFAULT_PART_BOX), groupId: gid };
+    });
+    next = { ...next, theme: { ...next.theme, layout, partLayout } };
+  }
+  return next;
+}
 
 /**
  * Patch one shape as edited from a specific slide. Deck-wide ("global")
@@ -278,6 +343,8 @@ export function useDeck() {
           };
         },
         `Edit header on ${scope === "selected" ? `${ids.size} slides` : scope === "slide" ? "this slide" : "all slides"}`,
+        // typing in the inline canvas editor must stay ONE undo step
+        `header-scoped:${scope}:${keys.join(",")}`,
       );
     },
     [setDeckH],
@@ -323,6 +390,119 @@ export function useDeck() {
         },
         label,
         `scope-layout:${scope}:${id}`,
+      );
+    },
+    [setDeckH],
+  );
+
+  /**
+   * Patch ONE built-in part's box (option row, option text, marker, banner,
+   * background artwork…) with the very same scope semantics as elements, so a
+   * part moved on the canvas can stay on this slide, be applied to a selection
+   * of slides, or become the deck default.
+   */
+  const patchPartLayoutScoped = useCallback(
+    (
+      id: string,
+      patch: Partial<Box>,
+      scope: "slide" | "selected" | "all",
+      slideIds: string[],
+      label = "Move element",
+    ) => {
+      const ids = new Set(slideIds);
+      setDeckH(
+        (d) => {
+          if (scope === "all") {
+            const cur = d.theme.partLayout?.[id] ?? DEFAULT_PART_BOX;
+            return {
+              ...d,
+              theme: {
+                ...d.theme,
+                partLayout: { ...(d.theme.partLayout ?? {}), [id]: { ...cur, ...patch } },
+              },
+              slides: d.slides.map((s) => {
+                if (!s.themeOverride?.partLayout?.[id]) return s;
+                const partLayout = { ...s.themeOverride.partLayout };
+                delete partLayout[id];
+                return {
+                  ...s,
+                  themeOverride: {
+                    ...s.themeOverride,
+                    partLayout: Object.keys(partLayout).length ? partLayout : undefined,
+                  },
+                };
+              }),
+            };
+          }
+          return {
+            ...d,
+            slides: d.slides.map((s) => {
+              if (!ids.has(s.id)) return s;
+              const base = s.themeOverride?.partLayout?.[id] ?? d.theme.partLayout?.[id] ?? DEFAULT_PART_BOX;
+              return {
+                ...s,
+                themeOverride: mergeThemeOverride(s.themeOverride, {
+                  partLayout: { [id]: { ...base, ...patch } },
+                }),
+              };
+            }),
+          };
+        },
+        label,
+        `scope-part:${scope}:${id}`,
+      );
+    },
+    [setDeckH],
+  );
+
+  /**
+   * ONE deck update for a mixed set of geometry patches — a group (or any
+   * multi-selection) of shapes, built-in elements and built-in parts dragged /
+   * resized / rotated together stays a single undo step.
+   */
+  const updateLayerGeoOnSlide = useCallback(
+    (updates: LayerGeoUpdate[], slideId: string, label = "Move items") => {
+      if (!updates.length) return;
+      const keys = Object.keys(updates[0]?.patch ?? {});
+      setDeckH(
+        (d) => {
+          let next = d;
+          for (const u of updates) {
+            if (u.ref.kind === "shape") next = patchShapeOnSlide(next, u.ref.id, u.patch as Partial<ShapeItem>, slideId);
+          }
+          const elUps = updates.filter((u) => u.ref.kind === "element");
+          const partUps = updates.filter((u) => u.ref.kind === "part");
+          if (elUps.length || partUps.length) {
+            next = {
+              ...next,
+              slides: next.slides.map((s) => {
+                if (s.id !== slideId) return s;
+                let patch: Partial<ThemeSettings> = {};
+                if (elUps.length) {
+                  const layout = { ...(s.themeOverride?.layout ?? d.theme.layout) };
+                  elUps.forEach((u) => {
+                    const id = u.ref.id as ElementId;
+                    const base = s.themeOverride?.layout?.[id] ?? d.theme.layout[id] ?? LAYOUT_DEFAULTS[id];
+                    layout[id] = { ...base, ...u.patch };
+                  });
+                  patch = { ...patch, layout };
+                }
+                if (partUps.length) {
+                  const partLayout = { ...(s.themeOverride?.partLayout ?? {}) };
+                  partUps.forEach((u) => {
+                    const base = partLayout[u.ref.id] ?? d.theme.partLayout?.[u.ref.id] ?? DEFAULT_PART_BOX;
+                    partLayout[u.ref.id] = { ...base, ...u.patch };
+                  });
+                  patch = { ...patch, partLayout };
+                }
+                return { ...s, themeOverride: mergeThemeOverride(s.themeOverride, patch) };
+              }),
+            };
+          }
+          return next;
+        },
+        label,
+        `layergeo:${slideId}:${keys.includes("rot") ? "rot" : keys.includes("w") || keys.includes("h") ? "size" : "move"}`,
       );
     },
     [setDeckH],
@@ -712,50 +892,86 @@ export function useDeck() {
   );
 
   /**
-   * Group the given shapes: only a shared tag is written, each member keeps
-   * its exact position, size, rotation, style and content — so Ungroup is
-   * lossless and members stay independently editable afterwards.
+   * Group ANY layers together — drawn shapes, built-in elements AND built-in
+   * parts (option rows, option text, markers, banner, background artwork…).
+   * Only a shared tag is written: every member keeps its exact position, size,
+   * rotation, text and styling, so ungrouping is lossless.
    */
-  const groupShapes = useCallback(
-    (ids: string[]): string | null => {
-      if (ids.length < 2) return null;
+  const groupLayers = useCallback(
+    (refs: LayerRef[]): string | null => {
+      if (refs.length < 2) return null;
       const gid = groupUid();
-      setDeckH((d) => {
-        const set = new Set(ids);
-        const fix = (x: ShapeItem): ShapeItem => (set.has(x.id) ? { ...x, groupId: gid } : x);
-        return {
-          ...d,
-          globalShapes: d.globalShapes?.map(fix),
-          slides: d.slides.map((s) =>
-            s.shapes?.some((x) => set.has(x.id)) ? { ...s, shapes: s.shapes.map(fix) } : s,
-          ),
-        };
-      }, `Group ${ids.length} items`);
+      setDeckH((d) => applyGroupTag(d, refs, gid), `Group ${refs.length} items`);
       return gid;
     },
     [setDeckH],
   );
 
-  /** Remove the group tag from every group the selection touches. */
-  const ungroupShapes = useCallback(
-    (ids: string[]) => {
-      if (!ids.length) return;
+  /**
+   * Break every group the selection touches — shapes, elements and parts alike.
+   * All members of those groups lose the tag (not only the selected ones), and
+   * each becomes independently selectable and editable again with its geometry,
+   * text and styling untouched.
+   */
+  const ungroupLayers = useCallback(
+    (refs: LayerRef[]) => {
+      if (!refs.length) return;
       setDeckH((d) => {
-        const set = new Set(ids);
-        const all = [...(d.globalShapes ?? []), ...d.slides.flatMap((s) => s.shapes ?? [])];
-        const gids = new Set(all.filter((x) => set.has(x.id) && x.groupId).map((x) => x.groupId as string));
+        const keys = new Set(refs.map((r) => `${r.kind}:${r.id}`));
+        const gids = new Set(
+          allGroupables(d)
+            .filter((g) => keys.has(`${g.kind}:${g.id}`) && g.groupId)
+            .map((g) => g.groupId as string),
+        );
         if (!gids.size) return d;
-        const fix = (x: ShapeItem): ShapeItem => (x.groupId && gids.has(x.groupId) ? { ...x, groupId: undefined } : x);
-        return {
-          ...d,
-          globalShapes: d.globalShapes?.map(fix),
-          slides: d.slides.map((s) =>
-            s.shapes?.some((x) => x.groupId && gids.has(x.groupId))
-              ? { ...s, shapes: s.shapes.map(fix) }
-              : s,
-          ),
-        };
+        const members = allGroupables(d)
+          .filter((g) => g.groupId && gids.has(g.groupId))
+          .map((g) => ({ kind: g.kind, id: g.id }) as LayerRef);
+        return applyGroupTag(d, members, undefined);
       }, "Ungroup items");
+    },
+    [setDeckH],
+  );
+
+  /**
+   * Releases built-in parts back to the slide's own layout (they stop being
+   * detached). Nothing is deleted — the part is exactly where the design puts
+   * it again, with all of its text and styling intact.
+   */
+  const resetParts = useCallback(
+    (ids: string[], slideId: string | null) => {
+      if (!ids.length) return;
+      const drop = new Set(ids);
+      setDeckH(
+        (d) => {
+          const strip = (m: PartLayoutMap | undefined) => {
+            if (!m) return m;
+            const out: PartLayoutMap = {};
+            let changed = false;
+            for (const [k, v] of Object.entries(m)) {
+              if (drop.has(k)) {
+                changed = true;
+                // keep the stacking order / group tag, drop the geometry
+                if (v?.z !== undefined || v?.groupId) out[k] = { ...DEFAULT_PART_BOX, z: v.z, groupId: v.groupId };
+              } else out[k] = v;
+            }
+            return changed ? out : m;
+          };
+          const themePL = strip(d.theme.partLayout);
+          return {
+            ...d,
+            theme: themePL === d.theme.partLayout ? d.theme : { ...d.theme, partLayout: themePL },
+            slides: d.slides.map((s) => {
+              if (slideId && s.id !== slideId) return s;
+              const pl = strip(s.themeOverride?.partLayout);
+              return pl === s.themeOverride?.partLayout
+                ? s
+                : { ...s, themeOverride: { ...(s.themeOverride ?? {}), partLayout: pl } };
+            }),
+          };
+        },
+        ids.length > 1 ? `Reset ${ids.length} elements` : "Reset element position",
+      );
     },
     [setDeckH],
   );
@@ -1100,6 +1316,8 @@ export function useDeck() {
     setHeaderScoped,
     patchLayout,
     patchLayoutScoped,
+    patchPartLayoutScoped,
+    updateLayerGeoOnSlide,
     transformLayout,
     transformLayoutScoped,
     updateSlide,
@@ -1118,8 +1336,9 @@ export function useDeck() {
     updateShapeOnSlide,
     updateShapesOnSlide,
     updateShapes,
-    groupShapes,
-    ungroupShapes,
+    groupLayers,
+    ungroupLayers,
+    resetParts,
     removeShapes,
     duplicateShapes,
     applyShapeDesign,

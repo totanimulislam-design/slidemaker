@@ -159,8 +159,10 @@ export function moveMembers(
 
 /* ------------------------------------------------------ layer hit-testing */
 
+export type HitKind = "shape" | "element" | "part";
+
 export interface BoardHit {
-  kind: "shape" | "element";
+  kind: HitKind;
   id: string;
 }
 
@@ -170,6 +172,10 @@ export interface BoardHit {
  * another one — Alt+click walks this list to pick the intended layer.
  * Locked / transparent shapes are skipped automatically because they render
  * with `pointer-events: none`.
+ *
+ * Built-in parts (option rows, option text, markers, banner, frame, background
+ * artwork) carry `data-part`, so the chain reaches the ACTUAL editable object
+ * under the cursor instead of stopping at the slide or its container.
  */
 export function boardLayerChain(clientX: number, clientY: number): BoardHit[] {
   if (typeof document === "undefined") return [];
@@ -182,15 +188,66 @@ export function boardLayerChain(clientX: number, clientY: number): BoardHit[] {
     return out;
   }
   for (const el of els) {
-    const hitEl = el.closest?.("[data-shape],[data-el]");
-    if (!hitEl) continue;
-    const shapeId = hitEl.getAttribute("data-shape");
-    const elId = hitEl.getAttribute("data-el");
-    const ref: BoardHit = shapeId !== null ? { kind: "shape", id: shapeId } : { kind: "element", id: elId! };
-    const key = `${ref.kind}:${ref.id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(ref);
+    // every ancestor that is itself a selectable layer joins the chain, so
+    // Alt+click can dig from an option's text → its marker → the row → the
+    // options block → the background artwork → the frame
+    const hits = typeof (el as HTMLElement).closest === "function" ? collectLayerHits(el) : [];
+    for (const ref of hits) {
+      const key = `${ref.kind}:${ref.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(ref);
+    }
   }
   return out;
 }
+
+/** the layer an element itself represents (innermost first), walking up */
+function collectLayerHits(el: Element): BoardHit[] {
+  const out: BoardHit[] = [];
+  let node: Element | null = el;
+  while (node && node !== document.documentElement) {
+    const shapeId = node.getAttribute?.("data-shape");
+    const partId = node.getAttribute?.("data-part");
+    const elId = node.getAttribute?.("data-el");
+    if (shapeId) out.push({ kind: "shape", id: shapeId });
+    else if (partId) out.push({ kind: "part", id: partId });
+    else if (elId) out.push({ kind: "element", id: elId });
+    node = node.parentElement;
+  }
+  return out;
+}
+
+/* ------------------------------------------------- groups over any layer */
+
+/**
+ * Anything that can carry a group tag: a drawn shape (`shape.groupId`), a
+ * built-in element or a built-in part (`box.groupId`). Groups stay a pure tag —
+ * members keep their own geometry, text and styling, so ungrouping is lossless
+ * and every member is individually selectable again.
+ */
+export interface Groupable {
+  kind: HitKind;
+  id: string;
+  groupId?: string;
+}
+
+export const groupableKey = (g: Groupable) => `${g.kind}:${g.id}`;
+
+/** every member of the group `g` belongs to (or just `g` when ungrouped) */
+export function groupOf(all: Groupable[], g: Groupable): Groupable[] {
+  if (!g.groupId) return [g];
+  return all.filter((o) => o.groupId === g.groupId);
+}
+
+/** true when `refs` is exactly one whole group */
+export function isWholeGroupOf(all: Groupable[], refs: Groupable[]): boolean {
+  if (refs.length < 2) return false;
+  const gid = refs[0]?.groupId;
+  if (!gid) return false;
+  if (!refs.every((r) => r.groupId === gid)) return false;
+  return all.filter((x) => x.groupId === gid).length === refs.length;
+}
+
+/** true when any of `refs` is grouped (so an Ungroup action makes sense) */
+export const anyGroupedOf = (refs: Groupable[]) => refs.some((r) => !!r.groupId);

@@ -22,10 +22,16 @@ interface Props {
   text: string;
   className?: string;
   style?: React.CSSProperties;
+  /**
+   * Extra DOM props (data-part / pointer handlers…) spread onto the root span,
+   * so a text object can be made selectable without adding a wrapper that would
+   * change the layout it participates in.
+   */
+  domProps?: React.HTMLAttributes<HTMLSpanElement>;
 }
 
 /** Renders mixed Bangla/English text with inline $LaTeX$ / $$display$$ segments. */
-export default function MathText({ text, className, style }: Props) {
+export default function MathText({ text, className, style, domProps }: Props) {
   const lines = useMemo(() => {
     return (text ?? "").split("\n").map((line) => {
       const parts = line.split(TOKEN).filter((p) => p !== undefined && p !== "");
@@ -40,7 +46,7 @@ export default function MathText({ text, className, style }: Props) {
   }, [text]);
 
   return (
-    <span className={className} style={style}>
+    <span className={className} {...domProps} style={style}>
       {lines.map((parts, li) => (
         // `plaintext` applies the Unicode bidi algorithm per line, so a Bangla,
         // English or Arabic line each flows in its own natural direction.

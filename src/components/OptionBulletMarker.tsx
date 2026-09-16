@@ -20,6 +20,12 @@ interface Props {
   fontFamily?: string;
   /** extra overrides (thumbnail scaling, previews…) */
   style?: CSSProperties;
+  /**
+   * Props spread onto the marker's root span (data-part + pointer handlers) so
+   * the bullet can be selected on the canvas without an extra wrapper that
+   * would disturb the flex row it sits in.
+   */
+  wrapperProps?: React.HTMLAttributes<HTMLSpanElement>;
 }
 
 export default function OptionBulletMarker({
@@ -31,13 +37,25 @@ export default function OptionBulletMarker({
   optionStyle,
   fontFamily,
   style,
+  wrapperProps,
 }: Props) {
   const shape = (theme.optionBulletShape ?? "circle") as OptionBulletShape;
   const marker = renderOptionBulletMarker(shape, theme, color, size, highlight, keyText);
   const badge = optionStyle ? optionBadgeStyle(optionStyle, theme, color, size, highlight) : undefined;
 
+  const { style: wrapperStyle, ...wrapperRest } = wrapperProps ?? {};
   return (
-    <span style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
+    <span
+      {...wrapperRest}
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flex: "0 0 auto",
+        ...wrapperStyle,
+      }}
+    >
       {marker.backplate ? <span style={marker.backplate} /> : null}
       <span
         style={{
