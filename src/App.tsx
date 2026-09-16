@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Slide, { SLIDE_H, SLIDE_W, type SlideField } from "./components/Slide";
 import {
+  DEFAULT_FRAME,
   FREE_MAX,
   FREE_MIN,
   type Box,
@@ -20,7 +21,7 @@ import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, shrinkDataUrl, type ShapeItem
 import type { AlignOp } from "./lib/shapeAlign";
 import { canMove, Z_LABELS, type ZOp } from "./lib/zorder";
 import { collectLayers, layerKey, parseLayerKey, visibleStack, type LayerRef } from "./lib/layers";
-import { boardLayerChain, groupOf, type Groupable } from "./lib/groups";
+import { boardLayerChain, groupOf, isWholeGroupOf, type Groupable } from "./lib/groups";
 import { partInfo } from "./lib/parts";
 import HistoryPanel from "./components/HistoryPanel";
 import AnswerKeyModal from "./components/AnswerKeyModal";
@@ -29,7 +30,7 @@ import { normalizeDeckZ, useDeck } from "./lib/useDeck";
 import { useFontCoverage } from "./lib/useFontCoverage";
 import { restoreCustomFonts } from "./lib/customFonts";
 import { downloadDataUrl, exportZip, slideToPng } from "./lib/exporter";
-import { convertMode, measurePart } from "./lib/layoutMeasure";
+import { convertMode, measureElement, measurePart } from "./lib/layoutMeasure";
 import { effectiveBackground } from "./lib/background";
 import { resolveFrameImageSrc } from "./lib/frameImages";
 import { effectiveHeader, effectiveTheme } from "./lib/overrides";
@@ -142,8 +143,6 @@ export default function App() {
 
   /** the "primary" selected drawn item — what the inspector edits */
   const selectedShape = selectedShapes.length ? selectedShapes[selectedShapes.length - 1] : null;
-  /** the primary selected built-in part (single selection only) */
-  const selectedPart = selectedParts.length === 1 ? selectedParts[0] : null;
 
   /**
    * The WHOLE canvas selection as one list: built-in elements, built-in parts
@@ -162,11 +161,16 @@ export default function App() {
   /** the slide the canvas shows (kept here because the memos below need it) */
   const curSlide = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
 
-  /** every grouped layer of the current slide — a click on one member selects all */
+  /**
+   * Every grouped layer of the current slide — a click on one member selects
+   * all. Hidden built-ins (e.g. the number-bullet element while the bullet is
+   * attached to the question) are left out so a default group only ever
+   * contains what is actually painted.
+   */
   const groupables = useMemo<Groupable[]>(
     () =>
       collectLayers(deck, curSlide)
-        .filter((l) => !!l.groupId)
+        .filter((l) => !!l.groupId && !l.hidden)
         .map((l) => ({ kind: l.ref.kind, id: l.ref.id, groupId: l.groupId } as Groupable)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [deck, current],
@@ -190,31 +194,66 @@ export default function App() {
     [groupables],
   );
 
+  /** the primary layer of the selection — what the inspector / toolbar edit */
+  const [primaryRef, setPrimaryRef] = useState<LayerRef | null>(null);
+
   /** writes one selection into the three stores and points the inspector at it */
-  const applySelection = useCallback((refs: LayerRef[]) => {
-    setSelectedShapes(refs.filter((r) => r.kind === "shape").map((r) => r.id));
-    setSelectedParts(refs.filter((r) => r.kind === "part").map((r) => r.id));
-    const els = refs.filter((r) => r.kind === "element");
-    setSelectedEls(els.map((r) => r.id as ElementId));
-    const el = els[0];
-    // the inspector follows the most specific pick: shape → part → element
-    const primary = refs.find((r) => r.kind === "shape") ?? refs.find((r) => r.kind === "part") ?? el ?? null;
-    if (!primary) {
-      setActiveField(null);
-      return;
-    }
-    if (primary.kind === "shape") {
-      setForceTab("shapes");
-      return;
-    }
-    if (primary.kind === "element") {
-      setForceTab("layout");
-      return;
-    }
-    const info = partInfo(primary.id);
-    setForceTab(info.tab);
-    setActiveField(info.field);
-  }, []);
+  const applySelection = useCallback(
+    (refs: LayerRef[]) => {
+      setSelectedShapes(refs.filter((r) => r.kind === "shape").map((r) => r.id));
+      setSelectedParts(refs.filter((r) => r.kind === "part").map((r) => r.id));
+      const els = refs.filter((r) => r.kind === "element");
+      setSelectedEls(els.map((r) => r.id as ElementId));
+
+      // Which member does the inspector point at?
+      //   • one WHOLE group → the most "content" member wins, so clicking the
+      //     question (default group = number bullet + text) still opens the
+      //     question editor, and clicking an option (row + numbering + text)
+      //     opens that option's text;
+      //   • anything else keeps the classic priority: shape → part → element.
+      let primary: LayerRef | null = null;
+      if (refs.length) {
+        const whole = groupables.length ? isWholeGroupOf(groupables, refs) : false;
+        if (whole && refs.length > 1) {
+          const score = (r: LayerRef): number => {
+            if (r.kind === "element") {
+              if (r.id === "question" || r.id === "title" || r.id === "badge" || r.id === "note" || r.id === "brand") return 0;
+              if (r.id === "logo") return 2;
+              return 3;
+            }
+            if (r.kind === "part") {
+              const k = partInfo(r.id).kind;
+              if (k === "text") return 1;
+              if (k === "shape") return 4;
+              if (k === "row") return 5;
+              return 6;
+            }
+            return 4;
+          };
+          primary = [...refs].sort((a, b) => score(a) - score(b))[0];
+        } else {
+          primary = refs.find((r) => r.kind === "shape") ?? refs.find((r) => r.kind === "part") ?? els[0] ?? null;
+        }
+      }
+      setPrimaryRef(primary);
+      if (!primary) {
+        setActiveField(null);
+        return;
+      }
+      if (primary.kind === "shape") {
+        setForceTab("shapes");
+        return;
+      }
+      if (primary.kind === "element") {
+        setForceTab("layout");
+        return;
+      }
+      const info = partInfo(primary.id);
+      setForceTab(info.tab);
+      setActiveField(info.field);
+    },
+    [groupables],
+  );
 
   /** canvas selection callback — groups arrive expanded unless it is a dig-in */
   const selectRefs = useCallback(
@@ -232,20 +271,8 @@ export default function App() {
     [addImage, resolveScope, selectShapeIds],
   );
 
-  /** what's currently selected in the unified layer stack */
-  const selectedLayer: LayerRef | null = useMemo(
-    () =>
-      selectedShape
-        ? { kind: "shape", id: selectedShape }
-        : selectedPart
-          ? { kind: "part", id: selectedPart }
-          : selectedParts.length
-            ? { kind: "part", id: selectedParts[0] }
-            : selectedEl
-              ? { kind: "element", id: selectedEl }
-              : null,
-    [selectedShape, selectedPart, selectedParts, selectedEl],
-  );
+  /** what's currently selected in the unified layer stack — the selection's primary member */
+  const selectedLayer: LayerRef | null = primaryRef;
 
   /** unified stack (elements + built-in parts + drawn items) on the current slide */
   const currentStack = useMemo(() => visibleStack(deck, curSlide), [deck, curSlide]);
@@ -349,7 +376,8 @@ export default function App() {
   // While editing, edits update the current slide live so user can preview their design
   const thisSlideId = useMemo(() => (slide ? [slide.id] : []), [slide]);
   const scopedTheme = useCallback(
-    (patch: Partial<ThemeSettings>) => setThemeScoped(patch, "slide", thisSlideId),
+    (patch: Partial<ThemeSettings>, coalesceKey?: string) =>
+      setThemeScoped(patch, "slide", thisSlideId, coalesceKey),
     [setThemeScoped, thisSlideId],
   );
   const scopedHeader = useCallback(
@@ -592,10 +620,11 @@ export default function App() {
               ? currentTheme.partLayout?.[ref.id]
               : currentTheme.layout[ref.id as ElementId];
           const free = (b?.mode ?? "align") === "free";
-          if (ref.kind === "part" && !free) {
+          if (!free) {
             // still laid out by the slide: nudge it from where it is painted,
-            // which promotes it to a free object (exactly like dragging it)
-            const m = measurePart(ref.id);
+            // which promotes it to a free object (exactly like dragging it) —
+            // group members always move the same amount, together
+            const m = ref.kind === "part" ? measurePart(ref.id) : measureElement(ref.id as ElementId);
             if (!m) return;
             ups.push({
               ref,
@@ -610,13 +639,11 @@ export default function App() {
             return;
           }
           if (!b) return;
-          const lo = free ? FREE_MIN : 0;
-          const hi = free ? FREE_MAX : 100;
           ups.push({
             ref,
             patch: {
-              x: Math.max(lo, Math.min(hi, Math.round((b.x + dx) * 10) / 10)),
-              y: Math.max(lo, Math.min(hi, Math.round((b.y + dy) * 10) / 10)),
+              x: Math.max(FREE_MIN, Math.min(FREE_MAX, Math.round((b.x + dx) * 10) / 10)),
+              y: Math.max(FREE_MIN, Math.min(FREE_MAX, Math.round((b.y + dy) * 10) / 10)),
             },
           });
         });
@@ -650,8 +677,6 @@ export default function App() {
     setCurrent,
     selectShapeIds,
     selectLayer,
-    groupLayers,
-    ungroupLayers,
     groupLayers,
     ungroupLayers,
     patchPartLayoutScoped,
@@ -1026,6 +1051,10 @@ export default function App() {
                     onUngroupRefs={(refs) => ungroupLayers(refs)}
                     groupables={groupables}
                     onTextChange={setFieldText}
+                    onPartOptions={(id) => setForceTab(partInfo(id).tab)}
+                    onFrameChange={(patch) =>
+                      scopedTheme({ frame: { ...currentTheme.frame, ...patch } }, "frame-width")
+                    }
                     onLayerCycle={cycleLayers}
                     onGestureEnd={history.commit}
                     background={effectiveBackground(deck, slide)}
@@ -1109,9 +1138,12 @@ export default function App() {
                       })}
                     </>
                   )}
-                  {selectedShapes.length > 0 && (
+                  {selectedRefs.length > 0 && (
                     <>
                       <div className="mx-1 h-5 w-px bg-white/10" />
+                      <span className="text-[10px] font-medium tracking-wide text-slate-500 uppercase">
+                        Selection{selectedRefs.length > 1 ? ` · ${selectedRefs.length}` : ""}
+                      </span>
                       {selectedRefs.length >= 2 && !selectedGrouped && (
                         <Btn
                           size="sm"
@@ -1135,15 +1167,26 @@ export default function App() {
                       {selectedParts.length > 0 && (
                         <Btn
                           size="sm"
-                          title="Put the selected built-in elements back where the design places them (nothing is deleted)"
+                          title="Put the selected built-in elements back where the design places them — the frame returns to its default thickness (nothing is deleted)"
                           onClick={() => {
-                            resetParts(selectedParts, slide?.id ?? null);
+                            const resettable = selectedParts.filter((id) => id !== "frame");
+                            if (resettable.length) resetParts(resettable, slide?.id ?? null);
+                            if (selectedParts.includes("frame")) {
+                              scopedTheme({
+                                frame: { ...currentTheme.frame, width: DEFAULT_FRAME.width },
+                              });
+                            }
                             applySelection(selectedRefs.filter((r) => r.kind !== "part"));
                           }}
                         >
                           ⟲ Reset position
                         </Btn>
                       )}
+                    </>
+                  )}
+                  {selectedShapes.length > 0 && (
+                    <>
+                      <div className="mx-1 h-5 w-px bg-white/10" />
                       <Btn
                         size="sm"
                         onClick={() => {
@@ -1254,7 +1297,7 @@ export default function App() {
             scripts={scripts}
             selectedEl={selectedEl ?? "title"}
             onSelectEl={(id) => applySelection([{ kind: "element", id }])}
-            selectedPart={selectedPart}
+            selectedPart={primaryRef?.kind === "part" ? primaryRef.id : null}
             forceTab={forceTab}
             shapes={{
               slide: slide?.shapes ?? [],

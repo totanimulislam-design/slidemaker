@@ -15,6 +15,25 @@ import { cssBorder, hasGradientFill } from "./shapeDesign";
 let gn = 0;
 export const groupUid = () => `grp${Date.now().toString(36)}${(gn++).toString(36)}`;
 
+/* ------------------------------------------- built-in default groups ---- */
+
+/**
+ * The groups every deck starts with (see migrateDefaultGroups in lib/useDeck):
+ *   • the QUESTION — number bullet + question text move/resize as one unit
+ *   • every OPTION — row background + numbering + option text, per index
+ *
+ * They are stored as plain group tags, so the whole group/ungroup machine
+ * (click expands to the group, Ctrl/⌘+G re-groups, Ctrl/⌘+Shift+G breaks it)
+ * works on them with no special casing — and breaking one is lossless.
+ *
+ * `groupId: ""` means "explicitly ungrouped by the user": the default-group
+ * migration never re-adds a group that was deliberately broken.
+ */
+export const DEFAULT_QUESTION_GROUP = "def:question";
+export const defaultOptionGroup = (i: number): string => `def:opt:${i}`;
+export const isDefaultGroup = (gid: string | undefined): boolean =>
+  !!gid && (gid === DEFAULT_QUESTION_GROUP || gid.startsWith("def:opt:"));
+
 /** ids of every shape sharing the clicked shape's group (or just itself). */
 export function groupMembersOf(shapes: ShapeItem[], id: string): string[] {
   const s = shapes.find((x) => x.id === id);
@@ -240,12 +259,17 @@ export function groupOf(all: Groupable[], g: Groupable): Groupable[] {
   return all.filter((o) => o.groupId === g.groupId);
 }
 
-/** true when `refs` is exactly one whole group */
+/**
+ * True when `refs` is exactly one whole group. `refs` may be plain
+ * `{ kind, id }` refs (LayerRef) — the group tag is looked up in `all`.
+ */
 export function isWholeGroupOf(all: Groupable[], refs: Groupable[]): boolean {
   if (refs.length < 2) return false;
-  const gid = refs[0]?.groupId;
+  const gidOf = (r: Groupable): string | undefined =>
+    r.groupId ?? all.find((g) => g.kind === r.kind && g.id === r.id)?.groupId;
+  const gid = gidOf(refs[0]);
   if (!gid) return false;
-  if (!refs.every((r) => r.groupId === gid)) return false;
+  if (!refs.every((r) => gidOf(r) === gid)) return false;
   return all.filter((x) => x.groupId === gid).length === refs.length;
 }
 

@@ -17,16 +17,27 @@ import {
 import { emptySlide, parseQuestions } from "./parse";
 import { resolveFrameImageSrc } from "./frameImages";
 import { makeImageShape, makeShape, shapeId, type ShapeItem, type ShapeKind } from "./shapes";
-import { groupUid, type Groupable } from "./groups";
+import { DEFAULT_QUESTION_GROUP, defaultOptionGroup, groupOf, groupUid, type Groupable } from "./groups";
 import { useHistory } from "./useHistory";
 import { effectiveTheme, mergeThemeOverride } from "./overrides";
 import { applySlideDesign, revertSlideDesign, type ApplySection } from "./applyDesign";
 import { sortByZ, Z_BASE, Z_LABELS, type ZOp } from "./zorder";
-import { alignLayer, DEFAULT_PART_BOX, distributeLayers, normalizeUnifiedZ, reorderLayer, topZ, type LayerRect, type LayerRef } from "./layers";
+import {
+  alignLayer,
+  DEFAULT_PART_BOX,
+  detachedPartBox,
+  distributeLayers,
+  normalizeUnifiedZ,
+  reorderLayer,
+  topZ,
+  type LayerRect,
+  type LayerRef,
+} from "./layers";
+import { partContainer } from "./parts";
 import type { AlignOp } from "./shapeAlign";
 import type { BackgroundSettings, Box, ElementId, LayoutMap, PartLayoutMap } from "./types";
 import { DEFAULT_LAYOUT as LAYOUT_DEFAULTS } from "./types";
-import { measureElement } from "./layoutMeasure";
+import { measureElement, measurePart } from "./layoutMeasure";
 
 const KEY = "mcq-slide-studio-v2";
 
@@ -54,7 +65,13 @@ export function allGroupables(d: Deck): Groupable[] {
   return out;
 }
 
-/** Writes (or clears, when `gid` is undefined) a group tag on any layer refs. */
+/**
+ * Writes (or clears, when `gid` is undefined) a group tag on any layer refs.
+ *
+ * Clearing writes `groupId: ""` (not `undefined`) so an explicit ungroup is
+ * persisted: the default-group migration skips `""` and never re-groups
+ * elements the user deliberately broke apart.
+ */
 function applyGroupTag(d: Deck, refs: LayerRef[], gid: string | undefined): Deck {
   const shapeIds = new Set(refs.filter((r) => r.kind === "shape").map((r) => r.id));
   const elementIds = refs.filter((r) => r.kind === "element").map((r) => r.id as ElementId);
@@ -73,28 +90,67 @@ function applyGroupTag(d: Deck, refs: LayerRef[], gid: string | undefined): Deck
   if (elementIds.length || partIds.length) {
     const layout = { ...next.theme.layout };
     elementIds.forEach((id) => {
-      const cur = layout[id];
-      // untagging never invents a layout entry — it only clears an existing tag
-      if (gid === undefined) {
-        if (cur?.groupId) layout[id] = { ...cur, groupId: undefined };
-        return;
-      }
-      layout[id] = { ...(cur ?? LAYOUT_DEFAULTS[id]), groupId: gid };
+      const cur = layout[id] ?? LAYOUT_DEFAULTS[id];
+      // untag = an explicit "" marker so the default-group migration leaves it alone
+      layout[id] = { ...cur, groupId: gid ?? "" };
     });
     const partLayout = { ...(next.theme.partLayout ?? {}) };
     partIds.forEach((id) => {
       const cur = partLayout[id];
-      if (gid === undefined) {
-        if (cur?.groupId) partLayout[id] = { ...cur, groupId: undefined };
-        return;
-      }
       // only the tag is written: no geometry, so the part stays laid out by the
       // slide until the user actually moves it
-      partLayout[id] = { ...(cur ?? DEFAULT_PART_BOX), groupId: gid };
+      partLayout[id] = { ...(cur ?? DEFAULT_PART_BOX), groupId: gid ?? "" };
     });
     next = { ...next, theme: { ...next.theme, layout, partLayout } };
   }
   return next;
+}
+
+/**
+ * Seeds the BUILT-IN default groups every slide is expected to start with:
+ *
+ *   • Question  = number bullet + question (element)
+ *   • Option i  = row background + numbering + option text (for every i the
+ *                 deck currently has)
+ *
+ * A member already carrying a group tag — including the explicit "" marker
+ * written by an Ungroup — is left untouched, so this is safe to re-run and
+ * can never resurrect a group the user broke. New option indices (pasted
+ * later) get the default group automatically.
+ */
+export function migrateDefaultGroups(d: Deck): Deck {
+  const maxOpt = Math.min(8, d.slides.reduce((m, s) => Math.max(m, s.options.length), 0));
+  const layout = { ...d.theme.layout };
+  const partLayout = { ...(d.theme.partLayout ?? {}) };
+  let changed = false;
+
+  const tagElement = (id: ElementId) => {
+    const cur = layout[id] ?? LAYOUT_DEFAULTS[id];
+    if (cur.groupId === undefined) {
+      layout[id] = { ...cur, groupId: DEFAULT_QUESTION_GROUP };
+      changed = true;
+    }
+  };
+  const tagPart = (id: string, gid: string) => {
+    const cur = partLayout[id];
+    if (!cur || cur.groupId === undefined) {
+      partLayout[id] = { ...(cur ?? DEFAULT_PART_BOX), groupId: gid };
+      changed = true;
+    }
+  };
+
+  tagElement("question");
+  tagElement("bullet"); // covers "Separate number bullet" mode
+  tagPart("questionBullet", DEFAULT_QUESTION_GROUP);
+  for (let i = 0; i < maxOpt; i++) {
+    const gid = defaultOptionGroup(i);
+    tagPart(`option:${i}`, gid);
+    tagPart(`optionBullet:${i}`, gid);
+    tagPart(`optionText:${i}`, gid);
+  }
+
+  if (!changed) return d;
+  return { ...d, theme: { ...d.theme, layout, partLayout } };
 }
 
 /**
@@ -145,12 +201,14 @@ export function normalizeDeckZ(deck: Deck): Deck {
     const b = layout[k];
     if (b && b.z !== undefined && !Number.isFinite(Number(b.z))) layout[k] = { ...b, z: undefined };
   });
-  return normalizeUnifiedZ({
-    ...deck,
-    theme: { ...deck.theme, layout },
-    globalShapes: deck.globalShapes?.map(fix),
-    slides: deck.slides.map((s) => (s.shapes ? { ...s, shapes: s.shapes.map(fix) } : s)),
-  });
+  return migrateDefaultGroups(
+    normalizeUnifiedZ({
+      ...deck,
+      theme: { ...deck.theme, layout },
+      globalShapes: deck.globalShapes?.map(fix),
+      slides: deck.slides.map((s) => (s.shapes ? { ...s, shapes: s.shapes.map(fix) } : s)),
+    }),
+  );
 }
 
 function initialDeck(): Deck {
@@ -232,6 +290,7 @@ const THEME_LABELS: Partial<Record<keyof ThemeSettings, string>> = {
   snapStep: "Snap step",
   banner: "Title banner",
   background: "Background",
+  frame: "Frame",
   showFrame: "Frame",
   showBullet: "Bullet",
   showNumber: "Number",
@@ -284,7 +343,12 @@ export function useDeck() {
 
   /** Apply visual settings to this slide, selected slides, or the whole deck. */
   const setThemeScoped = useCallback(
-    (patch: Partial<ThemeSettings>, scope: "slide" | "selected" | "all", slideIds: string[]) => {
+    (
+      patch: Partial<ThemeSettings>,
+      scope: "slide" | "selected" | "all",
+      slideIds: string[],
+      coalesceKey?: string,
+    ) => {
       const keys = Object.keys(patch) as (keyof ThemeSettings)[];
       const ids = new Set(slideIds);
       setDeckH(
@@ -309,6 +373,7 @@ export function useDeck() {
           };
         },
         `Change ${scope === "all" ? "all slides" : scope === "selected" ? `${ids.size} slides` : "this slide"}`,
+        coalesceKey,
       );
     },
     [setDeckH],
@@ -599,7 +664,11 @@ export function useDeck() {
         : key === "shapes" ? "Edit shapes"
         : `Edit ${key}`;
       setDeckH(
-        (d) => ({ ...d, slides: d.slides.map((s) => (s.id === id ? { ...s, ...patch } : s)) }),
+        (d) =>
+          patch.options !== undefined
+            ? // new options may add indices that need the default option groups
+              migrateDefaultGroups({ ...d, slides: d.slides.map((s) => (s.id === id ? { ...s, ...patch } : s)) })
+            : { ...d, slides: d.slides.map((s) => (s.id === id ? { ...s, ...patch } : s)) },
         label,
         `slide:${id}:${key}`,
       );
@@ -626,7 +695,11 @@ export function useDeck() {
       if (!slides.length) return;
       setDeckH((d) => {
         const next = mode === "replace" ? slides : [...d.slides, ...slides];
-        return { ...d, slides: next.map((s, i) => ({ ...s, number: s.number || String(i + 1) })) };
+        // new option indices get the default option groups seeded
+        return migrateDefaultGroups({
+          ...d,
+          slides: next.map((s, i) => ({ ...s, number: s.number || String(i + 1) })),
+        });
       }, `${mode === "replace" ? "Import" : "Add"} ${slides.length} slide${slides.length === 1 ? "" : "s"}`);
     },
     [setDeckH],
@@ -901,7 +974,25 @@ export function useDeck() {
     (refs: LayerRef[]): string | null => {
       if (refs.length < 2) return null;
       const gid = groupUid();
-      setDeckH((d) => applyGroupTag(d, refs, gid), `Group ${refs.length} items`);
+      setDeckH(
+        (d) => {
+          // pulling in a group member pulls in its WHOLE group — a default
+          // question/option group can never be left half behind
+          const gids = allGroupables(d);
+          const members = new Map<string, LayerRef>();
+          const add = (r: LayerRef) => {
+            const k = `${r.kind}:${r.id}`;
+            if (!members.has(k)) members.set(k, r);
+          };
+          refs.forEach(add);
+          refs.forEach((r) => {
+            const g = gids.find((x) => x.kind === r.kind && x.id === r.id);
+            if (g?.groupId) groupOf(gids, g).forEach((m) => add({ kind: m.kind, id: m.id } as LayerRef));
+          });
+          return applyGroupTag(d, [...members.values()], gid);
+        },
+        `Group ${refs.length} item${refs.length === 1 ? "" : "s"}`,
+      );
       return gid;
     },
     [setDeckH],
@@ -912,6 +1003,12 @@ export function useDeck() {
    * All members of those groups lose the tag (not only the selected ones), and
    * each becomes independently selectable and editable again with its geometry,
    * text and styling untouched.
+   *
+   * A member that is still painted INSIDE another member of the broken group
+   * (the number bullet inside the question, the option's numbering / text
+   * inside the option row, the banner inside the title) is additionally
+   * detached with its live measured geometry — exactly what a drag would write.
+   * Nothing moves visually; afterwards every member can move on its own.
    */
   const ungroupLayers = useCallback(
     (refs: LayerRef[]) => {
@@ -927,7 +1024,37 @@ export function useDeck() {
         const members = allGroupables(d)
           .filter((g) => g.groupId && gids.has(g.groupId))
           .map((g) => ({ kind: g.kind, id: g.id }) as LayerRef);
-        return applyGroupTag(d, members, undefined);
+        const memberKeys = new Set(members.map((m) => `${m.kind}:${m.id}`));
+
+        const r1 = (v: number) => Math.round(v * 10) / 10;
+        const detach: string[] = [];
+        members.forEach((m) => {
+          if (m.kind !== "part") return;
+          const c = partContainer(m.id);
+          if (!c || !memberKeys.has(`${c.kind}:${c.id}`)) return;
+          if (detachedPartBox(d.theme, m.id)) return; // already independent
+          const mm = measurePart(m.id);
+          if (mm && mm.w > 0.05) detach.push(m.id);
+        });
+
+        let next = applyGroupTag(d, members, undefined);
+        if (detach.length) {
+          const partLayout = { ...(next.theme.partLayout ?? {}) };
+          detach.forEach((id) => {
+            const mm = measurePart(id);
+            if (!mm) return;
+            partLayout[id] = {
+              ...(partLayout[id] ?? DEFAULT_PART_BOX),
+              mode: "free",
+              x: r1(mm.left),
+              y: r1(mm.top),
+              w: r1(mm.w),
+              h: r1(mm.h),
+            };
+          });
+          next = { ...next, theme: { ...next.theme, partLayout } };
+        }
+        return next;
       }, "Ungroup items");
     },
     [setDeckH],
@@ -1299,7 +1426,7 @@ export function useDeck() {
 
   const resetAll = useCallback(() => {
     setDeckH(
-      { header: DEFAULT_HEADER, theme: DEFAULT_THEME, slides: parseQuestions(SAMPLE_INPUT), globalShapes: [] },
+      normalizeDeckZ({ header: DEFAULT_HEADER, theme: DEFAULT_THEME, slides: parseQuestions(SAMPLE_INPUT), globalShapes: [] }),
       "Reset deck",
     );
     setCurrent(0);
