@@ -1,7 +1,7 @@
 import type { Deck, SlideData } from "../lib/types";
 import { useState } from "react";
 import { layerKey, layerRect, parseLayerKey, sortedLayers, type LayerRect, type LayerRef } from "../lib/layers";
-import { measureElement } from "../lib/layoutMeasure";
+import { measureElement } from "../lib/geometry";
 import type { AlignOp } from "../lib/shapeAlign";
 import { SegButtons } from "./ui";
 import { canMove, Z_LABELS, type ZOp } from "../lib/zorder";

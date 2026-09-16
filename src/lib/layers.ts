@@ -7,7 +7,7 @@ import type { Box } from "./types";
 import { collectParts, partInfo, type PartId } from "./parts";
 import { effectiveHeader, effectiveTheme } from "./overrides";
 import { effectiveBackground } from "./background";
-import { measurePart } from "./layoutMeasure";
+import { measurePart } from "./geometry";
 
 /**
  * ONE stacking order for everything on a slide.

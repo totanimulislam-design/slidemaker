@@ -1,4 +1,4 @@
-import type { Box, Deck, DeckHeader, PartLayoutMap, SlideData, ThemeSettings } from "./types";
+import type { Box, Deck, DeckHeader, LayoutMap, PartLayoutMap, SlideData, ThemeSettings } from "./types";
 
 /**
  * Merges two part-layout maps key by key so a per-slide geometry override never
@@ -9,7 +9,30 @@ export function mergePartLayout(base?: PartLayoutMap, patch?: PartLayoutMap): Pa
   if (!patch) return base;
   if (!base) return patch;
   const out: PartLayoutMap = { ...base };
-  for (const [k, v] of Object.entries(patch)) out[k] = { ...(base[k] as Box | undefined), ...v } as Box;
+  for (const [k, v] of Object.entries(patch)) {
+    out[k] = withDeckGroupTag(base[k] as Box | undefined, { ...(base[k] as Box | undefined), ...v } as Box);
+  }
+  return out;
+}
+
+/**
+ * Group tags are DECK-level state — Group / Ungroup always write `deck.theme`.
+ * A per-slide override may carry a stale copy of the tag (older builds copied
+ * whole boxes into overrides), so the deck-level tag always wins in a merge.
+ * This also repairs decks that were saved before that rule existed.
+ */
+function withDeckGroupTag(base: Box | undefined, merged: Box): Box {
+  if (!base || base.groupId === undefined) return merged;
+  return { ...merged, groupId: base.groupId };
+}
+
+/** layout merge: override boxes win, except the deck-level group tag */
+function mergeLayoutMap(base: LayoutMap, patch?: LayoutMap): LayoutMap {
+  if (!patch) return base;
+  const out: LayoutMap = { ...base };
+  for (const [k, v] of Object.entries(patch) as [keyof LayoutMap, Box][]) {
+    out[k] = withDeckGroupTag(base[k], v);
+  }
   return out;
 }
 
@@ -19,7 +42,7 @@ export function mergeTheme(base: ThemeSettings, patch?: Partial<ThemeSettings>):
   return {
     ...base,
     ...patch,
-    layout: { ...base.layout, ...(patch.layout ?? {}) },
+    layout: mergeLayoutMap(base.layout, patch.layout),
     partLayout: mergePartLayout(base.partLayout, patch.partLayout) ?? base.partLayout,
     boxFonts: { ...base.boxFonts, ...(patch.boxFonts ?? {}) },
     banner: patch.banner

@@ -17,7 +17,7 @@ import {
 import { emptySlide, parseQuestions } from "./parse";
 import { resolveFrameImageSrc } from "./frameImages";
 import { makeImageShape, makeShape, shapeId, type ShapeItem, type ShapeKind } from "./shapes";
-import { DEFAULT_QUESTION_GROUP, defaultOptionGroup, groupOf, groupUid, type Groupable } from "./groups";
+import { allGroupables, groupOf, groupUid, migrateDefaultGroups } from "./scene";
 import { useHistory } from "./useHistory";
 import { effectiveTheme, mergeThemeOverride } from "./overrides";
 import { applySlideDesign, revertSlideDesign, type ApplySection } from "./applyDesign";
@@ -37,7 +37,7 @@ import { partContainer } from "./parts";
 import type { AlignOp } from "./shapeAlign";
 import type { BackgroundSettings, Box, ElementId, LayoutMap, PartLayoutMap } from "./types";
 import { DEFAULT_LAYOUT as LAYOUT_DEFAULTS } from "./types";
-import { measureElement, measurePart } from "./layoutMeasure";
+import { measureElement, measurePart } from "./geometry";
 
 const KEY = "mcq-slide-studio-v2";
 
@@ -45,25 +45,6 @@ type ShapeUpdate = { id: string; patch: Partial<ShapeItem> };
 
 /** one geometry patch for ANY layer: a drawn shape, a built-in element or a built-in part */
 export type LayerGeoUpdate = { ref: LayerRef; patch: Partial<Box> };
-
-/**
- * Every groupable layer of a deck with its current group tag: drawn shapes
- * (per slide and deck-wide), built-in elements and built-in parts. Used to
- * expand a click on one group member into the whole group, and to ungroup
- * completely (no member is ever left behind in a half-broken group).
- */
-export function allGroupables(d: Deck): Groupable[] {
-  const out: Groupable[] = [];
-  (Object.keys(d.theme.layout) as ElementId[]).forEach((id) => {
-    out.push({ kind: "element", id, groupId: d.theme.layout[id]?.groupId });
-  });
-  Object.entries(d.theme.partLayout ?? {}).forEach(([id, b]) => {
-    if (b?.groupId) out.push({ kind: "part", id, groupId: b.groupId });
-  });
-  (d.globalShapes ?? []).forEach((s) => out.push({ kind: "shape", id: s.id, groupId: s.groupId }));
-  d.slides.forEach((s) => (s.shapes ?? []).forEach((x) => out.push({ kind: "shape", id: x.id, groupId: x.groupId })));
-  return out;
-}
 
 /**
  * Writes (or clears, when `gid` is undefined) a group tag on any layer refs.
@@ -104,53 +85,6 @@ function applyGroupTag(d: Deck, refs: LayerRef[], gid: string | undefined): Deck
     next = { ...next, theme: { ...next.theme, layout, partLayout } };
   }
   return next;
-}
-
-/**
- * Seeds the BUILT-IN default groups every slide is expected to start with:
- *
- *   • Question  = number bullet + question (element)
- *   • Option i  = row background + numbering + option text (for every i the
- *                 deck currently has)
- *
- * A member already carrying a group tag — including the explicit "" marker
- * written by an Ungroup — is left untouched, so this is safe to re-run and
- * can never resurrect a group the user broke. New option indices (pasted
- * later) get the default group automatically.
- */
-export function migrateDefaultGroups(d: Deck): Deck {
-  const maxOpt = Math.min(8, d.slides.reduce((m, s) => Math.max(m, s.options.length), 0));
-  const layout = { ...d.theme.layout };
-  const partLayout = { ...(d.theme.partLayout ?? {}) };
-  let changed = false;
-
-  const tagElement = (id: ElementId) => {
-    const cur = layout[id] ?? LAYOUT_DEFAULTS[id];
-    if (cur.groupId === undefined) {
-      layout[id] = { ...cur, groupId: DEFAULT_QUESTION_GROUP };
-      changed = true;
-    }
-  };
-  const tagPart = (id: string, gid: string) => {
-    const cur = partLayout[id];
-    if (!cur || cur.groupId === undefined) {
-      partLayout[id] = { ...(cur ?? DEFAULT_PART_BOX), groupId: gid };
-      changed = true;
-    }
-  };
-
-  tagElement("question");
-  tagElement("bullet"); // covers "Separate number bullet" mode
-  tagPart("questionBullet", DEFAULT_QUESTION_GROUP);
-  for (let i = 0; i < maxOpt; i++) {
-    const gid = defaultOptionGroup(i);
-    tagPart(`option:${i}`, gid);
-    tagPart(`optionBullet:${i}`, gid);
-    tagPart(`optionText:${i}`, gid);
-  }
-
-  if (!changed) return d;
-  return { ...d, theme: { ...d.theme, layout, partLayout } };
 }
 
 /**
@@ -255,7 +189,10 @@ function initialDeck(): Deck {
   } catch {
     /* ignore */
   }
-  return normalizeUnifiedZ({ header: DEFAULT_HEADER, theme: DEFAULT_THEME, slides: parseQuestions(SAMPLE_INPUT), globalShapes: [] });
+  // a brand-new deck starts with the default question / option groups tagged
+  return migrateDefaultGroups(
+    normalizeUnifiedZ({ header: DEFAULT_HEADER, theme: DEFAULT_THEME, slides: parseQuestions(SAMPLE_INPUT), globalShapes: [] }),
+  );
 }
 
 /** short readable names for the history panel */
@@ -444,10 +381,12 @@ export function useDeck() {
             slides: d.slides.map((s) => {
               if (!ids.has(s.id)) return s;
               const base = s.themeOverride?.layout?.[id] ?? d.theme.layout[id] ?? LAYOUT_DEFAULTS[id];
+              const box: Box = { ...base, ...patch };
+              delete box.groupId; // group tags are deck-level state
               return {
                 ...s,
                 themeOverride: mergeThemeOverride(s.themeOverride, {
-                  layout: { ...(s.themeOverride?.layout ?? d.theme.layout), [id]: { ...base, ...patch } },
+                  layout: { ...(s.themeOverride?.layout ?? {}), [id]: box } as LayoutMap,
                 }),
               };
             }),
@@ -504,10 +443,12 @@ export function useDeck() {
             slides: d.slides.map((s) => {
               if (!ids.has(s.id)) return s;
               const base = s.themeOverride?.partLayout?.[id] ?? d.theme.partLayout?.[id] ?? DEFAULT_PART_BOX;
+              const box: Box = { ...base, ...patch };
+              delete box.groupId; // group tags are deck-level state
               return {
                 ...s,
                 themeOverride: mergeThemeOverride(s.themeOverride, {
-                  partLayout: { [id]: { ...base, ...patch } },
+                  partLayout: { [id]: box },
                 }),
               };
             }),
@@ -544,19 +485,26 @@ export function useDeck() {
                 if (s.id !== slideId) return s;
                 let patch: Partial<ThemeSettings> = {};
                 if (elUps.length) {
-                  const layout = { ...(s.themeOverride?.layout ?? d.theme.layout) };
+                  // only the touched keys join the override: a full copy of the
+                  // deck layout would shadow later deck-level edits of the
+                  // untouched elements
+                  const layout: Partial<LayoutMap> = { ...(s.themeOverride?.layout ?? {}) };
                   elUps.forEach((u) => {
                     const id = u.ref.id as ElementId;
                     const base = s.themeOverride?.layout?.[id] ?? d.theme.layout[id] ?? LAYOUT_DEFAULTS[id];
-                    layout[id] = { ...base, ...u.patch };
+                    const box: Box = { ...base, ...u.patch };
+                    delete box.groupId; // group tags are deck-level state
+                    layout[id] = box;
                   });
-                  patch = { ...patch, layout };
+                  patch = { ...patch, layout: layout as LayoutMap };
                 }
                 if (partUps.length) {
                   const partLayout = { ...(s.themeOverride?.partLayout ?? {}) };
                   partUps.forEach((u) => {
                     const base = partLayout[u.ref.id] ?? d.theme.partLayout?.[u.ref.id] ?? DEFAULT_PART_BOX;
-                    partLayout[u.ref.id] = { ...base, ...u.patch };
+                    const box: Box = { ...base, ...u.patch };
+                    delete box.groupId; // group tags are deck-level state
+                    partLayout[u.ref.id] = box;
                   });
                   patch = { ...patch, partLayout };
                 }

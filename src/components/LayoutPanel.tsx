@@ -1,6 +1,6 @@
 import type { Box, ElementId, LayoutMap, OptionsLayout, ThemeSettings } from "../lib/types";
 import { DEFAULT_LAYOUT, ELEMENT_LABELS, FREE_MAX, FREE_MIN, cloneLayout } from "../lib/types";
-import { clamp100, clampFree, convertMode } from "../lib/layoutMeasure";
+import { clamp100, clampFree, convertMode } from "../lib/geometry";
 import { Btn, Field, SegButtons, Slider, Toggle } from "./ui";
 import BoxFontControls from "./BoxFontControls";
 import { cn } from "../utils/cn";
@@ -179,7 +179,7 @@ export default function LayoutPanel({ theme, setTheme, patchLayout, transformLay
           <button
             onClick={() => {
               // restore the image's natural proportions from the bitmap
-              const img = document.querySelector<HTMLImageElement>('.slide-editable [data-el="logo"] img');
+              const img = document.querySelector<HTMLImageElement>('.slide-editable [data-obj="element:logo"] img');
               const ratio = img && img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1;
               set({ h: r1((box.w / ratio) * (16 / 9)) });
             }}
