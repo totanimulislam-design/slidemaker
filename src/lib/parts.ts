@@ -76,6 +76,8 @@ export interface PartInfo {
 export const PART_FRAME = "frame";
 export const PART_BANNER = "banner";
 export const PART_QBULLET = "questionBullet";
+/** the slide's own base background (the board's gradient) — selectable + resizable */
+export const PART_BG_BOARD = "bgBoard";
 export const PART_BG_GRADIENT = "bgGradient";
 export const PART_BG_DESIGN = "bgDesign";
 export const PART_BG_IMAGE = "bgImage";
@@ -84,6 +86,7 @@ export const PART_BG_VIGNETTE = "bgVignette";
 
 /** every background layer part, bottom → top (matches lib/background.ts order) */
 export const BG_PART_IDS: PartId[] = [
+  PART_BG_BOARD,
   PART_BG_GRADIENT,
   PART_BG_DESIGN,
   PART_BG_IMAGE,
@@ -122,6 +125,17 @@ const STATIC: Record<string, StaticDef> = {
     field: null,
     tab: "frame",
     movable: false,
+  },
+  [PART_BG_BOARD]: {
+    label: "Slide background",
+    icon: "▦",
+    kind: "decor",
+    z: 0,
+    field: null,
+    tab: "background",
+    // the base board background is a real object: it can be moved and scaled
+    // (its box is written into partLayout) without touching the slide itself
+    movable: true,
   },
   [PART_BG_GRADIENT]: {
     label: "Background gradient",
@@ -263,6 +277,9 @@ export function collectParts(
   const frame = theme.frame ?? DEFAULT_FRAME;
   const frameOn = theme.showFrame && frame.style !== "none";
 
+  // the board's base background is always painted → always selectable
+  out.push(partInfo(PART_BG_BOARD));
+
   if (background) {
     if (background.gradient?.enabled) out.push(partInfo(PART_BG_GRADIENT));
     if (background.design) out.push(partInfo(PART_BG_DESIGN));
@@ -288,6 +305,27 @@ export function collectParts(
 }
 
 /* --------------------------------------------------------------- geometry */
+
+/**
+ * The layer a part is PAINTED inside while it is still in flow (null = it is
+ * already a top-level object). Used by Ungroup: a member that is nested inside
+ * another member of the broken group must come out of that nesting (with its
+ * live geometry) so it can finally move on its own:
+ *
+ *   number bullet   → inside the question element
+ *   option numbering / option text → inside the option row
+ *   option row      → inside the options element
+ *   title banner    → inside the title element
+ */
+export function partContainer(id: PartId): { kind: "element" | "part"; id: string } | null {
+  if (id === PART_QBULLET) return { kind: "element", id: "question" };
+  if (id === PART_BANNER) return { kind: "element", id: "title" };
+  const opt = partOptionIndex(id);
+  if (opt === null) return null;
+  if (id.startsWith("optionBullet:") || id.startsWith("optionText:")) return { kind: "part", id: optionRowId(opt) };
+  if (id.startsWith("option:")) return { kind: "element", id: "options" };
+  return null;
+}
 
 /** stored override box of a part (undefined = still laid out by the slide) */
 export function partBox(theme: ThemeSettings, id: PartId): Box | undefined {

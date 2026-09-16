@@ -45,6 +45,7 @@ import { measureElement, measurePart } from "../lib/layoutMeasure";
 import {
   BG_PART_IDS,
   PART_BANNER,
+  PART_BG_BOARD,
   PART_BG_DESIGN,
   PART_FRAME,
   PART_QBULLET,
@@ -80,6 +81,7 @@ const FIELD_OF: Record<ElementId, SlideField> = {
 /** which built-in elements carry text that can be edited right on the canvas */
 const ELEMENT_TEXT_FIELD: Partial<Record<ElementId, SlideField>> = {
   title: "title",
+  brand: "brandTop",
   badge: "badge",
   question: "question",
   note: "note",
@@ -117,6 +119,10 @@ interface Props {
   groupables?: Groupable[];
   /** inline text editing (double-click) of a built-in text field */
   onTextChange?: (field: SlideField, value: string) => void;
+  /** double-click on a non-text part (shape/decor/frame): open its inspector tab */
+  onPartOptions?: (id: PartId) => void;
+  /** drag the frame's grips to change its thickness (frame.width) */
+  onFrameChange?: (patch: { width: number }) => void;
   /** Alt+click on any layer: select the layer beneath it (overlap navigation) */
   onLayerCycle?: (clientX: number, clientY: number) => void;
   /** called when a drag/resize/rotate finishes — closes the undo coalescing window */
@@ -197,6 +203,8 @@ function SlideBase({
   onUngroupRefs,
   groupables,
   onTextChange,
+  onPartOptions,
+  onFrameChange,
   onLayerCycle,
   onGestureEnd,
   background,
@@ -864,18 +872,38 @@ function SlideBase({
     else if (editing.ref.kind === "shape") onShapeChange?.(editing.ref.id, { text: value });
   };
 
-  /** opens the inline editor over any text object (double-click) */
-  const openEditor = (ref: LayerRef) => {
-    if (!editable || !onTextChange) return;
+  /**
+   * Double-click routing:
+   *   • editable text  → inline editor over the object
+   *   • logo           → its edit options (Header panel: replace / remove)
+   *   • shape parts    (bullets, banner, frame, background layers) → their
+   *                         inspector tab, i.e. the object's edit options
+   */
+  const openEditor = (ref: LayerRef, fieldOverride?: SlideField) => {
+    if (!editable) return;
     if (ref.kind === "shape") {
       const s = allShapes.find((x) => x.id === ref.id);
       if (!s || s.locked) return;
-      setEditing({ ref, field: null });
+      if (onTextChange) setEditing({ ref, field: null });
       return;
     }
-    const field = ref.kind === "element" ? ELEMENT_TEXT_FIELD[ref.id as ElementId] : partInfo(ref.id).field;
-    if (!field) return;
-    if (ref.kind === "element" && ref.id === "logo") return;
+    if (ref.kind === "part") {
+      const info = partInfo(ref.id);
+      if (info.kind === "text" && info.field) {
+        if (onTextChange) setEditing({ ref, field: info.field });
+      } else {
+        onPartOptions?.(ref.id);
+      }
+      return;
+    }
+    if (ref.id === "logo") {
+      // the logo is a bitmap: double-click shows its edit options in the
+      // Header panel (upload / default / remove)
+      onField?.("logo");
+      return;
+    }
+    const field = fieldOverride ?? ELEMENT_TEXT_FIELD[ref.id as ElementId];
+    if (!field || !onTextChange) return;
     setEditing({ ref, field });
   };
 
@@ -1093,6 +1121,45 @@ function SlideBase({
   const imageInsetY = Math.round((imageInsetPct / 100) * SLIDE_H);
   const frameSelectable = editable && partById.has(PART_FRAME);
 
+  /* ------------------------- frame thickness grips ------------------------ */
+
+  /** unit outward vector per grip: dragging a grip away from the slide makes the ring thicker */
+  const FRAME_OUT: Record<string, { x: number; y: number }> = {
+    n: { x: 0, y: -1 }, s: { x: 0, y: 1 }, e: { x: 1, y: 0 }, w: { x: -1, y: 0 },
+    ne: { x: 1, y: -1 }, nw: { x: -1, y: -1 }, se: { x: 1, y: 1 }, sw: { x: -1, y: 1 },
+  };
+
+  /**
+   * Dragging a frame grip resizes the FRAME (its thickness), never the slide:
+   * only `frame.width` is written, so the 1280×720 board and all of its
+   * content are untouched.
+   */
+  const startFrameResize = (h: string) => (e: React.PointerEvent<HTMLElement>) => {
+    e.stopPropagation();
+    if (e.button !== 0 || !onFrameChange) return;
+    const out = FRAME_OUT[h];
+    if (!out) return;
+    const start = frame.width;
+    const px0 = e.clientX;
+    const py0 = e.clientY;
+    const b0 = boardRef.current?.getBoundingClientRect();
+    const scale = b0 && b0.width ? SLIDE_W / b0.width : 1; // design px per client px
+    const onMove = (ev: PointerEvent) => {
+      ev.preventDefault();
+      const d = ((ev.clientX - px0) * out.x + (ev.clientY - py0) * out.y) * scale;
+      onFrameChange({ width: Math.round(Math.max(2, Math.min(80, start + d))) });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      onGestureEnd?.();
+    };
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
   /** frame clicks land on the slide root / ring padding, never on the board */
   const frameHandlers = frameSelectable
     ? {
@@ -1110,6 +1177,7 @@ function SlideBase({
           if (e.target !== e.currentTarget) return;
           e.stopPropagation();
           selectOne({ kind: "part", id: PART_FRAME });
+          onPartOptions?.(PART_FRAME);
         },
         style: { cursor: "pointer" } as CSSProperties,
       }
@@ -1125,6 +1193,8 @@ function SlideBase({
     .map((x, i) => [x.id, i] as const);
   const bgZ = new Map(bgOrder);
   const bgDesignBox = detachedPartBox(theme, PART_BG_DESIGN);
+  /** the slide's base background as a free object (undefined = full bleed) */
+  const bgBoardBox = detachedPartBox(theme, PART_BG_BOARD);
 
   /* ---------------------------- detached parts ---------------------------- */
   /** built-in parts the user moved: painted straight onto the board */
@@ -1548,11 +1618,11 @@ function SlideBase({
       };
 
       /* ---- the option's numbering / bullet marker (its own selectable part) ---- */
-      const marker = (extra?: CSSProperties, asPart = true) => (
+      const marker = (extra?: CSSProperties, asPart = true, size = circle) => (
         <OptionBulletMarker
           theme={theme}
           color={oColor}
-          size={circle}
+          size={size}
           keyText={markerText}
           highlight={highlight}
           optionStyle={oStyle}
@@ -1608,6 +1678,35 @@ function SlideBase({
           L.options.align === "center" ? "center" : L.options.align === "right" ? "flex-end" : chrome.row.justifyContent,
       };
 
+      const inner = (
+        <>
+          {bulletBox ? null : marker()}
+          {textBox ? null : text()}
+          {tick}
+        </>
+      );
+
+      // a detached option paints row-background FIRST, then marker, then text:
+      // all three share the same z-band, so DOM order decides and the row's
+      // background can never paint over its (detached) numbering / text
+      if (rowBox) {
+        // the row was moved: it leaves the grid and becomes a free object
+        detached.push(
+          <div
+            key={`d-${rowId}`}
+            {...partHandlers(rowId)}
+            style={detachedStyle(rowId, rowBox, {
+              ...rowCss,
+              display: "flex",
+              alignItems: "center",
+              overflow: "visible",
+              ...partPointerCss(rowId, selKeys.has(`part:${rowId}`)),
+            })}
+          >
+            {inner}
+          </div>,
+        );
+      }
       // a detached marker / text is painted straight onto the board
       if (bulletBox) {
         detached.push(
@@ -1621,7 +1720,7 @@ function SlideBase({
               ...partPointerCss(bulletId, selKeys.has(`part:${bulletId}`)),
             })}
           >
-            {marker(undefined, false)}
+            {marker(undefined, false, circle * bulletScale(bulletBox.h, circle))}
           </div>,
         );
       }
@@ -1641,34 +1740,7 @@ function SlideBase({
           </div>,
         );
       }
-
-      const inner = (
-        <>
-          {bulletBox ? null : marker()}
-          {textBox ? null : text()}
-          {tick}
-        </>
-      );
-
-      if (rowBox) {
-        // the row was moved: it leaves the grid and becomes a free object
-        detached.push(
-          <div
-            key={`d-${rowId}`}
-            {...partHandlers(rowId)}
-            style={detachedStyle(rowId, rowBox, {
-              ...rowCss,
-              display: "flex",
-              alignItems: "center",
-              overflow: "visible",
-              ...partPointerCss(rowId, selKeys.has(`part:${rowId}`)),
-            })}
-          >
-            {inner}
-          </div>,
-        );
-        return;
-      }
+      if (rowBox) return;
 
       inFlow.push(
         <div
@@ -1686,6 +1758,16 @@ function SlideBase({
       );
     });
     return inFlow;
+  };
+
+  /**
+   * A detached bullet's box height vs its natural px size: resizing the bullet
+   * object (handles or group grip) scales the marker graphic to match.
+   */
+  const bulletScale = (hPct: number | undefined, basePx: number) => {
+    const baseH = (basePx / SLIDE_H) * 100;
+    if (!hPct || baseH <= 0) return 1;
+    return Math.min(5, Math.max(0.2, hPct / baseH));
   };
 
   const optionRows = renderOptions();
@@ -1764,8 +1846,18 @@ function SlideBase({
               whiteSpace: "nowrap",
             }}
           >
-            Frame · styled in the Frame panel
+            Frame · drag a grip to resize thickness · design in the Frame panel
           </div>
+          {onFrameChange &&
+            HANDLES.map(({ h, cursor, style: hs }) => (
+              <div
+                key={h}
+                data-handle={h}
+                title="Drag to make the frame thicker / thinner"
+                onPointerDown={startFrameResize(h)}
+                style={{ ...handleBase, ...hs, cursor, background: "#5ef2ff" }}
+              />
+            ))}
         </div>
       )}
 
@@ -1811,7 +1903,14 @@ function SlideBase({
             height: "100%",
             boxSizing: "border-box",
             borderRadius: frameCss.innerRadius,
-            background: `radial-gradient(120% 90% at 50% -10%, ${shade(theme.board, 0.16)} 0%, ${theme.board} 62%)`,
+            // in edit mode the base background is painted by its own selectable
+            // layer (part "bgBoard") over a flat board-colour fallback, so
+            // shrinking the background reveals the board colour — and read-only
+            // renders keep the old inline fill so exports stay identical
+            background:
+              editable && partById.has(PART_BG_BOARD)
+                ? theme.board
+                : `radial-gradient(120% 90% at 50% -10%, ${shade(theme.board, 0.16)} 0%, ${theme.board} 62%)`,
             position: "relative",
             overflow: "hidden",
             // isolated stacking context: a child can never end up behind this background
@@ -1819,6 +1918,47 @@ function SlideBase({
             zIndex: 1,
           }}
         >
+          {/* ------------------------- slide background ------------------------ */}
+          {editable && partById.has(PART_BG_BOARD) && (
+            <div
+              data-part={PART_BG_BOARD}
+              onPointerDown={(e) => {
+                // already selected → drag it; otherwise bubble to the board so a
+                // plain click selects it and a drag still starts the marquee
+                if (e.button !== 0) return;
+                const ref: LayerRef = { kind: "part", id: PART_BG_BOARD };
+                if (selRefs.length === 1 && selKeys.has(keyOf(ref)) && canMoveRef(ref)) {
+                  startDragRef(ref)(e);
+                }
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                onPartOptions?.(PART_BG_BOARD);
+              }}
+              style={{
+                position: "absolute",
+                ...(bgBoardBox
+                  ? {
+                      left: `${bgBoardBox.x}%`,
+                      top: `${bgBoardBox.y}%`,
+                      width: `${bgBoardBox.w}%`,
+                      height: `${bgBoardBox.h ?? 100}%`,
+                      transform: bgBoardBox.rot ? `rotate(${bgBoardBox.rot}deg)` : undefined,
+                      transformOrigin: "center center",
+                    }
+                  : { inset: 0 }),
+                background: `radial-gradient(120% 90% at 50% -10%, ${shade(theme.board, 0.16)} 0%, ${theme.board} 62%)`,
+                zIndex: partZ(theme, PART_BG_BOARD),
+                pointerEvents: "auto",
+                cursor: "move",
+                touchAction: "none",
+                boxSizing: "border-box",
+                outline: selKeys.has(`part:${PART_BG_BOARD}`) ? "1.5px dashed rgba(94,242,255,.6)" : undefined,
+                outlineOffset: -2,
+              }}
+            />
+          )}
+
           {/* ------------------------------ background ------------------------- */}
           {bgLayers.map((l) => {
             const isDesign = l.id === PART_BG_DESIGN;
@@ -1850,7 +1990,16 @@ function SlideBase({
               <div
                 key={`bg-${l.id}`}
                 data-bg=""
-                {...(grabbable ? partHandlers(l.id) : { "data-part": l.id })}
+                {...(grabbable
+                  ? partHandlers(l.id)
+                  : {
+                      "data-part": l.id,
+                      // double-click a decorative layer → its Background panel
+                      onDoubleClick: (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        onPartOptions?.(l.id);
+                      },
+                    })}
                 style={{
                   ...artStyle,
                   zIndex: bgZ.get(l.id) ?? 0,
@@ -1935,8 +2084,24 @@ function SlideBase({
               letterSpacing: 0.4,
             }))}
           >
-            <div style={{ fontSize: 25 }}>{header.brandTop}</div>
-            <div style={{ fontSize: 27 }}>{header.brandBottom}</div>
+            {(["brandTop", "brandBottom"] as const).map((f, i) => (
+              <div
+                key={f}
+                style={{ fontSize: i === 0 ? 25 : 27 }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  const ref: LayerRef = { kind: "element", id: "brand" };
+                  // first double-click digs into a group, the next edits the line
+                  if (isGrouped(ref) && !(selRefs.length === 1 && selKeys.has(keyOf(ref)))) {
+                    selectOne(ref, { exact: true });
+                    return;
+                  }
+                  openEditor(ref, f);
+                }}
+              >
+                {f === "brandTop" ? header.brandTop : header.brandBottom}
+              </div>
+            ))}
           </div>
 
           {/* -------------------------------- title --------------------------- */}
@@ -2101,7 +2266,7 @@ function SlideBase({
                     touchAction: editable ? "none" : undefined,
                   })}
                 >
-                  {qBullet(theme.bulletSize ?? 54)}
+                  {qBullet((theme.bulletSize ?? 54) * bulletScale(qBulletBox.h, theme.bulletSize ?? 54))}
                 </div>,
               );
             }
