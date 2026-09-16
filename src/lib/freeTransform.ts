@@ -17,6 +17,9 @@ export interface FreeRect {
 
 export type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
+/** Pixels the pointer must travel after mousedown before a move-drag starts. */
+export const DRAG_THRESHOLD_PX = 4;
+
 export const HANDLES: { h: Handle; cursor: string; style: React.CSSProperties }[] = [
   { h: "nw", cursor: "nwse-resize", style: { left: -8, top: -8 } },
   { h: "n", cursor: "ns-resize", style: { left: "50%", top: -8, marginLeft: -8 } },

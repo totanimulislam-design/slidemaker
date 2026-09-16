@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type CSSProperties } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Box, DeckHeader, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { shade, withAlpha } from "../lib/color";
 import { isWideNumberStyle, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
@@ -16,7 +16,7 @@ import { DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
 import { computeFrameCss } from "../lib/frameDesigns";
 import { resolveFrameImageSrc } from "../lib/frameImages";
 import { boxesOverlap } from "../lib/groups";
-import { HANDLES, applyMove, applyResize, applyRotate, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
+import { HANDLES, applyMove, applyResize, applyRotate, DRAG_THRESHOLD_PX, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
 import { measureElement } from "../lib/layoutMeasure";
 import MathText from "./MathText";
 import ShapeLayer from "./ShapeLayer";
@@ -101,7 +101,20 @@ function SlideBase({
   background,
 }: Props) {
   const boardRef = useRef<HTMLDivElement>(null);
-  const gesture = useRef<FreeGesture | null>(null);
+  type PointerDrag = {
+    isPointerDown: boolean;
+    isDragging: boolean;
+    pointerId: number;
+    dragStartX: number;
+    dragStartY: number;
+    initialObjectX: number;
+    initialObjectY: number;
+    gesture: FreeGesture;
+  };
+  const drag = useRef<PointerDrag | null>(null);
+  const bound = useRef(false);
+  const applyGestureRef = useRef<(e: PointerEvent) => void>(() => {});
+  const endDragRef = useRef<(commit?: boolean) => void>(() => {});
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
   // drag-marquee (rubber-band selection) state
   const marq = useRef<{ x0: number; y0: number; x1: number; y1: number; px: number; py: number; moved: boolean } | null>(null);
@@ -211,6 +224,61 @@ function SlideBase({
       }
     : undefined;
 
+  const onDocMove = useRef((e: PointerEvent) => applyGestureRef.current(e)).current;
+  const onDocUp = useRef(() => endDragRef.current(true)).current;
+
+  const unbindDoc = () => {
+    if (!bound.current) return;
+    bound.current = false;
+    window.removeEventListener("pointermove", onDocMove);
+    window.removeEventListener("pointerup", onDocUp);
+    window.removeEventListener("pointercancel", onDocUp);
+    window.removeEventListener("blur", onDocUp);
+  };
+
+  const bindDoc = () => {
+    if (bound.current) return;
+    bound.current = true;
+    window.addEventListener("pointermove", onDocMove);
+    window.addEventListener("pointerup", onDocUp);
+    window.addEventListener("pointercancel", onDocUp);
+    window.addEventListener("blur", onDocUp);
+  };
+
+  const endDrag = (commit = true) => {
+    const s = drag.current;
+    unbindDoc();
+    if (!s) return;
+    drag.current = null;
+    frozenRect.current = null;
+    if (commit && s.isDragging) onGestureEnd?.();
+    setGuides({ x: null, y: null });
+  };
+
+  useEffect(() => {
+    return () => endDragRef.current(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const begin = (gesture: FreeGesture, e: React.PointerEvent, startDragging: boolean, initial: { x: number; y: number }) => {
+    drag.current = {
+      isPointerDown: true,
+      isDragging: startDragging,
+      pointerId: e.pointerId,
+      dragStartX: e.clientX,
+      dragStartY: e.clientY,
+      initialObjectX: initial.x,
+      initialObjectY: initial.y,
+      gesture,
+    };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* window listeners still drive the drag */
+    }
+    bindDoc();
+  };
+
   const startDrag = (id: ElementId) => (e: React.PointerEvent<HTMLDivElement>) => {
     if (editable) {
       e.stopPropagation();
@@ -224,24 +292,16 @@ function SlideBase({
       onField?.(FIELD_OF[id]);
     }
     if (!movable || e.button !== 0) return;
-    const b = boardRef.current?.getBoundingClientRect();
-    if (!b) return;
-    const r = ensureFree(id);
-    gesture.current = {
-      kind: "move",
-      id,
-      dx: e.clientX - (b.left + (r.x / 100) * b.width),
-      dy: e.clientY - (b.top + (r.y / 100) * b.height),
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    // snapshot visual position only — do NOT promote to free / move on click
+    const r = freeRectOf(id);
+    begin({ kind: "move", id, dx: 0, dy: 0 }, e, false, { x: r.x, y: r.y });
   };
 
   const startResize = (id: ElementId, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!movable || e.button !== 0) return;
     const r = ensureFree(id);
-    gesture.current = { kind: "resize", id, handle, sx: e.clientX, sy: e.clientY, start: r, ratio: r.h > 0 ? r.w / r.h : 1 };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    begin({ kind: "resize", id, handle, sx: e.clientX, sy: e.clientY, start: r, ratio: r.h > 0 ? r.w / r.h : 1 }, e, true, { x: r.x, y: r.y });
   };
 
   const startRotate = (id: ElementId) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -252,22 +312,39 @@ function SlideBase({
     const r = ensureFree(id);
     const cx = b.left + ((r.x + r.w / 2) / 100) * b.width;
     const cy = b.top + ((r.y + r.h / 2) / 100) * b.height;
-    gesture.current = { kind: "rotate", id, cx, cy, start: Math.atan2(e.clientY - cy, e.clientX - cx), rot0: r.rot };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    begin({ kind: "rotate", id, cx, cy, start: Math.atan2(e.clientY - cy, e.clientX - cx), rot0: r.rot }, e, true, { x: r.x, y: r.y });
   };
 
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const g = gesture.current;
+  const applyGesture = (e: PointerEvent) => {
+    const s = drag.current;
+    if (!s?.isPointerDown) return;
+    if (e.pointerId !== s.pointerId) return;
+    if (e.buttons === 0) {
+      endDrag(true);
+      return;
+    }
+
+    const g = s.gesture;
+    if (!s.isDragging) {
+      if (g.kind === "move") {
+        const dist = Math.hypot(e.clientX - s.dragStartX, e.clientY - s.dragStartY);
+        if (dist < DRAG_THRESHOLD_PX) return;
+        // first real drag: promote aligned deck elements to free mode once
+        ensureFree(g.id as ElementId);
+      }
+      s.isDragging = true;
+    }
+    if (!s.isDragging) return;
+
     const b = boardRef.current?.getBoundingClientRect();
-    if (!g || !b) return;
-    e.preventDefault();
+    if (!b) return;
     const id = g.id as ElementId;
     const freeMove = e.altKey;
 
     if (g.kind === "move") {
       const r = freeRectOf(id); // frozen size → stable snapping while dragging
-      const rawX = ((e.clientX - g.dx - b.left) / b.width) * 100;
-      const rawY = ((e.clientY - g.dy - b.top) / b.height) * 100;
+      const rawX = s.initialObjectX + ((e.clientX - s.dragStartX) / b.width) * 100;
+      const rawY = s.initialObjectY + ((e.clientY - s.dragStartY) / b.height) * 100;
       const res = applyMove(r, rawX, rawY, {
         grid: gridSnap,
         others: theme.smartGuides === false ? undefined : snapTargets(`element:${id}`),
@@ -288,27 +365,15 @@ function SlideBase({
     onLayoutChange?.(id, { rot: applyRotate(g, e.clientX, e.clientY, e.shiftKey) });
   };
 
-  const endGesture = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (gesture.current) {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        /* pointer already released */
-      }
-      onGestureEnd?.();
-    }
-    gesture.current = null;
-    frozenRect.current = null;
-    setGuides({ x: null, y: null });
-  };
+  applyGestureRef.current = applyGesture;
+  endDragRef.current = endDrag;
 
   const handlers = editable
     ? (id: ElementId) => ({
         "data-el": id,
         onPointerDown: startDrag(id),
-        onPointerMove,
-        onPointerUp: endGesture,
-        onPointerCancel: endGesture,
+        onPointerUp: () => endDrag(true),
+        onPointerCancel: () => endDrag(true),
       })
     : (id: ElementId) => ({ "data-el": id });
 
@@ -357,18 +422,16 @@ function SlideBase({
             key={h}
             title="Drag to resize · Shift keeps ratio · Alt disables snapping"
             onPointerDown={startResize(id, h)}
-            onPointerMove={onPointerMove}
-            onPointerUp={endGesture}
-            onPointerCancel={endGesture}
+            onPointerUp={() => endDrag(true)}
+            onPointerCancel={() => endDrag(true)}
             style={{ ...handleBase, ...hs, cursor, background: "#5ef2ff", borderRadius: h.length === 1 ? 8 : 3 }}
           />
         ))}
         <div
           title="Rotate · Shift snaps to 15°"
           onPointerDown={startRotate(id)}
-          onPointerMove={onPointerMove}
-          onPointerUp={endGesture}
-          onPointerCancel={endGesture}
+          onPointerUp={() => endDrag(true)}
+          onPointerCancel={() => endDrag(true)}
           style={{ ...handleBase, left: "50%", top: -34, marginLeft: -8, borderRadius: "50%", background: "#5ef2ff", cursor: "grab" }}
         />
         <div style={{ position: "absolute", left: "50%", top: -18, width: 2, height: 16, marginLeft: -1, background: "rgba(94,242,255,.8)" }} />

@@ -1,9 +1,9 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { polygonPoints, type ShapeItem } from "../lib/shapes";
 import { withAlpha } from "../lib/color";
 import { cssBorder, dashArray, hasGradientFill, itemStyle, shapeFill, textStyle } from "../lib/shapeDesign";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
-import { applyResize } from "../lib/freeTransform";
+import { applyResize, DRAG_THRESHOLD_PX } from "../lib/freeTransform";
 import {
   anyGrouped,
   fillsBox,
@@ -44,13 +44,23 @@ interface Props {
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 type Gesture =
-  | { kind: "move"; id: string; dx: number; dy: number; others: ShapeItem[] }
+  | { kind: "move"; id: string; initialObjectX: number; initialObjectY: number; others: ShapeItem[] }
   | { kind: "resize"; id: string; handle: Handle; sx: number; sy: number; x0: number; y0: number; w0: number; h0: number; ratio: number }
   | { kind: "rotate"; id: string; cx: number; cy: number; start: number; rot0: number }
   /** whole selection (multi / group) — every member gets patched by the same transform */
-  | { kind: "set"; mode: "move"; ids: string[]; start: Record<string, MemberGeo>; px0: number; py0: number }
+  | { kind: "set"; mode: "move"; ids: string[]; start: Record<string, MemberGeo> }
   | { kind: "set"; mode: "resize"; ids: string[]; start: Record<string, MemberGeo>; handle: Handle; sx: number; sy: number; bounds: { x: number; y: number; w: number; h: number } }
   | { kind: "set"; mode: "rotate"; ids: string[]; start: Record<string, MemberGeo>; cx: number; cy: number; startAngle: number; board: { left: number; top: number; width: number; height: number } };
+
+/** Pointer session — a shape never moves unless isDragging is true. */
+type PointerDrag = {
+  isPointerDown: boolean;
+  isDragging: boolean;
+  pointerId: number;
+  dragStartX: number;
+  dragStartY: number;
+  gesture: Gesture;
+};
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const GUIDE_TOL = 0.8; // % of board
@@ -337,7 +347,10 @@ export default function ShapeLayer({
   onGestureEnd,
   extraTargets,
 }: Props) {
-  const gesture = useRef<Gesture | null>(null);
+  const drag = useRef<PointerDrag | null>(null);
+  const bound = useRef(false);
+  const applyGestureRef = useRef<(e: PointerEvent) => void>(() => {});
+  const endDragRef = useRef<(commit?: boolean) => void>(() => {});
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
 
   const board = () => boardRef.current?.getBoundingClientRect();
@@ -363,13 +376,43 @@ export default function ShapeLayer({
   const memberList = (ids: string[], start: Record<string, MemberGeo>) =>
     ids.map((id) => ({ id, geo: start[id] })).filter((m): m is { id: string; geo: MemberGeo } => !!m.geo);
 
-  /** capture on the actual hit child (and the box) so painted-only targets keep dragging */
+  const onDocMove = useRef((e: PointerEvent) => applyGestureRef.current(e)).current;
+  const onDocUp = useRef(() => endDragRef.current(true)).current;
+
+  const unbindDoc = () => {
+    if (!bound.current) return;
+    bound.current = false;
+    window.removeEventListener("pointermove", onDocMove);
+    window.removeEventListener("pointerup", onDocUp);
+    window.removeEventListener("pointercancel", onDocUp);
+    window.removeEventListener("blur", onDocUp);
+  };
+
+  const bindDoc = () => {
+    if (bound.current) return;
+    bound.current = true;
+    window.addEventListener("pointermove", onDocMove);
+    window.addEventListener("pointerup", onDocUp);
+    window.addEventListener("pointercancel", onDocUp);
+    window.addEventListener("blur", onDocUp);
+  };
+
+  const endDrag = (commit = true) => {
+    const s = drag.current;
+    unbindDoc();
+    if (!s) return;
+    drag.current = null;
+    if (commit && s.isDragging) onGestureEnd?.();
+    setGuides({ x: null, y: null });
+  };
+
+  /** capture on the actual hit child (and the box) so painted-only targets keep the cursor */
   const grab = (e: React.PointerEvent<Element>) => {
     const pid = e.pointerId;
     try {
       e.currentTarget.setPointerCapture(pid);
     } catch {
-      /* capture unsupported here — move events still bubble while over the item */
+      /* capture unsupported — window listeners still drive the drag */
     }
     const t = e.target as Element | null;
     if (t && t !== e.currentTarget && typeof t.setPointerCapture === "function") {
@@ -380,6 +423,24 @@ export default function ShapeLayer({
       }
     }
   };
+
+  const begin = (gesture: Gesture, e: React.PointerEvent, startDragging: boolean) => {
+    drag.current = {
+      isPointerDown: true,
+      isDragging: startDragging,
+      pointerId: e.pointerId,
+      dragStartX: e.clientX,
+      dragStartY: e.clientY,
+      gesture,
+    };
+    grab(e);
+    bindDoc();
+  };
+
+  useEffect(() => {
+    return () => endDragRef.current(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ------------------------------- gestures ------------------------------ */
   const down = (s: ShapeItem) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -412,39 +473,45 @@ export default function ShapeLayer({
     if (e.button !== 0) return;
     const movable = targets.filter((id) => shapes.some((x) => x.id === id && !x.locked));
     if (!movable.length) return;
-    const b = board();
-    if (!b) return;
+    // prepare a possible drag — position is NOT updated until the pointer
+    // actually moves past the threshold (isDragging becomes true)
     if (movable.length === 1 && targets.length === 1) {
       const it = shapes.find((x) => x.id === movable[0])!;
-      gesture.current = {
-        kind: "move",
-        id: it.id,
-        dx: e.clientX - (b.left + (it.x / 100) * b.width),
-        dy: e.clientY - (b.top + (it.y / 100) * b.height),
-        others: [...shapes.filter((o) => o.id !== it.id), ...((extraTargets ?? []) as ShapeItem[])],
-      };
+      begin(
+        {
+          kind: "move",
+          id: it.id,
+          initialObjectX: it.x,
+          initialObjectY: it.y,
+          others: [...shapes.filter((o) => o.id !== it.id), ...((extraTargets ?? []) as ShapeItem[])],
+        },
+        e,
+        false,
+      );
     } else {
-      gesture.current = { kind: "set", mode: "move", ids: movable, start: snapshot(movable), px0: e.clientX, py0: e.clientY };
+      begin({ kind: "set", mode: "move", ids: movable, start: snapshot(movable) }, e, false);
     }
-    grab(e);
   };
 
   const resizeDown = (s: ShapeItem, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (e.button !== 0) return;
-    gesture.current = {
-      kind: "resize",
-      id: s.id,
-      handle,
-      sx: e.clientX,
-      sy: e.clientY,
-      x0: s.x,
-      y0: s.y,
-      w0: s.w,
-      h0: s.h,
-      ratio: s.h > 0 ? s.w / s.h : 1,
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    begin(
+      {
+        kind: "resize",
+        id: s.id,
+        handle,
+        sx: e.clientX,
+        sy: e.clientY,
+        x0: s.x,
+        y0: s.y,
+        w0: s.w,
+        h0: s.h,
+        ratio: s.h > 0 ? s.w / s.h : 1,
+      },
+      e,
+      true,
+    );
   };
 
   const rotateDown = (s: ShapeItem) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -454,8 +521,7 @@ export default function ShapeLayer({
     if (!b) return;
     const cx = b.left + ((s.x + s.w / 2) / 100) * b.width;
     const cy = b.top + ((s.y + s.h / 2) / 100) * b.height;
-    gesture.current = { kind: "rotate", id: s.id, cx, cy, start: Math.atan2(e.clientY - cy, e.clientX - cx), rot0: s.rot };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    begin({ kind: "rotate", id: s.id, cx, cy, start: Math.atan2(e.clientY - cy, e.clientX - cx), rot0: s.rot }, e, true);
   };
 
   /** resize / rotate handles of the multi-selection (group) frame */
@@ -466,8 +532,7 @@ export default function ShapeLayer({
     if (!ids.length) return;
     const start = snapshot(ids);
     const bounds = selectionBounds(memberList(ids, start).map((m) => m.geo));
-    gesture.current = { kind: "set", mode: "resize", ids, handle, start, sx: e.clientX, sy: e.clientY, bounds };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    begin({ kind: "set", mode: "resize", ids, handle, start, sx: e.clientX, sy: e.clientY, bounds }, e, true);
   };
 
   const setRotateDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -479,30 +544,51 @@ export default function ShapeLayer({
     if (!ids.length) return;
     const start = snapshot(ids);
     const bd = selectionBounds(memberList(ids, start).map((m) => m.geo));
-    gesture.current = {
-      kind: "set",
-      mode: "rotate",
-      ids,
-      start,
-      cx: b.left + ((bd.x + bd.w / 2) / 100) * b.width,
-      cy: b.top + ((bd.y + bd.h / 2) / 100) * b.height,
-      startAngle: Math.atan2(e.clientY - (b.top + ((bd.y + bd.h / 2) / 100) * b.height), e.clientX - (b.left + ((bd.x + bd.w / 2) / 100) * b.width)),
-      board: { left: b.left, top: b.top, width: b.width, height: b.height },
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    begin(
+      {
+        kind: "set",
+        mode: "rotate",
+        ids,
+        start,
+        cx: b.left + ((bd.x + bd.w / 2) / 100) * b.width,
+        cy: b.top + ((bd.y + bd.h / 2) / 100) * b.height,
+        startAngle: Math.atan2(e.clientY - (b.top + ((bd.y + bd.h / 2) / 100) * b.height), e.clientX - (b.left + ((bd.x + bd.w / 2) / 100) * b.width)),
+        board: { left: b.left, top: b.top, width: b.width, height: b.height },
+      },
+      e,
+      true,
+    );
   };
 
-  const move = (e: React.PointerEvent<HTMLDivElement>) => {
-    const g = gesture.current;
+  const applyGesture = (e: PointerEvent) => {
+    const s = drag.current;
+    if (!s?.isPointerDown) return;
+    if (e.pointerId !== s.pointerId) return;
+    // hover / leftover sessions must never move anything
+    if (e.buttons === 0) {
+      endDrag(true);
+      return;
+    }
+
+    const g = s.gesture;
+    const isMove = g.kind === "move" || (g.kind === "set" && g.mode === "move");
+    if (!s.isDragging) {
+      if (isMove) {
+        const dist = Math.hypot(e.clientX - s.dragStartX, e.clientY - s.dragStartY);
+        if (dist < DRAG_THRESHOLD_PX) return;
+      }
+      s.isDragging = true;
+    }
+    if (!s.isDragging) return;
+
     const b = board();
-    if (!g || !b) return;
-    e.preventDefault();
+    if (!b) return;
     const freeMove = e.altKey; // Alt = ignore all snapping
 
     if (g.kind === "set") {
       if (g.mode === "move") {
-        const dx = ((e.clientX - g.px0) / b.width) * 100;
-        const dy = ((e.clientY - g.py0) / b.height) * 100;
+        const dx = ((e.clientX - s.dragStartX) / b.width) * 100;
+        const dy = ((e.clientY - s.dragStartY) / b.height) * 100;
         emitUpdates(moveMembers(memberList(g.ids, g.start), dx, dy));
         return;
       }
@@ -537,8 +623,8 @@ export default function ShapeLayer({
 
     if (g.kind === "move") {
       const me = shapes.find((x) => x.id === g.id);
-      let x = ((e.clientX - g.dx - b.left) / b.width) * 100;
-      let y = ((e.clientY - g.dy - b.top) / b.height) * 100;
+      let x = g.initialObjectX + ((e.clientX - s.dragStartX) / b.width) * 100;
+      let y = g.initialObjectY + ((e.clientY - s.dragStartY) / b.height) * 100;
       let gx: number | null = null;
       let gy: number | null = null;
       if (!freeMove) {
@@ -625,26 +711,8 @@ export default function ShapeLayer({
     onChange?.(g.id, { rot: deg });
   };
 
-  const up = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (gesture.current) {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        /* already released */
-      }
-      const t = e.target as Element | null;
-      if (t && typeof t.releasePointerCapture === "function") {
-        try {
-          t.releasePointerCapture(e.pointerId);
-        } catch {
-          /* not held by the child */
-        }
-      }
-      onGestureEnd?.();
-    }
-    gesture.current = null;
-    setGuides({ x: null, y: null });
-  };
+  applyGestureRef.current = applyGesture;
+  endDragRef.current = endDrag;
 
   const handleBase: CSSProperties = {
     position: "absolute",
@@ -694,9 +762,8 @@ export default function ShapeLayer({
             key={s.id}
             data-shape={s.id}
             onPointerDown={down(s)}
-            onPointerMove={move}
-            onPointerUp={up}
-            onPointerCancel={up}
+            onPointerUp={() => endDrag(true)}
+            onPointerCancel={() => endDrag(true)}
             onDoubleClick={
               clickable && s.groupId
                 ? (e) => {
@@ -862,9 +929,8 @@ export default function ShapeLayer({
                       data-handle={h}
                       title="Drag to resize · Shift keeps ratio · Alt disables snapping"
                       onPointerDown={resizeDown(s, h)}
-                      onPointerMove={move}
-                      onPointerUp={up}
-                      onPointerCancel={up}
+                      onPointerUp={() => endDrag(true)}
+                      onPointerCancel={() => endDrag(true)}
                       style={{
                         ...handleBase,
                         ...style,
@@ -878,9 +944,8 @@ export default function ShapeLayer({
                     data-rotate=""
                     title="Rotate · Shift snaps to 15°"
                     onPointerDown={rotateDown(s)}
-                    onPointerMove={move}
-                    onPointerUp={up}
-                    onPointerCancel={up}
+                    onPointerUp={() => endDrag(true)}
+                    onPointerCancel={() => endDrag(true)}
                     style={{
                       ...handleBase,
                       left: "50%",
@@ -976,9 +1041,8 @@ export default function ShapeLayer({
                   data-handle={h}
                   title="Drag to resize the whole selection"
                   onPointerDown={setResizeDown(h)}
-                  onPointerMove={move}
-                  onPointerUp={up}
-                  onPointerCancel={up}
+                  onPointerUp={() => endDrag(true)}
+                  onPointerCancel={() => endDrag(true)}
                   style={{
                     ...handleBase,
                     ...style,
@@ -991,9 +1055,8 @@ export default function ShapeLayer({
                 data-rotate=""
                 title="Rotate the whole selection · Shift snaps to 15°"
                 onPointerDown={setRotateDown}
-                onPointerMove={move}
-                onPointerUp={up}
-                onPointerCancel={up}
+                onPointerUp={() => endDrag(true)}
+                onPointerCancel={() => endDrag(true)}
                 style={{
                   ...handleBase,
                   left: "50%",
