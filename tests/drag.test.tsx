@@ -573,25 +573,8 @@ test("group frame: hover then release does not move the set", () => {
   record("group freezes after release", shapeWrites() === 0, `writes=${shapeWrites()}`);
 });
 
-test("grouping / ungrouping via the frame chips does not shift anything", () => {
-  const before = { ...at(SHAPE.id) };
-  const board = boardEl();
-  down(board, { x: 1, y: 1 });
-  held(board, { x: 900, y: 640 });
-  up(board, { x: 900, y: 640 });
-  clearWrites();
-  const chip = doc.querySelector('[data-chip="group"]') as HTMLElement | null;
-  if (!chip) {
-    record("group chip available on the selection frame", false, "no chip");
-    return;
-  }
-  record("group chip available on the selection frame", true, "");
-  down(chip, centre(chip)); // pointerdown on a chip must be inert
-  up(chip, centre(chip));
-  chip.click();
-  for (let i = 0; i < 8; i++) hover(chip, { x: 10 + i * 12, y: 10 });
-  hover(shapeEl(SHAPE.id), { x: 200, y: 200 });
-  record("grouping moved nothing", shapeWrites() === 0 && samePos(SHAPE.id, before), `writes=${shapeWrites()}`);
+test("selection frame leaves grouping actions to contextual toolbar", () => {
+  record("old canvas grouping chips are removed", !doc.querySelector('[data-chip="group"], [data-chip="ungroup"]'), "");
 });
 
 /* ============ 5. existing features must survive the rewrite ============== */

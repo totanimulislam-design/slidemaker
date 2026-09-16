@@ -51,6 +51,7 @@ interface Props {
   onLayoutChange?: (id: ElementId, patch: Partial<Box>) => void;
   selected?: ElementId | null;
   onSelect?: (id: ElementId | null) => void;
+  onSurfaceSelect?: (surface: "frame" | "background") => void;
   /** deck-wide shapes rendered beneath the slide's own */
   globalShapes?: ShapeItem[];
   /** ids of the selected drawn items (multi-select / whole groups) */
@@ -90,6 +91,7 @@ function SlideBase({
   onLayoutChange,
   selected,
   onSelect,
+  onSurfaceSelect,
   globalShapes,
   selectedShapeIds,
   onSelectShapeIds,
@@ -297,7 +299,7 @@ function SlideBase({
       // click = select only; the box keeps the exact position it had
       onSelect?.(id);
       onSelectShapeIds?.([]);
-      onField?.(FIELD_OF[id]);
+      onField?.(null);
     }
     if (!movable || e.button !== 0) return;
     // snapshot the visual position for a possible drag — no write happens here
@@ -333,6 +335,7 @@ function SlideBase({
     ? (id: ElementId) => ({
         "data-el": id,
         onPointerDown: startDrag(id),
+        onDoubleClick: () => onField?.(FIELD_OF[id]),
         onPointerUp: end,
         onPointerCancel: end,
         onPointerLeave: leave,
@@ -518,6 +521,7 @@ function SlideBase({
         onSelectShapeIds?.([]);
         onSelect?.(null);
         onField?.(null);
+        onSurfaceSelect?.("background");
         return;
       }
       const r = { x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) };
@@ -575,6 +579,7 @@ function SlideBase({
 
   return (
     <div
+      onPointerDown={e => { if (editable && !(e.target as HTMLElement).closest("[data-board]")) onSurfaceSelect?.("frame"); }}
       className={editable ? "slide-editable" : undefined}
       style={{
         width: SLIDE_W,

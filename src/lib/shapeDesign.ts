@@ -56,6 +56,7 @@ export function itemStyle(s: ShapeItem): CSSProperties {
 export function textStyle(s: ShapeItem): CSSProperties {
   const base: CSSProperties = {
     fontFamily: s.fontFamily ? `'${s.fontFamily}', sans-serif` : undefined,
+    textDecoration: [s.underline && "underline", s.strikethrough && "line-through"].filter(Boolean).join(" ") || "none",
     letterSpacing: s.letterSpacing ? `${s.letterSpacing}px` : undefined,
     lineHeight: s.lineHeight ?? 1.4,
     textTransform: s.uppercase ? "uppercase" : undefined,
