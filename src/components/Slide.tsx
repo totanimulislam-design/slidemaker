@@ -15,6 +15,7 @@ import type { BackgroundSettings } from "../lib/types";
 import { DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
 import { computeFrameCss } from "../lib/frameDesigns";
 import { resolveFrameImageSrc } from "../lib/frameImages";
+import { boxesOverlap } from "../lib/groups";
 import { HANDLES, applyMove, applyResize, applyRotate, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
 import { measureElement } from "../lib/layoutMeasure";
 import MathText from "./MathText";
@@ -51,9 +52,16 @@ interface Props {
   onSelect?: (id: ElementId | null) => void;
   /** deck-wide shapes rendered beneath the slide's own */
   globalShapes?: ShapeItem[];
-  selectedShape?: string | null;
-  onSelectShape?: (id: string | null) => void;
+  /** ids of the selected drawn items (multi-select / whole groups) */
+  selectedShapeIds?: string[];
+  onSelectShapeIds?: (ids: string[]) => void;
   onShapeChange?: (id: string, patch: Partial<ShapeItem>) => void;
+  /** batched patches from group / multi-selection gestures */
+  onShapesChange?: (updates: { id: string; patch: Partial<ShapeItem> }[]) => void;
+  onGroupShapes?: (ids: string[]) => void;
+  onUngroupShapes?: (ids: string[]) => void;
+  /** Alt+click on any layer: select the layer beneath it (overlap navigation) */
+  onLayerCycle?: (clientX: number, clientY: number) => void;
   /** called when a drag/resize/rotate finishes — closes the undo coalescing window */
   onGestureEnd?: () => void;
   /** effective background for this slide (deck default merged with the slide override) */
@@ -82,15 +90,22 @@ function SlideBase({
   selected,
   onSelect,
   globalShapes,
-  selectedShape,
-  onSelectShape,
+  selectedShapeIds,
+  onSelectShapeIds,
   onShapeChange,
+  onShapesChange,
+  onGroupShapes,
+  onUngroupShapes,
+  onLayerCycle,
   onGestureEnd,
   background,
 }: Props) {
   const boardRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<FreeGesture | null>(null);
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
+  // drag-marquee (rubber-band selection) state
+  const marq = useRef<{ x0: number; y0: number; x1: number; y1: number; px: number; py: number; moved: boolean } | null>(null);
+  const [marqRect, setMarqRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const editable = !!onField;
   const movable = !!onLayoutChange;
@@ -199,8 +214,13 @@ function SlideBase({
   const startDrag = (id: ElementId) => (e: React.PointerEvent<HTMLDivElement>) => {
     if (editable) {
       e.stopPropagation();
+      if (e.altKey) {
+        // Alt+click digs to the layer beneath this element
+        onLayerCycle?.(e.clientX, e.clientY);
+        return;
+      }
       onSelect?.(id);
-      onSelectShape?.(null);
+      onSelectShapeIds?.([]);
       onField?.(FIELD_OF[id]);
     }
     if (!movable || e.button !== 0) return;
@@ -432,6 +452,69 @@ function SlideBase({
     : undefined;
   const allShapes = [...(globalShapes ?? []), ...(slide.shapes ?? [])];
 
+  /* ---------------------- drag-marquee selection ---------------------- */
+  const pctPoint = (clientX: number, clientY: number) => {
+    const b = boardRef.current?.getBoundingClientRect();
+    if (!b || !b.width || !b.height) return null;
+    return { x: ((clientX - b.left) / b.width) * 100, y: ((clientY - b.top) / b.height) * 100 };
+  };
+  const boardDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!editable || e.button !== 0) return;
+    const p = pctPoint(e.clientX, e.clientY);
+    if (!p) return;
+    marq.current = { x0: p.x, y0: p.y, x1: p.x, y1: p.y, px: e.clientX, py: e.clientY, moved: false };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* capture unsupported — marquee just won't extend past the board */
+    }
+  };
+  const boardMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const m = marq.current;
+    if (!m) return;
+    if (!m.moved && Math.hypot(e.clientX - m.px, e.clientY - m.py) < 4) return;
+    m.moved = true;
+    const p = pctPoint(e.clientX, e.clientY);
+    if (!p) return;
+    m.x1 = p.x;
+    m.y1 = p.y;
+    setMarqRect({ x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) });
+    e.preventDefault();
+  };
+  const boardUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const m = marq.current;
+    marq.current = null;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    if (!m) return;
+    if (!m.moved) {
+      // a plain click on the empty slide clears the selection (element, shape, and any field)
+      setMarqRect(null);
+      onSelectShapeIds?.([]);
+      onSelect?.(null);
+      onField?.(null);
+      return;
+    }
+    const r = { x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) };
+    setMarqRect(null);
+    // every shape (locked included) whose box touches the band joins the set;
+    // group members are pulled in together
+    const hit = new Set<string>();
+    allShapes.forEach((s) => {
+      if (boxesOverlap(r, { x: s.x, y: s.y, w: s.w, h: s.h })) {
+        hit.add(s.id);
+        if (s.groupId) allShapes.forEach((o) => o.groupId === s.groupId && hit.add(o.id));
+      }
+    });
+    const ids = allShapes.filter((s) => hit.has(s.id)).map((s) => s.id);
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+    const base = additive ? (selectedShapeIds ?? []) : [];
+    onSelectShapeIds?.([...new Set([...base, ...ids])]);
+  };
+
   const bodyStack = boxStack(theme, "question");
   /**
    * Option text only — applied directly to the element that paints an option's
@@ -516,13 +599,10 @@ function SlideBase({
         <div
           ref={boardRef}
           data-board=""
-          onPointerDown={() => {
-            if (!editable) return;
-            // clicking empty slide clears the selection (element, shape, and any field)
-            onSelectShape?.(null);
-            onSelect?.(null);
-            onField?.(null);
-          }}
+          onPointerDown={boardDown}
+          onPointerMove={boardMove}
+          onPointerUp={boardUp}
+          onPointerCancel={boardUp}
           style={{
             width: "100%",
             height: "100%",
@@ -556,6 +636,25 @@ function SlideBase({
               style={{
                 position: "absolute", left: 0, right: 0, top: `${guides.y}%`,
                 height: 1, background: "rgba(255,214,51,.85)", zIndex: BAND_UI, pointerEvents: "none",
+              }}
+            />
+          )}
+
+          {/* rubber-band marquee while dragging over empty slide */}
+          {editable && marqRect && marqRect.w > 0.2 && marqRect.h > 0.2 && (
+            <div
+              data-marquee=""
+              style={{
+                position: "absolute",
+                left: `${marqRect.x}%`,
+                top: `${marqRect.y}%`,
+                width: `${marqRect.w}%`,
+                height: `${marqRect.h}%`,
+                border: "1.5px dashed rgba(94,242,255,.95)",
+                background: "rgba(94,242,255,.10)",
+                pointerEvents: "none",
+                zIndex: BAND_UI + 30,
+                boxSizing: "border-box",
               }}
             />
           )}
@@ -783,9 +882,13 @@ function SlideBase({
               shapes={allShapes}
               boardRef={boardRef}
               editable={editable}
-              selectedId={selectedShape ?? null}
-              onSelect={onSelectShape}
+              selectedIds={selectedShapeIds ?? []}
+              onSelect={(ids) => onSelectShapeIds?.(ids)}
               onChange={onShapeChange}
+              onBatchChange={onShapesChange}
+              onGroup={onGroupShapes}
+              onUngroup={onUngroupShapes}
+              onLayerCycle={onLayerCycle}
               fontFamily={bodyStack}
               snap={shapeSnap}
               smartGuides={theme.smartGuides ?? true}
