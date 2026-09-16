@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useRef, useState, type CSSProperties } from "react";
 import type { Box, DeckHeader, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { shade, withAlpha } from "../lib/color";
 import { isWideNumberStyle, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
@@ -16,7 +16,8 @@ import { DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
 import { computeFrameCss } from "../lib/frameDesigns";
 import { resolveFrameImageSrc } from "../lib/frameImages";
 import { boxesOverlap } from "../lib/groups";
-import { HANDLES, applyMove, applyResize, applyRotate, DRAG_THRESHOLD_PX, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
+import { HANDLES, applyMove, applyResize, applyRotate, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
+import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
 import { measureElement } from "../lib/layoutMeasure";
 import MathText from "./MathText";
 import ShapeLayer from "./ShapeLayer";
@@ -101,23 +102,12 @@ function SlideBase({
   background,
 }: Props) {
   const boardRef = useRef<HTMLDivElement>(null);
-  type PointerDrag = {
-    isPointerDown: boolean;
-    isDragging: boolean;
-    pointerId: number;
-    dragStartX: number;
-    dragStartY: number;
-    initialObjectX: number;
-    initialObjectY: number;
-    gesture: FreeGesture;
-  };
-  const drag = useRef<PointerDrag | null>(null);
-  const bound = useRef(false);
-  const applyGestureRef = useRef<(e: PointerEvent) => void>(() => {});
-  const endDragRef = useRef<(commit?: boolean) => void>(() => {});
+  /** the gesture the element pointer session drives; null = no gesture armed */
+  const gesture = useRef<FreeGesture | null>(null);
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
   // drag-marquee (rubber-band selection) state
-  const marq = useRef<{ x0: number; y0: number; x1: number; y1: number; px: number; py: number; moved: boolean } | null>(null);
+  const marq = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const marqActive = useRef(false);
   const [marqRect, setMarqRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const editable = !!onField;
@@ -224,59 +214,76 @@ function SlideBase({
       }
     : undefined;
 
-  const onDocMove = useRef((e: PointerEvent) => applyGestureRef.current(e)).current;
-  const onDocUp = useRef(() => endDragRef.current(true)).current;
+  /* ------------------------------ gestures ------------------------------- */
+  /**
+   * The single write path for a built-in (deck) element. The pointer session
+   * calls it ONLY while `st.isDragging === true`, which requires a left
+   * pointer-down on the element plus pointer travel past DRAG_THRESHOLD_PX.
+   * Hovering, entering/leaving, selecting or a plain click never reach it.
+   */
+  const applyGesture = (e: PointerEvent, st: Readonly<DragState>) => {
+    const g = gesture.current;
+    if (!g) return;
+    const b = boardRef.current?.getBoundingClientRect();
+    if (!b) return;
+    const id = g.id as ElementId;
+    const freeMove = e.altKey; // Alt = ignore all snapping
+    const dx = ((e.clientX - st.dragStartX) / b.width) * 100;
+    const dy = ((e.clientY - st.dragStartY) / b.height) * 100;
 
-  const unbindDoc = () => {
-    if (!bound.current) return;
-    bound.current = false;
-    window.removeEventListener("pointermove", onDocMove);
-    window.removeEventListener("pointerup", onDocUp);
-    window.removeEventListener("pointercancel", onDocUp);
-    window.removeEventListener("blur", onDocUp);
-  };
-
-  const bindDoc = () => {
-    if (bound.current) return;
-    bound.current = true;
-    window.addEventListener("pointermove", onDocMove);
-    window.addEventListener("pointerup", onDocUp);
-    window.addEventListener("pointercancel", onDocUp);
-    window.addEventListener("blur", onDocUp);
-  };
-
-  const endDrag = (commit = true) => {
-    const s = drag.current;
-    unbindDoc();
-    if (!s) return;
-    drag.current = null;
-    frozenRect.current = null;
-    if (commit && s.isDragging) onGestureEnd?.();
-    setGuides({ x: null, y: null });
-  };
-
-  useEffect(() => {
-    return () => endDragRef.current(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const begin = (gesture: FreeGesture, e: React.PointerEvent, startDragging: boolean, initial: { x: number; y: number }) => {
-    drag.current = {
-      isPointerDown: true,
-      isDragging: startDragging,
-      pointerId: e.pointerId,
-      dragStartX: e.clientX,
-      dragStartY: e.clientY,
-      initialObjectX: initial.x,
-      initialObjectY: initial.y,
-      gesture,
-    };
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* window listeners still drive the drag */
+    if (g.kind === "move") {
+      const r = freeRectOf(id); // frozen size → stable snapping while dragging
+      const res = applyMove(r, st.initialObjectX + dx, st.initialObjectY + dy, {
+        grid: gridSnap,
+        others: theme.smartGuides === false ? undefined : snapTargets(`element:${id}`),
+        free: freeMove,
+      });
+      setGuides({ x: res.gx, y: res.gy });
+      onLayoutChange?.(id, { x: res.x, y: res.y });
+      return;
     }
-    bindDoc();
+    if (g.kind === "resize") {
+      const keepRatio = id === "logo" ? !e.shiftKey : e.shiftKey;
+      const r = applyResize(g, dx, dy, { keepRatio, grid: gridSnap, free: freeMove, minW: 2, minH: 2 });
+      onLayoutChange?.(id, { x: r.x, y: r.y, w: r.w, h: r.h });
+      return;
+    }
+    onLayoutChange?.(id, { rot: applyRotate(g, e.clientX, e.clientY, e.shiftKey) });
+  };
+
+  /**
+   * One guarded session for every built-in element AND its handles. A press
+   * only arms it; the threshold decides click-vs-drag; every possible release
+   * path (up / cancel / leave / lost capture / blur / hidden tab) disarms it, so
+   * a gesture that the browser never let us finish cannot keep following the
+   * pointer afterwards.
+   */
+  const { begin, end, handleLeave } = usePointerDrag({
+    threshold: DRAG_THRESHOLD_PX,
+    enabled: () => editable && movable,
+    onStart: () => {
+      // aligned deck elements are promoted to free mode on the FIRST real drag
+      // movement — never when they are merely clicked or when a handle is pressed
+      const g = gesture.current;
+      if (g) ensureFree(g.id as ElementId);
+    },
+    onMove: applyGesture,
+    onEnd: (moved) => {
+      gesture.current = null;
+      frozenRect.current = null;
+      if (moved) onGestureEnd?.();
+      setGuides({ x: null, y: null });
+    },
+  });
+
+  /** releasing / leaving the pointer over the element ends the gesture cleanly */
+  const leave = (e: React.PointerEvent) => handleLeave({ pointerId: e.pointerId, buttons: e.buttons });
+
+  /** arm a possible gesture; a click that never moves simply never starts one */
+  const arm = (g: FreeGesture, e: React.PointerEvent, initial: { x: number; y: number }) => {
+    // arm the session first: it may finish a stale gesture, which clears ours
+    if (!begin(e, initial)) return;
+    gesture.current = g;
   };
 
   const startDrag = (id: ElementId) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -287,21 +294,25 @@ function SlideBase({
         onLayerCycle?.(e.clientX, e.clientY);
         return;
       }
+      // click = select only; the box keeps the exact position it had
       onSelect?.(id);
       onSelectShapeIds?.([]);
       onField?.(FIELD_OF[id]);
     }
     if (!movable || e.button !== 0) return;
-    // snapshot visual position only — do NOT promote to free / move on click
+    // snapshot the visual position for a possible drag — no write happens here
     const r = freeRectOf(id);
-    begin({ kind: "move", id, dx: 0, dy: 0 }, e, false, { x: r.x, y: r.y });
+    arm({ kind: "move", id, dx: 0, dy: 0 }, e, { x: r.x, y: r.y });
   };
 
   const startResize = (id: ElementId, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!movable || e.button !== 0) return;
-    const r = ensureFree(id);
-    begin({ kind: "resize", id, handle, sx: e.clientX, sy: e.clientY, start: r, ratio: r.h > 0 ? r.w / r.h : 1 }, e, true, { x: r.x, y: r.y });
+    const r = freeRectOf(id);
+    arm({ kind: "resize", id, handle, sx: e.clientX, sy: e.clientY, start: r, ratio: r.h > 0 ? r.w / r.h : 1 }, e, {
+      x: r.x,
+      y: r.y,
+    });
   };
 
   const startRotate = (id: ElementId) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -309,71 +320,22 @@ function SlideBase({
     if (!movable || e.button !== 0) return;
     const b = boardRef.current?.getBoundingClientRect();
     if (!b) return;
-    const r = ensureFree(id);
+    const r = freeRectOf(id);
     const cx = b.left + ((r.x + r.w / 2) / 100) * b.width;
     const cy = b.top + ((r.y + r.h / 2) / 100) * b.height;
-    begin({ kind: "rotate", id, cx, cy, start: Math.atan2(e.clientY - cy, e.clientX - cx), rot0: r.rot }, e, true, { x: r.x, y: r.y });
+    arm({ kind: "rotate", id, cx, cy, start: Math.atan2(e.clientY - cy, e.clientX - cx), rot0: r.rot }, e, {
+      x: r.x,
+      y: r.y,
+    });
   };
-
-  const applyGesture = (e: PointerEvent) => {
-    const s = drag.current;
-    if (!s?.isPointerDown) return;
-    if (e.pointerId !== s.pointerId) return;
-    if (e.buttons === 0) {
-      endDrag(true);
-      return;
-    }
-
-    const g = s.gesture;
-    if (!s.isDragging) {
-      if (g.kind === "move") {
-        const dist = Math.hypot(e.clientX - s.dragStartX, e.clientY - s.dragStartY);
-        if (dist < DRAG_THRESHOLD_PX) return;
-        // first real drag: promote aligned deck elements to free mode once
-        ensureFree(g.id as ElementId);
-      }
-      s.isDragging = true;
-    }
-    if (!s.isDragging) return;
-
-    const b = boardRef.current?.getBoundingClientRect();
-    if (!b) return;
-    const id = g.id as ElementId;
-    const freeMove = e.altKey;
-
-    if (g.kind === "move") {
-      const r = freeRectOf(id); // frozen size → stable snapping while dragging
-      const rawX = s.initialObjectX + ((e.clientX - s.dragStartX) / b.width) * 100;
-      const rawY = s.initialObjectY + ((e.clientY - s.dragStartY) / b.height) * 100;
-      const res = applyMove(r, rawX, rawY, {
-        grid: gridSnap,
-        others: theme.smartGuides === false ? undefined : snapTargets(`element:${id}`),
-        free: freeMove,
-      });
-      setGuides({ x: res.gx, y: res.gy });
-      onLayoutChange?.(id, { x: res.x, y: res.y });
-      return;
-    }
-    if (g.kind === "resize") {
-      const dx = ((e.clientX - g.sx) / b.width) * 100;
-      const dy = ((e.clientY - g.sy) / b.height) * 100;
-      const keepRatio = id === "logo" ? !e.shiftKey : e.shiftKey;
-      const r = applyResize(g, dx, dy, { keepRatio, grid: gridSnap, free: freeMove, minW: 2, minH: 2 });
-      onLayoutChange?.(id, { x: r.x, y: r.y, w: r.w, h: r.h });
-      return;
-    }
-    onLayoutChange?.(id, { rot: applyRotate(g, e.clientX, e.clientY, e.shiftKey) });
-  };
-
-  applyGestureRef.current = applyGesture;
-  endDragRef.current = endDrag;
 
   const handlers = editable
     ? (id: ElementId) => ({
         "data-el": id,
         onPointerDown: startDrag(id),
-        onPointerUp: () => endDrag(true),
-        onPointerCancel: () => endDrag(true),
+        onPointerUp: end,
+        onPointerCancel: end,
+        onPointerLeave: leave,
       })
     : (id: ElementId) => ({ "data-el": id });
 
@@ -420,18 +382,20 @@ function SlideBase({
         {HANDLES.map(({ h, cursor, style: hs }) => (
           <div
             key={h}
+            data-handle={h}
             title="Drag to resize · Shift keeps ratio · Alt disables snapping"
             onPointerDown={startResize(id, h)}
-            onPointerUp={() => endDrag(true)}
-            onPointerCancel={() => endDrag(true)}
+            onPointerUp={end}
+            onPointerCancel={end}
             style={{ ...handleBase, ...hs, cursor, background: "#5ef2ff", borderRadius: h.length === 1 ? 8 : 3 }}
           />
         ))}
         <div
+          data-rotate=""
           title="Rotate · Shift snaps to 15°"
           onPointerDown={startRotate(id)}
-          onPointerUp={() => endDrag(true)}
-          onPointerCancel={() => endDrag(true)}
+          onPointerUp={end}
+          onPointerCancel={end}
           style={{ ...handleBase, left: "50%", top: -34, marginLeft: -8, borderRadius: "50%", background: "#5ef2ff", cursor: "grab" }}
         />
         <div style={{ position: "absolute", left: "50%", top: -18, width: 2, height: 16, marginLeft: -1, background: "rgba(94,242,255,.8)" }} />
@@ -521,62 +485,69 @@ function SlideBase({
     if (!b || !b.width || !b.height) return null;
     return { x: ((clientX - b.left) / b.width) * 100, y: ((clientY - b.top) / b.height) * 100 };
   };
+  /**
+   * The rubber band runs through the same guarded session: pointer-down on the
+   * empty board arms it, only travel past the threshold turns it into a marquee
+   * (a plain click just clears the selection) and every release path ends it —
+   * so a stale marquee can never keep chasing the cursor either.
+   */
+  const { begin: beginMarquee, end: endMarquee, handleLeave: leaveMarquee } = usePointerDrag({
+    threshold: DRAG_THRESHOLD_PX,
+    enabled: () => editable,
+    onStart: () => {
+      marqActive.current = true;
+    },
+    onMove: (e) => {
+      const m = marq.current;
+      if (!m) return;
+      const p = pctPoint(e.clientX, e.clientY);
+      if (!p) return;
+      m.x1 = p.x;
+      m.y1 = p.y;
+      setMarqRect({ x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) });
+    },
+    onEnd: (moved, ev) => {
+      const m = marq.current;
+      marq.current = null;
+      const wasMarquee = marqActive.current;
+      marqActive.current = false;
+      setMarqRect(null);
+      if (!m) return;
+      if (!wasMarquee || !moved) {
+        // a plain click on the empty slide clears the selection (element, shape, and any field)
+        onSelectShapeIds?.([]);
+        onSelect?.(null);
+        onField?.(null);
+        return;
+      }
+      const r = { x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) };
+      // every shape (locked included) whose box touches the band joins the set;
+      // group members are pulled in together
+      const ids: string[] = [];
+      const hit = new Set<string>();
+      allShapes.forEach((sh) => {
+        if (boxesOverlap(r, { x: sh.x, y: sh.y, w: sh.w, h: sh.h })) {
+          hit.add(sh.id);
+          if (sh.groupId) allShapes.forEach((o) => o.groupId === sh.groupId && hit.add(o.id));
+        }
+      });
+      allShapes.forEach((sh) => hit.has(sh.id) && ids.push(sh.id));
+      const pe = ev as PointerEvent | undefined;
+      const additive = !!pe && (pe.shiftKey || pe.ctrlKey || pe.metaKey);
+      const base = additive ? (selectedShapeIds ?? []) : [];
+      onSelectShapeIds?.([...new Set([...base, ...ids])]);
+    },
+  });
+
   const boardDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!editable || e.button !== 0) return;
     const p = pctPoint(e.clientX, e.clientY);
     if (!p) return;
-    marq.current = { x0: p.x, y0: p.y, x1: p.x, y1: p.y, px: e.clientX, py: e.clientY, moved: false };
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* capture unsupported — marquee just won't extend past the board */
-    }
+    marq.current = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+    marqActive.current = false;
+    if (!beginMarquee(e, p)) marq.current = null;
   };
-  const boardMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const m = marq.current;
-    if (!m) return;
-    if (!m.moved && Math.hypot(e.clientX - m.px, e.clientY - m.py) < 4) return;
-    m.moved = true;
-    const p = pctPoint(e.clientX, e.clientY);
-    if (!p) return;
-    m.x1 = p.x;
-    m.y1 = p.y;
-    setMarqRect({ x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) });
-    e.preventDefault();
-  };
-  const boardUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    const m = marq.current;
-    marq.current = null;
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      /* already released */
-    }
-    if (!m) return;
-    if (!m.moved) {
-      // a plain click on the empty slide clears the selection (element, shape, and any field)
-      setMarqRect(null);
-      onSelectShapeIds?.([]);
-      onSelect?.(null);
-      onField?.(null);
-      return;
-    }
-    const r = { x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) };
-    setMarqRect(null);
-    // every shape (locked included) whose box touches the band joins the set;
-    // group members are pulled in together
-    const hit = new Set<string>();
-    allShapes.forEach((s) => {
-      if (boxesOverlap(r, { x: s.x, y: s.y, w: s.w, h: s.h })) {
-        hit.add(s.id);
-        if (s.groupId) allShapes.forEach((o) => o.groupId === s.groupId && hit.add(o.id));
-      }
-    });
-    const ids = allShapes.filter((s) => hit.has(s.id)).map((s) => s.id);
-    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
-    const base = additive ? (selectedShapeIds ?? []) : [];
-    onSelectShapeIds?.([...new Set([...base, ...ids])]);
-  };
+  const boardLeave = (e: React.PointerEvent<HTMLDivElement>) => leaveMarquee({ pointerId: e.pointerId, buttons: e.buttons });
 
   const bodyStack = boxStack(theme, "question");
   /**
@@ -663,9 +634,9 @@ function SlideBase({
           ref={boardRef}
           data-board=""
           onPointerDown={boardDown}
-          onPointerMove={boardMove}
-          onPointerUp={boardUp}
-          onPointerCancel={boardUp}
+          onPointerUp={endMarquee}
+          onPointerCancel={endMarquee}
+          onPointerLeave={boardLeave}
           style={{
             width: "100%",
             height: "100%",

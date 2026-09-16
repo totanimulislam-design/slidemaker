@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "../utils/cn";
+import { DRAG_THRESHOLD_PX, usePointerDrag } from "../lib/dragSession";
 
 /**
  * A dialog whose size can be changed three ways:
@@ -55,8 +56,6 @@ export default function ResizableDialog({
 }: Props) {
   const [size, setSize] = useState<Size>(() => readSize(storageKey, initial));
   const [maxed, setMaxed] = useState(false);
-  const drag = useRef<{ sx: number; sy: number; w: number; h: number; ex: number; ey: number } | null>(null);
-
   const viewport = () => ({ w: window.innerWidth - 32, h: window.innerHeight - 32 });
 
   useEffect(() => {
@@ -75,42 +74,37 @@ export default function ResizableDialog({
   }, []);
 
   /** ex/ey ∈ {-1,0,1}: which edges move (1 = right/bottom, -1 = left/top) */
-  const start = (ex: number, ey: number) => (e: React.PointerEvent<HTMLDivElement>) => {
-    if (maxed) return;
-    e.preventDefault();
-    drag.current = { sx: e.clientX, sy: e.clientY, w: size.w, h: size.h, ex, ey };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-  const move = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      const d = drag.current;
-      if (!d) return;
+  const edge = useRef<{ ex: number; ey: number }>({ ex: 0, ey: 0 });
+
+  /**
+   * Same guarded session the slide board uses: the size only ever follows the
+   * pointer between a pointer-down on a grip and its release, so a grip can not
+   * start resizing the dialog on hover if a release event was ever missed.
+   */
+  const { begin, end } = usePointerDrag({
+    threshold: DRAG_THRESHOLD_PX,
+    enabled: () => !maxed,
+    onMove: (e, st) => {
       const v = viewport();
       // the dialog is centred, so dragging one edge changes width by 2×
-      const dw = (e.clientX - d.sx) * d.ex * 2;
-      const dh = (e.clientY - d.sy) * d.ey * 2;
+      const dw = (e.clientX - st.dragStartX) * edge.current.ex * 2;
+      const dh = (e.clientY - st.dragStartY) * edge.current.ey * 2;
       setSize({
-        w: Math.max(min.w, Math.min(v.w, d.w + dw)),
-        h: Math.max(min.h, Math.min(v.h, d.h + dh)),
+        w: Math.max(min.w, Math.min(v.w, st.initialObjectX + dw)),
+        h: Math.max(min.h, Math.min(v.h, st.initialObjectY + dh)),
       });
     },
-    [min.w, min.h],
-  );
-  const end = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (drag.current) {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
-    }
-    drag.current = null;
+  });
+
+  const start = (ex: number, ey: number) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    edge.current = { ex, ey };
+    begin(e, { x: size.w, y: size.h });
   };
 
   const grip = (ex: number, ey: number, style: React.CSSProperties, cursor: string) => (
     <div
       onPointerDown={start(ex, ey)}
-      onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={end}
       style={{ position: "absolute", zIndex: 5, cursor: maxed ? "default" : cursor, touchAction: "none", ...style }}
@@ -211,7 +205,6 @@ export function SplitPane({ storageKey, left, right, initial = 0.5, min = 0.25, 
   });
   const [vertical, setVertical] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(`split:${storageKey}`, String(ratio));
@@ -225,12 +218,16 @@ export function SplitPane({ storageKey, left, right, initial = 0.5, min = 0.25, 
     return () => ro.disconnect();
   }, []);
 
-  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current || !ref.current) return;
-    const r = ref.current.getBoundingClientRect();
-    const raw = vertical ? (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
-    setRatio(Math.max(min, Math.min(max, raw)));
-  };
+  /** guarded so a divider can never keep following the cursor after a release */
+  const { begin, end } = usePointerDrag({
+    threshold: DRAG_THRESHOLD_PX,
+    onMove: (e) => {
+      if (!ref.current) return;
+      const r = ref.current.getBoundingClientRect();
+      const raw = vertical ? (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
+      setRatio(Math.max(min, Math.min(max, raw)));
+    },
+  });
 
   return (
     <div
@@ -244,19 +241,10 @@ export function SplitPane({ storageKey, left, right, initial = 0.5, min = 0.25, 
         role="separator"
         title="Drag to resize · double-click to reset"
         onDoubleClick={() => setRatio(initial)}
-        onPointerDown={(e) => {
-          dragging.current = true;
-          e.currentTarget.setPointerCapture(e.pointerId);
-        }}
-        onPointerMove={onMove}
-        onPointerUp={(e) => {
-          dragging.current = false;
-          try {
-            e.currentTarget.releasePointerCapture(e.pointerId);
-          } catch {
-            /* ignore */
-          }
-        }}
+        onPointerDown={(e) => begin(e, { x: ratio, y: 0 })}
+        onPointerUp={end}
+        onPointerCancel={end}
+        onPointerLeave={end}
         className={cn(
           "group relative shrink-0 select-none",
           vertical ? "my-1 h-3 cursor-row-resize" : "mx-1 w-3 cursor-col-resize",
