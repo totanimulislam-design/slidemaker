@@ -1,4 +1,17 @@
-import type { Deck, DeckHeader, SlideData, ThemeSettings } from "./types";
+import type { Box, Deck, DeckHeader, PartLayoutMap, SlideData, ThemeSettings } from "./types";
+
+/**
+ * Merges two part-layout maps key by key so a per-slide geometry override never
+ * throws away deck-level properties of the same part (its stacking order, its
+ * group tag, its rotation…).
+ */
+export function mergePartLayout(base?: PartLayoutMap, patch?: PartLayoutMap): PartLayoutMap | undefined {
+  if (!patch) return base;
+  if (!base) return patch;
+  const out: PartLayoutMap = { ...base };
+  for (const [k, v] of Object.entries(patch)) out[k] = { ...(base[k] as Box | undefined), ...v } as Box;
+  return out;
+}
 
 /** Merge nested theme values without losing unchanged deck-level properties. */
 export function mergeTheme(base: ThemeSettings, patch?: Partial<ThemeSettings>): ThemeSettings {
@@ -7,6 +20,7 @@ export function mergeTheme(base: ThemeSettings, patch?: Partial<ThemeSettings>):
     ...base,
     ...patch,
     layout: { ...base.layout, ...(patch.layout ?? {}) },
+    partLayout: mergePartLayout(base.partLayout, patch.partLayout) ?? base.partLayout,
     boxFonts: { ...base.boxFonts, ...(patch.boxFonts ?? {}) },
     banner: patch.banner
       ? {
@@ -52,6 +66,9 @@ export function mergeThemeOverride(
     ...(current ?? {}),
     ...patch,
     ...(patch.layout ? { layout: { ...(current?.layout ?? {}), ...patch.layout } } : {}),
+    ...(patch.partLayout || current?.partLayout
+      ? { partLayout: mergePartLayout(current?.partLayout, patch.partLayout) }
+      : {}),
     ...(patch.boxFonts ? { boxFonts: { ...(current?.boxFonts ?? {}), ...patch.boxFonts } } : {}),
     ...(patch.banner
       ? {

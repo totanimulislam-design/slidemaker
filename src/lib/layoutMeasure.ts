@@ -18,10 +18,10 @@ export interface Rect {
  * this most visibly). We use the un-rotated layout box instead:
  *   centre stays where it is, size = offsetWidth/Height × board scale.
  */
-export function measureElement(id: ElementId): Rect | null {
+export function measureSelector(selector: string): Rect | null {
   if (typeof document === "undefined") return null;
   const board = document.querySelector<HTMLElement>(".slide-editable [data-board]");
-  const el = document.querySelector<HTMLElement>(`.slide-editable [data-el="${id}"]`);
+  const el = document.querySelector<HTMLElement>(`.slide-editable ${selector}`);
   if (!board || !el) return null;
   const b = board.getBoundingClientRect();
   if (!b.width || !b.height) return null;
@@ -40,6 +40,20 @@ export function measureElement(id: ElementId): Rect | null {
   };
 }
 
+export function measureElement(id: ElementId): Rect | null {
+  return measureSelector(`[data-el="${id}"]`);
+}
+
+/**
+ * Measures a built-in PART of the editable canvas (option row, option text,
+ * marker, banner, frame, background layer…) in % of the board — the same
+ * rotation-proof reading as `measureElement`, so the first drag of a part that
+ * is still laid out by the slide starts exactly where it is painted.
+ */
+export function measurePart(id: string): Rect | null {
+  return measureSelector(`[data-part="${id.replace(/["\\]/g, "\\$&")}"]`);
+}
+
 const r1 = (v: number) => Math.round(v * 10) / 10;
 export const clampFree = (v: number) => Math.max(FREE_MIN, Math.min(FREE_MAX, v));
 export const clamp100 = (v: number) => Math.max(0, Math.min(100, v));
@@ -49,15 +63,27 @@ export const clamp100 = (v: number) => Math.max(0, Math.min(100, v));
  * moving. Uses the live DOM size when available, a width-only estimate otherwise.
  */
 export function convertMode(id: ElementId, box: Box, to: "align" | "free"): Box {
+  return convertBoxMode(box, to, measureElement(id), { fixedHeight: id === "logo" });
+}
+
+/**
+ * Mode conversion for ANY box (built-in elements, built-in parts…). `m` is the
+ * live measurement of the node, `fixedHeight` keeps an explicit height (images)
+ * so the box never depends on a bitmap finishing loading.
+ */
+export function convertBoxMode(
+  box: Box,
+  to: "align" | "free",
+  m: Rect | null,
+  opts?: { fixedHeight?: boolean },
+): Box {
   const from = box.mode ?? "align";
   if (from === to) return box;
-  const m = measureElement(id);
 
   if (to === "free") {
     const left = m ? m.left : (box.x * (100 - box.w)) / 100;
     const top = m ? m.top : box.y;
-    // images (logo) need an explicit height so the box doesn't depend on bitmap loading
-    const h = id === "logo" ? r1(m ? m.h : box.h ?? box.w * (16 / 9)) : box.h;
+    const h = opts?.fixedHeight ? r1(m ? m.h : box.h ?? box.w * (16 / 9)) : box.h ?? (m ? r1(m.h) : undefined);
     return { ...box, mode: "free", x: r1(left), y: r1(top), w: r1(m ? m.w : box.w), h };
   }
 

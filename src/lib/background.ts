@@ -5,6 +5,7 @@ import { gradientCss } from "./banner";
 import { withAlpha } from "./color";
 import { effectiveTheme } from "./overrides";
 import { designLayer } from "./backgroundDesigns";
+import { PART_BG_DESIGN, PART_BG_GRADIENT, PART_BG_IMAGE, PART_BG_OVERLAY, PART_BG_VIGNETTE } from "./parts";
 
 /**
  * Fills in every field a saved background may be missing (decks stored before
@@ -48,19 +49,29 @@ export function effectiveBackground(deck: Deck, slide: SlideData | undefined): B
 
 export const hasBackground = (b: BackgroundSettings) => !!b.src || !!b.design || b.gradient.enabled;
 
+/** one painted background layer + the built-in part it can be selected as */
+export interface BackgroundLayer {
+  /** part id (see lib/parts.ts) — makes the layer selectable on the canvas */
+  id: string;
+  style: CSSProperties;
+}
+
 /**
  * Layered CSS for the board background:
  *   [gradient] → [vector design] → [image] → [overlay tint] → [vignette]
- * Everything is inline so exports render identically.
+ * Everything is inline so exports render identically. Each layer is tagged with
+ * the built-in part id it represents, so the editor can select / highlight the
+ * exact decorative layer under the cursor.
  */
-export function backgroundLayers(b: BackgroundSettings, boardColor: string): CSSProperties[] {
-  const layers: CSSProperties[] = [];
+export function backgroundLayers(b: BackgroundSettings, boardColor: string): BackgroundLayer[] {
+  const layers: BackgroundLayer[] = [];
   const common: CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none" };
+  const push = (id: string, style: CSSProperties) => layers.push({ id, style });
 
-  if (b.gradient.enabled) layers.push({ ...common, background: gradientCss(b.gradient, boardColor) });
+  if (b.gradient.enabled) push(PART_BG_GRADIENT, { ...common, background: gradientCss(b.gradient, boardColor) });
 
   const art = designLayer(b.design, b.designW, b.designH, b.designOpacity);
-  if (art) layers.push(art);
+  if (art) push(PART_BG_DESIGN, art);
 
   if (b.src) {
     const zoom = b.fit === "cover" ? 1 + b.zoom / 100 : 1;
@@ -69,7 +80,7 @@ export function backgroundLayers(b: BackgroundSettings, boardColor: string): CSS
       : b.fit === "contain" ? "contain"
       : b.fit === "stretch" ? "100% 100%"
       : "auto";
-    layers.push({
+    push(PART_BG_IMAGE, {
       ...common,
       backgroundImage: `url("${b.src}")`,
       backgroundRepeat: b.fit === "tile" ? "repeat" : "no-repeat",
@@ -85,11 +96,11 @@ export function backgroundLayers(b: BackgroundSettings, boardColor: string): CSS
   }
 
   if (b.overlay.enabled && b.overlay.opacity > 0) {
-    layers.push({ ...common, background: withAlpha(b.overlay.color, b.overlay.opacity) });
+    push(PART_BG_OVERLAY, { ...common, background: withAlpha(b.overlay.color, b.overlay.opacity) });
   }
 
   if (b.vignette > 0) {
-    layers.push({
+    push(PART_BG_VIGNETTE, {
       ...common,
       background: `radial-gradient(ellipse at center, rgba(0,0,0,0) ${Math.max(20, 75 - b.vignette * 0.4)}%, rgba(0,0,0,${(b.vignette / 100) * 0.85}) 100%)`,
     });

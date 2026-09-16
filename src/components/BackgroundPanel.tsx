@@ -122,8 +122,8 @@ export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSl
     <div className="space-y-4">
       {/* ------------------------------ live preview -------------------------- */}
       <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-white/10" style={{ background: deck.theme.board }}>
-        {backgroundLayers(bg, deck.theme.board).map((st, i) => (
-          <div key={i} style={st} />
+        {backgroundLayers(bg, deck.theme.board).map((l) => (
+          <div key={l.id} style={l.style} />
         ))}
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-black/40 px-2 py-1 text-[10px] text-slate-300">
           <span className="truncate">{statusParts.length ? statusParts.join(" · ") : "Board colour only"}</span>

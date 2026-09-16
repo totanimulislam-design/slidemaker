@@ -4,6 +4,7 @@ import { withAlpha } from "../lib/color";
 import { cssBorder, dashArray, hasGradientFill, itemStyle, shapeFill, textStyle } from "../lib/shapeDesign";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
 import { applyResize } from "../lib/freeTransform";
+import type { LayerRef } from "../lib/layers";
 import {
   anyGrouped,
   fillsBox,
@@ -23,7 +24,8 @@ interface Props {
   editable: boolean;
   /** current multi-selection of drawn items; a group is selected as a unit */
   selectedIds: string[];
-  onSelect?: (ids: string[]) => void;
+  /** `exact` = do not expand groups (double-click digs into one member) */
+  onSelect?: (ids: string[], opts?: { exact?: boolean }) => void;
   onChange?: (id: string, patch: Partial<ShapeItem>) => void;
   /** batched patches — keeps a group/multi drag inside ONE undo step */
   onBatchChange?: (updates: { id: string; patch: Partial<ShapeItem> }[]) => void;
@@ -39,6 +41,26 @@ interface Props {
   onGestureEnd?: () => void;
   /** additional snap targets (the built-in slide elements) */
   extraTargets?: { x: number; y: number; w: number; h: number }[];
+  /**
+   * The slide draws the selection frame itself whenever MORE than one layer is
+   * selected (the set can mix drawn items with built-in elements and built-in
+   * parts), so this layer only paints its own frame for a single shape.
+   */
+  externalFrame?: boolean;
+  /** every layer of a shape's group — may contain built-in elements / parts */
+  groupRefs?: (shapeId: string) => LayerRef[];
+  /** non-shape layers of the current selection (mixed multi-selection) */
+  extraSelection?: LayerRef[];
+  /**
+   * Selection callback that can carry built-in elements / parts as well as
+   * shapes. When it is given, every selection change goes through it so a
+   * mixed multi-selection is never reduced to "shapes only".
+   */
+  onSelectRefs?: (refs: LayerRef[], opts?: { exact?: boolean }) => void;
+  /** hand a whole-selection drag over to the slide's unified gesture engine */
+  onExternalSetMove?: (e: React.PointerEvent<HTMLDivElement>, refs: LayerRef[]) => void;
+  /** double-click a text box → edit its text right on the canvas */
+  onEditText?: (shapeId: string) => void;
 }
 
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
@@ -336,6 +358,12 @@ export default function ShapeLayer({
   smartGuides = true,
   onGestureEnd,
   extraTargets,
+  externalFrame = false,
+  groupRefs,
+  extraSelection,
+  onSelectRefs,
+  onExternalSetMove,
+  onEditText,
 }: Props) {
   const gesture = useRef<Gesture | null>(null);
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
@@ -395,25 +423,63 @@ export default function ShapeLayer({
     // an already-selected member keeps the exact selection (precise editing),
     // Ctrl/⌘ toggles this shape's group into a multi-selection
     const members = groupMembersOf(shapes, s.id);
-    const additive = e.ctrlKey || e.metaKey;
+    // Shift AND Ctrl/⌘ both add to the selection (like every real editor);
+    // Shift is still "keep ratio" while resizing and "no snapping" while moving.
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+    /** the whole mixed selection a set of shape ids stands for */
+    const mixedRefs = (ids: string[]): LayerRef[] => {
+      const shapeRefs: LayerRef[] = ids.map((id) => ({ kind: "shape", id }));
+      const memberRefs: LayerRef[] = groupRefs
+        ? ids.flatMap((id) => (groupRefs(id) ?? []).filter((r) => r.kind !== "shape"))
+        : [];
+      const out: LayerRef[] = [];
+      const seen = new Set<string>();
+      [...shapeRefs, ...memberRefs, ...(additive ? (extraSelection ?? []) : [])].forEach((r) => {
+        const k = `${r.kind}:${r.id}`;
+        if (seen.has(k)) return;
+        seen.add(k);
+        out.push(r);
+      });
+      return out;
+    };
+    /** selects through the unified callback so built-ins are never dropped */
+    const commit = (ids: string[]) => {
+      if (onSelectRefs) onSelectRefs(mixedRefs(ids), { exact: true });
+      else onSelect?.(ids);
+    };
+
     let targets: string[];
     if (additive) {
       const allOn = members.every((id) => selectedIds.includes(id));
       targets = allOn
         ? selectedIds.filter((id) => !members.includes(id))
         : [...new Set([...selectedIds, ...members])];
-      onSelect?.(targets);
+      commit(targets);
     } else if (selectedIds.includes(s.id)) {
       targets = selectedIds;
     } else {
       targets = members;
-      onSelect?.(targets);
+      commit(targets);
     }
     if (e.button !== 0) return;
     const movable = targets.filter((id) => shapes.some((x) => x.id === id && !x.locked));
     if (!movable.length) return;
     const b = board();
     if (!b) return;
+
+    /**
+     * A group (or any multi-selection) that also contains built-in elements or
+     * built-in parts is transformed by the slide's unified engine, so EVERY
+     * member moves together — a mixed group can never be torn apart.
+     */
+    if (onExternalSetMove) {
+      const all = mixedRefs(targets);
+      if (all.length > 1) {
+        onExternalSetMove(e, all);
+        return;
+      }
+    }
+
     if (movable.length === 1 && targets.length === 1) {
       const it = shapes.find((x) => x.id === movable[0])!;
       gesture.current = {
@@ -672,6 +738,9 @@ export default function ShapeLayer({
     pointerEvents: "auto",
   };
 
+  /** true when the shape's group also holds built-in elements / parts */
+  const externalGroupOf = (id: string) => (groupRefs ? (groupRefs(id) ?? []).some((r) => r.kind !== "shape") : false);
+
   const bounds = selectionBounds(selectedShapes);
 
   return (
@@ -698,11 +767,17 @@ export default function ShapeLayer({
             onPointerUp={up}
             onPointerCancel={up}
             onDoubleClick={
-              clickable && s.groupId
+              clickable
                 ? (e) => {
-                    // double-click digs into a group: select just this member
                     e.stopPropagation();
-                    onSelect?.([s.id]);
+                    const solo = selectedIds.length === 1 && selectedIds[0] === s.id;
+                    // first double-click digs into a group: select just this member
+                    if ((s.groupId || externalGroupOf(s.id)) && !solo) {
+                      onSelect?.([s.id], { exact: true });
+                      return;
+                    }
+                    // …the next one edits the text right on the canvas
+                    if (onEditText && (s.kind === "text" || s.text)) onEditText(s.id);
                   }
                 : undefined
             }
@@ -764,6 +839,7 @@ export default function ShapeLayer({
 
       {/* per-member outlines while several items (or a group) are selected */}
       {editable &&
+        !externalFrame &&
         selectedShapes.length > 1 &&
         selectedShapes.map((s) => (
           <div
@@ -788,6 +864,7 @@ export default function ShapeLayer({
       {/* ---- selection frame + handles: drawn on the top band so a shape that
            sits behind an opaque image/rectangle is still visible & grabbable ---- */}
       {editable &&
+        !externalFrame &&
         single &&
         (() => {
           const s = single;
@@ -927,7 +1004,7 @@ export default function ShapeLayer({
         })()}
 
       {/* ---- group / multi-selection frame: bounds + handles move the set ---- */}
-      {editable && selectedShapes.length > 1 && (
+      {editable && !externalFrame && selectedShapes.length > 1 && (
         <div
           data-set-frame=""
           style={{

@@ -22,6 +22,7 @@ import { describeScripts, type ScriptId } from "../lib/fonts";
 import { handleSmartPaste } from "../lib/richPaste";
 import type { ApplySection } from "../lib/applyDesign";
 import type { SlideField } from "./Slide";
+import { partInfo } from "../lib/parts";
 import { Btn, ColorInput, Field, Slider, TextArea, TextInput, Toggle } from "./ui";
 import { cn } from "../utils/cn";
 
@@ -57,6 +58,8 @@ interface Props {
   scripts: ScriptId[];
   selectedEl: ElementId;
   onSelectEl: (id: ElementId) => void;
+  /** the built-in part selected on the canvas (option row, marker, banner, frame…) */
+  selectedPart?: string | null;
   shapes: {
     slide: ShapeItem[];
     global: ShapeItem[];
@@ -117,6 +120,7 @@ export default function Inspector({
   scripts,
   selectedEl,
   onSelectEl,
+  selectedPart,
   shapes,
   forceTab,
   background,
@@ -137,6 +141,13 @@ export default function Inspector({
   const qRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    // a built-in part decides the tab itself — its own panel is always the most
+    // useful one (option bullet → Option bullet, frame → Frame, artwork → Background…)
+    if (selectedPart) {
+      const info = partInfo(selectedPart);
+      setTab(info.tab as Tab);
+      return;
+    }
     if (!activeField) return;
     if (selectedEl === "bullet") {
       setTab("questionBullet");
@@ -155,7 +166,7 @@ export default function Inspector({
     if (activeField === "question") {
       qRef.current?.focus();
     }
-  }, [activeField, selectedEl]);
+  }, [activeField, selectedEl, selectedPart]);
 
   const insertSnippet = (text: string) => {
     if (!slide) return;

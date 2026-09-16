@@ -49,6 +49,13 @@ export type OptionsLayout = "right" | "left" | "two-col" | "grid";
 export type ElementId =
   | "logo" | "brand" | "title" | "badge" | "bullet" | "question" | "options" | "note";
 
+/**
+ * The text field an editable box writes to. Shared by the canvas, the inline
+ * text editor and the inspector so one field name always means one thing.
+ */
+export type SlideField =
+  | "title" | "brandTop" | "brandBottom" | "badge" | "logo" | "question" | `option:${number}` | "note";
+
 /** Per-box typeface override. Empty fields fall back to the deck fonts. */
 export interface BoxTypeface {
   family?: string;
@@ -87,7 +94,26 @@ export interface Box {
   rot?: number;
   /** stacking order */
   z?: number;
+  /**
+   * Group tag. Boxes (built-in elements AND built-in parts) that share a
+   * groupId move / resize / rotate as one unit, exactly like grouped shapes.
+   * Members keep their own geometry, text and styling, so ungrouping is
+   * lossless and every member stays individually selectable.
+   */
+  groupId?: string;
 }
+
+/**
+ * Geometry of the slide's BUILT-IN parts — everything that is drawn on a slide
+ * without the user inserting a shape: option rows, option text, option bullet
+ * markers, the number bullet, the title banner, the frame and the decorative
+ * background layers (see lib/parts.ts).
+ *
+ * A part with no entry is laid out by the slide exactly as before; the first
+ * drag "detaches" it by writing a free-mode box here, so nothing changes
+ * visually until the user actually moves something.
+ */
+export type PartLayoutMap = Record<string, Box>;
 
 export const FREE_MIN = -50;
 export const FREE_MAX = 150;
@@ -491,6 +517,8 @@ export interface ThemeSettings {
   optionsLayout: OptionsLayout;
   /** free positioning for every element (0–100 % both axes) */
   layout: LayoutMap;
+  /** free positioning / grouping of the slide's built-in parts (see lib/parts.ts) */
+  partLayout?: PartLayoutMap;
   /** magnetic snapping while dragging */
   snapEnabled: boolean;
   /** grid step in % used by free mode snapping */
