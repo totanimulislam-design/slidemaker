@@ -261,6 +261,7 @@ export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: P
           <FontPicker
             label="Text font (this item)"
             value={s.fontFamily ?? ""}
+            previewTarget={`shape:${s.id}`}
             onChange={(family) => {
               const f = FONT_BY_FAMILY.get(family.toLowerCase());
               if (f) ensureFontStylesheet([f]);

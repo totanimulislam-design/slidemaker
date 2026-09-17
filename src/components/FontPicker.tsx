@@ -13,6 +13,8 @@ import {
 } from "../lib/fonts";
 import { addCustomFontFile, customFontChoices, listCustomFonts, onCustomFontsChanged, removeCustomFont, type CustomFont } from "../lib/customFonts";
 import { cn } from "../utils/cn";
+import { useFontPreview } from "../lib/fontPreview";
+import { ensureFontStylesheet, preloadFontLibrary } from "../lib/fonts";
 
 interface Props {
   /** current value: a font-family stack (legacy) or a single family */
@@ -27,6 +29,8 @@ interface Props {
   compact?: boolean;
   /** file the list under language headings (on by default when script is "all") */
   grouped?: boolean;
+  /** target identifier for live hover preview, e.g. "box:question", "deck:bengali", "shape:xxx" */
+  previewTarget?: string;
 }
 
 /** one heading + its faces inside the dropdown (`flat` = the un-grouped list) */
@@ -45,9 +49,7 @@ const KIND_LABEL: Record<FC["kind"], string> = {
   traditional: "Traditional",
 };
 
-import { ensureFontStylesheet, preloadFontLibrary } from "../lib/fonts";
-
-export default function FontPicker({ value, onChange, label, script, kinds, compact, grouped }: Props) {
+export default function FontPicker({ value, onChange, label, script, kinds, compact, grouped, previewTarget }: Props) {
   const current = value.split(",")[0]?.trim().replace(/^['"]|['"]$/g, "") || "";
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -57,6 +59,13 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
 
   const all = script === "all";
   const showGroups = grouped ?? all;
+
+  const { setPreview, clearPreview } = useFontPreview();
+
+  // clear live preview when dropdown closes
+  useEffect(() => {
+    if (!open) clearPreview();
+  }, [open, clearPreview]);
 
   /** every face the dropdown offers, in the order it will be shown */
   const sections = useMemo<Section[]>(() => {
@@ -107,12 +116,22 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
     active?.scrollIntoView?.({ block: "nearest" });
   }, [open]);
 
+  const handleClose = () => {
+    setOpen(false);
+    clearPreview();
+  };
+
+  const handleHover = (family: string) => {
+    if (!previewTarget) return;
+    setPreview(previewTarget, family);
+  };
+
   return (
     <div className="space-y-1.5">
       <span className="flex items-baseline justify-between text-[11px] font-medium tracking-wide text-slate-400 uppercase">
         {label}
         {open && (
-          <button onClick={() => setOpen(false)} className="text-[10px] normal-case text-slate-500 hover:text-slate-300">
+          <button onClick={handleClose} className="text-[10px] normal-case text-slate-500 hover:text-slate-300">
             close
           </button>
         )}
@@ -123,6 +142,7 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
         onClick={() => {
           setOpen((v) => !v);
           if (!open) preloadFontLibrary();
+          else clearPreview();
         }}
         className={cn(
           "flex w-full items-center gap-2 rounded-lg border bg-slate-900/70 px-2.5 py-2 text-left transition-colors",
@@ -144,7 +164,10 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
       </button>
 
       {open && (
-        <div className="space-y-2 rounded-xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl">
+        <div
+          className="space-y-2 rounded-xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl"
+          onMouseLeave={() => clearPreview()}
+        >
           <input
             autoFocus
             value={query}
@@ -165,7 +188,13 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
                     key={f.family}
                     f={f}
                     active={f.family === current}
-                    onPick={() => { onChange(f.family); setOpen(false); }}
+                    previewTarget={previewTarget}
+                    onHover={handleHover}
+                    onPick={() => {
+                      onChange(f.family);
+                      setOpen(false);
+                      clearPreview();
+                    }}
                     onRemove={
                       f.custom
                         ? () => {
@@ -184,11 +213,13 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
           {/* upload your own font file (Chhatrish July, SolaimanLipi, Charukola…) */}
           <UploadRow
             script={script === "all" ? (FONT_BY_FAMILY.get(current.toLowerCase())?.script ?? "bangla") : script}
-            onAdded={(family) => { onChange(family); }}
+            onAdded={(family) => {
+              onChange(family);
+            }}
           />
           <p className="px-1 text-[10px] leading-relaxed text-slate-500">
-            Previews load on open. Any text still falls back through the universal chain, so mixed Bangla/Arabic/Latin
-            always renders.
+            Hover a font to preview it live on the slide. Previews load on open. Any text still falls back through the
+            universal chain, so mixed Bangla/Arabic/Latin always renders.
           </p>
         </div>
       )}
@@ -220,9 +251,11 @@ function UploadRow({ script, onAdded }: { script: NonNullable<FontChoice["script
               const font = await addCustomFontFile(file, script);
               onAdded(font.family);
             } catch (ex) {
-              setErr(ex instanceof Error && ex.message === "storage-full"
-                ? "Not enough browser storage — remove another custom font."
-                : "That file could not be loaded as a font.");
+              setErr(
+                ex instanceof Error && ex.message === "storage-full"
+                  ? "Not enough browser storage — remove another custom font."
+                  : "That file could not be loaded as a font.",
+              );
             } finally {
               setBusy(false);
             }
@@ -243,24 +276,31 @@ function FontRow({
   active,
   onPick,
   onRemove,
-}: { f: FontChoice; active: boolean; onPick: () => void; onRemove?: () => void }) {
+  previewTarget,
+  onHover,
+}: {
+  f: FontChoice;
+  active: boolean;
+  onPick: () => void;
+  onRemove?: () => void;
+  previewTarget?: string;
+  onHover?: (family: string) => void;
+}) {
   // mount the stylesheet for this row lazily so the list stays light
   const [seen, setSeen] = useState(false);
-  const ref = useMemo(
-    () => ({
-      onMouseEnter: () => {
-        if (!seen) {
-          ensureFontStylesheet([f]);
-          setSeen(true);
-        }
-      },
-    }),
-    [f, seen],
-  );
+
+  const handleEnter = () => {
+    if (!seen) {
+      ensureFontStylesheet([f]);
+      setSeen(true);
+    }
+    if (previewTarget) onHover?.(f.family);
+  };
 
   return (
     <button
-      {...ref}
+      onMouseEnter={handleEnter}
+      onFocus={handleEnter}
       onClick={onPick}
       data-active={active ? "true" : undefined}
       className={cn(

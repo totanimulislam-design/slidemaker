@@ -37,8 +37,9 @@ import type { ApplySection } from "./lib/applyDesign";
 import { exportPdf } from "./lib/exportPdf";
 import { normalizeSource } from "./lib/richPaste";
 import { cn } from "./utils/cn";
+import { FontPreviewProvider, useFontPreview } from "./lib/fontPreview";
 
-export default function App() {
+function AppContent() {
   const {
     deck,
     setDeck,
@@ -93,6 +94,8 @@ export default function App() {
     canRedo,
     history,
   } = useDeck();
+
+  const { preview } = useFontPreview();
 
   // loads any extra font files the content needs (CJK, Hebrew, Thai…)
   const { scripts, revision } = useFontCoverage(deck);
@@ -437,6 +440,7 @@ export default function App() {
 
   const index = Math.min(current, Math.max(0, deck.slides.length - 1));
   const slide = deck.slides[index];
+
   useEffect(() => {
     setSelectedShapes([]);
     setSelectedEl(null);
@@ -449,9 +453,70 @@ export default function App() {
       nav === "answerKey" || nav === "images" || nav === "shapes" || nav === "layers" ? nav : null,
     );
   }, [current]);
-  const currentTheme = effectiveTheme(deck, slide);
+
+  const rawTheme = effectiveTheme(deck, slide);
   const currentHeader = effectiveHeader(deck, slide);
-  const editorDeck = { ...deck, theme: currentTheme, header: currentHeader };
+
+  // ---- font hover preview -------------------------------------------------
+  // When the user hovers a font family in any FontPicker, the related text
+  // on the slide previews that family live. The preview is ephemeral and
+  // never writes to the deck.
+  const previewedTheme = useMemo<ThemeSettings>(() => {
+    if (!preview) return rawTheme;
+    const fam = preview.family;
+    const t = preview.target;
+    let next = { ...rawTheme, boxFonts: { ...(rawTheme.boxFonts ?? {}) } } as ThemeSettings;
+
+    if (t.startsWith("box:")) {
+      const boxId = t.slice(4) as ElementId;
+      const prev = next.boxFonts[boxId] ?? {};
+      next.boxFonts = { ...next.boxFonts, [boxId]: { ...prev, family: fam } };
+      return next;
+    }
+    if (t === "deck:bengali") {
+      next.bengaliFont = `'${fam}', sans-serif`;
+      return next;
+    }
+    if (t === "deck:latin") {
+      next.latinFont = `'${fam}', sans-serif`;
+      return next;
+    }
+    if (t === "deck:arabic") {
+      next.arabicFont = `'${fam}'`;
+      return next;
+    }
+    if (t === "optionBullet") {
+      next.optionBulletFontFamily = fam;
+      return next;
+    }
+    // deck fonts that affect multiple boxes are handled above;
+    // any other target leaves theme untouched
+    return next;
+  }, [rawTheme, preview]);
+
+  const currentTheme = previewedTheme;
+
+  // preview for shapes (text boxes)
+  const previewedGlobalShapes = useMemo(() => {
+    if (!preview || !preview.target.startsWith("shape:")) return deck.globalShapes;
+    const id = preview.target.slice(6);
+    return (deck.globalShapes ?? []).map((sh) => (sh.id === id ? { ...sh, fontFamily: preview.family } : sh));
+  }, [deck.globalShapes, preview]);
+
+  const previewedSlideShapes = useMemo(() => {
+    if (!preview || !preview.target.startsWith("shape:")) return slide?.shapes;
+    const id = preview.target.slice(6);
+    return (slide?.shapes ?? []).map((sh) => (sh.id === id ? { ...sh, fontFamily: preview.family } : sh));
+  }, [slide?.shapes, preview]);
+
+  // merged slide used for main canvas (includes previewed shapes)
+  const previewedSlideForCanvas = useMemo(() => {
+    if (!slide) return slide;
+    if (!preview || !preview.target.startsWith("shape:")) return slide;
+    return { ...slide, shapes: previewedSlideShapes };
+  }, [slide, previewedSlideShapes, preview]);
+
+  const editorDeck = { ...deck, theme: currentTheme, header: currentHeader, globalShapes: previewedGlobalShapes as any };
   // While editing, edits update the current slide live so user can preview their design
   const thisSlideId = useMemo(() => (slide ? [slide.id] : []), [slide]);
   const scopedTheme = useCallback(
@@ -503,9 +568,6 @@ export default function App() {
       // ---- undo / redo: Ctrl/⌘+Z, Ctrl/⌘+Shift+Z, Ctrl/⌘+Y -------------------
       const mod = e.ctrlKey || e.metaKey;
       if (mod && !e.altKey && (e.key.toLowerCase() === "z" || e.key.toLowerCase() === "y")) {
-        // Deck-level undo everywhere. Inside a text field the deck's history
-        // already holds each typing burst (coalesced), so we blur the field to
-        // keep React's controlled value authoritative and revert the deck.
         const isRedo = e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey);
         e.preventDefault();
         if (inField) (t as HTMLElement).blur();
@@ -515,13 +577,6 @@ export default function App() {
       }
       if (inField) return;
 
-      /**
-       * The Layers list owns its own keys: ↑/↓ walk the rows, Alt+↑/↓ reorder
-       * the stack, Delete removes the focused layer and F2 renames it. Without
-       * this guard the very same keystroke would ALSO act on the canvas
-       * selection (and ←/→ would flip the slide), so one press wrote two
-       * history entries and moved two things.
-       */
       const inLayerList = typeof t?.closest === "function" && !!t.closest("[data-layer-list]");
       if (
         inLayerList &&
@@ -529,8 +584,6 @@ export default function App() {
       )
         return;
 
-      // Escape clears the whole selection (element + shapes + active field) and
-      // takes the context toolbar down with it
       if (e.key === "Escape") {
         setSurface(null);
         setSelectedShapes([]);
@@ -540,7 +593,6 @@ export default function App() {
         return;
       }
 
-      // Ctrl/⌘+A selects every drawn item on this slide
       if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "a") {
         const ids = [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])].map((x) => x.id);
         if (ids.length) {
@@ -550,10 +602,6 @@ export default function App() {
         return;
       }
 
-      // Tab / Shift+Tab walks the unified layer stack (every element + shape),
-      // so a covered item is always reachable without ungrouping anything.
-      // Only hijacked on slides that actually have drawn items, so normal
-      // keyboard focus travel is untouched everywhere else.
       const slideShapeCount = (deck.globalShapes?.length ?? 0) + (slide?.shapes?.length ?? 0);
       if (e.key === "Tab" && !mod && paintedLayers.length && slideShapeCount > 0) {
         e.preventDefault();
@@ -570,7 +618,6 @@ export default function App() {
         return;
       }
 
-      // Ctrl/⌘+G groups the selection; Ctrl/⌘+Shift+G ungroups it (lossless)
       if (mod && !e.altKey && e.key.toLowerCase() === "g") {
         e.preventDefault();
         if (e.shiftKey) {
@@ -581,7 +628,6 @@ export default function App() {
         return;
       }
 
-      // shape shortcuts — single, group or multi-selection
       if (selectedShapes.length) {
         if (e.key === "Delete" || e.key === "Backspace") {
           e.preventDefault();
@@ -595,7 +641,6 @@ export default function App() {
           if (ids.length) setSelectedShapes(ids);
           return;
         }
-        // Ctrl+] / Ctrl+[ = forward / backward; add Shift for front / back
         if ((e.ctrlKey || e.metaKey) && (e.key === "]" || e.key === "[" || e.code === "BracketRight" || e.code === "BracketLeft")) {
           e.preventDefault();
           const up = e.key === "]" || e.code === "BracketRight";
@@ -608,8 +653,6 @@ export default function App() {
           const all = [...(deck.globalShapes ?? []), ...deck.slides.flatMap((x) => x.shapes ?? [])];
           const dx = e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0;
           const dy = e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0;
-          // one batched update → every unlocked member of the selection nudges
-          // together and undo steps back over the whole set at once
           const updates = selectedShapes
             .map((id) => all.find((x) => x.id === id))
             .filter((sh): sh is ShapeItem => !!sh && !sh.locked)
@@ -622,7 +665,6 @@ export default function App() {
         }
       }
 
-      // Ctrl+] / Ctrl+[ on a selected slide element (shapes handled above)
       if ((e.ctrlKey || e.metaKey) && (e.code === "BracketRight" || e.code === "BracketLeft")) {
         e.preventDefault();
         const up = e.code === "BracketRight";
@@ -630,7 +672,6 @@ export default function App() {
         return;
       }
 
-      // Shift + arrows nudge the selected element; plain arrows change slides
       if (e.shiftKey && e.key.startsWith("Arrow") && selectedEl) {
         e.preventDefault();
         const step = e.altKey ? 0.2 : 1;
@@ -680,7 +721,6 @@ export default function App() {
   ]);
 
   /* ------------------------------- exporting ----------------------------- */
-  /** mounts every slide at full size off-screen so exporters can rasterise them */
   const mountOffscreen = useCallback(async () => {
     setOffscreen(true);
     await new Promise((r) => requestAnimationFrame(() => window.setTimeout(r, 450)));
@@ -695,7 +735,7 @@ export default function App() {
       .filter(Boolean) as { node: HTMLElement; name: string }[];
 
   const runExport = async (cfg: ExportSettings) => {
-    const name = (cfg.fileName || "mcq-slides").replace(/[\\/:*?"<>|]+/g, "").trim() || "mcq-slides";
+    const name = (cfg.fileName || "mcq-slides").replace(/[\\/:*?\"<>|]+/g, "").trim() || "mcq-slides";
     try {
       setBusy("Preparing slides…");
       await mountOffscreen();
@@ -722,10 +762,8 @@ export default function App() {
     }
   };
 
-  /** re-runs the formatting converter over stored text (repairs earlier pastes) */
   const fixFormatting = useCallback(
     (scope: "slide" | "all") => {
-      // reflow is off here: a single field must never be split into new lines
       const fix = (s: (typeof deck.slides)[number]) => ({
         ...s,
         question: normalizeSource(s.question, { reflow: false }).text,
@@ -740,7 +778,6 @@ export default function App() {
     [deck.slides, slide, transformAll, updateSlide],
   );
 
-  /* --------------------------- deck save / load -------------------------- */
   const saveJson = () => {
     const blob = new Blob([JSON.stringify(deck, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -779,7 +816,6 @@ export default function App() {
                   ...(data.theme?.frame ?? {}),
                   color: data.theme?.frame?.color ?? data.theme?.frameInner ?? deck.theme.frame.color,
                 };
-                // decks exported with the retired frame collection keep working
                 f.image = resolveFrameImageSrc(f.image);
                 return f;
               })(),
@@ -802,7 +838,6 @@ export default function App() {
     return { total: deck.slides.length, withAnswer };
   }, [deck.slides]);
 
-  /** do any of the selected drawn items belong to a group? (drives the Ungroup chip) */
   const selectedGrouped = useMemo(() => {
     if (!selectedShapes.length) return false;
     const set = new Set(selectedShapes);
@@ -813,7 +848,6 @@ export default function App() {
     <>
       <div className="app-shell relative flex h-full flex-col bg-slate-950 text-slate-200">
         <HistoryPanel open={historyOpen} history={history} onClose={() => setHistoryOpen(false)} />
-        {/* ------------------------------ top bar ----------------------------- */}
         <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-slate-950/90 px-4 py-2.5">
           <div className="mr-2 flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-300 to-amber-600 text-lg font-black text-slate-950 shadow-[0_2px_14px_rgba(251,191,36,.35)]">
@@ -909,7 +943,6 @@ export default function App() {
         </header>
 
         <div className="flex min-h-0 flex-1">
-          {/* ---------------------------- slide rail --------------------------- */}
           <aside className="flex w-[230px] shrink-0 flex-col border-r border-white/10 bg-slate-950/60">
             <div className="flex items-center justify-between px-3 py-2 text-[11px] font-medium tracking-wide text-slate-500 uppercase">
               Slides
@@ -972,17 +1005,9 @@ export default function App() {
             </div>
           </aside>
 
-          {/* ------------------------------ canvas ----------------------------- */}
           <main className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(60%_60%_at_50%_0%,#141a2b_0%,#020617_70%)]">
             {slide ? (
               <>
-                {/*
-                  * The toolbar above the board follows the navigation: any
-                  * destination that selects something (element, surface, shape)
-                  * already showed it, and the "no-element" destinations —
-                  * Answer key, Insert images, Insert shapes — now open their own
-                  * related tools instead of nothing.
-                  */}
                 {(surface || selectedLayer || activeNav === "answerKey" || activeNav === "images" || activeNav === "shapes" || activeNav === "layers") && <ContextToolbar
                   key={`${slide.id}:${surface}:${selectedEl}:${activeNav}:${selectedShapes.join(',')}`}
                   shape={[...(slide.shapes ?? []), ...(deck.globalShapes ?? [])].find(s => s.id === selectedShape)}
@@ -1043,7 +1068,6 @@ export default function App() {
                     e.preventDefault();
                     setDropHint(false);
                     const files = Array.from(e.dataTransfer.files);
-                    // Shift + drop → set as this slide's background instead of inserting a shape
                     if (e.shiftKey && files[0]?.type.startsWith("image/") && slide) {
                       void (async () => {
                         const { loadImageFile, shrinkDataUrl } = await import("./lib/shapes");
@@ -1053,7 +1077,6 @@ export default function App() {
                       })();
                       return;
                     }
-                    // drop position → % of the board, so the image lands under the cursor
                     const board = document.querySelector<HTMLElement>(".slide-editable [data-board]");
                     let at: { x: number; y: number } | undefined;
                     if (board) {
@@ -1074,7 +1097,7 @@ export default function App() {
                 <Stage>
                   <Slide
                     key={`main-${revision}`}
-                    slide={slide}
+                    slide={previewedSlideForCanvas ?? slide}
                     header={currentHeader}
                     theme={currentTheme}
                     onField={setActiveField}
@@ -1086,13 +1109,11 @@ export default function App() {
                       if (id) {
                         setSurface(null);
                         setSelectedShapes([]);
-                        // two-way sync: picking content on the slide opens the
-                        // navigation entry that styles it (the Layers list stays)
                         openTabForSelection(tabOfElement(id));
                       }
                     }}
                     onSurfaceSelect={value => { setSurface(value); setSelectedEl(null); setSelectedShapes([]); setActiveField(null); }}
-                    globalShapes={deck.globalShapes}
+                    globalShapes={previewedGlobalShapes as any}
                     selectedShapeIds={selectedShapes}
                     onSelectShapeIds={selectShapeIds}
                     onShapeChange={(id, patch) => slide && updateShapeOnSlide(id, patch, slide.id)}
@@ -1123,22 +1144,29 @@ export default function App() {
                       }}
                     />
                   </label>
-                  {(["text", "rect", "rounded", "ellipse", "triangle", "diamond", "star", "line", "arrow"] as ShapeKind[]).map(
-                    (k) => (
-                      <button
-                        key={k}
-                        onClick={() => insertShape(k, false)}
-                        title={SHAPE_LABELS[k]}
-                        className={cn(
-                          "h-8 min-w-8 rounded-md border border-white/10 bg-white/[0.04] px-2 text-sm text-slate-200 hover:border-amber-400/60 hover:bg-white/10",
-                          k === "text" && "font-serif font-bold",
-                        )}
-                      >
-                        {SHAPE_ICONS[k]}
-                      </button>
-                    ),
-                  )}
-
+                  {([
+                    "text",
+                    "rect",
+                    "rounded",
+                    "ellipse",
+                    "triangle",
+                    "diamond",
+                    "star",
+                    "line",
+                    "arrow",
+                  ] as ShapeKind[]).map((k) => (
+                    <button
+                      key={k}
+                      onClick={() => insertShape(k, false)}
+                      title={SHAPE_LABELS[k]}
+                      className={cn(
+                        "h-8 min-w-8 rounded-md border border-white/10 bg-white/[0.04] px-2 text-sm text-slate-200 hover:border-amber-400/60 hover:bg-white/10",
+                        k === "text" && "font-serif font-bold",
+                      )}
+                    >
+                      {SHAPE_ICONS[k]}
+                    </button>
+                  ))}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 bg-slate-950/70 px-4 py-2.5">
                   <Btn size="sm" onClick={() => setCurrent(Math.max(0, index - 1))} disabled={index === 0}>
@@ -1206,7 +1234,6 @@ export default function App() {
             )}
           </main>
 
-          {/* ----------------------------- inspector --------------------------- */}
           <Inspector
             deck={editorDeck}
             slide={slide}
@@ -1238,7 +1265,6 @@ export default function App() {
               global: deck.globalShapes ?? [],
               selectedId: selectedShape,
               selectedIds: selectedShapes,
-              // panel picks are exact: a group member can be selected alone
               onSelect: (id) => selectShapeIds(id ? [id] : []),
               onGroup: (ids) => groupShapes(ids),
               onUngroup: (ids) => ungroupShapes(ids),
@@ -1267,8 +1293,6 @@ export default function App() {
               onApplyDesign: (style, kind, exceptId) => applyShapeDesign(style, kind, exceptId, slide?.id ?? null),
             }}
             background={{
-              // Background panel is a live editor for this slide. Distribution
-              // happens only through the explicit Apply Changes button above.
               onSet: (patch) => setBackground(patch, "slide", slide?.id ?? null),
               onReset: () => resetBackground("slide", slide?.id ?? null),
               onClearSlide: clearSlideBackground,
@@ -1289,7 +1313,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* ------------------------- offscreen render roots ---------------------- */}
       {offscreen && (
         <div
           className="offscreen-root"
@@ -1346,5 +1369,13 @@ export default function App() {
         />
       )}
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <FontPreviewProvider>
+      <AppContent />
+    </FontPreviewProvider>
   );
 }
