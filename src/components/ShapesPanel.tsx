@@ -4,7 +4,7 @@ import { handleSmartPaste } from "../lib/richPaste";
 import { alignShape, boundsOf, distributeShapes, type AlignOp } from "../lib/shapeAlign";
 import { canMove, Z_LABELS, type ZOp } from "../lib/zorder";
 import { useState } from "react";
-import { Btn, Field, SegButtons, Slider, TextArea, Toggle } from "./ui";
+import { Btn, Field, PanelHead, SegButtons, Slider, TextArea, Toggle } from "./ui";
 import ShapeDesignPanel from "./ShapeDesignPanel";
 import { cn } from "../utils/cn";
 
@@ -42,6 +42,11 @@ interface Props {
   onApplyDesign: (style: Partial<ShapeItem>, kind: ShapeItem["kind"] | null, exceptId: string) => void;
   /** unified layers list (elements + shapes) rendered inside the Layer section */
   layersPanel?: React.ReactNode;
+  /**
+   * Pictures have their own navigation entry ("Insert images"), so the shapes
+   * panel can drop its image uploader and stay focused on shapes & text boxes.
+   */
+  hideImageInsert?: boolean;
   /** Scope is controlled by the inspector's main Apply Changes bar. */
   managedScope?: boolean;
 }
@@ -75,6 +80,7 @@ export default function ShapesPanel({
   onApplyDesign,
   layersPanel,
   managedScope = false,
+  hideImageInsert = false,
 }: Props) {
   const [scopeMode, setScopeMode] = useState<"this" | "selected" | "all">("this");
   const [pickedIds, setPickedIds] = useState<string[]>([]);
@@ -147,6 +153,10 @@ export default function ShapesPanel({
 
   return (
     <div className="space-y-4">
+      <PanelHead
+        title="Insert shapes"
+        subtitle="Boxes, circles, arrows, text boxes — plus every layer's position and order."
+      />
       {/* --------------------------------- insert ---------------------------- */}
       {/* Scope is normally handled by the main Apply Changes bar. */}
       {!managedScope && <div className="space-y-2 rounded-xl border border-amber-400/30 bg-amber-400/[0.07] p-3">
@@ -280,6 +290,7 @@ export default function ShapesPanel({
             </button>
           ))}
         </div>
+        {!hideImageInsert && (
         <div className="mt-2 space-y-1.5 rounded-lg border border-sky-400/25 bg-sky-400/[0.06] p-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-sky-200">🖼 Image</span>
@@ -319,6 +330,7 @@ export default function ShapesPanel({
             Or paste an image (Ctrl+V) / drag a file onto the slide.
           </p>
         </div>
+        )}
 
       </Field>
 

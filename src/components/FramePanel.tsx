@@ -3,7 +3,7 @@ import type { FrameSettings, ThemeSettings } from "../lib/types";
 import { DEFAULT_FRAME } from "../lib/types";
 import { ALL_FRAME_STYLES, RICH_FRAME_PRESETS } from "../lib/frameDesigns";
 import { FRAME_IMAGES } from "../lib/frameImages";
-import { Btn, ColorInput, Field, Slider, Toggle } from "./ui";
+import { Btn, ColorInput, Field, PanelHead, Slider, Toggle } from "./ui";
 import { cn } from "../utils/cn";
 
 interface Props {
@@ -54,6 +54,10 @@ export default function FramePanel({ theme, setTheme }: Props) {
 
   return (
     <div className="space-y-4">
+      <PanelHead
+        title="Slide frame"
+        subtitle="The border around the board — material, thickness, corners and overlay artwork."
+      />
       {/* ------------------------------ Master Toggle ------------------------- */}
       <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] p-3">
         <div>

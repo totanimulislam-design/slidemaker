@@ -12,7 +12,6 @@ import {
 import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
 import { boxFontLabel, setBoxFont } from "../lib/boxFonts";
 import FontPicker from "./FontPicker";
-import PlainNumberingPicker from "./PlainNumberingPicker";
 import { Btn, ColorInput, Field, Slider, TextInput } from "./ui";
 import { cn } from "../utils/cn";
 
@@ -23,9 +22,11 @@ interface Props {
   updateSlide: (id: string, p: Partial<SlideData>) => void;
   updateAll: (p: Partial<SlideData>) => void;
   onAnswerCopies: () => void;
+  /** open the "text inside option bullet" panel (labels, ink and marker face) */
+  onOpenBulletText?: () => void;
 }
 
-export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide, updateAll, onAnswerCopies }: Props) {
+export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide, updateAll, onAnswerCopies, onOpenBulletText }: Props) {
   const refs = useRef<Record<number, HTMLInputElement | null>>({});
   /**
    * The style every AUTO label is generated from. An unknown/legacy value
@@ -155,15 +156,22 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
       <div className="grid grid-cols-2 gap-2">
         <ColorInput label="Option text" value={T.optionTextColor} onChange={(v) => setTheme({ optionTextColor: v })} />
       </div>
-      {/* direct selection, every style on show — `as="div"` because the chips are
-          buttons: a <label> would forward its clicks to the first one */}
-      <Field label="Plain numbering" hint={numberingDef.example} as="div">
-        <PlainNumberingPicker
-          theme={T}
-          setTheme={setTheme}
-          sampleKeys={slide.options.map((o) => o.key)}
-        />
-      </Field>
+      {/* the label painted inside each marker is styled under "Opt bullet text" */}
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+        <span className="text-[11px] leading-snug text-slate-400">
+          Marker labels: <b className="text-slate-200">{numberingDef.label}</b>
+          <span className="ml-1 text-slate-500">{numberingDef.example}</span>
+        </span>
+        {onOpenBulletText && (
+          <button
+            type="button"
+            onClick={onOpenBulletText}
+            className="shrink-0 text-[11px] font-medium text-amber-300 hover:underline"
+          >
+            Change →
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <Btn size="sm" onClick={() => updateAll({ showAnswer: true })}>Reveal all</Btn>
         <Btn size="sm" onClick={() => updateAll({ showAnswer: false })}>Hide all</Btn>

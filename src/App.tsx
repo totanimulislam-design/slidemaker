@@ -108,9 +108,34 @@ export default function App() {
   /** multi-selection of drawn items; a group is selected as a unit (all member ids) */
   const [selectedShapes, setSelectedShapes] = useState<string[]>([]);
   const [surface, setSurface] = useState<"frame" | "background" | null>(null);
-  const [forceTab, setForceTab] = useState<InspectorTab | null>(null);
+  /**
+   * An externally requested inspector tab. Carried with a nonce so asking for
+   * the tab that is already recorded still re-opens it (a plain string state
+   * would be swallowed by React's "same value" bailout).
+   */
+  const [tabRequest, setTabRequest] = useState<{ tab: InspectorTab; n: number } | null>(null);
+  const requestTab = useCallback((tab: InspectorTab) => {
+    setTabRequest((r) => ({ tab, n: (r?.n ?? 0) + 1 }));
+  }, []);
   const [editScope, setEditScope] = useState<"slide" | "selected" | "all">("slide");
   const [scopeSlideIds, setScopeSlideIds] = useState<string[]>([]);
+
+  /**
+   * Which navigation entry edits a given board element. Selecting a layer (or an
+   * element on the canvas) therefore opens the panel that actually styles it,
+   * instead of dumping everything into one generic layout tab.
+   */
+  const tabOfElement = (id: ElementId): InspectorTab =>
+    ({
+      logo: "logo",
+      brand: "badge1",
+      title: "titleText",
+      badge: "badge3",
+      bullet: "questionBullet",
+      question: "questionText",
+      options: "optionText",
+      note: "footnote",
+    })[id] ?? "shapes";
 
   /** resolves the Shapes-panel scope into a deck target (null = all, id, or id[]) */
   const resolveScope = useCallback(
@@ -130,22 +155,52 @@ export default function App() {
       setSurface(null);
       setSelectedEl(null);
       setSelectedShapes([id]);
-      setForceTab("shapes");
+      requestTab("images");
     },
-    [addImage, resolveScope],
+    [addImage, resolveScope, requestTab],
   );
 
   /** the "primary" selected drawn item — what the inspector edits */
   const selectedShape = selectedShapes.length ? selectedShapes[selectedShapes.length - 1] : null;
 
   /** select shapes from the canvas; a group arrives already expanded */
-  const selectShapeIds = useCallback((ids: string[]) => {
-    if (ids.length) setSurface(null);
-    setSelectedShapes(ids);
-    // selecting a drawn shape clears any built-in element selection
-    if (ids.length) {
+  const selectShapeIds = useCallback(
+    (ids: string[]) => {
+      if (ids.length) setSurface(null);
+      setSelectedShapes(ids);
+      // selecting a drawn shape clears any built-in element selection
+      if (ids.length) {
+        setSelectedEl(null);
+        // a lone picture opens "Insert images"; anything else opens "Insert shapes"
+        const cur = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
+        const pool = [...(deck.globalShapes ?? []), ...(cur?.shapes ?? [])];
+        const only = ids.length === 1 ? pool.find((x) => x.id === ids[0]) : undefined;
+        requestTab(only?.kind === "image" ? "images" : "shapes");
+      }
+    },
+    [deck.globalShapes, deck.slides, current, requestTab],
+  );
+
+  /**
+   * Picking a navigation entry also selects the matching content on the slide,
+   * so the panel and the canvas always point at the same thing. The active
+   * field is cleared: it would otherwise re-drive the inspector's tab from a
+   * stale canvas click and undo the navigation choice.
+   */
+  const handleNavSelect = useCallback((target: { element?: ElementId; surface?: "frame" | "background" }) => {
+    setActiveField(null);
+    if (target.element) {
+      setSelectedEl(target.element);
+      setSelectedShapes([]);
+      setSurface(null);
+    } else if (target.surface) {
+      setSurface(target.surface);
       setSelectedEl(null);
-      setForceTab("shapes");
+      setSelectedShapes([]);
+    } else {
+      // the insert tabs keep any selected picture / shape so it stays editable
+      setSurface(null);
+      setSelectedEl(null);
     }
   }, []);
 
@@ -161,18 +216,23 @@ export default function App() {
     return visibleStack(deck, sl);
   }, [deck, current]);
 
-  const selectLayer = useCallback((ref: LayerRef) => {
-    setSurface(null);
-    if (ref.kind === "shape") {
-      setSelectedEl(null);
-      setSelectedShapes([ref.id]);
-      setForceTab("shapes");
-    } else {
-      setSelectedShapes([]);
-      setSelectedEl(ref.id);
-      setForceTab("layout");
-    }
-  }, []);
+  const selectLayer = useCallback(
+    (ref: LayerRef) => {
+      setSurface(null);
+      if (ref.kind === "shape") {
+        setSelectedEl(null);
+        setSelectedShapes([ref.id]);
+        const cur = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
+        const pool = [...(deck.globalShapes ?? []), ...(cur?.shapes ?? [])];
+        requestTab(pool.find((x) => x.id === ref.id)?.kind === "image" ? "images" : "shapes");
+      } else {
+        setSelectedShapes([]);
+        setSelectedEl(ref.id);
+        requestTab(tabOfElement(ref.id));
+      }
+    },
+    [deck.globalShapes, deck.slides, current, requestTab],
+  );
 
   /**
    * Alt+click on any layer: walks to the layer directly BENEATH the current
@@ -260,9 +320,9 @@ export default function App() {
       setSurface(null);
       setSelectedEl(null);
       setSelectedShapes([id]);
-      setForceTab("shapes");
+      requestTab(kind === "image" ? "images" : "shapes");
     },
-    [addShape, resolveScope],
+    [addShape, resolveScope, requestTab],
   );
 
   const [offscreen, setOffscreen] = useState(false);
@@ -829,7 +889,7 @@ export default function App() {
                         const { loadImageFile, shrinkDataUrl } = await import("./lib/shapes");
                         const { src } = await loadImageFile(files[0]);
                         setBackground({ src: await shrinkDataUrl(src, 2560, 0.85) }, "slide", slide.id);
-                        setForceTab("background");
+                        requestTab("background");
                       })();
                       return;
                     }
@@ -861,7 +921,16 @@ export default function App() {
                     activeField={activeField}
                     onLayoutChange={moveElement}
                     selected={selectedEl}
-                    onSelect={id => { setSelectedEl(id); if (id) { setSurface(null); setSelectedShapes([]); } }}
+                    onSelect={id => {
+                      setSelectedEl(id);
+                      if (id) {
+                        setSurface(null);
+                        setSelectedShapes([]);
+                        // two-way sync: picking content on the slide opens the
+                        // navigation entry that styles it
+                        requestTab(tabOfElement(id));
+                      }
+                    }}
                     onSurfaceSelect={value => { setSurface(value); setSelectedEl(null); setSelectedShapes([]); setActiveField(null); }}
                     globalShapes={deck.globalShapes}
                     selectedShapeIds={selectedShapes}
@@ -999,7 +1068,9 @@ export default function App() {
             scripts={scripts}
             selectedEl={selectedEl ?? "title"}
             onSelectEl={id => { setSelectedEl(id); setSelectedShapes([]); setSurface(null); }}
-            forceTab={forceTab}
+            onNavSelect={handleNavSelect}
+            forceTab={tabRequest?.tab ?? null}
+            forceToken={tabRequest?.n ?? 0}
             shapes={{
               slide: slide?.shapes ?? [],
               global: deck.globalShapes ?? [],

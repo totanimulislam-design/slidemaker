@@ -12,7 +12,7 @@ import { ELEMENT_DEFAULT_Z } from "../lib/layers";
 import { bannerCss } from "../lib/banner";
 import { backgroundLayers } from "../lib/background";
 import type { BackgroundSettings } from "../lib/types";
-import { DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
+import { DEFAULT_BADGE_PLATE, DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
 import { computeFrameCss } from "../lib/frameDesigns";
 import { resolveFrameImageSrc } from "../lib/frameImages";
 import { boxesOverlap } from "../lib/groups";
@@ -192,8 +192,12 @@ function SlideBase({
     return r;
   };
 
-  const elementShown = (id: ElementId) =>
-    id === "logo" ? !!(header.showLogo && header.logo) : id === "note" ? !!slide.note?.trim() : true;
+  const elementShown = (id: ElementId) => {
+    if (id === "logo") return !!(header.showLogo && header.logo);
+    if (id === "note") return !!slide.note?.trim() && (theme.showNote ?? true);
+    if (id === "brand") return (theme.showBrandTop ?? true) || (theme.showBrandBottom ?? true);
+    return true;
+  };
 
   const snapTargets = (except: string) => {
     const out: { x: number; y: number; w: number; h: number }[] = [];
@@ -370,6 +374,7 @@ function SlideBase({
       : { left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` };
     return (
       <div
+        data-el-overlay={id}
         style={{
           position: "absolute",
           ...style,
@@ -433,7 +438,12 @@ function SlideBase({
     const r = renderNumberStyle(id, t, size, sl.number);
     const slash = id === "slash";
     return (
-      <div style={{ ...r.style, fontSize: size * r.fontScale, color: r.color, fontFamily: boxStack(t, "bullet") }}>
+      <div
+        // boxFontCss makes the "text inside question bullet" panel live: family,
+        // colour, weight, case, tracking and size scale all land on the number
+        // (and only on it — the bullet's painted shape comes from r.style).
+        style={boxFontCss(t, "bullet", { ...r.style, fontSize: size * r.fontScale, color: r.color })}
+      >
         {r.content}
         {slash && (
           <span
@@ -730,8 +740,18 @@ function SlideBase({
               letterSpacing: 0.4,
             }))}
           >
-            <div style={{ fontSize: 25 }}>{header.brandTop}</div>
-            <div style={{ fontSize: 27 }}>{header.brandBottom}</div>
+            {/* Badge 1 / Badge 2 — each line can be hidden, resized and
+                recoloured independently (see the Brand Line panels) */}
+            {(theme.showBrandTop ?? true) && (
+              <div style={{ fontSize: theme.brandTopSize ?? 25, color: theme.brandTopColor || undefined }}>
+                {header.brandTop}
+              </div>
+            )}
+            {(theme.showBrandBottom ?? true) && (
+              <div style={{ fontSize: theme.brandBottomSize ?? 27, color: theme.brandBottomColor || undefined }}>
+                {header.brandBottom}
+              </div>
+            )}
             <Grip id="brand" />
           </div>
 
@@ -750,7 +770,7 @@ function SlideBase({
                   <div
                     style={boxFontCss(theme, "title", {
                       position: "relative",
-                      fontSize: 54,
+                      fontSize: theme.titleSize ?? 54,
                       fontWeight: 800,
                       lineHeight: 1.25,
                       whiteSpace: "nowrap",
@@ -770,7 +790,7 @@ function SlideBase({
             {...handlers("badge")}
             style={boxStyle("badge", boxFontCss(theme, "badge", {
               fontWeight: 700,
-              fontSize: 36,
+              fontSize: theme.badgeSize ?? 36,
               letterSpacing: 0.5,
               color: theme.badgeColor,
               textTransform: "uppercase",
@@ -778,7 +798,25 @@ function SlideBase({
               lineHeight: 1.15,
             }))}
           >
-            <span>{slide.badge?.trim() || header.badge}</span>
+            {(() => {
+              const text = slide.badge?.trim() || header.badge;
+              const plate = { ...DEFAULT_BADGE_PLATE, ...(theme.badgePlate ?? {}) };
+              if (!plate.enabled) return <span>{text}</span>;
+              return (
+                <span
+                  style={{
+                    display: "inline-block",
+                    background: withAlpha(plate.color, plate.opacity),
+                    borderRadius: plate.radius,
+                    padding: `${plate.padY}px ${plate.padX}px`,
+                    border: plate.border.enabled ? `${plate.border.width}px solid ${plate.border.color}` : undefined,
+                    boxShadow: `0 2px 10px ${withAlpha("#000000", 0.45)}`,
+                  }}
+                >
+                  {text}
+                </span>
+              );
+            })()}
             <Grip id="badge" />
           </div>
 
@@ -901,12 +939,12 @@ function SlideBase({
           </div>
 
           {/* -------------------------------- note ----------------------------- */}
-          {slide.note?.trim() ? (
+          {slide.note?.trim() && (theme.showNote ?? true) ? (
             <div
               {...handlers("note")}
               style={boxStyle("note", boxFontCss(theme, "note", {
-                color: withAlpha("#ffffff", 0.72),
-                fontSize: 20,
+                color: withAlpha(theme.noteColor || "#ffffff", (theme.noteOpacity ?? 72) / 100),
+                fontSize: theme.noteSize ?? 20,
                 fontWeight: 500,
               }))}
             >

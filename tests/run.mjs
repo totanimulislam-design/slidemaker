@@ -18,6 +18,7 @@ const suites = [
   ["pointer state machine (lib/dragSession)", "session.test.ts", "runSessionTests"],
   ["editor chrome resizers (SplitPane divider)", "chrome.test.tsx", "runChromeTests"],
   ["app boot smoke test (full editor)", "smoke.test.tsx", "runSmokeTests"],
+  ["inspector navigation (17 destinations + slide selection sync)", "nav.test.tsx", "runNavTests"],
 ];
 
 installDom();

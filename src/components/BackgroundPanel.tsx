@@ -5,7 +5,7 @@ import { BG_CATEGORIES, BG_PRESETS, designName, designThumb } from "../lib/backg
 import { gradientCss } from "../lib/banner";
 import { inlineRemoteImage, loadImageFile, shrinkDataUrl, type ShapeItem } from "../lib/shapes";
 import GradientEditor from "./GradientEditor";
-import { Btn, ColorInput, Field, SegButtons, Slider, Toggle } from "./ui";
+import { Btn, ColorInput, Field, PanelHead, SegButtons, Slider, Toggle } from "./ui";
 import { cn } from "../utils/cn";
 
 type Scope = "slide" | "deck" | "selected";
@@ -120,6 +120,10 @@ export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSl
 
   return (
     <div className="space-y-4">
+      <PanelHead
+        title="Slide background"
+        subtitle="The surface behind everything — image, gradient, pattern design and vignette."
+      />
       {/* ------------------------------ live preview -------------------------- */}
       <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-white/10" style={{ background: deck.theme.board }}>
         {backgroundLayers(bg, deck.theme.board).map((st, i) => (

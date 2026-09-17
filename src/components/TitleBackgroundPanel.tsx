@@ -1,15 +1,24 @@
-import type { BannerSettings, BannerShape, DeckHeader, ThemeSettings } from "../lib/types";
+import type { BannerSettings, BannerShape, Box, DeckHeader, ElementId, ThemeSettings } from "../lib/types";
 import { DEFAULT_BANNER, cloneBanner } from "../lib/types";
-import { BANNER_PRESETS, TEXT_GRADIENT_PRESETS, bannerCss } from "../lib/banner";
+import { BANNER_PRESETS, bannerCss } from "../lib/banner";
 import GradientEditor from "./GradientEditor";
-import { Btn, ColorInput, Field, Slider, TextInput, Toggle } from "./ui";
+import ElementPosition from "./ElementPosition";
+import { Btn, ColorInput, Field, PanelHead, Slider, Toggle } from "./ui";
 import { cn } from "../utils/cn";
 
+/**
+ * Navigation ▸ "Title background".
+ *
+ * The plate painted *behind* the heading: silhouette, solid colour or gradient,
+ * softness, halo, opacity, padding, corner radius, border and the on-screen
+ * shimmer. The glyphs themselves live in the sibling "Title text" panel.
+ */
 interface Props {
   theme: ThemeSettings;
   header: DeckHeader;
   setTheme: (patch: Partial<ThemeSettings>) => void;
   setHeader: (patch: Partial<DeckHeader>) => void;
+  patchLayout: (id: ElementId, patch: Partial<Box>, label?: string) => void;
 }
 
 const SHAPES: { id: BannerShape; label: string; icon: string }[] = [
@@ -22,18 +31,34 @@ const SHAPES: { id: BannerShape; label: string; icon: string }[] = [
   { id: "none", label: "None", icon: "∅" },
 ];
 
-export default function BannerPanel({ theme, header, setTheme, setHeader }: Props) {
-  const b: BannerSettings = { ...DEFAULT_BANNER, ...(theme.banner ?? {}), color: theme.banner?.color ?? theme.titleBanner };
-  const set = (p: Partial<BannerSettings>) => setTheme({ banner: { ...b, ...p } });
+const SWATCHES = ["#1f5fd0", "#7c3aed", "#059669", "#b91c1c", "#b45309", "#0e7490", "#334155"];
+
+export default function TitleBackgroundPanel({ theme, header, setTheme, setHeader, patchLayout }: Props) {
+  const b: BannerSettings = {
+    ...DEFAULT_BANNER,
+    ...(theme.banner ?? {}),
+    color: theme.banner?.color ?? theme.titleBanner,
+  };
+  /**
+   * `theme.titleBanner` is the legacy solid banner colour older decks read from,
+   * so a colour pick writes both — the two can never drift apart.
+   */
+  const set = (p: Partial<BannerSettings>) =>
+    setTheme({ banner: { ...b, ...p }, ...(p.color ? { titleBanner: p.color } : {}) });
   const css = bannerCss(b, theme.titleColor);
   const solidShape = b.shape !== "glow" && b.shape !== "none";
 
   return (
     <div className="space-y-4">
-      {/* ------------------------------- live preview ------------------------ */}
+      <PanelHead
+        title="Title background"
+        subtitle="The banner plate behind the heading — shape, fill, glow and padding."
+      />
+
+      {/* --------------------------------- live preview ---------------------- */}
       <div className="overflow-hidden rounded-xl border border-white/10" style={{ background: theme.board }}>
         <div className="flex items-center justify-center px-6 py-7">
-          <div style={{ position: "relative", padding: "6px 0" }}>
+          <div style={{ position: "relative", padding: css.padding }}>
             {header.showBanner && css.halo && <div style={css.halo} />}
             {header.showBanner && <div className={b.shimmer ? "banner-shimmer" : undefined} style={css.box} />}
             <div
@@ -53,18 +78,19 @@ export default function BannerPanel({ theme, header, setTheme, setHeader }: Prop
         </div>
       </div>
 
-      <Toggle label="Show banner behind the title" checked={header.showBanner} onChange={(v) => setHeader({ showBanner: v })} />
-
-      <Field label="Title text">
-        <TextInput value={header.title} onChange={(e) => setHeader({ title: e.target.value })} />
-      </Field>
+      <Toggle
+        label="Show banner behind the title"
+        checked={header.showBanner}
+        onChange={(v) => setHeader({ showBanner: v })}
+      />
 
       {/* --------------------------------- presets --------------------------- */}
-      <Field label="Banner presets">
+      <Field label="Banner presets" as="div">
         <div className="grid grid-cols-4 gap-1.5">
           {BANNER_PRESETS.map((p) => (
             <button
               key={p.name}
+              type="button"
               onClick={() => set({ ...cloneBanner(b), ...p.banner })}
               title={p.name}
               className="flex flex-col items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1.5 text-[10px] text-slate-300 hover:border-amber-400/60"
@@ -77,16 +103,19 @@ export default function BannerPanel({ theme, header, setTheme, setHeader }: Prop
       </Field>
 
       {/* --------------------------------- shape ----------------------------- */}
-      <Field label="Shape">
+      <Field label="Shape" as="div">
         <div className="grid grid-cols-7 gap-1">
           {SHAPES.map((s) => (
             <button
               key={s.id}
+              type="button"
               onClick={() => set({ shape: s.id })}
               title={s.label}
               className={cn(
                 "flex flex-col items-center rounded-lg border py-1.5 text-[9px]",
-                b.shape === s.id ? "border-amber-400 bg-amber-400 text-slate-950" : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/25",
+                b.shape === s.id
+                  ? "border-amber-400 bg-amber-400 text-slate-950"
+                  : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/25",
               )}
             >
               <span className="text-base leading-none">{s.icon}</span>
@@ -98,15 +127,20 @@ export default function BannerPanel({ theme, header, setTheme, setHeader }: Prop
 
       {b.shape !== "none" && (
         <>
-          {/* -------------------------------- colour ----------------------------- */}
           {!b.gradient.enabled && (
-            <Field label="Banner colour">
+            <Field label="Banner colour" as="div">
               <div className="flex items-center gap-2">
                 <div className="flex-1">
                   <ColorInput label={b.color} value={b.color} onChange={(v) => set({ color: v })} />
                 </div>
-                {["#1f5fd0", "#7c3aed", "#059669", "#b91c1c", "#b45309", "#0e7490", "#334155"].map((c) => (
-                  <button key={c} onClick={() => set({ color: c })} className="h-6 w-6 rounded-md border border-black/40" style={{ background: c }} />
+                {SWATCHES.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => set({ color: c })}
+                    className="h-6 w-6 rounded-md border border-black/40"
+                    style={{ background: c }}
+                  />
                 ))}
               </div>
             </Field>
@@ -127,7 +161,6 @@ export default function BannerPanel({ theme, header, setTheme, setHeader }: Prop
             ]}
           />
 
-          {/* -------------------------------- glow ------------------------------- */}
           <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
             {b.shape === "glow" && (
               <Field label="Softness" hint={`${b.glow}`}>
@@ -142,7 +175,6 @@ export default function BannerPanel({ theme, header, setTheme, setHeader }: Prop
             </Field>
           </div>
 
-          {/* -------------------------------- size ------------------------------- */}
           <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
             <Field label="Width padding" hint={`${b.padX}%`}>
               <Slider min={0} max={40} value={b.padX} onChange={(v) => set({ padX: v })} />
@@ -164,9 +196,19 @@ export default function BannerPanel({ theme, header, setTheme, setHeader }: Prop
                 />
                 {b.border.enabled && (
                   <div className="grid grid-cols-2 gap-2">
-                    <ColorInput label="Border colour" value={b.border.color} onChange={(v) => set({ border: { ...b.border, color: v } })} />
+                    <ColorInput
+                      label="Border colour"
+                      value={b.border.color}
+                      onChange={(v) => set({ border: { ...b.border, color: v } })}
+                    />
                     <Field label="Width" hint={`${b.border.width}px`}>
-                      <Slider min={1} max={8} step={0.5} value={b.border.width} onChange={(v) => set({ border: { ...b.border, width: v } })} />
+                      <Slider
+                        min={1}
+                        max={8}
+                        step={0.5}
+                        value={b.border.width}
+                        onChange={(v) => set({ border: { ...b.border, width: v } })}
+                      />
                     </Field>
                   </div>
                 )}
@@ -177,26 +219,7 @@ export default function BannerPanel({ theme, header, setTheme, setHeader }: Prop
         </>
       )}
 
-      {/* ------------------------------- title text -------------------------- */}
-      <div className="space-y-3">
-        <span className="text-[11px] font-medium tracking-wide text-slate-400 uppercase">Title text</span>
-        {!b.textGradient.enabled && (
-          <ColorInput label="Title colour" value={theme.titleColor} onChange={(v) => setTheme({ titleColor: v })} />
-        )}
-        <GradientEditor
-          label="Gradient text"
-          value={b.textGradient}
-          fallback={theme.titleColor}
-          onChange={(g) => set({ textGradient: g })}
-          presets={TEXT_GRADIENT_PRESETS}
-        />
-        <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-          <Field label="Text glow" hint={b.textGlow ? `${b.textGlow}` : "off"}>
-            <Slider min={0} max={100} value={b.textGlow} onChange={(v) => set({ textGlow: v })} />
-          </Field>
-          <Toggle label="Drop shadow" checked={b.textShadow} onChange={(v) => set({ textShadow: v })} />
-        </div>
-      </div>
+      <ElementPosition theme={theme} id="title" patchLayout={patchLayout} label="Title block" />
 
       <div className="flex gap-2 border-t border-white/10 pt-3">
         <Btn size="sm" variant="danger" onClick={() => setTheme({ banner: cloneBanner(DEFAULT_BANNER) })}>
