@@ -407,7 +407,7 @@ export default function ContextToolbar(p: Props) {
     swatch(name, value, change, <span className="ctx-a" style={{ borderBottomColor: value }}>A</span>);
 
   let content: ReactNode = null;
-  if (panel === "Font" && text) content = <FontPicker label="Font family" script="all" compact value={s?.fontFamily || (el ? boxFontLabel(theme, el) : "")} onChange={family => s ? patch({ fontFamily: family }) : fontPatch({ family })} />;
+  if (panel === "Font" && text) content = <FontPicker label="Font family" script="all" compact previewTarget={s ? `shape:${s.id}` : el ? `box:${el}` : undefined} value={s?.fontFamily || (el ? boxFontLabel(theme, el) : "")} onChange={family => s ? patch({ fontFamily: family }) : fontPatch({ family })} />;
   if (panel === "Spacing" && text) content = (
     <div>
       <div className="ctx-field"><span>Letter spacing</span>{stepper("Letter spacing", s?.letterSpacing ?? tf.letterSpacing ?? 0, v => s ? patch({ letterSpacing: v }) : fontPatch({ letterSpacing: v }), -2, 20, .5)}</div>
@@ -492,6 +492,7 @@ export default function ContextToolbar(p: Props) {
       label="Marker typeface"
       script="all"
       compact
+      previewTarget="optionBullet"
       value={theme.optionBulletFontFamily ?? ""}
       onChange={family => {
         const meta = FONT_BY_FAMILY.get(family.toLowerCase());
@@ -507,6 +508,7 @@ export default function ContextToolbar(p: Props) {
       label="Title typeface"
       script="all"
       compact
+      previewTarget="box:title"
       value={boxFontLabel(theme, "title")}
       onChange={family => patchBoxFont("title", { family })}
     />
@@ -565,6 +567,7 @@ export default function ContextToolbar(p: Props) {
       label="Badge typeface"
       script="all"
       compact
+      previewTarget="box:brand"
       value={boxFontLabel(theme, "brand")}
       onChange={family => patchBoxFont("brand", { family })}
     />
@@ -576,6 +579,7 @@ export default function ContextToolbar(p: Props) {
       label="Question typeface"
       script="all"
       compact
+      previewTarget="box:question"
       value={boxFontLabel(theme, "question")}
       onChange={family => patchBoxFont("question", { family })}
     />
@@ -588,6 +592,7 @@ export default function ContextToolbar(p: Props) {
       label="Number typeface"
       script="all"
       compact
+      previewTarget="box:bullet"
       value={boxFontLabel(theme, "bullet")}
       onChange={family => patchBoxFont("bullet", { family })}
     />

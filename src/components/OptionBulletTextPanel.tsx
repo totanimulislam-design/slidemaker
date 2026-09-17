@@ -109,6 +109,7 @@ export default function OptionBulletTextPanel({ theme: T, slide, setTheme }: Pro
         <FontPicker
           label="Marker typeface"
           value={family}
+          previewTarget="optionBullet"
           onChange={(f) => {
             const meta = FONT_BY_FAMILY.get(f.toLowerCase());
             if (meta) ensureFontStylesheet([meta]);

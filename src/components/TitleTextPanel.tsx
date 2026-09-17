@@ -1,7 +1,7 @@
 import type { Box, DeckHeader, ElementId, ThemeSettings } from "../lib/types";
 import { DEFAULT_BANNER } from "../lib/types";
 import { TEXT_GRADIENT_PRESETS, bannerCss } from "../lib/banner";
-import { clearBoxFont } from "../lib/boxFonts";
+import { boxStack, clearBoxFont } from "../lib/boxFonts";
 import GradientEditor from "./GradientEditor";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
@@ -45,7 +45,7 @@ export default function TitleTextPanel({ theme, header, setTheme, setHeader, pat
             <div
               style={{
                 position: "relative",
-                fontFamily: theme.bengaliFont,
+                fontFamily: boxStack(theme, "title"),
                 fontSize: Math.round(size * 0.56),
                 fontWeight: 800,
                 whiteSpace: "nowrap",

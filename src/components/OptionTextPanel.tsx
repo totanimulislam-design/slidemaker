@@ -143,6 +143,7 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
       <FontPicker
         label="Option text font"
         value={optionFont}
+        previewTarget="box:options"
         onChange={(family) => {
           const meta = FONT_BY_FAMILY.get(family.toLowerCase());
           if (meta) ensureFontStylesheet([meta]);

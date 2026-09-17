@@ -57,6 +57,7 @@ export default function BoxFontControls({ theme, setTheme, selected, compact }: 
       <FontPicker
         label={`${script === "bangla" ? "Bangla" : script === "arabic" ? "Arabic" : "English"} typeface`}
         value={tf.family ?? ""}
+        previewTarget={`box:${selected}`}
         onChange={(family) => {
           const meta = FONT_BY_FAMILY.get(family.toLowerCase());
           if (meta) ensureFontStylesheet([meta]);

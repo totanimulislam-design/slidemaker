@@ -5,6 +5,7 @@ import GradientEditor from "./GradientEditor";
 import ElementPosition from "./ElementPosition";
 import { Btn, ColorInput, Field, PanelHead, Slider, Toggle } from "./ui";
 import { cn } from "../utils/cn";
+import { boxStack } from "../lib/boxFonts";
 
 /**
  * Navigation ▸ "Title background".
@@ -64,7 +65,7 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
             <div
               style={{
                 position: "relative",
-                fontFamily: theme.bengaliFont,
+                fontFamily: boxStack(theme, "title"),
                 fontSize: 30,
                 fontWeight: 800,
                 whiteSpace: "nowrap",

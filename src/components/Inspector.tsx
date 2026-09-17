@@ -609,6 +609,7 @@ export default function Inspector({
               <FontPicker
                 label="Question font"
                 value={toSingleFamily(T.bengaliFont)}
+                previewTarget="deck:bengali"
                 onChange={(family) => {
                   const meta = FONT_BY_FAMILY.get(family.toLowerCase());
                   if (meta) ensureFontStylesheet([meta]);
@@ -630,6 +631,7 @@ export default function Inspector({
                 <FontPicker
                   label="English / Latin default face"
                   value={toSingleFamily(T.latinFont)}
+                  previewTarget="deck:latin"
                   onChange={(family) => {
                     const meta = FONT_BY_FAMILY.get(family.toLowerCase());
                     if (meta) ensureFontStylesheet([meta]);
@@ -641,6 +643,7 @@ export default function Inspector({
                 <FontPicker
                   label="Arabic / Urdu fallback"
                   value={toSingleFamily(T.arabicFont)}
+                  previewTarget="deck:arabic"
                   onChange={(family) => {
                     const meta = FONT_BY_FAMILY.get(family.toLowerCase());
                     if (meta) ensureFontStylesheet([meta]);
