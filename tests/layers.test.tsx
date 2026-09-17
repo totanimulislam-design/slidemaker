@@ -76,10 +76,29 @@ const listEl = () => doc.querySelector<HTMLElement>("aside [data-layer-list]");
 const rows = () => Array.from(doc.querySelectorAll<HTMLElement>("aside [data-layer-list] [data-layer-row]"));
 const rowOf = (k: string) => doc.querySelector<HTMLElement>(`aside [data-layer-row="${k}"]`);
 const rowKeys = () => rows().map((r) => r.getAttribute("data-layer-row") ?? "");
-/** the rows that can be reordered — hidden built-ins are not on this slide */
+/** the rows that can be reordered — built-ins the slide does not have are not */
 const liveKeys = () =>
-  rows().filter((r) => !r.hasAttribute("data-layer-hidden")).map((r) => r.getAttribute("data-layer-row") ?? "");
+  rows().filter((r) => !r.hasAttribute("data-layer-absent")).map((r) => r.getAttribute("data-layer-row") ?? "");
+/** rows for built-ins this slide does not paint at all (no logo, empty footnote) */
+const absentKeys = () => rowKeys().filter((k) => rowOf(k)?.hasAttribute("data-layer-absent"));
+/** rows the user hid with 👁 — still in the stack, just not painted */
 const hiddenKeys = () => rowKeys().filter((k) => rowOf(k)?.hasAttribute("data-layer-hidden"));
+/** rows the user locked with 🔒 */
+const lockedKeys = () => rowKeys().filter((k) => rowOf(k)?.hasAttribute("data-layer-locked"));
+/** a row's action button, by its accessible name prefix */
+const rowBtn = (k: string, prefix: string) =>
+  Array.from(rowOf(k)?.querySelectorAll<HTMLElement>("button") ?? []).find((b) =>
+    (b.getAttribute("title") ?? "").startsWith(prefix),
+  ) ?? null;
+/** is the layer painted on the board right now? */
+const paintedOnBoard = (k: string): boolean => {
+  const kind = k.slice(0, k.indexOf(":"));
+  const id = k.slice(k.indexOf(":") + 1);
+  const el = doc.querySelector<HTMLElement>(
+    kind === "element" ? `.slide-editable [data-el="${id}"]` : `.slide-editable [data-shape="${id}"]`,
+  );
+  return !!el && el.style.display !== "none";
+};
 const selectedRow = () =>
   rows().find((r) => r.getAttribute("aria-selected") === "true")?.getAttribute("data-layer-row") ?? null;
 const order = () => liveKeys().join(",");
@@ -249,9 +268,14 @@ export async function runLayersTests(): Promise<CaseResult[]> {
     detail: first.map((k) => `${k.split(":")[1]}=${paintedZ(k)}`).join(" "),
   });
   out.push({
-    name: "built-ins that are not on this slide are listed but marked hidden",
-    pass: hiddenKeys().length === 3 && liveKeys().length < rowKeys().length,
-    detail: hiddenKeys().join(","),
+    name: "built-ins that are not on this slide are listed but marked absent",
+    pass: absentKeys().length === 3 && liveKeys().length < rowKeys().length,
+    detail: absentKeys().join(","),
+  });
+  out.push({
+    name: "every row carries a live preview of what that layer is",
+    pass: rows().every((r) => !!r.querySelector("[data-layer-thumb]")),
+    detail: `${rows().filter((r) => !!r.querySelector("[data-layer-thumb]")).length}/${rows().length} rows`,
   });
   out.push({
     name: "the list is a listbox of selectable options",
@@ -463,22 +487,22 @@ export async function runLayersTests(): Promise<CaseResult[]> {
     detail: order(),
   });
 
-  // a hidden built-in is not on this slide, so it cannot be dragged
+  // a built-in the slide does not have cannot be dragged
   base = order();
-  const hiddenKey = hiddenKeys()[0];
+  const absentKey = absentKeys()[0];
   stubRowBoxes();
   {
-    const h = boxOf(hiddenKey);
+    const h = boxOf(absentKey);
     const t = boxOf("element:question");
-    down(rowOf(hiddenKey)!, h.x, h.y);
+    down(rowOf(absentKey)!, h.x, h.y);
     held(asWin, t.x, t.y + 6);
     held(asWin, t.x, t.top + 2);
     up(asWin, t.x, t.top + 2);
   }
   out.push({
-    name: "a hidden layer cannot be dragged",
-    pass: order() === base && rowOf(hiddenKey)?.getAttribute("title") === "Not painted on this slide — nothing to reorder",
-    detail: `${hiddenKey} → ${order()}`,
+    name: "a layer that is not on this slide cannot be dragged",
+    pass: order() === base && rowOf(absentKey)?.getAttribute("title") === "Not on this slide — nothing to reorder",
+    detail: `${absentKey} → ${order()}`,
   });
 
   // pointercancel abandons the drop
@@ -561,14 +585,19 @@ export async function runLayersTests(): Promise<CaseResult[]> {
 
   // the lock button still locks (a press on it must not arm a drag)
   {
-    const lockBtn = rowOf("shape:sh2")?.querySelector<HTMLElement>('button[title="Lock"]');
+    const lockBtn = rowBtn("shape:sh2", "Lock");
     click(lockBtn);
     out.push({
       name: "a row's lock button still locks the item",
-      pass: !!lockBtn && !!rowOf("shape:sh2")?.querySelector('button[title="Unlock"]'),
-      detail: `btn=${!!lockBtn}`,
+      pass: !!lockBtn && !!rowBtn("shape:sh2", "Unlock") && lockedKeys().includes("shape:sh2"),
+      detail: `btn=${!!lockBtn} locked=${lockedKeys().join(",")}`,
     });
-    click(rowOf("shape:sh2")?.querySelector<HTMLElement>('button[title="Unlock"]'));
+    click(rowBtn("shape:sh2", "Unlock"));
+    out.push({
+      name: "…and unlocks it again",
+      pass: !lockedKeys().includes("shape:sh2"),
+      detail: lockedKeys().join(","),
+    });
   }
 
   /* --------------------------- keyboard reordering -------------------------- */
@@ -592,6 +621,189 @@ export async function runLayersTests(): Promise<CaseResult[]> {
     detail: `${base} → ${order()}`,
   });
   click(undoBtn());
+
+  /* -------------------------- hide / show a layer --------------------------- */
+  click(navButton("layers"));
+  base = order();
+  click(rowBtn("shape:sh1", "Hide"));
+  out.push({
+    name: "👁 hides a drawn item: the board stops painting it",
+    pass: hiddenKeys().includes("shape:sh1") && !paintedOnBoard("shape:sh1"),
+    detail: `hidden=${hiddenKeys().join(",")} painted=${paintedOnBoard("shape:sh1")}`,
+  });
+  out.push({
+    name: "…but it keeps its slot in the stack (Canva behaviour)",
+    pass: order() === base && liveKeys().includes("shape:sh1"),
+    detail: `${base} → ${order()}`,
+  });
+  // a hidden layer is still fully draggable
+  before = liveKeys();
+  dragRow("shape:sh1", "element:brand");
+  out.push({
+    name: "a hidden layer can still be dragged to a new slot",
+    pass: liveKeys().join(",") === afterDrag(before, "shape:sh1", "element:brand").join(","),
+    detail: `${before.join(",")} → ${liveKeys().join(",")}`,
+  });
+  click(undoBtn());
+  click(rowBtn("shape:sh1", "Show"));
+  out.push({
+    name: "👁 again shows it",
+    pass: !hiddenKeys().includes("shape:sh1") && paintedOnBoard("shape:sh1"),
+    detail: `hidden=${hiddenKeys().join(",")} painted=${paintedOnBoard("shape:sh1")}`,
+  });
+
+  // the same toggle works on a built-in slide element
+  click(rowBtn("element:title", "Hide"));
+  out.push({
+    name: "👁 hides a built-in element too, and the board follows",
+    pass: hiddenKeys().includes("element:title") && !paintedOnBoard("element:title"),
+    detail: `hidden=${hiddenKeys().join(",")} painted=${paintedOnBoard("element:title")}`,
+  });
+  click(undoBtn());
+  out.push({
+    name: "hiding a layer is one undo step",
+    pass: !hiddenKeys().includes("element:title") && paintedOnBoard("element:title"),
+    detail: hiddenKeys().join(","),
+  });
+
+  /* ----------------------------- lock a layer ------------------------------- */
+  click(rowBtn("element:question", "Lock"));
+  out.push({
+    name: "🔒 locks a built-in element",
+    pass: lockedKeys().includes("element:question"),
+    detail: lockedKeys().join(","),
+  });
+  {
+    // a locked element must not move when dragged on the board
+    const qEl = doc.querySelector<HTMLElement>('.slide-editable [data-el="question"]');
+    const x0 = qEl?.style.left ?? "";
+    if (qEl) {
+      fire(qEl, "pointerdown", 300, 300, 1);
+      held(asWin, 380, 360);
+      up(asWin, 380, 360);
+    }
+    out.push({
+      name: "…and a locked element cannot be dragged on the board",
+      pass: (doc.querySelector<HTMLElement>('.slide-editable [data-el="question"]')?.style.left ?? "") === x0,
+      detail: `left ${x0} → ${doc.querySelector<HTMLElement>('.slide-editable [data-el="question"]')?.style.left}`,
+    });
+    out.push({
+      name: "…but it still selects, so it can be unlocked again",
+      pass: overlayOf() === "question" && !!doc.querySelector('[data-el-locked="true"]'),
+      detail: `overlay=${overlayOf()}`,
+    });
+  }
+  click(rowBtn("element:question", "Unlock"));
+  out.push({
+    name: "🔒 again unlocks it",
+    pass: !lockedKeys().includes("element:question"),
+    detail: lockedKeys().join(","),
+  });
+
+  /* ------------------------------- duplicate -------------------------------- */
+  {
+    const n = liveKeys().length;
+    click(rowBtn("shape:sh2", "Duplicate"));
+    const grown = liveKeys();
+    out.push({
+      name: "⧉ duplicates a drawn item into its own new layer",
+      pass: grown.length === n + 1,
+      detail: `${n} → ${grown.length} rows`,
+    });
+    out.push({
+      name: "…and the clone becomes the selection",
+      pass: !!selectedRow() && selectedRow() !== "shape:sh2" && selectedRow()!.startsWith("shape:"),
+      detail: String(selectedRow()),
+    });
+    click(undoBtn());
+    out.push({
+      name: "duplicating is one undo step",
+      pass: liveKeys().length === n,
+      detail: `${liveKeys().length} rows`,
+    });
+  }
+
+  /* --------------------------------- delete --------------------------------- */
+  {
+    const n = liveKeys().length;
+    click(rowBtn("shape:sh2", "Delete"));
+    out.push({
+      name: "🗑 deletes a drawn item's layer",
+      pass: liveKeys().length === n - 1 && !liveKeys().includes("shape:sh2"),
+      detail: `${n} → ${liveKeys().length} rows`,
+    });
+    click(undoBtn());
+    out.push({
+      name: "…and undo brings it back",
+      pass: liveKeys().includes("shape:sh2"),
+      detail: liveKeys().join(","),
+    });
+    // a built-in element cannot be deleted — it is hidden instead
+    click(rowBtn("element:badge", "Hide Badge"));
+    out.push({
+      name: "🗑 on a built-in element hides it instead of deleting the row",
+      pass: hiddenKeys().includes("element:badge") && rowKeys().includes("element:badge"),
+      detail: `hidden=${hiddenKeys().join(",")}`,
+    });
+    click(undoBtn());
+  }
+
+  /* --------------------------------- rename --------------------------------- */
+  {
+    const row = rowOf("shape:sh1")!;
+    act(() => {
+      row.dispatchEvent(new win.MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+    });
+    const input = row.querySelector<HTMLInputElement>("input");
+    out.push({
+      name: "double-clicking a drawn item's row opens a rename box",
+      pass: !!input,
+      detail: `input=${!!input}`,
+    });
+    if (input) {
+      act(() => {
+        input.value = "Backdrop";
+        input.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      });
+    }
+    out.push({
+      name: "…and the new name sticks on the row",
+      pass: (rowOf("shape:sh1")?.textContent ?? "").includes("Backdrop"),
+      detail: String(rowOf("shape:sh1")?.textContent),
+    });
+    click(undoBtn());
+  }
+
+  /* -------------------- several layers dragged as one block ----------------- */
+  {
+    clickRow("shape:sh1");
+    stubRowBoxes();
+    const b = boxOf("shape:sh2");
+    act(() => {
+      rowOf("shape:sh2")!.dispatchEvent(
+        new win.MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }),
+      );
+    });
+    void b;
+    const picked = rows().filter((r) => r.className.includes("sky-400")).length;
+    out.push({
+      name: "Ctrl+click adds a second layer to the selection",
+      pass: picked >= 1,
+      detail: `${picked} extra row(s) marked`,
+    });
+    before = liveKeys();
+    dragRow("shape:sh1", "element:brand");
+    after = liveKeys();
+    const bothMoved =
+      after.indexOf("shape:sh1") > before.indexOf("shape:sh1") && after.indexOf("shape:sh2") > before.indexOf("shape:sh2");
+    out.push({
+      name: "dragging one of them carries the whole selection as a block",
+      pass: bothMoved && Math.abs(after.indexOf("shape:sh1") - after.indexOf("shape:sh2")) === 1,
+      detail: `${before.join(",")} → ${after.join(",")}`,
+    });
+    click(undoBtn());
+    clickRow("shape:sh1");
+  }
 
   /* --------------------- the same list inside Insert shapes ----------------- */
   click(navButton("shapes"));

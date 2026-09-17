@@ -399,6 +399,8 @@ export default function ContextToolbar(p: Props) {
       {button(<>⧉ Duplicate</>, p.duplicate, undefined, "Duplicate")}
       {button(<>🗑 Delete</>, p.remove, undefined, "Delete", "danger")}
       {!multi && button(<>{s.locked ? "🔓 Unlock" : "🔒 Lock"}</>, () => patch({ locked: !s.locked }), undefined, s.locked ? "Unlock" : "Lock")}
+      {/* 👁 keeps the layer in the stack (and in the Layers list) but stops painting it */}
+      {!multi && button(<>🙈 Hide layer</>, () => patch({ hidden: true }), undefined, "Hide this layer — show it again from the Layers panel")}
     </div>
   );
   // the related panel of the "Answer key" destination: style, deck-wide actions,
@@ -874,8 +876,8 @@ export default function ContextToolbar(p: Props) {
         {/* the Layers destination: the stack, and how to move things in it */}
         {layering && <>
           <span className="ctx-hint">
-            {p.layerTools?.total ?? 0} layers on this slide · drag a row in the panel to reorder it · click a row to
-            select it on the slide
+            {p.layerTools?.total ?? 0} layers on this slide · drag a row in the panel to any slot in the stack · click
+            to select it on the slide · 👁 hide · 🔒 lock · ⧉ duplicate · 🗑 delete
           </span>
         </>}
         {arrangeBar && <>

@@ -22,7 +22,7 @@ import type { BackgroundSettings } from "../lib/types";
 import ShapesPanel, { type InsertScope } from "./ShapesPanel";
 import type { ShapeItem, ShapeKind } from "../lib/shapes";
 import type { ZOp } from "../lib/zorder";
-import { layerKey, sortedLayers, type LayerRect, type LayerRef } from "../lib/layers";
+import { layerKey, sortedLayers, type LayerPatch, type LayerRect, type LayerRef } from "../lib/layers";
 import type { AlignOp } from "../lib/shapeAlign";
 import AnswerKeyPanel from "./AnswerKeyPanel";
 import LayersPanel from "./LayersPanel";
@@ -234,10 +234,15 @@ interface Props {
     selected: LayerRef | null;
     /** every drawn item selected on the canvas (a group lights up as a whole) */
     selectedIds: string[];
-    onSelect: (ref: LayerRef) => void;
+    onSelect: (ref: LayerRef, additive?: boolean) => void;
     onReorder: (ref: LayerRef, op: ZOp) => void;
-    /** drag & drop: the stack slot (from the bottom) a layer was dropped into */
-    onMoveTo: (ref: LayerRef, index: number) => void;
+    /** drag & drop: the stack slot (from the bottom) the layers were dropped into */
+    onMoveTo: (refs: LayerRef[], index: number) => void;
+    /** 👁 hide/show, 🔒 lock/unlock and rename, for elements and drawn items alike */
+    onPatch: (refs: LayerRef[], patch: LayerPatch) => void;
+    onDuplicate: (refs: LayerRef[]) => void;
+    /** drawn items are deleted; a built-in element is hidden instead */
+    onDelete: (refs: LayerRef[]) => void;
     onAlign: (ref: LayerRef, op: AlignOp, target?: LayerRect) => void;
     onDistribute: (refs: LayerRef[], axis: "h" | "v") => void;
   };
@@ -367,13 +372,12 @@ export default function Inspector({
       onSelect={layers.onSelect}
       onReorder={layers.onReorder}
       onMoveTo={layers.onMoveTo}
+      onPatch={layers.onPatch}
+      onDuplicate={layers.onDuplicate}
+      onDelete={layers.onDelete}
       onAlign={layers.onAlign}
       onDistribute={layers.onDistribute}
       expanded={expanded}
-      onToggleLock={(id) => {
-        const it = [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])].find((x) => x.id === id);
-        if (it) shapes.onChange(id, { locked: !it.locked });
-      }}
     />
   );
 

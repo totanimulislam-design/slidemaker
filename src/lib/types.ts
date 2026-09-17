@@ -90,6 +90,14 @@ export interface Box {
   rot?: number;
   /** stacking order */
   z?: number;
+  /**
+   * Layer visibility (Layers panel 👁). `true` keeps the element in the stack —
+   * it can still be reordered, selected and shown again — but the board, the
+   * thumbnails and every export stop painting it.
+   */
+  hidden?: boolean;
+  /** Layer lock (Layers panel 🔒): the element cannot be dragged/resized/rotated. */
+  locked?: boolean;
 }
 
 export const FREE_MIN = -50;

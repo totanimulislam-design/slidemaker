@@ -6,6 +6,7 @@ import { canMove, Z_LABELS, type ZOp } from "../lib/zorder";
 import { useState } from "react";
 import { Btn, Field, PanelHead, SegButtons, Slider, TextArea, Toggle } from "./ui";
 import ShapeDesignPanel from "./ShapeDesignPanel";
+import { layerLabel } from "../lib/layers";
 import { cn } from "../utils/cn";
 
 const KINDS: ShapeKind[] = ["text", "rect", "rounded", "ellipse", "triangle", "diamond", "star", "line", "arrow"];
@@ -360,9 +361,10 @@ export default function ShapesPanel({
                     )}
                   >
                     <span className="w-4 text-center">{SHAPE_ICONS[x.kind]}</span>
-                    <span className="flex-1 truncate">
-                      {x.kind === "text" && x.text ? x.text.replace(/\n/g, " ") : SHAPE_LABELS[x.kind]}
+                    <span className={cn("flex-1 truncate", x.hidden && "line-through opacity-60")}>
+                      {layerLabel(x)}
                     </span>
+                    {x.hidden && <span className="text-[10px]" title="Hidden">🙈</span>}
                     {g && <span className="rounded bg-black/20 px-1 text-[9px]">ALL</span>}
                     {x.groupId && (
                       <span className="text-[10px] text-sky-300" title="Part of a group — click here selects this item alone">

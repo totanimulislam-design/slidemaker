@@ -22,6 +22,8 @@ export type ShapeKind =
 export interface ShapeItem {
   id: string;
   kind: ShapeKind;
+  /** user-given layer name (Layers panel); empty = derive it from the content */
+  name?: string;
   /** left / top edge in % of the board */
   x: number;
   y: number;
@@ -45,6 +47,11 @@ export interface ShapeItem {
   align: "left" | "center" | "right";
   valign: "top" | "middle" | "bottom";
   locked?: boolean;
+  /**
+   * Layer visibility (Layers panel 👁). A hidden item keeps its slot in the
+   * stack and stays listed, but is not painted on the board or in exports.
+   */
+  hidden?: boolean;
   /** render beneath the slide's question/options/title (backdrops, highlights) */
   behind?: boolean;
   /**

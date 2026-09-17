@@ -22,7 +22,18 @@ import { useHistory } from "./useHistory";
 import { effectiveTheme, mergeThemeOverride } from "./overrides";
 import { applySlideDesign, revertSlideDesign, type ApplySection } from "./applyDesign";
 import { sortByZ, Z_BASE, Z_LABELS, type ZOp } from "./zorder";
-import { alignLayer, distributeLayers, moveLayerTo, normalizeUnifiedZ, reorderLayer, topZ, type LayerRect, type LayerRef } from "./layers";
+import {
+  alignLayer,
+  distributeLayers,
+  moveLayerTo,
+  normalizeUnifiedZ,
+  patchLayers,
+  reorderLayer,
+  topZ,
+  type LayerPatch,
+  type LayerRect,
+  type LayerRef,
+} from "./layers";
 import type { AlignOp } from "./shapeAlign";
 import type { BackgroundSettings, Box, ElementId, LayoutMap } from "./types";
 import { DEFAULT_LAYOUT as LAYOUT_DEFAULTS } from "./types";
@@ -804,7 +815,9 @@ export function useDeck() {
           }
           made.push({
             slideId: d.globalShapes?.some((x) => x.id === p.src) ? null : ownerOf(p.src),
-            item: { ...src, id: p.dst, x: src.x + 3, y: src.y + 3, z: topZ(d) + 1 + i, groupId: g },
+            // a copy is always painted: duplicating a 👁-hidden layer and seeing
+            // nothing appear on the slide reads as a broken button
+            item: { ...src, id: p.dst, x: src.x + 3, y: src.y + 3, z: topZ(d) + 1 + i, groupId: g, hidden: false },
           });
         });
         const globals = made.filter((m) => m.slideId === null).map((m) => m.item);
@@ -839,17 +852,80 @@ export function useDeck() {
   );
 
   /**
-   * Drag & drop in the layer list: puts `ref` into an exact slot of the visible
-   * stack (counted from the bottom). One drop = one undo step.
+   * Drag & drop in the layer list: puts `ref` (one row, or a whole multi-row
+   * selection carried as a block) into an exact slot of the stack, counted from
+   * the bottom. One drop = one undo step.
    */
   const moveLayerToOp = useCallback(
-    (ref: LayerRef, index: number, slideId: string | null) => {
+    (ref: LayerRef | LayerRef[], index: number, slideId: string | null) => {
+      const one = Array.isArray(ref) ? ref[0] : ref;
+      const count = Array.isArray(ref) ? ref.length : 1;
       setDeckH((d) => {
         const slide =
-          (ref.kind === "shape" ? d.slides.find((s) => s.shapes?.some((x) => x.id === ref.id)) : undefined) ??
+          (one?.kind === "shape" ? d.slides.find((s) => s.shapes?.some((x) => x.id === one.id)) : undefined) ??
           d.slides.find((s) => s.id === slideId);
         return moveLayerTo(d, slide, ref, index);
-      }, "Reorder layer");
+      }, count > 1 ? `Reorder ${count} layers` : "Reorder layer");
+    },
+    [setDeckH],
+  );
+
+  /**
+   * Hide / show, lock / unlock and rename any layer — built-in elements and
+   * drawn items alike. One call per gesture, so a whole multi-selection toggles
+   * in a single undo step.
+   */
+  const patchLayersOp = useCallback(
+    (refs: LayerRef[], patch: LayerPatch, slideId: string | null) => {
+      if (!refs.length) return;
+      const n = refs.length;
+      const label =
+        patch.name !== undefined
+          ? "Rename layer"
+          : patch.hidden !== undefined
+            ? `${patch.hidden ? "Hide" : "Show"} ${n > 1 ? `${n} layers` : "layer"}`
+            : patch.locked !== undefined
+              ? `${patch.locked ? "Lock" : "Unlock"} ${n > 1 ? `${n} layers` : "layer"}`
+              : "Edit layer";
+      setDeckH((d) => patchLayers(d, refs, patch, slideId), label);
+    },
+    [setDeckH],
+  );
+
+  /**
+   * Duplicate any set of layers. Drawn items are cloned right above the
+   * originals; built-in elements cannot be duplicated (there is exactly one
+   * title, one question …), so they are simply skipped.
+   */
+  const duplicateLayersOp = useCallback(
+    (refs: LayerRef[]): string[] => duplicateShapes(refs.filter((r) => r.kind === "shape").map((r) => r.id)),
+    [duplicateShapes],
+  );
+
+  /**
+   * Delete any set of layers. Drawn items are removed; a built-in element
+   * cannot be deleted, so it is HIDDEN instead — the Canva-equivalent outcome,
+   * and it stays in the list ready to be shown again.
+   */
+  const removeLayersOp = useCallback(
+    (refs: LayerRef[], slideId: string | null) => {
+      const shapeIds = refs.filter((r) => r.kind === "shape").map((r) => r.id);
+      const elements = refs.filter((r) => r.kind === "element");
+      if (!shapeIds.length && !elements.length) return;
+      const n = refs.length;
+      setDeckH((d) => {
+        const set = new Set(shapeIds);
+        const cleared: Deck = shapeIds.length
+          ? {
+              ...d,
+              globalShapes: d.globalShapes?.filter((x) => !set.has(x.id)),
+              slides: d.slides.map((s) =>
+                s.shapes?.some((x) => set.has(x.id)) ? { ...s, shapes: s.shapes.filter((x) => !set.has(x.id)) } : s,
+              ),
+            }
+          : d;
+        return elements.length ? patchLayers(cleared, elements, { hidden: true }, slideId) : cleared;
+      }, n > 1 ? `Delete ${n} layers` : elements.length && !shapeIds.length ? "Hide layer" : "Delete layer");
     },
     [setDeckH],
   );
@@ -888,9 +964,10 @@ export function useDeck() {
       // never copy geometry / content / identity
       const {
         id: _i, kind: _k, x: _x, y: _y, w: _w, h: _h, rot: _r, z: _z, text: _t, src: _s, locked: _l, behind: _b,
-        naturalRatio: _n, ...design
+        naturalRatio: _n, hidden: _hd, name: _nm, groupId: _g, ...design
       } = style as ShapeItem;
-      void _i; void _k; void _x; void _y; void _w; void _h; void _r; void _z; void _t; void _s; void _l; void _b; void _n;
+      void _i; void _k; void _x; void _y; void _w; void _h; void _r; void _z; void _t; void _s; void _l; void _b;
+      void _n; void _hd; void _nm; void _g;
       const match = (x: ShapeItem) => x.id !== exceptId && (kind === null || x.kind === kind);
       const apply = (x: ShapeItem): ShapeItem => (match(x) ? { ...x, ...design } : x);
       setDeckH(
@@ -1142,6 +1219,9 @@ export function useDeck() {
     reorderShape,
     reorderLayerOp,
     moveLayerToOp,
+    patchLayersOp,
+    duplicateLayersOp,
+    removeLayersOp,
     alignLayerOp,
     distributeLayersOp,
     removeShape,

@@ -93,37 +93,50 @@ the plain toolbar, never a merged stack.
 
 ## Layers
 
-The **Layers** destination (the ⧉ tile after *Insert shapes*) is one list for
-everything painted on the slide — logo, brand lines, title, badge, question,
-options, footnote **and** every drawn shape, text box and image — because they
-all share a single stacking order (`lib/layers.ts`):
+The **Layers** destination (the ⧉ tile after *Insert shapes*) is one Canva-style
+list for everything painted on the slide — logo, brand lines, title, badge,
+question, options, footnote **and** every drawn shape, text box and image —
+because they all share a single stacking order (`lib/layers.ts`):
 
-- **Top first.** Row 0 is the front-most layer; the gutter shows `top` / `btm`
-  and the layer number. Built-ins that this slide does not paint (no logo, empty
-  footnote, merged bullet) stay in the list, dimmed and marked *(hidden)* — they
-  cannot be reordered because they are not on the board.
-- **Drag to reorder.** Press a row and drag it up or down: the rows it passes
-  slide out of the way, a chip follows the cursor, and the drop writes the whole
-  stack in one undo step. The list auto-scrolls when you hold a row near either
-  edge, so a long deck is reachable in one drag. Dropping below the last row
-  sends the layer to the back.
-- **Click to select.** A row selects that shape / text / element on the slide —
-  outline, handles and its own tools — exactly like Canva, and the panel keeps
-  its place so you can walk down the stack. Clicking the board does the reverse:
-  the list's selection follows, and scrolls the row into view.
+- **Top first, with a preview.** Row 0 is the front-most layer. Every row draws
+  a real mini preview of its own content: shapes render their kind, fill,
+  gradient, stroke and corner radius, images render the image itself, text
+  renders a `T` chip, and the built-in elements render the block they paint.
+- **Drag to any slot.** Press a row and drag: the rows it passes slide out of
+  the way to open the landing gap, a chip follows the cursor, and releasing
+  drops the layer **anywhere** in the stack — not one step at a time. The list
+  auto-scrolls while you hold a row near either edge, and the whole reorder is a
+  single undo step. Ctrl/⌘-click picks several rows and they travel together as
+  one contiguous block.
+- **Per-row controls.** Hovering a row reveals the full Canva set: ▲ **Bring
+  Forward**, ▼ **Send Backward**, 👁 **Hide/Show**, 🔒 **Lock/Unlock**, ⧉
+  **Duplicate** and 🗑 **Delete**. The toolbar above the list repeats them for
+  the current selection and adds ⏫ **Bring to Front** / ⏬ **Send to Back**,
+  plus a collapsible *Align & distribute* section.
+- **Hide vs. not on this slide.** 👁 hides a layer you own: it stops painting but
+  keeps its slot, stays selectable and stays draggable, and one click brings it
+  back. Built-ins this slide simply does not paint (no logo, empty footnote,
+  merged bullet) are parked above the stack, frozen and marked *(not on slide)*
+  — there is nothing to reorder, hide or delete. Deleting a built-in hides it
+  instead, since a slide always owns its elements.
+- **Locked layers.** A locked layer cannot be dragged, resized or rotated on the
+  board — it draws a dashed amber outline and no handles — but it still selects,
+  so you can always unlock it from the row or the toolbar.
+- **Click to select, both ways.** A row selects that shape / text / element on
+  the slide with its outline, handles and its own tools; clicking the board
+  scrolls the matching row into view and highlights it. Order changes repaint
+  the canvas immediately.
 - **Keyboard.** The list is a `listbox` with roving focus: ↑/↓ walk the rows,
-  `Home`/`End` jump to the ends, `Enter`/`Space` select, and **Alt+↑ / Alt+↓**
-  bring a layer forward / send it backward without a pointer.
-- **Per row.** 🔒 lock a drawn item, ▲/▼ step it one slot, `ALL` marks a
-  deck-wide item that paints on every slide, ⧉ marks a group member (clicking it
-  selects that member alone).
-- **Above the list.** Bring Forward / Front / Backward / Back, align to the slide
-  or to another layer (including *fill* and *match*), and distribute a picked
-  set evenly. The toolbar above the board carries the same arrange buttons while
-  the destination is open.
+  `Home`/`End` jump to the ends, `Enter`/`Space` select, **Alt+↑ / Alt+↓** step a
+  layer forward / backward, `F2` renames, `Delete` removes. Double-clicking a
+  row's name renames it too. On the board, `Tab` / `Shift+Tab` still walk the
+  painted layers — a hidden layer is skipped.
+- **Badges.** `ALL` marks a deck-wide item that paints on every slide, ⧉ marks a
+  group member (clicking it selects that member alone).
 
 The same list is embedded in the *Insert shapes* destination under **Layer
-order**, so reordering is never more than one click away while styling a shape.
+order**, so reordering is never more than one click away while styling a shape,
+and the panel scrolls inside its own pane so it stays usable on a short window.
 
 ## Answer key
 

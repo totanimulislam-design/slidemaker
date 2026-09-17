@@ -1,11 +1,14 @@
-import type { Deck, SlideData } from "../lib/types";
+import type { Deck, ElementId, SlideData } from "../lib/types";
 import { useEffect, useRef, useState } from "react";
 import {
   dropSlot,
+  isStackable,
   layerKey,
   layerRect,
   parseLayerKey,
   sortedLayers,
+  type LayerEntry,
+  type LayerPatch,
   type LayerRect,
   type LayerRef,
 } from "../lib/layers";
@@ -13,6 +16,7 @@ import { measureElement } from "../lib/layoutMeasure";
 import type { AlignOp } from "../lib/shapeAlign";
 import { DRAG_THRESHOLD_PX, usePointerDrag } from "../lib/dragSession";
 import { SegButtons } from "./ui";
+import LayerThumb from "./LayerThumb";
 import { canMove, Z_LABELS, type ZOp } from "../lib/zorder";
 import { cn } from "../utils/cn";
 
@@ -20,17 +24,22 @@ interface Props {
   deck: Deck;
   slide: SlideData | undefined;
   selected: LayerRef | null;
-  onSelect: (ref: LayerRef) => void;
+  onSelect: (ref: LayerRef, additive?: boolean) => void;
   onReorder: (ref: LayerRef, op: ZOp) => void;
   onAlign?: (ref: LayerRef, op: AlignOp, target?: LayerRect) => void;
   onDistribute?: (refs: LayerRef[], axis: "h" | "v") => void;
-  onToggleLock?: (id: string) => void;
   /**
-   * Drag & drop: called once per drop with the layer and the stack slot it
-   * lands in (counted from the BOTTOM, over the visible layers). Absent → the
+   * Drag & drop: called once per drop with the layer(s) and the stack slot they
+   * land in (counted from the BOTTOM, over the stackable rows). Absent → the
    * list is read-only and rows cannot be dragged.
    */
-  onMoveTo?: (ref: LayerRef, index: number) => void;
+  onMoveTo?: (refs: LayerRef[], index: number) => void;
+  /** 👁 / 🔒 / rename — works on elements and drawn items alike */
+  onPatch?: (refs: LayerRef[], patch: LayerPatch) => void;
+  /** ⧉ duplicate the given layers (drawn items only) */
+  onDuplicate?: (refs: LayerRef[]) => void;
+  /** 🗑 delete drawn items — a built-in element is hidden instead */
+  onDelete?: (refs: LayerRef[]) => void;
   /** every drawn item selected on the canvas, so a group lights up as a whole */
   selectedIds?: string[];
   compact?: boolean;
@@ -41,7 +50,9 @@ interface Props {
 /** the live state of one row drag (mirrored into a ref for the gesture handlers) */
 interface RowDrag {
   key: string;
-  /** the dragged row, top-first among the VISIBLE rows */
+  /** every row travelling with this gesture (a multi-selection drags as a block) */
+  keys: string[];
+  /** the dragged row, top-first among the STACKABLE rows */
   from: number;
   /** insertion point the pointer currently points at, same order */
   over: number;
@@ -62,13 +73,15 @@ const EDGE_SPEED = 9;
 
 /**
  * One list for everything on the slide — header pieces, question, options,
- * footnote, shapes, text boxes and images — top-most first, with the four
- * layer operations.
+ * footnote, shapes, text boxes and images — top-most first, with the full set
+ * of Canva layer controls.
  *
  * Clicking a row selects that element / shape on the canvas; dragging a row
- * carries it to a new slot and reorders the stack on drop, exactly like Canva.
- * The reorder runs through the same guarded pointer session as the board, so a
- * click can never move a layer and a drag never leaks past pointer-up.
+ * carries it to any slot in the stack and reorders on drop. Each row also
+ * carries 👁 show/hide, 🔒 lock/unlock, ⧉ duplicate and 🗑 delete, plus
+ * rename-on-double-click for drawn items. The reorder runs through the same
+ * guarded pointer session as the board, so a click can never move a layer and a
+ * drag never leaks past pointer-up.
  */
 export default function LayersPanel({
   deck,
@@ -78,8 +91,10 @@ export default function LayersPanel({
   onReorder,
   onAlign,
   onDistribute,
-  onToggleLock,
   onMoveTo,
+  onPatch,
+  onDuplicate,
+  onDelete,
   selectedIds,
   compact,
   expanded,
@@ -87,17 +102,31 @@ export default function LayersPanel({
   const [alignTo, setAlignTo] = useState<"slide" | "item">("slide");
   const [refKey, setRefKey] = useState<string>("");
   const [picked, setPicked] = useState<string[]>([]);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [arrangeOpen, setArrangeOpen] = useState(false);
   const layers = sortedLayers(deck, slide).slice().reverse(); // top first
-  // ops are decided on the visible layers only (hidden ones are skipped by reorderLayer)
-  const stack = layers.filter((l) => !l.hidden).map((l) => ({ id: l.key, z: l.z }));
+  // ops are decided on the rows that belong to this slide's stack; layers the
+  // user hid with 👁 keep their slot and can still be reordered (like Canva)
+  const stack = layers.filter(isStackable).map((l) => ({ id: l.key, z: l.z }));
   const selKey = selected ? layerKey(selected) : null;
   const selEntry = layers.find((l) => l.key === selKey);
   const pos = selEntry ? layers.length - layers.indexOf(selEntry) : 0;
 
-  /** rows that can actually be reordered: hidden built-ins are not on this slide */
-  const visRows = layers.filter((l) => !l.hidden);
+  /** rows that can actually be reordered: rows not painted on this slide cannot */
+  const visRows = layers.filter(isStackable);
   const visIndexOf = new Map(visRows.map((l, i) => [l.key, i]));
   const draggable = !!onMoveTo && visRows.length > 1;
+
+  /** the full canvas selection, as row keys — a multi-selection drags as one block */
+  const selKeys = new Set<string>([
+    ...(selectedIds ?? []).map((id) => `shape:${id}`),
+    ...(selKey ? [selKey] : []),
+  ]);
+  /** the refs a row-level action applies to: the whole selection, or just that row */
+  const targetsOf = (l: LayerEntry): LayerRef[] =>
+    selKeys.has(l.key) && selKeys.size > 1
+      ? visRows.filter((r) => selKeys.has(r.key)).map((r) => r.ref)
+      : [l.ref];
 
   /* ---------------------------------------------------------------------- *
    * Drag to reorder
@@ -198,8 +227,15 @@ export default function LayersPanel({
       const from = visIndexOf.get(key);
       const measured = measureRows();
       if (from === undefined || !measured) return;
+      /**
+       * A multi-selection travels as one block, keeping its internal order —
+       * exactly like dragging several layers in Canva. Dragging a row that is
+       * NOT part of the selection carries that row alone.
+       */
+      const keys = selKeys.has(key) && selKeys.size > 1 ? visRows.filter((r) => selKeys.has(r.key)).map((r) => r.key) : [key];
       setDrag({
         key,
+        keys,
         from,
         over: from,
         x: e.clientX,
@@ -228,28 +264,47 @@ export default function LayersPanel({
        * landing somewhere it was never aimed at.
        */
       if (!e || e.type !== "pointerup") return;
-      const ref = parseLayerKey(d.key);
-      if (!ref) return;
-      const slot = dropSlot(visRows.length, d.from, d.over);
-      if (slot !== null) onMoveTo(ref, slot);
+      const refs = d.keys.map(parseLayerKey).filter((r): r is LayerRef => !!r);
+      if (!refs.length) return;
+      const slot = dropSlot(visRows.length, d.from, d.over, d.keys.length);
+      if (slot !== null) onMoveTo(refs, slot);
       /**
        * The layer you just carried is the one you are working on, so the drop
        * also selects it on the canvas (outline, handles and its arrange tools).
        * Deliberately AFTER the gesture ended: selecting mid-drag could swap the
        * panel underneath the list and tear the gesture down.
        */
-      onSelect(ref);
+      const ref = parseLayerKey(d.key);
+      if (ref) onSelect(ref);
     },
   });
 
-  /** how far a row travels to open the landing gap (Canva-style preview) */
-  const shiftFor = (visIndex: number): number => {
-    if (!drag) return 0;
-    const { from, over, rowH } = drag;
-    if (over < from) return visIndex >= over && visIndex < from ? rowH : 0;
-    if (over > from) return visIndex > from && visIndex <= over ? -rowH : 0;
-    return 0;
-  };
+  /**
+   * How far each row travels to open the landing gap (Canva-style preview).
+   *
+   * Exact for any number of carried rows, contiguous or not: the rows that stay
+   * put keep their relative order, the block lands on `over`, and each row's
+   * shift is simply the distance between where it is now and where the drop
+   * would put it.
+   */
+  const shiftFor = (() => {
+    if (!drag) return () => 0;
+    const moving = new Set(drag.keys.map((k) => visIndexOf.get(k)).filter((i): i is number => i !== undefined));
+    const m = moving.size || 1;
+    const over = Math.max(0, Math.min(visRows.length - m, drag.over));
+    /** final top-index of every row that stays put, by its current index */
+    const target = new Map<number, number>();
+    let p = 0;
+    for (let i = 0; i < visRows.length; i++) {
+      if (moving.has(i)) continue;
+      target.set(i, p < over ? p : p + m);
+      p++;
+    }
+    return (visIndex: number): number => {
+      const to = target.get(visIndex);
+      return to === undefined ? 0 : (to - visIndex) * drag.rowH;
+    };
+  })();
 
   /** keep the selected row in view when the canvas drives the selection */
   useEffect(() => {
@@ -272,130 +327,234 @@ export default function LayersPanel({
   };
 
   const dragEntry = drag ? layers.find((l) => l.key === drag.key) : null;
+  const layout = deck.theme.layout;
+
+  /* ------------------------------------------------------------------ row */
+  /** one hover/selected action button, sized for the dense list */
+  const RowBtn = ({
+    on,
+    label,
+    title,
+    onClick,
+    always,
+    danger,
+    disabled,
+  }: {
+    on?: boolean;
+    label: string;
+    title: string;
+    onClick: () => void;
+    /** stay visible even when the row is not hovered (state that must be seen) */
+    always?: boolean;
+    danger?: boolean;
+    disabled?: boolean;
+  }) => (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={cn(
+        "grid h-6 w-6 shrink-0 place-items-center rounded text-[11px] leading-none transition-colors",
+        always || on ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+        disabled && "cursor-not-allowed opacity-25 grayscale",
+        on
+          ? "text-amber-300 hover:bg-amber-400/15"
+          : danger
+            ? "text-slate-400 hover:bg-rose-500/20 hover:text-rose-300"
+            : "text-slate-400 hover:bg-white/10 hover:text-slate-100",
+      )}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="space-y-2">
-      {/* four ops for the selected layer */}
-      <div className="grid grid-cols-2 gap-1.5">
-        {(["forward", "front", "backward", "back"] as ZOp[]).map((op) => {
+      {/* ------------------------------ toolbar ------------------------------ */}
+      <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/50 p-1">
+        {(["front", "forward", "backward", "back"] as ZOp[]).map((op) => {
           const enabled = !!selKey && canMove(stack, selKey, op);
           return (
             <button
               key={op}
+              type="button"
               disabled={!enabled}
               onClick={() => selected && onReorder(selected, op)}
-              title={Z_LABELS[op].hint}
+              title={`${Z_LABELS[op].label} — ${Z_LABELS[op].hint}`}
+              aria-label={Z_LABELS[op].label}
               className={cn(
-                "flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors",
-                enabled
-                  ? "border-white/10 bg-white/[0.04] text-slate-200 hover:border-amber-400/60 hover:bg-white/10"
-                  : "cursor-not-allowed border-white/5 text-slate-600",
+                "grid h-7 w-7 place-items-center rounded-md text-xs transition-colors",
+                enabled ? "text-slate-200 hover:bg-white/10" : "cursor-not-allowed text-slate-700",
               )}
             >
-              <span className="w-4 text-center">{Z_LABELS[op].icon}</span>
-              {Z_LABELS[op].label}
+              {Z_LABELS[op].icon}
             </button>
           );
         })}
+        <span className="mx-0.5 h-5 w-px bg-white/10" />
+        {onPatch && (
+          <>
+            <RowBtn
+              always
+              disabled={!selEntry || !!selEntry.absent}
+              on={!!selEntry?.hidden}
+              label={selEntry?.hidden ? "🙈" : "👁"}
+              title={selEntry?.hidden ? "Show this layer" : "Hide this layer"}
+              onClick={() => selEntry && onPatch(targetsOf(selEntry), { hidden: !selEntry.hidden })}
+            />
+            <RowBtn
+              always
+              disabled={!selEntry || !!selEntry.absent}
+              on={!!selEntry?.locked}
+              label={selEntry?.locked ? "🔒" : "🔓"}
+              title={selEntry?.locked ? "Unlock this layer" : "Lock this layer"}
+              onClick={() => selEntry && onPatch(targetsOf(selEntry), { locked: !selEntry.locked })}
+            />
+          </>
+        )}
+        {onDuplicate && (
+          <RowBtn
+            always
+            disabled={selEntry?.ref.kind !== "shape"}
+            label="⧉"
+            title={
+              selEntry?.ref.kind === "element"
+                ? "Built-in slide elements can't be duplicated"
+                : "Duplicate this layer"
+            }
+            onClick={() => selEntry && onDuplicate(targetsOf(selEntry))}
+          />
+        )}
+        {onDelete && (
+          <RowBtn
+            always
+            danger
+            disabled={!selEntry || !!selEntry.absent}
+            label="🗑"
+            title={
+              selEntry?.ref.kind === "element"
+                ? "Hide this layer — built-in elements can't be deleted"
+                : "Delete this layer"
+            }
+            onClick={() => selEntry && onDelete(targetsOf(selEntry))}
+          />
+        )}
+        <span className="ml-auto pr-1 text-[10px] whitespace-nowrap text-slate-500">
+          {selKeys.size > 1 ? `${selKeys.size} selected` : selEntry ? `${pos} of ${layers.length}` : `${layers.length} layers`}
+        </span>
       </div>
 
-      {/* ------------------------------ free alignment ------------------------- */}
+      {/* --------------------------- align & distribute ---------------------- */}
       {onAlign && (
-        <div className="space-y-1.5 rounded-lg border border-white/10 bg-slate-900/40 p-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium tracking-wide text-slate-400 uppercase">Align selected</span>
-            <div className="w-36">
-              <SegButtons
-                value={alignTo}
-                onChange={setAlignTo}
-                options={[
-                  { value: "slide", label: "to slide" },
-                  { value: "item", label: "to item" },
-                ]}
-              />
+        <details
+          open={arrangeOpen}
+          onToggle={(e) => setArrangeOpen((e.currentTarget as HTMLDetailsElement).open)}
+          className="rounded-lg border border-white/10 bg-slate-900/40"
+        >
+          <summary className="cursor-pointer list-none px-2.5 py-1.5 text-[11px] font-medium tracking-wide text-slate-400 uppercase select-none hover:text-slate-200">
+            {arrangeOpen ? "▾" : "▸"} Align &amp; distribute
+          </summary>
+          <div className="space-y-1.5 border-t border-white/10 p-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">Align selected</span>
+              <div className="w-36">
+                <SegButtons
+                  value={alignTo}
+                  onChange={setAlignTo}
+                  options={[
+                    { value: "slide", label: "to slide" },
+                    { value: "item", label: "to item" },
+                  ]}
+                />
+              </div>
             </div>
-          </div>
-          {alignTo === "item" && (
-            <select
-              value={refKey}
-              onChange={(e) => setRefKey(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-2 py-1.5 text-xs text-slate-100 outline-none"
-            >
-              <option value="">— choose reference item —</option>
-              {layers
-                .filter((l) => l.key !== selKey && !l.hidden)
-                .map((l) => (
-                  <option key={l.key} value={l.key}>
-                    {l.icon} {l.label}
-                  </option>
-                ))}
-            </select>
-          )}
-          {(() => {
-            const refRef = alignTo === "item" ? parseLayerKey(refKey) : null;
-            const target: LayerRect | undefined =
-              alignTo === "item" ? (refRef ? layerRect(deck, slide, refRef, measureElement) ?? undefined : undefined) : undefined;
-            const disabled = !selected || (alignTo === "item" && !target);
-            const run = (op: AlignOp) => selected && onAlign(selected, op, target);
-            const B = ({ op, label, title }: { op: AlignOp; label: string; title: string }) => (
-              <button
-                disabled={disabled}
-                onClick={() => run(op)}
-                title={title}
-                className="rounded-md border border-white/10 bg-white/[0.04] py-1.5 text-sm text-slate-200 hover:border-amber-400/60 hover:bg-white/10 disabled:opacity-30"
+            {alignTo === "item" && (
+              <select
+                value={refKey}
+                onChange={(e) => setRefKey(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-2 py-1.5 text-xs text-slate-100 outline-none"
               >
-                {label}
-              </button>
-            );
-            return (
-              <>
-                <div className="grid grid-cols-6 gap-1">
-                  <B op="left" label="⇤" title="Align left edges" />
-                  <B op="hcenter" label="⫿" title="Center horizontally" />
-                  <B op="right" label="⇥" title="Align right edges" />
-                  <B op="top" label="⤒" title="Align top edges" />
-                  <B op="vcenter" label="⩵" title="Center vertically" />
-                  <B op="bottom" label="⤓" title="Align bottom edges" />
-                </div>
-                <div className="grid grid-cols-3 gap-1">
-                  <B op="fill-w" label="↔ Fill W" title="Match the reference width" />
-                  <B op="fill-h" label="↕ Fill H" title="Match the reference height" />
-                  {alignTo === "slide" ? (
-                    <B op="fit-board" label="⛶ Fill slide" title="Cover the whole slide" />
-                  ) : (
-                    <button
-                      disabled={disabled}
-                      onClick={() => {
-                        if (!selected || !target) return;
-                        onAlign(selected, "left", target);
-                        onAlign(selected, "top", target);
-                        onAlign(selected, "fill-w", target);
-                        onAlign(selected, "fill-h", target);
-                      }}
-                      className="rounded-md border border-white/10 bg-white/[0.04] py-1.5 text-xs text-slate-200 hover:border-amber-400/60 disabled:opacity-30"
-                    >
-                      ⧉ Match
-                    </button>
-                  )}
-                </div>
-              </>
-            );
-          })()}
-
-          {/* distribute a picked set */}
-          {onDistribute && layers.filter((l) => !l.hidden).length >= 3 && (
-            <details className="rounded-md border border-white/10 p-2">
-              <summary className="cursor-pointer text-[11px] text-slate-300">
-                Distribute evenly {picked.length ? `(${picked.length} picked)` : ""}
-              </summary>
-              <div className="mt-1.5 flex flex-wrap gap-1">
+                <option value="">— choose reference item —</option>
                 {layers
-                  .filter((l) => !l.hidden)
-                  .map((l) => {
+                  .filter((l) => l.key !== selKey && isStackable(l))
+                  .map((l) => (
+                    <option key={l.key} value={l.key}>
+                      {l.icon} {l.label}
+                    </option>
+                  ))}
+              </select>
+            )}
+            {(() => {
+              const refRef = alignTo === "item" ? parseLayerKey(refKey) : null;
+              const target: LayerRect | undefined =
+                alignTo === "item" ? (refRef ? layerRect(deck, slide, refRef, measureElement) ?? undefined : undefined) : undefined;
+              const disabled = !selected || (alignTo === "item" && !target);
+              const run = (op: AlignOp) => selected && onAlign(selected, op, target);
+              const B = ({ op, label, title }: { op: AlignOp; label: string; title: string }) => (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => run(op)}
+                  title={title}
+                  className="rounded-md border border-white/10 bg-white/[0.04] py-1.5 text-sm text-slate-200 hover:border-amber-400/60 hover:bg-white/10 disabled:opacity-30"
+                >
+                  {label}
+                </button>
+              );
+              return (
+                <>
+                  <div className="grid grid-cols-6 gap-1">
+                    <B op="left" label="⇤" title="Align left edges" />
+                    <B op="hcenter" label="⫿" title="Center horizontally" />
+                    <B op="right" label="⇥" title="Align right edges" />
+                    <B op="top" label="⤒" title="Align top edges" />
+                    <B op="vcenter" label="⩵" title="Center vertically" />
+                    <B op="bottom" label="⤓" title="Align bottom edges" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <B op="fill-w" label="↔ Fill W" title="Match the reference width" />
+                    <B op="fill-h" label="↕ Fill H" title="Match the reference height" />
+                    {alignTo === "slide" ? (
+                      <B op="fit-board" label="⛶ Fill slide" title="Cover the whole slide" />
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => {
+                          if (!selected || !target) return;
+                          onAlign(selected, "left", target);
+                          onAlign(selected, "top", target);
+                          onAlign(selected, "fill-w", target);
+                          onAlign(selected, "fill-h", target);
+                        }}
+                        className="rounded-md border border-white/10 bg-white/[0.04] py-1.5 text-xs text-slate-200 hover:border-amber-400/60 disabled:opacity-30"
+                      >
+                        ⧉ Match
+                      </button>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* distribute a picked set */}
+            {onDistribute && visRows.length >= 3 && (
+              <details className="rounded-md border border-white/10 p-2">
+                <summary className="cursor-pointer text-[11px] text-slate-300">
+                  Distribute evenly {picked.length ? `(${picked.length} picked)` : ""}
+                </summary>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {visRows.map((l) => {
                     const on = picked.includes(l.key);
                     return (
                       <button
                         key={l.key}
+                        type="button"
                         onClick={() => setPicked((p) => (on ? p.filter((k) => k !== l.key) : [...p, l.key]))}
                         className={cn(
                           "rounded border px-1.5 py-0.5 text-[10px]",
@@ -406,52 +565,52 @@ export default function LayersPanel({
                       </button>
                     );
                   })}
-              </div>
-              <div className="mt-1.5 grid grid-cols-2 gap-1">
-                <button
-                  disabled={picked.length < 3}
-                  onClick={() => onDistribute(picked.map(parseLayerKey).filter((r): r is LayerRef => !!r), "h")}
-                  className="rounded-md border border-white/10 bg-white/[0.04] py-1.5 text-xs text-slate-200 hover:border-amber-400/60 disabled:opacity-30"
-                >
-                  ⋯ Horizontally
-                </button>
-                <button
-                  disabled={picked.length < 3}
-                  onClick={() => onDistribute(picked.map(parseLayerKey).filter((r): r is LayerRef => !!r), "v")}
-                  className="rounded-md border border-white/10 bg-white/[0.04] py-1.5 text-xs text-slate-200 hover:border-amber-400/60 disabled:opacity-30"
-                >
-                  ⋮ Vertically
-                </button>
-              </div>
-            </details>
-          )}
-        </div>
+                </div>
+                <div className="mt-1.5 grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    disabled={picked.length < 3}
+                    onClick={() => onDistribute(picked.map(parseLayerKey).filter((r): r is LayerRef => !!r), "h")}
+                    className="rounded-md border border-white/10 bg-white/[0.04] py-1.5 text-xs text-slate-200 hover:border-amber-400/60 disabled:opacity-30"
+                  >
+                    ⋯ Horizontally
+                  </button>
+                  <button
+                    type="button"
+                    disabled={picked.length < 3}
+                    onClick={() => onDistribute(picked.map(parseLayerKey).filter((r): r is LayerRef => !!r), "v")}
+                    className="rounded-md border border-white/10 bg-white/[0.04] py-1.5 text-xs text-slate-200 hover:border-amber-400/60 disabled:opacity-30"
+                  >
+                    ⋮ Vertically
+                  </button>
+                </div>
+              </details>
+            )}
+          </div>
+        </details>
       )}
 
-      <div className="flex items-center justify-between text-[11px] text-slate-500">
-        <span>
-          {selEntry ? (
-            <>
-              <b className="text-slate-300">{selEntry.label}</b> · layer {pos} of {layers.length}
-              {pos === layers.length ? " · top" : pos === 1 ? " · bottom" : ""}
-            </>
-          ) : (
-            "Select an item on the slide or in the list"
-          )}
-        </span>
-        <span>top ↑</span>
+      <div className="flex items-center justify-between px-0.5 text-[10px] tracking-wide text-slate-500 uppercase">
+        <span>Top layer</span>
+        {selEntry && (
+          <span className="normal-case">
+            <b className="text-slate-300">{selEntry.label}</b>
+            {pos === layers.length ? " · front" : pos === 1 ? " · back" : ""}
+          </span>
+        )}
       </div>
 
       <div
         ref={listRef}
         role="listbox"
         aria-label="Layers on this slide"
+        aria-multiselectable="true"
         data-layer-list
         data-dragging={drag ? drag.key : undefined}
         data-drop-index={drag ? drag.over : undefined}
         className={cn(
-          "space-y-0.5 overflow-y-auto rounded-lg border border-white/10 bg-slate-900/50 p-1",
-          compact ? "max-h-48" : expanded ? "max-h-[56vh]" : "max-h-72",
+          "space-y-px overflow-y-auto rounded-lg border border-white/10 bg-slate-900/50 p-1",
+          compact ? "max-h-56" : expanded ? "max-h-[58vh]" : "max-h-80",
           drag && "select-none border-amber-400/40",
         )}
       >
@@ -459,10 +618,11 @@ export default function LayersPanel({
           const isSel = l.key === selKey;
           const isElement = l.ref.kind === "element";
           const vi = visIndexOf.get(l.key);
-          const isDragged = drag?.key === l.key;
+          const isDragged = !!drag?.keys.includes(l.key);
           const shift = vi === undefined || isDragged ? 0 : shiftFor(vi);
-          const inMulti =
-            !isSel && l.ref.kind === "shape" && (selectedIds ?? []).includes(l.ref.id);
+          const inMulti = !isSel && selKeys.has(l.key);
+          const canDrag = draggable && isStackable(l);
+          const isRenaming = renaming === l.key;
           return (
             <div
               key={l.key}
@@ -475,11 +635,13 @@ export default function LayersPanel({
               tabIndex={i === focusIndex ? 0 : -1}
               data-layer-row={l.key}
               data-layer-dragging={isDragged ? "true" : undefined}
+              data-layer-absent={l.absent ? "true" : undefined}
               data-layer-hidden={l.hidden ? "true" : undefined}
+              data-layer-locked={l.locked ? "true" : undefined}
               title={
-                l.hidden
-                  ? "Not painted on this slide — nothing to reorder"
-                  : draggable
+                l.absent
+                  ? "Not on this slide — nothing to reorder"
+                  : canDrag
                     ? "Drag to reorder · click to select it on the slide · Alt+↑/↓ to move one step"
                     : "Click to select it on the slide"
               }
@@ -488,23 +650,24 @@ export default function LayersPanel({
                 zIndex: isDragged ? 1 : shift ? 3 : 2,
                 transform: shift ? `translateY(${shift}px)` : undefined,
                 transition: shift ? "transform 120ms ease" : undefined,
-                opacity: isDragged ? 0.3 : undefined,
+                opacity: isDragged ? 0.35 : undefined,
               }}
               className={cn(
-                "group flex items-center gap-2 rounded-md px-1.5 py-1 text-xs outline-none",
+                "group flex items-center gap-1.5 rounded-md border border-transparent px-1 py-1 text-xs outline-none",
                 isSel
-                  ? "bg-amber-400/20 text-amber-100"
+                  ? "border-amber-400/50 bg-amber-400/15 text-amber-100"
                   : inMulti
-                    ? "bg-sky-400/10 text-sky-100"
+                    ? "border-sky-400/40 bg-sky-400/10 text-sky-100"
                     : "text-slate-300 hover:bg-white/5",
                 "focus-visible:ring-1 focus-visible:ring-amber-400/70",
-                l.hidden && "opacity-40",
-                isDragged && "border border-dashed border-amber-400/60",
-                draggable && !l.hidden && "cursor-grab active:cursor-grabbing",
+                l.absent && "opacity-40",
+                l.hidden && !l.absent && "opacity-60",
+                isDragged && "border-dashed border-amber-400/60",
+                canDrag && "cursor-grab active:cursor-grabbing",
               )}
               onPointerDown={(e) => {
-                if (!draggable || l.hidden) return;
-                // the row's own quick-op buttons keep their clicks (no capture, no drag)
+                if (!canDrag) return;
+                // the row's own buttons and the rename box keep their events
                 if ((e.target as HTMLElement | null)?.closest("button, input, select, textarea, a")) return;
                 armedKey.current = l.key;
                 begin(e, { x: 0, y: 0 });
@@ -516,18 +679,35 @@ export default function LayersPanel({
               onPointerLeave={handleLeave}
               onClick={(e) => {
                 if ((e.target as HTMLElement | null)?.closest("button, input, select, textarea")) return;
-                onSelect(l.ref);
+                // Ctrl/⌘/Shift+click extends the selection, exactly like the canvas
+                onSelect(l.ref, e.ctrlKey || e.metaKey || e.shiftKey);
+              }}
+              onDoubleClick={(e) => {
+                if ((e.target as HTMLElement | null)?.closest("button, input")) return;
+                // double-click renames a drawn item (built-ins keep their labels)
+                if (l.ref.kind === "shape" && onPatch) setRenaming(l.key);
               }}
               onKeyDown={(e) => {
+                if (isRenaming) return;
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   onSelect(l.ref);
                   return;
                 }
+                if (e.key === "F2" && l.ref.kind === "shape" && onPatch) {
+                  e.preventDefault();
+                  setRenaming(l.key);
+                  return;
+                }
+                if ((e.key === "Delete" || e.key === "Backspace") && onDelete) {
+                  e.preventDefault();
+                  onDelete(targetsOf(l));
+                  return;
+                }
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                   e.preventDefault();
                   const dir = e.key === "ArrowDown" ? 1 : -1;
-                  if (e.altKey && !l.hidden) {
+                  if (e.altKey && isStackable(l)) {
                     // Alt+↑/↓ = Bring Forward / Send Backward, without a drag
                     onReorder(l.ref, dir === -1 ? "forward" : "backward");
                     window.setTimeout(() => rowEls.current.get(l.key)?.focus(), 0);
@@ -550,67 +730,128 @@ export default function LayersPanel({
                   instead of scrolling the list (the rest of the row still scrolls) */}
               <span
                 aria-hidden="true"
-                style={{ touchAction: draggable && !l.hidden ? "none" : undefined }}
+                style={{ touchAction: canDrag ? "none" : undefined }}
                 className={cn(
-                  "shrink-0 text-[11px] leading-none text-slate-600 group-hover:text-slate-400",
-                  draggable && !l.hidden ? "opacity-70" : "opacity-0",
+                  "shrink-0 px-0.5 text-[11px] leading-none text-slate-600 group-hover:text-slate-400",
+                  canDrag ? "opacity-70" : "opacity-0",
                 )}
               >
                 ⠿
               </span>
-              <span className="w-7 shrink-0 font-mono text-[9px] text-slate-600">
-                {i === 0 ? "top" : i === layers.length - 1 ? "btm" : layers.length - i}
-              </span>
-              <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                <span
-                  className={cn(
-                    "flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px]",
-                    isElement ? "bg-sky-400/15 text-sky-200" : "bg-white/10 text-slate-200",
-                  )}
-                  title={isElement ? "Slide element" : "Drawn item"}
-                >
-                  {l.icon}
-                </span>
-                <span className="truncate">{l.label}</span>
-                {l.hidden && <span className="text-[9px] text-slate-500">(hidden)</span>}
-                {!!l.groupId && (
-                  <span className="shrink-0 text-[9px] text-sky-300" title="Part of a group — clicking this row selects the item alone">
-                    ⧉
+
+              {/* the preview: what this layer actually looks like */}
+              <LayerThumb
+                shape={l.shape}
+                elementId={isElement ? (l.ref.id as ElementId) : undefined}
+                box={isElement ? layout[l.ref.id as ElementId] : undefined}
+                dim={l.hidden || l.absent}
+              />
+
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+                {isRenaming ? (
+                  <input
+                    autoFocus
+                    defaultValue={l.label}
+                    aria-label={`Rename ${l.label}`}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={(e) => {
+                      onPatch?.([l.ref], { name: e.currentTarget.value.trim() });
+                      setRenaming(null);
+                    }}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") {
+                        onPatch?.([l.ref], { name: e.currentTarget.value.trim() });
+                        setRenaming(null);
+                      }
+                      if (e.key === "Escape") setRenaming(null);
+                    }}
+                    className="w-full rounded border border-amber-400/60 bg-slate-950/80 px-1 py-0.5 text-xs text-slate-100 outline-none"
+                  />
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <span className={cn("truncate", l.hidden && "line-through decoration-slate-500")}>{l.label}</span>
+                    {l.absent && <span className="shrink-0 text-[9px] text-slate-500">(not on slide)</span>}
+                    {!!l.groupId && (
+                      <span className="shrink-0 text-[9px] text-sky-300" title="Part of a group — clicking this row selects the item alone">
+                        ⧉
+                      </span>
+                    )}
+                    {l.global && !isElement && (
+                      <span className="shrink-0 rounded bg-black/40 px-1 text-[8px] text-slate-400" title="On every slide">
+                        ALL
+                      </span>
+                    )}
                   </span>
                 )}
               </span>
-              {l.global && !isElement && <span className="rounded bg-black/30 px-1 text-[8px]">ALL</span>}
-              {l.ref.kind === "shape" && onToggleLock && (
-                <button
-                  onClick={() => onToggleLock(l.ref.id)}
-                  title={l.locked ? "Unlock" : "Lock"}
-                  aria-label={l.locked ? `Unlock ${l.label}` : `Lock ${l.label}`}
-                  className={cn("text-[11px]", l.locked ? "text-amber-300" : "text-slate-600 opacity-0 group-hover:opacity-100")}
-                >
-                  {l.locked ? "🔒" : "🔓"}
-                </button>
+
+              {/* per-row controls — the state ones stay visible, the rest on hover.
+                  A row that is not on this slide has nothing to act on. */}
+              {!isRenaming && !l.absent && (
+                <span className="flex shrink-0 items-center">
+                  {/* move up / move down, one slot at a time */}
+                  <button
+                    type="button"
+                    disabled={!canMove(stack, l.key, "forward")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReorder(l.ref, "forward");
+                    }}
+                    title="Bring Forward"
+                    aria-label={`Bring ${l.label} forward`}
+                    className="grid h-6 w-4 shrink-0 place-items-center rounded text-[9px] text-slate-400 opacity-0 hover:bg-white/10 hover:text-slate-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-0"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canMove(stack, l.key, "backward")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReorder(l.ref, "backward");
+                    }}
+                    title="Send Backward"
+                    aria-label={`Send ${l.label} backward`}
+                    className="mr-0.5 grid h-6 w-4 shrink-0 place-items-center rounded text-[9px] text-slate-400 opacity-0 hover:bg-white/10 hover:text-slate-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-0"
+                  >
+                    ▼
+                  </button>
+                  {onPatch && (
+                    <RowBtn
+                      always={l.hidden}
+                      on={l.hidden}
+                      label={l.hidden ? "🙈" : "👁"}
+                      title={l.hidden ? `Show ${l.label}` : `Hide ${l.label}`}
+                      onClick={() => onPatch(targetsOf(l), { hidden: !l.hidden })}
+                    />
+                  )}
+                  {onPatch && (
+                    <RowBtn
+                      always={l.locked}
+                      on={l.locked}
+                      label={l.locked ? "🔒" : "🔓"}
+                      title={l.locked ? `Unlock ${l.label}` : `Lock ${l.label}`}
+                      onClick={() => onPatch(targetsOf(l), { locked: !l.locked })}
+                    />
+                  )}
+                  {onDuplicate && l.ref.kind === "shape" && (
+                    <RowBtn label="⧉" title={`Duplicate ${l.label}`} onClick={() => onDuplicate(targetsOf(l))} />
+                  )}
+                  {onDelete && (l.ref.kind === "shape" || !l.hidden) && (
+                    <RowBtn
+                      danger
+                      label="🗑"
+                      title={
+                        l.ref.kind === "shape"
+                          ? `Delete ${l.label}`
+                          : `Hide ${l.label} — built-in elements can't be deleted`
+                      }
+                      onClick={() => onDelete(targetsOf(l))}
+                    />
+                  )}
+                </span>
               )}
-              {/* inline quick ops on hover */}
-              <div className="hidden shrink-0 gap-0.5 group-hover:flex">
-                <button
-                  disabled={!canMove(stack, l.key, "forward")}
-                  onClick={() => onReorder(l.ref, "forward")}
-                  title="Bring Forward"
-                  aria-label={`Bring ${l.label} forward`}
-                  className="rounded px-1 text-[10px] text-slate-300 hover:bg-white/10 disabled:opacity-20"
-                >
-                  ▲
-                </button>
-                <button
-                  disabled={!canMove(stack, l.key, "backward")}
-                  onClick={() => onReorder(l.ref, "backward")}
-                  title="Send Backward"
-                  aria-label={`Send ${l.label} backward`}
-                  className="rounded px-1 text-[10px] text-slate-300 hover:bg-white/10 disabled:opacity-20"
-                >
-                  ▼
-                </button>
-              </div>
             </div>
           );
         })}
@@ -626,7 +867,15 @@ export default function LayersPanel({
           <span aria-hidden="true" className="text-[11px] text-slate-500">
             ⠿
           </span>
-          <span className="truncate">{dragEntry.label}</span>
+          <LayerThumb
+            shape={dragEntry.shape}
+            elementId={dragEntry.ref.kind === "element" ? (dragEntry.ref.id as ElementId) : undefined}
+            box={dragEntry.ref.kind === "element" ? layout[dragEntry.ref.id as ElementId] : undefined}
+          />
+          <span className="truncate">
+            {dragEntry.label}
+            {drag.keys.length > 1 ? ` +${drag.keys.length - 1}` : ""}
+          </span>
           <span className="shrink-0 rounded bg-amber-400/20 px-1 text-[9px] text-amber-200">
             layer {visRows.length - drag.over} of {visRows.length}
           </span>
@@ -634,11 +883,10 @@ export default function LayersPanel({
       )}
 
       <p className="text-[10px] leading-relaxed text-slate-500">
-        {draggable
-          ? "Drag a row to reorder the stack, or click it to select that item on the slide. "
-          : "Click a row to select that item on the slide. "}
-        Blue icons are slide elements (header, question, options…), grey are drawn items. They share one stack, so a
-        shape can go under the question or the title can sit over an image.
+        {draggable ? "Drag a row anywhere in the stack to reorder it" : "Click a row to select that item on the slide"} ·
+        click to select · double-click a drawn item to rename · 👁 hide · 🔒 lock · ⧉ duplicate · 🗑 delete.
+        Blue previews are slide elements (header, question, options…), the rest are drawn items — they share one stack,
+        so a shape can go under the question or the title can sit over an image.
       </p>
     </div>
   );

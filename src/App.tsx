@@ -20,7 +20,7 @@ import type { InsertScope } from "./components/ShapesPanel";
 import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, shrinkDataUrl, type ShapeItem, type ShapeKind } from "./lib/shapes";
 import type { AlignOp } from "./lib/shapeAlign";
 import { type ZOp } from "./lib/zorder";
-import { parseLayerKey, visibleStack, type LayerRef } from "./lib/layers";
+import { paintedStack, parseLayerKey, visibleStack, type LayerPatch, type LayerRef } from "./lib/layers";
 import { boardLayerChain, selectionBounds, moveMembers } from "./lib/groups";
 import HistoryPanel from "./components/HistoryPanel";
 import AnswerKeyModal from "./components/AnswerKeyModal";
@@ -71,6 +71,9 @@ export default function App() {
     reorderShape,
     reorderLayerOp,
     moveLayerToOp,
+    patchLayersOp,
+    duplicateLayersOp,
+    removeLayersOp,
     alignLayerOp,
     distributeLayersOp,
     removeShape,
@@ -252,18 +255,31 @@ export default function App() {
     [selectedShape, selectedEl],
   );
 
-  /** unified stack (elements + drawn items) visible on the current slide */
+  /** unified stack (elements + drawn items) on the current slide */
   const currentStack = useMemo(() => {
     const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
     return visibleStack(deck, sl);
   }, [deck, current]);
 
+  /** …and the subset actually painted: what Tab-walking can land on */
+  const paintedLayers = useMemo(() => {
+    const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
+    return paintedStack(deck, sl);
+  }, [deck, current]);
+
   const selectLayer = useCallback(
-    (ref: LayerRef) => {
+    /**
+     * `additive` (Ctrl/⌘/Shift+click in the layer list) extends the drawn-item
+     * selection instead of replacing it, so several layers can be hidden,
+     * locked, duplicated or dragged as one block — exactly like the canvas.
+     */
+    (ref: LayerRef, additive = false) => {
       setSurface(null);
       if (ref.kind === "shape") {
         setSelectedEl(null);
-        setSelectedShapes([ref.id]);
+        setSelectedShapes((prev) =>
+          additive ? (prev.includes(ref.id) ? prev.filter((id) => id !== ref.id) : [...prev, ref.id]) : [ref.id],
+        );
         const cur = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
         const pool = [...(deck.globalShapes ?? []), ...(cur?.shapes ?? [])];
         openTabForSelection(pool.find((x) => x.id === ref.id)?.kind === "image" ? "images" : "shapes");
@@ -302,13 +318,53 @@ export default function App() {
     [deck.slides, current, reorderLayerOp],
   );
 
-  /** a layer row was dragged into a new slot of the stack */
+  /** a layer row (or a whole multi-selection) was dragged into a new slot */
   const moveLayerToSlot = useCallback(
-    (ref: LayerRef, index: number) => {
+    (refs: LayerRef[], index: number) => {
       const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
-      moveLayerToOp(ref, index, sl?.id ?? null);
+      moveLayerToOp(refs, index, sl?.id ?? null);
     },
     [deck.slides, current, moveLayerToOp],
+  );
+
+  /** 👁 / 🔒 / rename from the Layers panel */
+  const patchLayersRef = useCallback(
+    (refs: LayerRef[], patch: LayerPatch) => {
+      const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
+      patchLayersOp(refs, patch, sl?.id ?? null);
+      // a layer you just hid can no longer be edited on the board, so it also
+      // leaves the canvas selection (its outline and handles go with it)
+      if (patch.hidden) {
+        const ids = new Set(refs.filter((r) => r.kind === "shape").map((r) => r.id));
+        if (ids.size) setSelectedShapes((prev) => prev.filter((id) => !ids.has(id)));
+        if (refs.some((r) => r.kind === "element" && r.id === selectedEl)) setSelectedEl(null);
+      }
+    },
+    [deck.slides, current, patchLayersOp, selectedEl],
+  );
+
+  /** ⧉ duplicate from the Layers panel — the clones become the selection */
+  const duplicateLayersRef = useCallback(
+    (refs: LayerRef[]) => {
+      const ids = duplicateLayersOp(refs);
+      if (ids.length) {
+        setSelectedEl(null);
+        setSelectedShapes(ids);
+      }
+    },
+    [duplicateLayersOp],
+  );
+
+  /** 🗑 delete from the Layers panel (a built-in element is hidden instead) */
+  const removeLayersRef = useCallback(
+    (refs: LayerRef[]) => {
+      const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
+      removeLayersOp(refs, sl?.id ?? null);
+      const gone = new Set(refs.filter((r) => r.kind === "shape").map((r) => r.id));
+      if (gone.size) setSelectedShapes((prev) => prev.filter((id) => !gone.has(id)));
+      if (refs.some((r) => r.kind === "element" && r.id === selectedEl)) setSelectedEl(null);
+    },
+    [deck.slides, current, removeLayersOp, selectedEl],
   );
 
   const reorderSelected = useCallback(
@@ -460,13 +516,18 @@ export default function App() {
       if (inField) return;
 
       /**
-       * The Layers list owns its arrow and Tab keys: ↑/↓ walk the rows and
-       * Alt+↑/↓ reorder the stack. Without this guard the very same keystroke
-       * would ALSO nudge the selected shape on the canvas (and ←/→ would flip
-       * the slide), so one press wrote two history entries and moved two things.
+       * The Layers list owns its own keys: ↑/↓ walk the rows, Alt+↑/↓ reorder
+       * the stack, Delete removes the focused layer and F2 renames it. Without
+       * this guard the very same keystroke would ALSO act on the canvas
+       * selection (and ←/→ would flip the slide), so one press wrote two
+       * history entries and moved two things.
        */
       const inLayerList = typeof t?.closest === "function" && !!t.closest("[data-layer-list]");
-      if (inLayerList && (e.key === "Tab" || e.key.startsWith("Arrow"))) return;
+      if (
+        inLayerList &&
+        (e.key === "Tab" || e.key === "F2" || e.key === "Delete" || e.key === "Backspace" || e.key.startsWith("Arrow"))
+      )
+        return;
 
       // Escape clears the whole selection (element + shapes + active field) and
       // takes the context toolbar down with it
@@ -494,16 +555,16 @@ export default function App() {
       // Only hijacked on slides that actually have drawn items, so normal
       // keyboard focus travel is untouched everywhere else.
       const slideShapeCount = (deck.globalShapes?.length ?? 0) + (slide?.shapes?.length ?? 0);
-      if (e.key === "Tab" && !mod && currentStack.length && slideShapeCount > 0) {
+      if (e.key === "Tab" && !mod && paintedLayers.length && slideShapeCount > 0) {
         e.preventDefault();
         const selKeys = new Set<string>([
           ...selectedShapes.map((id) => `shape:${id}`),
           ...(selectedEl ? [`element:${selectedEl}`] : []),
         ]);
         const step = e.shiftKey ? -1 : 1;
-        let idx = currentStack.findIndex((s) => selKeys.has(s.id));
-        if (idx < 0) idx = step === 1 ? -1 : currentStack.length;
-        const next = currentStack[(idx + step + currentStack.length) % currentStack.length];
+        let idx = paintedLayers.findIndex((s) => selKeys.has(s.id));
+        if (idx < 0) idx = step === 1 ? -1 : paintedLayers.length;
+        const next = paintedLayers[(idx + step + paintedLayers.length) % paintedLayers.length];
         const ref = parseLayerKey(next.id);
         if (ref) selectLayer(ref);
         return;
@@ -603,6 +664,7 @@ export default function App() {
     selectedEl,
     selectedShapes,
     currentStack,
+    paintedLayers,
     moveElement,
     setCurrent,
     selectShapeIds,
@@ -1217,6 +1279,9 @@ export default function App() {
               onSelect: selectLayer,
               onReorder: reorderLayerRef,
               onMoveTo: moveLayerToSlot,
+              onPatch: patchLayersRef,
+              onDuplicate: duplicateLayersRef,
+              onDelete: removeLayersRef,
               onAlign: (ref, op, target) => alignLayerOp(ref, op, slide?.id ?? null, target),
               onDistribute: (refs, axis) => distributeLayersOp(refs, axis, slide?.id ?? null),
             }}
