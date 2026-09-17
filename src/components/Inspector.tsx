@@ -22,7 +22,7 @@ import type { BackgroundSettings } from "../lib/types";
 import ShapesPanel, { type InsertScope } from "./ShapesPanel";
 import type { ShapeItem, ShapeKind } from "../lib/shapes";
 import type { ZOp } from "../lib/zorder";
-import type { LayerRect, LayerRef } from "../lib/layers";
+import { layerKey, sortedLayers, type LayerRect, type LayerRef } from "../lib/layers";
 import type { AlignOp } from "../lib/shapeAlign";
 import AnswerKeyPanel from "./AnswerKeyPanel";
 import LayersPanel from "./LayersPanel";
@@ -62,7 +62,8 @@ type Tab =
   | "background"
   | "frame"
   | "images"
-  | "shapes";
+  | "shapes"
+  | "layers";
 
 interface NavItem {
   id: Tab;
@@ -74,6 +75,11 @@ interface NavItem {
   element?: ElementId;
   /** slide surface instead of an element */
   surface?: "frame" | "background";
+  /**
+   * This destination lists what is ALREADY selected instead of owning one thing,
+   * so opening it must leave the canvas selection exactly as it is.
+   */
+  keepSelection?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -101,7 +107,31 @@ const NAV: NavItem[] = [
   { id: "frame", label: "Slide frame", icon: "▢", title: "Slide frame", surface: "frame" },
   { id: "images", label: "Insert images", icon: "🖼", title: "Insert images" },
   { id: "shapes", label: "Insert shapes", icon: "◇", title: "Insert shapes, text boxes and layers" },
+  {
+    id: "layers",
+    label: "Layers",
+    icon: "⧉",
+    title: "Layers — everything on the slide in one stack: drag a row to reorder it, click it to select it on the slide",
+    keepSelection: true,
+  },
 ];
+
+/**
+ * The destination that styles a board element. Several tiles share one element
+ * (the options block alone has four), so this picks the same "main" tile App
+ * opens when the element is selected on the canvas — the Layers list's
+ * *Edit … →* jump has to land in the same place.
+ */
+const ELEMENT_DEST: Record<ElementId, Tab> = {
+  logo: "logo",
+  brand: "badge1",
+  title: "titleText",
+  badge: "badge3",
+  bullet: "questionBullet",
+  question: "questionText",
+  options: "optionText",
+  note: "footnote",
+};
 
 /** tab a canvas click on `field` should open (slide → navigation sync) */
 const TAB_OF_FIELD: Record<SlideField, Tab> = {
@@ -160,7 +190,13 @@ interface Props {
    * the insert tabs simply release the element selection (a selected picture or
    * shape stays selected so this panel can keep editing it).
    */
-  onNavSelect: (target: { element?: ElementId; surface?: "frame" | "background"; nav?: Tab }) => void;
+  onNavSelect: (target: {
+    element?: ElementId;
+    surface?: "frame" | "background";
+    nav?: Tab;
+    /** leave the canvas selection alone (the Layers destination) */
+    keepSelection?: boolean;
+  }) => void;
   shapes: {
     slide: ShapeItem[];
     global: ShapeItem[];
@@ -196,8 +232,12 @@ interface Props {
   };
   layers: {
     selected: LayerRef | null;
+    /** every drawn item selected on the canvas (a group lights up as a whole) */
+    selectedIds: string[];
     onSelect: (ref: LayerRef) => void;
     onReorder: (ref: LayerRef, op: ZOp) => void;
+    /** drag & drop: the stack slot (from the bottom) a layer was dropped into */
+    onMoveTo: (ref: LayerRef, index: number) => void;
     onAlign: (ref: LayerRef, op: AlignOp, target?: LayerRect) => void;
     onDistribute: (refs: LayerRef[], axis: "h" | "v") => void;
   };
@@ -242,10 +282,18 @@ export default function Inspector({
     setTab(LEGACY_TAB[forceTab] ?? (forceTab as Tab));
   }, [forceTab, forceToken]);
   const qRef = useRef<HTMLTextAreaElement>(null);
+  /** the open destination, readable from effects without re-running them */
+  const tabRef = useRef<Tab>(tab);
+  tabRef.current = tab;
 
-  /** clicking content on the slide opens the panel that edits it */
+  /**
+   * Clicking content on the slide opens the panel that edits it — unless the
+   * Layers destination is open. That one is a list of the whole board, so a
+   * canvas click only moves its selection (Canva keeps its layers list open too);
+   * the panel offers a one-click jump to the clicked thing's own destination.
+   */
   useEffect(() => {
-    if (!activeField) return;
+    if (!activeField || tabRef.current === "layers") return;
     if (selectedEl === "bullet") {
       setTab("bulletText");
       return;
@@ -257,7 +305,12 @@ export default function Inspector({
   /** a navigation pick: open the panel AND select its content on the slide */
   const choose = (item: NavItem) => {
     setTab(item.id);
-    onNavSelect({ element: item.element, surface: item.surface, nav: item.id });
+    onNavSelect({
+      element: item.element,
+      surface: item.surface,
+      nav: item.id,
+      keepSelection: item.keepSelection,
+    });
   };
 
   const insertSnippet = (text: string) => {
@@ -299,6 +352,47 @@ export default function Inspector({
   const [qRows, setQRows] = useState<number>(() => Number(localStorage.getItem("inspector:qrows")) || 4);
 
   const activeNav = NAV.find((n) => n.id === tab);
+
+  /**
+   * The unified layer list, shared by the Layers destination and the "Layer
+   * order" field of the Insert-shapes panel. `expanded` only grows the list, so
+   * the destination can show the whole stack without scrolling as much.
+   */
+  const layersList = (expanded?: boolean) => (
+    <LayersPanel
+      deck={deck}
+      slide={slide}
+      selected={layers.selected}
+      selectedIds={layers.selectedIds}
+      onSelect={layers.onSelect}
+      onReorder={layers.onReorder}
+      onMoveTo={layers.onMoveTo}
+      onAlign={layers.onAlign}
+      onDistribute={layers.onDistribute}
+      expanded={expanded}
+      onToggleLock={(id) => {
+        const it = [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])].find((x) => x.id === id);
+        if (it) shapes.onChange(id, { locked: !it.locked });
+      }}
+    />
+  );
+
+  /** what the Layers destination needs to know about the current selection */
+  const layerRows = (() => {
+    const all = sortedLayers(deck, slide);
+    const sel = layers.selected ? all.find((l) => l.key === layerKey(layers.selected!)) : undefined;
+    const drawn = all.filter((l) => l.ref.kind === "shape").length;
+    /** the destination that styles the selected layer, for the one-click jump */
+    const jump: NavItem | null = !sel
+      ? null
+      : sel.ref.kind === "element"
+        ? (NAV.find((n) => n.id === ELEMENT_DEST[sel.ref.id as ElementId]) ?? null)
+        : (() => {
+            const it = [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])].find((x) => x.id === sel.ref.id);
+            return NAV.find((n) => n.id === (it?.kind === "image" ? "images" : "shapes")) ?? null;
+          })();
+    return { total: all.length, drawn, jump, selectedLabel: sel?.label ?? "" };
+  })();
 
   return (
     <aside
@@ -666,6 +760,32 @@ export default function Inspector({
           />
         )}
 
+        {/* ------------------------------ layers ----------------------------- */}
+        {tab === "layers" && (
+          <>
+            <PanelHead
+              title="Layers"
+              subtitle="Everything painted on this slide in one stack — drag a row up or down to reorder it, click a row to select that shape or text on the slide."
+              right={
+                <span className="shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-400">
+                  {layerRows.total} rows · {layerRows.drawn} drawn
+                </span>
+              }
+            />
+            {layers.selected && layerRows.jump && (
+              <div className="flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/[0.07] px-2.5 py-2">
+                <span className="min-w-0 flex-1 truncate text-[11px] text-amber-100">
+                  <b>{layerRows.selectedLabel}</b> is selected on the slide
+                </span>
+                <Btn size="sm" onClick={() => choose(layerRows.jump!)}>
+                  Edit {layerRows.jump.label} →
+                </Btn>
+              </div>
+            )}
+            {layersList(true)}
+          </>
+        )}
+
         {/* --------------------------- insert shapes ------------------------- */}
         {tab === "shapes" && (
           <>
@@ -696,21 +816,7 @@ export default function Inspector({
               onApplyDesign={shapes.onApplyDesign}
               managedScope
               hideImageInsert
-              layersPanel={
-                <LayersPanel
-                  deck={deck}
-                  slide={slide}
-                  selected={layers.selected}
-                  onSelect={layers.onSelect}
-                  onReorder={layers.onReorder}
-                  onAlign={layers.onAlign}
-                  onDistribute={layers.onDistribute}
-                  onToggleLock={(id) => {
-                    const it = [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])].find((x) => x.id === id);
-                    if (it) shapes.onChange(id, { locked: !it.locked });
-                  }}
-                />
-              }
+              layersPanel={layersList()}
             />
 
             {/* the whole-board layout overview: every element at once, with the
@@ -727,7 +833,7 @@ export default function Inspector({
         )}
 
         {/* ------------------------- where am I hint ------------------------- */}
-        {activeNav && !activeNav.element && !activeNav.surface && (
+        {activeNav && !activeNav.element && !activeNav.surface && !activeNav.keepSelection && (
           <p className="border-t border-white/10 pt-3 text-[10px] leading-relaxed text-slate-500">
             Nothing is outlined on the slide for this panel — click a picture or shape on the canvas to edit it here.
           </p>
@@ -759,7 +865,7 @@ function ScopeBar({
   const [section, setSection] = useState<ApplySection>("all");
   const [toast, setToast] = useState<string | null>(null);
   /**
-   * The scope bar is collapsible: with 18 navigation destinations above it, the
+   * The scope bar is collapsible: with 19 navigation destinations above it, the
    * panel needs the vertical room. The choice is remembered between sessions.
    */
   const [open, setOpen] = useState<boolean>(() => localStorage.getItem("inspector:scope") !== "0");

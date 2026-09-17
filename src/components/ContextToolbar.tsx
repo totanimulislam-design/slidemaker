@@ -59,6 +59,12 @@ interface Props {
    */
   nav?: string | null;
   answerKey?: AnswerKeyTools;
+  /**
+   * The Layers destination: how many layers the slide has. Present only while
+   * that destination is open, so the strip can introduce itself when nothing is
+   * selected yet and add the arrange buttons once a layer is.
+   */
+  layerTools?: { total: number };
   /** quick insert: a shape/text box on the current slide (Insert shapes) */
   insertShape?: (kind: ShapeKind) => void;
   /** quick insert: image files on the current slide (Insert images) */
@@ -554,12 +560,22 @@ export default function ContextToolbar(p: Props) {
   const setAlign = (a: "left" | "center" | "right") => { const align = a as Box['align']; s ? patch({ align }) : p.patchBox({ align }); };
   /** the Insert destinations show their quick-add tools when nothing else is selected */
   const inserting = !s && !surface && (p.nav === "images" || p.nav === "shapes");
+  /**
+   * The Layers destination with nothing selected yet: the strip explains the
+   * stack instead of staying empty. As soon as a row is picked, the ordinary
+   * tools for that layer take over and gain the arrange buttons below.
+   */
+  const layering = !!p.layerTools && !s && !surface && !el && !multi;
+  /** arrange inline, one click away, while the Layers destination is open */
+  const arrangeBar = !!p.layerTools && !layering && !surface;
   const kindLabel = ak
     ? "Answer key"
-    : inserting
-      ? (p.nav === "images" ? "Insert image" : "Insert shape")
-      : surface || (multi ? `Group · ${p.count}` : text ? 'Text' : s?.kind || 'Image');
-  const toolbarLabel = `${ak ? "answer" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
+    : layering
+      ? "Layers"
+      : inserting
+        ? (p.nav === "images" ? "Insert image" : "Insert shape")
+        : surface || (multi ? `Group · ${p.count}` : text ? 'Text' : s?.kind || 'Image');
+  const toolbarLabel = `${ak ? "answer" : layering ? "layers" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
 
   /* the movable pop-up card every toolbar toggle shares (single or stacked) */
   const popNode = content && (
@@ -853,6 +869,21 @@ export default function ContextToolbar(p: Props) {
           </select>
           {toggle("Answer")}
           {button(<>✓ Paste key</>, ak.onPaste, undefined, "Paste an answer key (1. ঘ 2. গ …) for the whole deck")}
+          {sep()}
+        </>}
+        {/* the Layers destination: the stack, and how to move things in it */}
+        {layering && <>
+          <span className="ctx-hint">
+            {p.layerTools?.total ?? 0} layers on this slide · drag a row in the panel to reorder it · click a row to
+            select it on the slide
+          </span>
+        </>}
+        {arrangeBar && <>
+          {(["front", "forward", "backward", "back"] as ZOp[]).map(op => (
+            <span key={op}>
+              {button(Z_LABELS[op].icon, () => p.reorder(op), undefined, `${Z_LABELS[op].label} — ${Z_LABELS[op].hint}`)}
+            </span>
+          ))}
           {sep()}
         </>}
         {/* the insert destinations: quick-add tools above the board */}

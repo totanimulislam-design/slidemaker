@@ -3,6 +3,7 @@ import { ELEMENT_LABELS } from "./types";
 import { SHAPE_ICONS, SHAPE_LABELS, type ShapeItem } from "./shapes";
 import { reorder, sortByZ, Z_BASE, type ZOp } from "./zorder";
 import { alignShape, type AlignOp } from "./shapeAlign";
+import { effectiveTheme } from "./overrides";
 import type { Box } from "./types";
 
 /**
@@ -70,10 +71,17 @@ export const elementZ = (layout: LayoutMap, id: ElementId): number => {
   return typeof z === "number" && Number.isFinite(z) ? z : ELEMENT_DEFAULT_Z[id];
 };
 
-/** Everything that is actually rendered on `slide`, unsorted. */
+/**
+ * Everything that is actually rendered on `slide`, unsorted.
+ *
+ * Element z is read from the EFFECTIVE theme: a slide whose elements were moved
+ * by hand carries its own `themeOverride.layout` copy, and that copy is what the
+ * board paints — so the list, the drag drop slot and the canvas must all agree
+ * on the same order.
+ */
 export function collectLayers(deck: Deck, slide: SlideData | undefined): LayerEntry[] {
   const out: LayerEntry[] = [];
-  const layout = deck.theme.layout;
+  const layout = effectiveTheme(deck, slide).layout;
 
   const elementVisible = (id: ElementId) =>
     id === "logo" ? deck.header.showLogo && !!deck.header.logo
@@ -135,7 +143,72 @@ export function reorderLayer(deck: Deck, slide: SlideData | undefined, ref: Laye
   all.filter((e) => e.hidden).forEach((e, i) => {
     changes[e.key] = top + 1 + i;
   });
-  return applyZChanges(deck, changes);
+  return applyZChanges(deck, changes, slide?.id ?? null);
+}
+
+/**
+ * Drag & drop: moves `ref` into an exact slot of the VISIBLE stack.
+ *
+ * `index` counts from the BOTTOM (0 = back … n-1 = front) and is clamped, so a
+ * drop anywhere in the list — including past either end — always yields a
+ * valid, gap-free stack. Hidden built-ins are parked above it, exactly like
+ * `reorderLayer`, so every z stays distinct.
+ *
+ * Returns the deck unchanged when the layer would not move, which lets callers
+ * treat a drop on its own slot as a no-op (no undo step, no re-render).
+ */
+export function moveLayerTo(deck: Deck, slide: SlideData | undefined, ref: LayerRef, index: number): Deck {
+  const all = collectLayers(deck, slide);
+  const visible = sortByZ(all.filter((e) => !e.hidden).map((e) => ({ id: e.key, z: e.z })));
+  const key = layerKey(ref);
+  const from = visible.findIndex((v) => v.id === key);
+  if (from < 0 || visible.length < 2) return deck; // hidden layers never reorder
+  const to = Math.max(0, Math.min(visible.length - 1, Math.round(Number(index))));
+  if (to === from) return deck;
+
+  const next = [...visible];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+
+  const changes: Record<string, number> = {};
+  next.forEach((it, i) => {
+    const z = Z_BASE + i;
+    if (it.z !== z) changes[it.id] = z;
+  });
+  if (!Object.keys(changes).length) return deck;
+
+  // park hidden layers above the visible stack so they never collide
+  const top = Z_BASE + next.length - 1;
+  all.filter((e) => e.hidden).forEach((e, i) => {
+    changes[e.key] = top + 1 + i;
+  });
+  return applyZChanges(deck, changes, slide?.id ?? null);
+}
+
+/**
+ * The stack slot a dragged layer lands in, from the pointer's row index.
+ *
+ * The layer list is painted TOP-FIRST while the stack counts from the BOTTOM,
+ * and the list also shows hidden built-ins that cannot be reordered — so the
+ * drag source and the drop target are both counted over the VISIBLE rows only
+ * and then flipped. One helper owns that mapping so the panel and the tests
+ * agree on it.
+ *
+ * @param visibleCount  visible rows in the list
+ * @param fromVisible   the dragged row, top-first among the visible rows
+ * @param overVisible   the row the pointer hovers (its insertion point), top-first
+ * @returns the bottom-up index to hand to `moveLayerTo`, or null when it is a no-op
+ */
+export function dropSlot(
+  visibleCount: number,
+  fromVisible: number,
+  overVisible: number,
+): number | null {
+  if (visibleCount < 2) return null;
+  const from = Math.max(0, Math.min(visibleCount - 1, Math.round(fromVisible)));
+  const over = Math.max(0, Math.min(visibleCount - 1, Math.round(overVisible)));
+  if (over === from) return null;
+  return visibleCount - 1 - over; // top-first row → bottom-up stack slot
 }
 
 /** stack used by UI to decide whether an op is possible (visible layers only) */
@@ -143,21 +216,49 @@ export function visibleStack(deck: Deck, slide: SlideData | undefined): { id: st
   return sortByZ(collectLayers(deck, slide).filter((e) => !e.hidden).map((e) => ({ ...e, id: e.key })));
 }
 
-export function applyZChanges(deck: Deck, changes: Record<string, number>): Deck {
+/**
+ * Writes new z values into the deck.
+ *
+ * `slideId` matters: a slide whose elements were moved carries a
+ * `themeOverride.layout` copy of the whole map, and that copy SHADOWS the
+ * deck-level z. Reordering therefore has to write both, or the drop would look
+ * like it did nothing on exactly the slides the user has arranged by hand.
+ */
+export function applyZChanges(deck: Deck, changes: Record<string, number>, slideId?: string | null): Deck {
   const layout = { ...deck.theme.layout };
   const shapeZ = new Map<string, number>();
+  const elementZChanges = new Map<ElementId, number>();
   for (const key of Object.keys(changes)) {
     const ref = parseLayerKey(key);
     if (!ref) continue;
-    if (ref.kind === "element") layout[ref.id] = { ...layout[ref.id], z: changes[key] };
-    else shapeZ.set(ref.id, changes[key]);
+    if (ref.kind === "element") {
+      layout[ref.id] = { ...layout[ref.id], z: changes[key] };
+      elementZChanges.set(ref.id, changes[key]);
+    } else shapeZ.set(ref.id, changes[key]);
   }
   const fix = (x: ShapeItem): ShapeItem => (shapeZ.has(x.id) ? { ...x, z: shapeZ.get(x.id)! } : x);
+  const fixSlide = (s: SlideData): SlideData => {
+    const shapes = s.shapes?.length ? s.shapes.map(fix) : s.shapes;
+    const over = s.id === slideId ? s.themeOverride?.layout : undefined;
+    const themeOverride =
+      over && [...elementZChanges.keys()].some((id) => over[id])
+        ? {
+            ...s.themeOverride!,
+            layout: {
+              ...over,
+              ...Object.fromEntries(
+                [...elementZChanges.entries()].filter(([id]) => over[id]).map(([id, z]) => [id, { ...over[id], z }]),
+              ) as LayoutMap,
+            },
+          }
+        : s.themeOverride;
+    return shapes === s.shapes && themeOverride === s.themeOverride ? s : { ...s, shapes, themeOverride };
+  };
   return {
     ...deck,
     theme: { ...deck.theme, layout },
     globalShapes: deck.globalShapes?.map(fix),
-    slides: deck.slides.map((s) => (s.shapes?.length ? { ...s, shapes: s.shapes.map(fix) } : s)),
+    slides: deck.slides.map(fixSlide),
   };
 }
 

@@ -19,7 +19,7 @@ slide**, in board order — a compact icon + label tile for each:
 | Title text | Question bullet | Option bullet | Footnote |
 | Title background | Q bullet text | Opt bullet text | Slide background |
 | Badge 1 · Badge 2 · Badge 3 · Logo | Question text | Option text | Slide frame |
-|  |  | **Answer key** | Insert images · Insert shapes |
+|  |  | **Answer key** | Insert images · Insert shapes · **Layers** |
 
 Two-way selection sync ties the navigation to the canvas:
 
@@ -29,13 +29,16 @@ Two-way selection sync ties the navigation to the canvas:
   outline but keep a selected picture/shape editable.
 - **Slide → navigation.** Clicking an element on the board (or a row in the
   Layers list) opens the tile that styles it; double-clicking still drops you
-  into its text field.
+  into its text field. The **Layers** tile is the one exception: it lists the
+  whole board rather than owning one thing, so it stays open while the selection
+  follows your clicks — on the board and in the list alike — and offers an
+  *Edit … →* jump to the tile that styles whatever is selected.
 - **Navigation → toolbar.** Every tile also opens the related tools in the
   context toolbar above the board. Tiles that own an element or a surface
-  already did; the destinations that don't — **Answer key**, **Insert images**
-  and **Insert shapes** — now bring their own tools instead of leaving the strip
-  empty (answer marking/reveal/style/paste-key, quick image insert, quick shape
-  insert). `Esc`, changing slides, or picking another tile changes what the
+  already did; the destinations that don't — **Answer key**, **Insert images**,
+  **Insert shapes** and **Layers** — bring their own tools instead of leaving the
+  strip empty (answer marking/reveal/style/paste-key, quick image insert, quick
+  shape insert, and the layer count plus the arrange buttons). `Esc`, changing slides, or picking another tile changes what the
   toolbar shows.
 
 Badges 1 and 2 are the two brand lines ("LEARN WITH" / "FAYSAL SIR") and Badge 3
@@ -87,6 +90,40 @@ The deeper pickers (bullet designs, banner shapes, marker shapes, row styles,
 plain numbering, fonts) open from their line in the same movable pop-up card
 every other toolbar toggle uses. A multi-selection or a drawn shape always gets
 the plain toolbar, never a merged stack.
+
+## Layers
+
+The **Layers** destination (the ⧉ tile after *Insert shapes*) is one list for
+everything painted on the slide — logo, brand lines, title, badge, question,
+options, footnote **and** every drawn shape, text box and image — because they
+all share a single stacking order (`lib/layers.ts`):
+
+- **Top first.** Row 0 is the front-most layer; the gutter shows `top` / `btm`
+  and the layer number. Built-ins that this slide does not paint (no logo, empty
+  footnote, merged bullet) stay in the list, dimmed and marked *(hidden)* — they
+  cannot be reordered because they are not on the board.
+- **Drag to reorder.** Press a row and drag it up or down: the rows it passes
+  slide out of the way, a chip follows the cursor, and the drop writes the whole
+  stack in one undo step. The list auto-scrolls when you hold a row near either
+  edge, so a long deck is reachable in one drag. Dropping below the last row
+  sends the layer to the back.
+- **Click to select.** A row selects that shape / text / element on the slide —
+  outline, handles and its own tools — exactly like Canva, and the panel keeps
+  its place so you can walk down the stack. Clicking the board does the reverse:
+  the list's selection follows, and scrolls the row into view.
+- **Keyboard.** The list is a `listbox` with roving focus: ↑/↓ walk the rows,
+  `Home`/`End` jump to the ends, `Enter`/`Space` select, and **Alt+↑ / Alt+↓**
+  bring a layer forward / send it backward without a pointer.
+- **Per row.** 🔒 lock a drawn item, ▲/▼ step it one slot, `ALL` marks a
+  deck-wide item that paints on every slide, ⧉ marks a group member (clicking it
+  selects that member alone).
+- **Above the list.** Bring Forward / Front / Backward / Back, align to the slide
+  or to another layer (including *fill* and *match*), and distribute a picked
+  set evenly. The toolbar above the board carries the same arrange buttons while
+  the destination is open.
+
+The same list is embedded in the *Insert shapes* destination under **Layer
+order**, so reordering is never more than one click away while styling a shape.
 
 ## Answer key
 

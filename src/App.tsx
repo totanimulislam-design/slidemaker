@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ContextToolbar from "./components/ContextToolbar";
 import Slide, { SLIDE_H, SLIDE_W, type SlideField } from "./components/Slide";
 import {
@@ -70,6 +70,7 @@ export default function App() {
     applyShapeDesign,
     reorderShape,
     reorderLayerOp,
+    moveLayerToOp,
     alignLayerOp,
     distributeLayersOp,
     removeShape,
@@ -125,6 +126,27 @@ export default function App() {
     setTabRequest((r) => ({ tab, n: (r?.n ?? 0) + 1 }));
     setActiveNav(tab);
   }, []);
+  /**
+   * Latest navigation destination, readable from callbacks without re-binding
+   * them. The Layers destination is a list of the WHOLE board, so selecting
+   * something — in the list or on the canvas — must not navigate away from it
+   * (Canva keeps its layers panel open the same way); every other destination
+   * still follows the selection.
+   */
+  const activeNavRef = useRef<InspectorTab | null>(null);
+  useEffect(() => {
+    activeNavRef.current = activeNav;
+  }, [activeNav]);
+
+  /** opens a destination as a consequence of a selection (Layers stays put) */
+  const openTabForSelection = useCallback(
+    (tab: InspectorTab) => {
+      if (activeNavRef.current === "layers") return;
+      requestTab(tab);
+    },
+    [requestTab],
+  );
+
   const [editScope, setEditScope] = useState<"slide" | "selected" | "all">("slide");
   const [scopeSlideIds, setScopeSlideIds] = useState<string[]>([]);
 
@@ -183,10 +205,10 @@ export default function App() {
         const cur = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
         const pool = [...(deck.globalShapes ?? []), ...(cur?.shapes ?? [])];
         const only = ids.length === 1 ? pool.find((x) => x.id === ids[0]) : undefined;
-        requestTab(only?.kind === "image" ? "images" : "shapes");
+        openTabForSelection(only?.kind === "image" ? "images" : "shapes");
       }
     },
-    [deck.globalShapes, deck.slides, current, requestTab],
+    [deck.globalShapes, deck.slides, current, openTabForSelection],
   );
 
   /**
@@ -195,9 +217,20 @@ export default function App() {
    * field is cleared: it would otherwise re-drive the inspector's tab from a
    * stale canvas click and undo the navigation choice.
    */
-  const handleNavSelect = useCallback((target: { element?: ElementId; surface?: "frame" | "background"; nav?: InspectorTab }) => {
+  const handleNavSelect = useCallback((target: {
+    element?: ElementId;
+    surface?: "frame" | "background";
+    nav?: InspectorTab;
+    keepSelection?: boolean;
+  }) => {
     setActiveField(null);
     setActiveNav(target.nav ?? null);
+    // the Layers destination lists whatever is selected, so opening it must not
+    // clear the selection it is about to show
+    if (target.keepSelection) {
+      setSurface(null);
+      return;
+    }
     if (target.element) {
       setSelectedEl(target.element);
       setSelectedShapes([]);
@@ -233,14 +266,14 @@ export default function App() {
         setSelectedShapes([ref.id]);
         const cur = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
         const pool = [...(deck.globalShapes ?? []), ...(cur?.shapes ?? [])];
-        requestTab(pool.find((x) => x.id === ref.id)?.kind === "image" ? "images" : "shapes");
+        openTabForSelection(pool.find((x) => x.id === ref.id)?.kind === "image" ? "images" : "shapes");
       } else {
         setSelectedShapes([]);
         setSelectedEl(ref.id);
-        requestTab(tabOfElement(ref.id));
+        openTabForSelection(tabOfElement(ref.id));
       }
     },
-    [deck.globalShapes, deck.slides, current, requestTab],
+    [deck.globalShapes, deck.slides, current, openTabForSelection],
   );
 
   /**
@@ -267,6 +300,15 @@ export default function App() {
       reorderLayerOp(ref, op, sl?.id ?? null);
     },
     [deck.slides, current, reorderLayerOp],
+  );
+
+  /** a layer row was dragged into a new slot of the stack */
+  const moveLayerToSlot = useCallback(
+    (ref: LayerRef, index: number) => {
+      const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
+      moveLayerToOp(ref, index, sl?.id ?? null);
+    },
+    [deck.slides, current, moveLayerToOp],
   );
 
   const reorderSelected = useCallback(
@@ -347,7 +389,9 @@ export default function App() {
     // the destinations that do not depend on a selection (Answer key, Insert
     // images, Insert shapes) stay open across slides — their tools apply to the
     // slide you just moved to; every other destination needs its element back
-    setActiveNav((nav) => (nav === "answerKey" || nav === "images" || nav === "shapes" ? nav : null));
+    setActiveNav((nav) =>
+      nav === "answerKey" || nav === "images" || nav === "shapes" || nav === "layers" ? nav : null,
+    );
   }, [current]);
   const currentTheme = effectiveTheme(deck, slide);
   const currentHeader = effectiveHeader(deck, slide);
@@ -414,6 +458,15 @@ export default function App() {
         return;
       }
       if (inField) return;
+
+      /**
+       * The Layers list owns its arrow and Tab keys: ↑/↓ walk the rows and
+       * Alt+↑/↓ reorder the stack. Without this guard the very same keystroke
+       * would ALSO nudge the selected shape on the canvas (and ←/→ would flip
+       * the slide), so one press wrote two history entries and moved two things.
+       */
+      const inLayerList = typeof t?.closest === "function" && !!t.closest("[data-layer-list]");
+      if (inLayerList && (e.key === "Tab" || e.key.startsWith("Arrow"))) return;
 
       // Escape clears the whole selection (element + shapes + active field) and
       // takes the context toolbar down with it
@@ -868,13 +921,14 @@ export default function App() {
                   * Answer key, Insert images, Insert shapes — now open their own
                   * related tools instead of nothing.
                   */}
-                {(surface || selectedLayer || activeNav === "answerKey" || activeNav === "images" || activeNav === "shapes") && <ContextToolbar
+                {(surface || selectedLayer || activeNav === "answerKey" || activeNav === "images" || activeNav === "shapes" || activeNav === "layers") && <ContextToolbar
                   key={`${slide.id}:${surface}:${selectedEl}:${activeNav}:${selectedShapes.join(',')}`}
                   shape={[...(slide.shapes ?? []), ...(deck.globalShapes ?? [])].find(s => s.id === selectedShape)}
                   element={selectedEl} surface={surface} count={selectedShapes.length} grouped={selectedGrouped}
                   nav={activeNav}
                   insertShape={kind => insertShape(kind, { mode: "this" })}
                   onAddImages={files => void importImageFiles(files)}
+                  layerTools={activeNav === "layers" ? { total: currentStack.length } : undefined}
                   answerKey={activeNav === "answerKey" ? {
                     answer: slide.answer,
                     showAnswer: slide.showAnswer,
@@ -971,8 +1025,8 @@ export default function App() {
                         setSurface(null);
                         setSelectedShapes([]);
                         // two-way sync: picking content on the slide opens the
-                        // navigation entry that styles it
-                        requestTab(tabOfElement(id));
+                        // navigation entry that styles it (the Layers list stays)
+                        openTabForSelection(tabOfElement(id));
                       }
                     }}
                     onSurfaceSelect={value => { setSurface(value); setSelectedEl(null); setSelectedShapes([]); setActiveField(null); }}
@@ -1159,8 +1213,10 @@ export default function App() {
             }}
             layers={{
               selected: selectedLayer,
+              selectedIds: selectedShapes,
               onSelect: selectLayer,
               onReorder: reorderLayerRef,
+              onMoveTo: moveLayerToSlot,
               onAlign: (ref, op, target) => alignLayerOp(ref, op, slide?.id ?? null, target),
               onDistribute: (refs, axis) => distributeLayersOp(refs, axis, slide?.id ?? null),
             }}

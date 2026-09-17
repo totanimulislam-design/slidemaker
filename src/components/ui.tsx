@@ -319,7 +319,7 @@ export function SegButtons<T extends string>({
 }
 
 /**
- * Heading every inspector panel opens with, so the 18 navigation destinations
+ * Heading every inspector panel opens with, so the 19 navigation destinations
  * all read the same way: what this panel edits, and what it drives on the slide.
  */
 export function PanelHead({
