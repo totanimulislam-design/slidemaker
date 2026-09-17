@@ -22,7 +22,7 @@ import { useHistory } from "./useHistory";
 import { effectiveTheme, mergeThemeOverride } from "./overrides";
 import { applySlideDesign, revertSlideDesign, type ApplySection } from "./applyDesign";
 import { sortByZ, Z_BASE, Z_LABELS, type ZOp } from "./zorder";
-import { alignLayer, distributeLayers, normalizeUnifiedZ, reorderLayer, topZ, type LayerRect, type LayerRef } from "./layers";
+import { alignLayer, distributeLayers, moveLayerTo, normalizeUnifiedZ, reorderLayer, topZ, type LayerRect, type LayerRef } from "./layers";
 import type { AlignOp } from "./shapeAlign";
 import type { BackgroundSettings, Box, ElementId, LayoutMap } from "./types";
 import { DEFAULT_LAYOUT as LAYOUT_DEFAULTS } from "./types";
@@ -838,6 +838,22 @@ export function useDeck() {
     [setDeckH],
   );
 
+  /**
+   * Drag & drop in the layer list: puts `ref` into an exact slot of the visible
+   * stack (counted from the bottom). One drop = one undo step.
+   */
+  const moveLayerToOp = useCallback(
+    (ref: LayerRef, index: number, slideId: string | null) => {
+      setDeckH((d) => {
+        const slide =
+          (ref.kind === "shape" ? d.slides.find((s) => s.shapes?.some((x) => x.id === ref.id)) : undefined) ??
+          d.slides.find((s) => s.id === slideId);
+        return moveLayerTo(d, slide, ref, index);
+      }, "Reorder layer");
+    },
+    [setDeckH],
+  );
+
   /** align ANY layer (element or shape) to the slide or to a reference rect */
   const alignLayerOp = useCallback(
     (ref: LayerRef, op: AlignOp, slideId: string | null, target?: LayerRect) => {
@@ -1125,6 +1141,7 @@ export function useDeck() {
     applyShapeDesign,
     reorderShape,
     reorderLayerOp,
+    moveLayerToOp,
     alignLayerOp,
     distributeLayersOp,
     removeShape,

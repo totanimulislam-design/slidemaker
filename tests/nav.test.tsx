@@ -48,6 +48,7 @@ const NAV: [id: string, label: string, heading: string][] = [
   ["frame", "Slide frame", "Slide frame"],
   ["images", "Insert images", "Insert images"],
   ["shapes", "Insert shapes", "Insert shapes"],
+  ["layers", "Layers", "Layers"],
 ];
 
 /** nav id → the board element it must select on the slide */
@@ -70,6 +71,9 @@ const SELECTS: Record<string, string | null> = {
   frame: null,
   images: null,
   shapes: null,
+  // the Layers destination lists whatever is already selected, so opening it
+  // must not outline anything by itself
+  layers: null,
 };
 
 const click = (el: Element | null | undefined) => {
@@ -109,6 +113,13 @@ const fire = (target: EventTarget, t: string, x: number, y: number, buttons: num
 };
 
 const navButtons = () => Array.from(doc.querySelectorAll<HTMLElement>("aside nav button[data-nav]"));
+/** the layer rows of the Layers destination, top first */
+const layerRows = () => Array.from(doc.querySelectorAll<HTMLElement>('aside [data-layer-list] [data-layer-row]'));
+/** "Edit <destination> →" — the jump out of the Layers list */
+const jumpButton = () =>
+  Array.from(doc.querySelectorAll<HTMLElement>("aside button")).find((b) =>
+    /^Edit .+ →$/.test(b.textContent?.trim() ?? ""),
+  ) ?? null;
 const panelHeading = () => doc.querySelector("aside h2")?.textContent?.trim() ?? "";
 const overlayOf = () =>
   doc.querySelector('.slide-editable [data-el-overlay]')?.getAttribute("data-el-overlay") ?? null;
@@ -190,7 +201,7 @@ export async function runNavTests(): Promise<CaseResult[]> {
   /* ------------------------------- the nav itself -------------------------- */
   const ids = navButtons().map((b) => b.getAttribute("data-nav"));
   out.push({
-    name: "navigation lists all 18 destinations, in order",
+    name: "navigation lists all 19 destinations, in order",
     pass: ids.length === NAV.length && NAV.every(([id], i) => ids[i] === id),
     detail: ids.join(","),
   });
@@ -230,7 +241,7 @@ export async function runNavTests(): Promise<CaseResult[]> {
   out.push({
     name: "every destination opens a related toolbar above the slide",
     pass: badToolbars.length === 0,
-    detail: badToolbars.length ? `no toolbar for: ${badToolbars.join(", ")}` : "18/18",
+    detail: badToolbars.length ? `no toolbar for: ${badToolbars.join(", ")}` : `${NAV.length}/${NAV.length}`,
   });
 
   /* ------------------------- surfaces get their toolbar -------------------- */
@@ -246,6 +257,71 @@ export async function runNavTests(): Promise<CaseResult[]> {
     name: "Insert images releases the element outline but keeps its panel",
     pass: overlayOf() === null && panelHeading() === "Insert images",
     detail: `overlay=${overlayOf()} panel=${panelHeading()}`,
+  });
+
+  /* --------------------- the Layers destination ---------------------------- */
+  click(doc.querySelector('aside nav button[data-nav="badge3"]'));
+  click(doc.querySelector('aside nav button[data-nav="layers"]'));
+  out.push({
+    name: "Layers opens its own panel and keeps the badge selected",
+    pass: panelHeading() === "Layers" && overlayOf() === "badge",
+    detail: `panel=${panelHeading()} overlay=${overlayOf()}`,
+  });
+  out.push({
+    name: "Layers lists every element and drawn item of the slide, top first",
+    pass: layerRows().length >= 8 && layerRows()[0]?.getAttribute("data-layer-row") !== null,
+    detail: layerRows().map((r) => r.getAttribute("data-layer-row")).join(","),
+  });
+  out.push({
+    name: "Layers opens a related toolbar above the slide",
+    pass: !!toolbar(),
+    detail: String(toolbar()),
+  });
+  // picking a row selects it on the slide WITHOUT leaving the layers list
+  click(doc.querySelector('aside [data-layer-row="element:title"]'));
+  out.push({
+    name: "clicking a layer row selects that element on the slide",
+    pass: overlayOf() === "title" && panelHeading() === "Layers",
+    detail: `overlay=${overlayOf()} panel=${panelHeading()}`,
+  });
+  out.push({
+    name: "the selected layer row is marked in the list",
+    pass: doc.querySelector('aside [data-layer-row="element:title"]')?.getAttribute("aria-selected") === "true",
+    detail: String(doc.querySelector('aside [data-layer-row="element:title"]')?.getAttribute("aria-selected")),
+  });
+  // …and clicking the board keeps the list open while following the selection
+  const q = doc.querySelector<HTMLElement>('.slide-editable [data-el="question"]');
+  if (q) {
+    fire(q, "pointerdown", 400, 400, 1);
+    fire(q, "pointerup", 400, 400, 0);
+  }
+  out.push({
+    name: "clicking the slide keeps the Layers list open and moves its selection",
+    pass: panelHeading() === "Layers" && overlayOf() === "question",
+    detail: `panel=${panelHeading()} overlay=${overlayOf()}`,
+  });
+  out.push({
+    name: "the Layers list offers a one-click jump to the selected thing's panel",
+    pass: !!jumpButton(),
+    detail: jumpButton()?.textContent?.trim() ?? "missing",
+  });
+  click(jumpButton());
+  out.push({
+    name: "the jump button opens the destination that styles the selection",
+    pass: panelHeading() === "Question text",
+    detail: panelHeading(),
+  });
+  /**
+   * Four tiles touch the options block (option bullet, its text, its colour,
+   * the answer key), so the jump has to land on the same main tile a canvas
+   * click opens — Option text — not whichever tile lists options first.
+   */
+  click(doc.querySelector('aside nav button[data-nav="layers"]'));
+  click(doc.querySelector('aside [data-layer-row="element:options"]'));
+  out.push({
+    name: "an options layer jumps to Option text, the tile a board click opens",
+    pass: jumpButton()?.textContent?.trim() === "Edit Option text →",
+    detail: jumpButton()?.textContent?.trim() ?? "missing",
   });
 
   /* ---------------- the Answer key destination and its tools --------------- */
