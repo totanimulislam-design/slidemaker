@@ -508,6 +508,31 @@ export function useDeck() {
     [setDeckH],
   );
 
+  /**
+   * Drag & drop reordering: carry the slide to slot `toIndex` (its FINAL,
+   * 0-based position in the stack) and follow it with the editor — the same
+   * way the ↑ / ↓ step buttons follow the slide they move.
+   */
+  const moveSlideTo = useCallback(
+    (id: string, toIndex: number) => {
+      setDeckH((d) => {
+        const i = d.slides.findIndex((s) => s.id === id);
+        if (i < 0) return d;
+        const n = d.slides.length;
+        const to = Math.max(0, Math.min(n - 1, toIndex));
+        if (to === i) return d; // dropped back into its own slot
+        const slides = [...d.slides];
+        const [s] = slides.splice(i, 1);
+        // the inserted card takes slot `to` in the final array, so `to` IS the
+        // splice position into the shortened list
+        slides.splice(to, 0, s);
+        window.setTimeout(() => setCurrent(to), 0);
+        return { ...d, slides };
+      }, "Move slide");
+    },
+    [setDeckH],
+  );
+
   /** for quiz videos: question slide followed by the same slide with the answer shown */
   const addAnswerCopies = useCallback(() => {
     setDeckH(
@@ -1203,6 +1228,7 @@ export function useDeck() {
     removeSlide,
     duplicateSlide,
     moveSlide,
+    moveSlideTo,
     addAnswerCopies,
     addShape,
     addImage,

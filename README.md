@@ -9,6 +9,24 @@ npm run build      # single-file dist/index.html
 npm run test:drag  # pointer / drag + inspector navigation suites (jsdom)
 ```
 
+## Slide stack
+
+The left rail is a drag surface. Press a slide card, move the mouse, and the
+card is carried to **anywhere** in the stack — the cards in between open a
+landing gap live, a small preview follows the cursor, and a real mouse release
+commits the drop (one undo step). Hovering the top half of a card drops before
+it, the bottom half after, and hovering past the last card goes to the very
+end. A plain click still just opens the slide; the ↑ / ↓ / ⧉ / ✕ hover buttons
+keep working as one-slot steps, duplicate and delete. The reorder runs through
+the same guarded pointer session as the board and the layer list, so a press
+that never travels can't move a slide and a pointercancel, blur or hidden tab
+abandons the drop instead of committing it.
+
+There is also a **slide selector in the top-right corner** of the editor
+(`🎞 3 / 12`): it opens the whole deck as a list of live previews — number,
+question and answer state — and jumps the editor to the picked slide.
+`Esc` or a click away closes it.
+
 ## Inspector navigation
 
 The right-hand inspector lists **one destination per restylable thing on a

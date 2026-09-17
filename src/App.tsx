@@ -10,8 +10,10 @@ import {
   type LayoutMap,
   type ThemeSettings,
 } from "./lib/types";
-import { Stage, Thumb } from "./components/SlideViews";
+import { Stage } from "./components/SlideViews";
 import Inspector from "./components/Inspector";
+import SlideStack from "./components/SlideStack";
+import SlidePicker from "./components/SlidePicker";
 import PasteModal from "./components/PasteModal";
 import Presenter from "./components/Presenter";
 import ExportModal, { type ExportSettings } from "./components/ExportModal";
@@ -57,6 +59,7 @@ function AppContent() {
     removeSlide,
     duplicateSlide,
     moveSlide,
+    moveSlideTo,
     addAnswerCopies,
     addShape,
     addImage,
@@ -916,6 +919,7 @@ function AppContent() {
           </Btn>
 
           <div className="ml-auto flex items-center gap-2">
+            <SlidePicker deck={deck} current={index} revision={revision} onCurrent={setCurrent} />
             {busy && (
               <span className="rounded-lg bg-amber-400/15 px-3 py-1.5 text-xs text-amber-200">{busy}</span>
             )}
@@ -943,67 +947,17 @@ function AppContent() {
         </header>
 
         <div className="flex min-h-0 flex-1">
-          <aside className="flex w-[230px] shrink-0 flex-col border-r border-white/10 bg-slate-950/60">
-            <div className="flex items-center justify-between px-3 py-2 text-[11px] font-medium tracking-wide text-slate-500 uppercase">
-              Slides
-              <span className="text-slate-600">{deck.slides.length}</span>
-            </div>
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-4">
-              {deck.slides.map((s, i) => (
-                <div
-                  key={s.id}
-                  onClick={() => {
-                    setCurrent(i);
-                    setActiveField(null);
-                  }}
-                  className={cn(
-                    "group relative cursor-pointer rounded-lg border p-1 transition-colors",
-                    i === index ? "border-amber-400 bg-amber-400/10" : "border-white/10 hover:border-white/25",
-                  )}
-                >
-                  <div className="pointer-events-none">
-                    <Thumb width={196}>
-                      <Slide
-                        key={`t-${revision}`}
-                        slide={s}
-                        header={effectiveHeader(deck, s)}
-                        theme={effectiveTheme(deck, s)}
-                        globalShapes={deck.globalShapes}
-                        background={effectiveBackground(deck, s)}
-                      />
-                    </Thumb>
-                  </div>
-                  <span className="absolute top-2 left-2 rounded bg-black/70 px-1.5 text-[10px] font-semibold text-amber-300">
-                    {i + 1}
-                  </span>
-                  <div className="absolute right-1.5 bottom-1.5 hidden gap-1 group-hover:flex">
-                    {[
-                      { t: "↑", fn: () => moveSlide(s.id, -1) },
-                      { t: "↓", fn: () => moveSlide(s.id, 1) },
-                      { t: "⧉", fn: () => duplicateSlide(s.id) },
-                      { t: "✕", fn: () => removeSlide(s.id) },
-                    ].map((b) => (
-                      <button
-                        key={b.t}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          b.fn();
-                        }}
-                        className="rounded bg-black/80 px-1.5 py-0.5 text-[10px] text-slate-200 hover:bg-amber-400 hover:text-slate-950"
-                      >
-                        {b.t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {!deck.slides.length && (
-                <p className="px-1 py-6 text-center text-xs text-slate-600">
-                  No slides yet. Use “Paste questions”.
-                </p>
-              )}
-            </div>
-          </aside>
+          <SlideStack
+            deck={deck}
+            current={index}
+            revision={revision}
+            onCurrent={setCurrent}
+            onClearField={() => setActiveField(null)}
+            onMoveTo={moveSlideTo}
+            onStep={(id, dir) => moveSlide(id, dir)}
+            onDuplicate={duplicateSlide}
+            onRemove={removeSlide}
+          />
 
           <main className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(60%_60%_at_50%_0%,#141a2b_0%,#020617_70%)]">
             {slide ? (

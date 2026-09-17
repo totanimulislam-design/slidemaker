@@ -20,6 +20,7 @@ const suites = [
   ["app boot smoke test (full editor)", "smoke.test.tsx", "runSmokeTests"],
   ["inspector navigation (19 destinations, selection sync + merged toolbar stacks)", "nav.test.tsx", "runNavTests"],
   ["layers panel (drag to reorder the unified stack + selection sync)", "layers.test.tsx", "runLayersTests"],
+  ["slide stack (drag to reorder the deck + top-right slide selector)", "slides.test.tsx", "runSlideStackTests"],
 ];
 
 installDom();
