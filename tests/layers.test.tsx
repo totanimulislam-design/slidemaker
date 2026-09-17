@@ -103,6 +103,35 @@ const selectedRow = () =>
   rows().find((r) => r.getAttribute("aria-selected") === "true")?.getAttribute("data-layer-row") ?? null;
 const order = () => liveKeys().join(",");
 
+/** the toolbar rows above the board, in order — one per related part */
+const toolbarRows = () =>
+  Array.from(doc.querySelectorAll<HTMLElement>('.context-toolbar [role="toolbar"]')).map(
+    (t) => t.getAttribute("aria-label") ?? "",
+  );
+/** …without the arrange row the Layers destination adds beside them */
+const toolbarLines = () => toolbarRows().filter((l) => l !== "Arrange tools");
+/** the line the toolbar highlights as the one you are editing */
+const activeLine = () =>
+  Array.from(doc.querySelectorAll<HTMLElement>('.context-toolbar [role="toolbar"]')).find((t) =>
+    t.className.includes("ctx-pill-active"),
+  )?.getAttribute("aria-label") ?? "";
+/** the painted size of the title glyphs (the Title text line writes it) */
+const titlePx = () =>
+  Math.max(
+    ...Array.from(doc.querySelectorAll<HTMLElement>('.slide-editable [data-el="title"] div')).map((d) =>
+      parseFloat(d.style.fontSize || "0"),
+    ),
+  );
+/** typing into a toolbar stepper, the way a user edits the value */
+const type = (el: HTMLInputElement | null | undefined, v: string) => {
+  if (!el) return;
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(el, v);
+    el.dispatchEvent(new win.Event("input", { bubbles: true }));
+  });
+};
+
 /** the z the board paints a layer at: elements and shapes share one number line */
 const paintedZ = (k: string): number => {
   const kind = k.slice(0, k.indexOf(":"));
@@ -321,6 +350,63 @@ export async function runLayersTests(): Promise<CaseResult[]> {
     pass: overlayOf() === "question" && selectedRow() === "element:question" && shapeSelOf() === null,
     detail: `overlay=${overlayOf()} selected=${selectedRow()} shape=${shapeSelOf()}`,
   });
+
+  /* ------- a row previews every merged part of the layer it selects -------- */
+  /**
+   * The Layers destination styles nothing itself — it lists the board — so the
+   * toolbar above the slide takes its merged block from the SELECTION: the
+   * "Title" row previews the title text AND its banner, exactly like the Title
+   * text destination does, with the row's own part highlighted.
+   */
+  const MERGED: [row: string, lines: string[], own: string][] = [
+    ["element:title", ["Title text tools", "Title background tools"], "Title text tools"],
+    ["element:brand", ["Badge 1 tools", "Badge 2 tools"], "Badge 1 tools"],
+    [
+      "element:question",
+      ["Question text tools", "Question bullet tools", "Text inside question bullet tools"],
+      "Question text tools",
+    ],
+    ["element:options", ["Option text tools", "Option bullet tools", "Text inside option bullet tools"], "Option text tools"],
+  ];
+  for (const [row, lines, own] of MERGED) {
+    clickRow(row);
+    const got = toolbarLines();
+    out.push({
+      name: `picking ${row} previews every merged part of that layer above the slide`,
+      pass: got.join("|") === lines.join("|") && panelHeading() === "Layers",
+      detail: `${got.join(" | ")} · panel=${panelHeading()}`,
+    });
+    out.push({
+      name: `${row} highlights its own part and leaves the Layers panel open`,
+      pass: activeLine() === own && panelHeading() === "Layers" && selectedRow() === row,
+      detail: `active=${activeLine()} panel=${panelHeading()} selected=${selectedRow()}`,
+    });
+    out.push({
+      name: `${row} keeps the arrange tools the Layers destination is for`,
+      pass: toolbarRows().includes("Arrange tools"),
+      detail: toolbarRows().join(" | "),
+    });
+  }
+
+  /* …and a line picked from the list still restyles its OWN part only */
+  clickRow("element:title");
+  const titleBefore = titlePx();
+  type(doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label="Title size"]'), "80");
+  out.push({
+    name: "a line picked from the Layers list still restyles its own part",
+    pass: titlePx() > titleBefore && titlePx() > 0,
+    detail: `${titleBefore}px → ${titlePx()}px`,
+  });
+  type(doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label="Title size"]'), "54");
+
+  /* a layer with no merged siblings (Badge, Footnote) keeps the plain toolbar */
+  clickRow("element:badge");
+  out.push({
+    name: "a layer that is not part of a merged block keeps the plain toolbar",
+    pass: toolbarLines().join("|") === "Text tools",
+    detail: toolbarLines().join(" | "),
+  });
+  clickRow("element:question");
 
   /* ------------------- click the slide → the list follows ------------------- */
   const titleEl = doc.querySelector<HTMLElement>('.slide-editable [data-el="title"]');
