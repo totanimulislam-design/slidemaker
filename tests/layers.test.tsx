@@ -522,6 +522,23 @@ export async function runLayersTests(): Promise<CaseResult[]> {
     detail: `${base} → ${order()}`,
   });
 
+  // a cancel the row itself receives abandons the drop too (never commits)
+  base = order();
+  stubRowBoxes();
+  {
+    const d0 = boxOf("shape:g1");
+    const d1 = boxOf("element:brand");
+    down(rowOf("shape:g1")!, d0.x, d0.y);
+    held(asWin, d0.x, d0.y + 8);
+    held(asWin, d1.x, d1.top + 2);
+    fire(rowOf("shape:g1")!, "pointercancel", d1.x, d1.top + 2, 0); // ← on the row
+  }
+  out.push({
+    name: "a cancel the captured row receives abandons the drop",
+    pass: order() === base && !listEl()?.hasAttribute("data-dragging"),
+    detail: `${base} → ${order()}`,
+  });
+
   // window blur mid-drag drops the gesture too
   base = order();
   stubRowBoxes();
@@ -824,6 +841,30 @@ export async function runLayersTests(): Promise<CaseResult[]> {
   out.push({
     name: "…and its rows are draggable too",
     pass: after.join(",") === afterDrag(before, "shape:sh1", "element:question").join(","),
+    detail: `${before.join(",")} → ${after.join(",")}`,
+  });
+
+  /**
+   * The release the row itself receives — the path a REAL browser takes, since
+   * the pressed row holds the pointer capture: React's `onPointerUp` on the row
+   * runs on the way up, long before the session's window listener. It has to
+   * commit the drop, not abort it. (Last, because it moves the stack the tests
+   * above pin down.)
+   */
+  before = liveKeys();
+  stubRowBoxes();
+  {
+    const from = boxOf(before[0]);
+    const to = boxOf(before[3]);
+    down(rowOf(before[0])!, from.x, from.y);
+    held(asWin, from.x, from.y + 6);
+    held(asWin, to.x, to.top + 2);
+    up(rowOf(before[0])!, to.x, to.top + 2); // ← released ON the row, like a browser
+  }
+  after = liveKeys();
+  out.push({
+    name: "the release the captured row receives commits the drop (browser path)",
+    pass: after.join(",") === afterDrag(before, before[0], before[3]).join(","),
     detail: `${before.join(",")} → ${after.join(",")}`,
   });
 

@@ -306,7 +306,27 @@ export function usePointerDrag(handlers: DragHandlers) {
 
   /** end the gesture now (item-level pointer-up / cancel / leave) */
   const end = useCallback(() => session.end(), [session]);
+
+  /**
+   * End the gesture from a React pointer handler, forwarding the NATIVE event.
+   *
+   * `session.end(e)` needs that event to tell what the release MEANS —
+   * `pointerup` commits a drop, `pointercancel` / blur / a lost capture abandons
+   * it — and it needs `pointerId` to release the pointer capture. A React
+   * synthetic event carries neither, and `end()` with no event at all reads as
+   * an interrupted gesture, so a genuine release would be thrown away.
+   *
+   * That is exactly what used to happen on the layer rows: the row's own
+   * `onPointerUp` runs before the session's window listener (React listens on
+   * the root, the window is further up), so every drop in a real browser was
+   * discarded while the tests — which released on `window` — stayed green. A
+   * real release always commits, and only a pointer-captured row that ends the
+   * gesture early can do that, so wire `onPointerUp` / `onPointerCancel` to
+   * this helper rather than to `end`.
+   */
+  const release = useCallback((e: { nativeEvent: Event }) => session.end(e.nativeEvent), [session]);
+
   const handleLeave = useCallback((e: { pointerId?: number; buttons?: number }) => session.handleLeave(e), [session]);
 
-  return { begin, end, cancel: end, handleLeave, session, state: session.state };
+  return { begin, end, release, cancel: end, handleLeave, session, state: session.state };
 }
