@@ -367,6 +367,51 @@ export async function runNavTests(): Promise<CaseResult[]> {
     detail: String(toolbar()),
   });
 
+  /* --------- merged contents: one toolbar line per related part --------- */
+  const optionLines = () =>
+    Array.from(doc.querySelectorAll('.context-toolbar [role="toolbar"]')).map((t) =>
+      t.getAttribute("aria-label"),
+    );
+  const OPTION_TRIO = "Option text tools|Option bullet tools|Text inside option bullet tools";
+  for (const id of ["optionText", "optionBullet", "optionBulletText"]) {
+    click(doc.querySelector(`aside nav button[data-nav="${id}"]`));
+    out.push({
+      name: `${id} previews the tools of every merged option part, one line each`,
+      pass: optionLines().join("|") === OPTION_TRIO,
+      detail: optionLines().join(" | "),
+    });
+  }
+  // the line whose part the open destination owns is highlighted
+  click(doc.querySelector('aside nav button[data-nav="optionBullet"]'));
+  out.push({
+    name: "the destination's own line is highlighted in the stack",
+    pass:
+      doc
+        .querySelector('.context-toolbar [aria-label="Option bullet tools"]')
+        ?.classList.contains("ctx-pill-active") === true,
+    detail: String(
+      doc.querySelector('.context-toolbar [aria-label="Option bullet tools"]')?.className,
+    ),
+  });
+  // a line toggle opens its deeper picker in the shared movable pop-up
+  click(doc.querySelector('.context-toolbar [aria-label="Marker shape"]'));
+  out.push({
+    name: "a line toggle opens its picker in the shared pop-up",
+    pass: pop()?.getAttribute("data-pop-panel") === "Marker shape",
+    detail: String(pop()?.getAttribute("data-pop-panel")),
+  });
+  // and the same trio appears when an option is clicked on the slide itself
+  const optRow = doc.querySelector<HTMLElement>('.slide-editable [data-el="options"] > div');
+  if (optRow) {
+    fire(optRow, "pointerdown", 500, 300, 1);
+    fire(optRow, "pointerup", 500, 300, 0);
+  }
+  out.push({
+    name: "clicking an option on the slide previews every merged part's tools",
+    pass: optionLines().join("|") === OPTION_TRIO,
+    detail: optionLines().join(" | "),
+  });
+
   /* --------------------- reverse sync: canvas → nav ------------------------ */
   const title = doc.querySelector<HTMLElement>('.slide-editable [data-el="title"]');
   if (title) {

@@ -48,6 +48,25 @@ is separate from the *text inside it* (wording, ink, face, weight, case, size),
 for both the question bullet and the option markers. Pictures moved out of the
 shapes panel into their own "Insert images" destination.
 
+### Merged contents show every related toolbar
+
+Some destinations style parts that are painted as **one merged thing** on the
+board. The options row is the prime example: the option text, the option
+bullet, and the text inside the bullet are merged into a single options block.
+Selecting any of them — or clicking an option on the slide — stacks a preview
+of every related part's tools in the context toolbar, one line each, in
+board-reading order:
+
+1. **Option text** — font, size, ink, line height, alignment, position
+2. **Option bullet** — marker shape, row style, marker/fill/ring colours,
+   backplate, layout, row gap
+3. **Text inside option bullet** — numbering, marker font, ink, case, weight,
+   letter size
+
+The line that owns the open destination is highlighted; the deeper pickers
+(marker shapes, row styles, plain numbering, fonts) open from their line in
+the same movable pop-up card every other toolbar toggle uses.
+
 ## Answer key
 
 The **Answer key** destination (the ✓ tile between *Option text* and *Footnote*)
