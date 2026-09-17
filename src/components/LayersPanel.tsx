@@ -218,7 +218,7 @@ export default function LayersPanel({
   };
   useEffect(() => stopEdge, []);
 
-  const { begin, end, handleLeave } = usePointerDrag({
+  const { begin, release, handleLeave } = usePointerDrag({
     threshold: DRAG_THRESHOLD_PX,
     enabled: () => draggable && !!armedKey.current,
     onStart: (e) => {
@@ -672,8 +672,13 @@ export default function LayersPanel({
                 armedKey.current = l.key;
                 begin(e, { x: 0, y: 0 });
               }}
-              onPointerUp={end}
-              onPointerCancel={end}
+              /* `release` forwards the NATIVE pointer event: the row holds the
+                 pointer capture, so this is the handler a real release runs
+                 through, long before the session's window listener sees it.
+                 Ending the gesture here with no event would look like an abort
+                 and silently throw the drop away. */
+              onPointerUp={release}
+              onPointerCancel={release}
               /* a release outside the row must not leave an armed gesture behind;
                  while the button is still held the window listeners keep the drag */
               onPointerLeave={handleLeave}
