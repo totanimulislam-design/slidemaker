@@ -6,8 +6,39 @@ MCQ Slide Studio — paste Bengali/English MCQ questions and generate editable, 
 npm install
 npm run dev        # editor on http://localhost:5173
 npm run build      # single-file dist/index.html
-npm run test:drag  # pointer / drag interaction suites (jsdom)
+npm run test:drag  # pointer / drag + inspector navigation suites (jsdom)
 ```
+
+## Inspector navigation
+
+The right-hand inspector lists **one destination per restylable thing on a
+slide**, in board order — a compact icon + label tile for each:
+
+| Header | Question | Options | Slide | Insert |
+| --- | --- | --- | --- | --- |
+| Title text | Question bullet | Option bullet | Footnote | Insert images |
+| Title background | Q bullet text | Opt bullet text | Slide background | Insert shapes |
+| Badge 1 · Badge 2 · Badge 3 · Logo | Question text | Option text | Slide frame | |
+
+Two-way selection sync ties the navigation to the canvas:
+
+- **Navigation → slide.** Picking a tile selects the content it edits, so the
+  element is outlined with resize/rotate handles (or the surface — background,
+  frame — gets its own context toolbar). The insert tiles release the element
+  outline but keep a selected picture/shape editable.
+- **Slide → navigation.** Clicking an element on the board (or a row in the
+  Layers list) opens the tile that styles it; double-clicking still drops you
+  into its text field.
+
+Badges 1 and 2 are the two brand lines ("LEARN WITH" / "FAYSAL SIR") and Badge 3
+is the right-hand tag ("DAKHIL-26"). They share one movable box but each line
+can be hidden, resized and recoloured independently (`brandTop*` /
+`brandBottom*` in `ThemeSettings`).
+
+The split panels keep one concern each: a bullet's *body* (design, size, accent)
+is separate from the *text inside it* (wording, ink, face, weight, case, size),
+for both the question bullet and the option markers. Pictures moved out of the
+shapes panel into their own "Insert images" destination.
 
 ## Board gestures
 

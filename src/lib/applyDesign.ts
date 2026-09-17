@@ -72,6 +72,11 @@ export function applySlideDesign(
         optionBulletBgShape: effTheme.optionBulletBgShape,
         optionBulletBgSize: effTheme.optionBulletBgSize,
         optionBulletBgOpacity: effTheme.optionBulletBgOpacity,
+        // the letter painted inside each marker travels with the option design
+        optionBulletTextSize: effTheme.optionBulletTextSize,
+        optionBulletTextWeight: effTheme.optionBulletTextWeight,
+        optionBulletFontFamily: effTheme.optionBulletFontFamily,
+        optionBulletUppercase: effTheme.optionBulletUppercase,
         optionTextColor: effTheme.optionTextColor,
         optionGap: effTheme.optionGap,
         optionLineHeight: effTheme.optionLineHeight,
@@ -165,6 +170,11 @@ export function applySlideDesign(
           optionBulletBgShape: effTheme.optionBulletBgShape,
           optionBulletBgSize: effTheme.optionBulletBgSize,
           optionBulletBgOpacity: effTheme.optionBulletBgOpacity,
+          // the letter painted inside each marker travels with the option design
+          optionBulletTextSize: effTheme.optionBulletTextSize,
+          optionBulletTextWeight: effTheme.optionBulletTextWeight,
+          optionBulletFontFamily: effTheme.optionBulletFontFamily,
+          optionBulletUppercase: effTheme.optionBulletUppercase,
           optionTextColor: effTheme.optionTextColor,
           optionGap: effTheme.optionGap,
           optionLineHeight: effTheme.optionLineHeight,

@@ -32,6 +32,13 @@ export function mergeTheme(base: ThemeSettings, patch?: Partial<ThemeSettings>):
           gradient: { ...base.frame.gradient, ...(patch.frame.gradient ?? {}) },
         }
       : base.frame,
+    badgePlate: patch.badgePlate
+      ? {
+          ...base.badgePlate,
+          ...patch.badgePlate,
+          border: { ...(base.badgePlate?.border ?? patch.badgePlate.border), ...(patch.badgePlate.border ?? {}) },
+        }
+      : base.badgePlate,
   };
 }
 
@@ -77,6 +84,17 @@ export function mergeThemeOverride(
             ...patch.frame,
             ...(patch.frame.gradient
               ? { gradient: { ...(current?.frame?.gradient ?? {}), ...patch.frame.gradient } }
+              : {}),
+          },
+        }
+      : {}),
+    ...(patch.badgePlate
+      ? {
+          badgePlate: {
+            ...(current?.badgePlate ?? {}),
+            ...patch.badgePlate,
+            ...(patch.badgePlate.border
+              ? { border: { ...(current?.badgePlate?.border ?? {}), ...patch.badgePlate.border } }
               : {}),
           },
         }

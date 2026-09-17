@@ -423,6 +423,36 @@ export const FRAME_STYLES: { id: FrameStyleId; label: string }[] = [
 /** where the option bullet's background shape is painted */
 export type OptionBulletBgScope = "marker" | "row";
 
+/**
+ * A plate drawn behind the right-hand badge (Badge 3). Disabled by default so
+ * decks saved before this existed render exactly as they did.
+ */
+export interface BadgePlate {
+  enabled: boolean;
+  color: string;
+  /** 0–1 */
+  opacity: number;
+  /** corner radius in px */
+  radius: number;
+  /** horizontal / vertical padding in px */
+  padX: number;
+  padY: number;
+  border: { enabled: boolean; color: string; width: number };
+}
+
+export const DEFAULT_BADGE_PLATE: BadgePlate = {
+  enabled: false,
+  color: "#1f5fd0",
+  opacity: 1,
+  radius: 999,
+  padX: 18,
+  padY: 6,
+  border: { enabled: false, color: "#ffd633", width: 2 },
+};
+
+export const cloneBadgePlate = (p: BadgePlate = DEFAULT_BADGE_PLATE): BadgePlate =>
+  JSON.parse(JSON.stringify(p)) as BadgePlate;
+
 /** silhouette of the option bullet's background shape */
 export type OptionBulletBgShape =
   | "match"
@@ -474,6 +504,53 @@ export interface ThemeSettings {
   optionBulletBgSize: number;
   /** background shape opacity, 0–100 */
   optionBulletBgOpacity: number;
+
+  /* ------------------------------------------------------- title text ---- */
+  /** title text size in slide px (undefined = 54, the historical hardcode) */
+  titleSize?: number;
+
+  /* --------------------------------------- brand line 1 / brand line 2 ---- */
+  /**
+   * The brand block paints two independent lines — "Badge 1" (LEARN WITH) and
+   * "Badge 2" (FAYSAL SIR). Each can be hidden, resized and recoloured on its
+   * own; unset fields keep following the shared `brandColor`.
+   */
+  brandTopSize?: number;
+  brandBottomSize?: number;
+  brandTopColor?: string;
+  brandBottomColor?: string;
+  showBrandTop?: boolean;
+  showBrandBottom?: boolean;
+
+  /* ------------------------------------------------- badge 3 (right) ------ */
+  /** right-hand badge size in slide px (undefined = 36) */
+  badgeSize?: number;
+  /** optional plate drawn behind the right badge */
+  badgePlate?: BadgePlate;
+
+  /* ----------------------------------------- text inside question bullet -- */
+  /**
+   * The number painted inside the question bullet is styled through
+   * `boxFonts.bullet` (family, colour, weight, size scale) — the same per-box
+   * typeface mechanism every other text element uses.
+   */
+
+  /* ------------------------------------------- text inside option bullet -- */
+  /** letter size as % of the marker's own font size (100 = unchanged) */
+  optionBulletTextSize?: number;
+  /** 0 / undefined = the marker shape's own weight */
+  optionBulletTextWeight?: number;
+  /** "" = the deck face used by the options box */
+  optionBulletFontFamily?: string;
+  optionBulletUppercase?: boolean;
+
+  /* ---------------------------------------------------------- footnote ---- */
+  noteColor?: string;
+  /** 0–100 */
+  noteOpacity?: number;
+  noteSize?: number;
+  showNote?: boolean;
+
   accent: string;
   brandColor: string;
   badgeColor: string;
@@ -571,6 +648,23 @@ export const DEFAULT_THEME: ThemeSettings = {
   optionBulletBgShape: "match",
   optionBulletBgSize: 150,
   optionBulletBgOpacity: 30,
+  titleSize: 54,
+  brandTopSize: 25,
+  brandBottomSize: 27,
+  brandTopColor: "",
+  brandBottomColor: "",
+  showBrandTop: true,
+  showBrandBottom: true,
+  badgeSize: 36,
+  badgePlate: cloneBadgePlate(),
+  optionBulletTextSize: 100,
+  optionBulletTextWeight: 0,
+  optionBulletFontFamily: "",
+  optionBulletUppercase: false,
+  noteColor: "#ffffff",
+  noteOpacity: 72,
+  noteSize: 20,
+  showNote: true,
   accent: "#2f4fff",
   brandColor: "#ffffff",
   badgeColor: "#ffffff",

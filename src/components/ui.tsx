@@ -317,3 +317,27 @@ export function SegButtons<T extends string>({
     </div>
   );
 }
+
+/**
+ * Heading every inspector panel opens with, so the 17 navigation destinations
+ * all read the same way: what this panel edits, and what it drives on the slide.
+ */
+export function PanelHead({
+  title,
+  subtitle,
+  right,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-3">
+      <div className="min-w-0">
+        <h2 className="truncate text-base font-semibold text-slate-100">{title}</h2>
+        {subtitle && <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{subtitle}</p>}
+      </div>
+      {right}
+    </div>
+  );
+}
