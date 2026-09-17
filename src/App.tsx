@@ -114,8 +114,16 @@ export default function App() {
    * would be swallowed by React's "same value" bailout).
    */
   const [tabRequest, setTabRequest] = useState<{ tab: InspectorTab; n: number } | null>(null);
+  /**
+   * The navigation destination that is currently open. It drives the context
+   * toolbar above the slide: the destinations that own no single board element
+   * (Answer key, Insert images, Insert shapes) get their related tools there.
+   * Mirrors `tabRequest`, so canvas clicks and navigation picks always agree.
+   */
+  const [activeNav, setActiveNav] = useState<InspectorTab | null>(null);
   const requestTab = useCallback((tab: InspectorTab) => {
     setTabRequest((r) => ({ tab, n: (r?.n ?? 0) + 1 }));
+    setActiveNav(tab);
   }, []);
   const [editScope, setEditScope] = useState<"slide" | "selected" | "all">("slide");
   const [scopeSlideIds, setScopeSlideIds] = useState<string[]>([]);
@@ -187,8 +195,9 @@ export default function App() {
    * field is cleared: it would otherwise re-drive the inspector's tab from a
    * stale canvas click and undo the navigation choice.
    */
-  const handleNavSelect = useCallback((target: { element?: ElementId; surface?: "frame" | "background" }) => {
+  const handleNavSelect = useCallback((target: { element?: ElementId; surface?: "frame" | "background"; nav?: InspectorTab }) => {
     setActiveField(null);
+    setActiveNav(target.nav ?? null);
     if (target.element) {
       setSelectedEl(target.element);
       setSelectedShapes([]);
@@ -330,7 +339,16 @@ export default function App() {
 
   const index = Math.min(current, Math.max(0, deck.slides.length - 1));
   const slide = deck.slides[index];
-  useEffect(() => { setSelectedShapes([]); setSelectedEl(null); setSurface(null); setActiveField(null); }, [current]);
+  useEffect(() => {
+    setSelectedShapes([]);
+    setSelectedEl(null);
+    setSurface(null);
+    setActiveField(null);
+    // the destinations that do not depend on a selection (Answer key, Insert
+    // images, Insert shapes) stay open across slides — their tools apply to the
+    // slide you just moved to; every other destination needs its element back
+    setActiveNav((nav) => (nav === "answerKey" || nav === "images" || nav === "shapes" ? nav : null));
+  }, [current]);
   const currentTheme = effectiveTheme(deck, slide);
   const currentHeader = effectiveHeader(deck, slide);
   const editorDeck = { ...deck, theme: currentTheme, header: currentHeader };
@@ -397,12 +415,14 @@ export default function App() {
       }
       if (inField) return;
 
-      // Escape clears the whole selection (element + shapes + active field)
+      // Escape clears the whole selection (element + shapes + active field) and
+      // takes the context toolbar down with it
       if (e.key === "Escape") {
         setSurface(null);
         setSelectedShapes([]);
         setSelectedEl(null);
         setActiveField(null);
+        setActiveNav(null);
         return;
       }
 
@@ -841,10 +861,32 @@ export default function App() {
           <main className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(60%_60%_at_50%_0%,#141a2b_0%,#020617_70%)]">
             {slide ? (
               <>
-                {(surface || selectedLayer) && <ContextToolbar
-                  key={`${slide.id}:${surface}:${selectedEl}:${selectedShapes.join(',')}`}
+                {/*
+                  * The toolbar above the board follows the navigation: any
+                  * destination that selects something (element, surface, shape)
+                  * already showed it, and the "no-element" destinations —
+                  * Answer key, Insert images, Insert shapes — now open their own
+                  * related tools instead of nothing.
+                  */}
+                {(surface || selectedLayer || activeNav === "answerKey" || activeNav === "images" || activeNav === "shapes") && <ContextToolbar
+                  key={`${slide.id}:${surface}:${selectedEl}:${activeNav}:${selectedShapes.join(',')}`}
                   shape={[...(slide.shapes ?? []), ...(deck.globalShapes ?? [])].find(s => s.id === selectedShape)}
                   element={selectedEl} surface={surface} count={selectedShapes.length} grouped={selectedGrouped}
+                  nav={activeNav}
+                  insertShape={kind => insertShape(kind, { mode: "this" })}
+                  onAddImages={files => void importImageFiles(files)}
+                  answerKey={activeNav === "answerKey" ? {
+                    answer: slide.answer,
+                    showAnswer: slide.showAnswer,
+                    options: slide.options,
+                    onSetAnswer: (key) => updateSlide(slide.id, { answer: key, showAnswer: key ? slide.showAnswer : false }),
+                    onToggleReveal: () => updateSlide(slide.id, { showAnswer: !slide.showAnswer }),
+                    onRevealAll: () => updateAll({ showAnswer: true }),
+                    onHideAll: () => updateAll({ showAnswer: false }),
+                    onClearAll: () => updateAll({ answer: null, showAnswer: false }),
+                    onPaste: () => setAnswersOpen(true),
+                    onCopies: addAnswerCopies,
+                  } : undefined}
                   theme={currentTheme} background={effectiveBackground(deck, slide)}
                   patchShape={patch => selectedShape && updateShapeOnSlide(selectedShape, patch, slide.id)}
                   patchTheme={patch => setThemeScoped(patch, "slide", [slide.id])}
@@ -1064,6 +1106,8 @@ export default function App() {
             updateSlide={updateSlide}
             updateAll={updateAll}
             onAnswerCopies={addAnswerCopies}
+            onPasteAnswers={() => setAnswersOpen(true)}
+            onJumpToSlide={setCurrent}
             onFixFormatting={fixFormatting}
             scripts={scripts}
             selectedEl={selectedEl ?? "title"}

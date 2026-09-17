@@ -24,6 +24,7 @@ import type { ShapeItem, ShapeKind } from "../lib/shapes";
 import type { ZOp } from "../lib/zorder";
 import type { LayerRect, LayerRef } from "../lib/layers";
 import type { AlignOp } from "../lib/shapeAlign";
+import AnswerKeyPanel from "./AnswerKeyPanel";
 import LayersPanel from "./LayersPanel";
 import { MATH_SNIPPETS, PRESETS } from "../lib/presets";
 import { describeScripts, type ScriptId } from "../lib/fonts";
@@ -56,6 +57,7 @@ type Tab =
   | "optionBullet"
   | "optionBulletText"
   | "optionText"
+  | "answerKey"
   | "footnote"
   | "background"
   | "frame"
@@ -87,6 +89,13 @@ const NAV: NavItem[] = [
   { id: "optionBullet", label: "Option bullet", icon: "○", title: "Option bullet — the choice markers", element: "options" },
   { id: "optionBulletText", label: "Opt bullet text", icon: "A", title: "Text inside the option bullet", element: "options" },
   { id: "optionText", label: "Option text", icon: "▤", title: "Option text — the choices", element: "options" },
+  {
+    id: "answerKey",
+    label: "Answer key",
+    icon: "✓",
+    title: "Answer key — mark, reveal, paste and style the correct answers",
+    element: "options",
+  },
   { id: "footnote", label: "Footnote", icon: "¶", title: "Footnote — the bottom note line", element: "note" },
   { id: "background", label: "Slide background", icon: "▧", title: "Slide background", surface: "background" },
   { id: "frame", label: "Slide frame", icon: "▢", title: "Slide frame", surface: "frame" },
@@ -137,6 +146,10 @@ interface Props {
   updateSlide: (id: string, patch: Partial<SlideData>) => void;
   updateAll: (patch: Partial<SlideData>) => void;
   onAnswerCopies: () => void;
+  /** opens the paste-answers dialog (also reachable from the Answer key panel) */
+  onPasteAnswers: () => void;
+  /** jump the editor to a slide (the Answer key overview does this) */
+  onJumpToSlide: (index: number) => void;
   onFixFormatting: (scope: "slide" | "all") => void;
   scripts: ScriptId[];
   selectedEl: ElementId;
@@ -147,7 +160,7 @@ interface Props {
    * the insert tabs simply release the element selection (a selected picture or
    * shape stays selected so this panel can keep editing it).
    */
-  onNavSelect: (target: { element?: ElementId; surface?: "frame" | "background" }) => void;
+  onNavSelect: (target: { element?: ElementId; surface?: "frame" | "background"; nav?: Tab }) => void;
   shapes: {
     slide: ShapeItem[];
     global: ShapeItem[];
@@ -209,6 +222,8 @@ export default function Inspector({
   updateSlide,
   updateAll,
   onAnswerCopies,
+  onPasteAnswers,
+  onJumpToSlide,
   onFixFormatting,
   scripts,
   selectedEl,
@@ -242,7 +257,7 @@ export default function Inspector({
   /** a navigation pick: open the panel AND select its content on the slide */
   const choose = (item: NavItem) => {
     setTab(item.id);
-    onNavSelect({ element: item.element, surface: item.surface });
+    onNavSelect({ element: item.element, surface: item.surface, nav: item.id });
   };
 
   const insertSnippet = (text: string) => {
@@ -587,6 +602,21 @@ export default function Inspector({
           />
         )}
 
+        {/* ---------------------------- answer key --------------------------- */}
+        {tab === "answerKey" && (
+          <AnswerKeyPanel
+            slide={slide}
+            slides={deck.slides}
+            theme={T}
+            setTheme={setTheme}
+            updateSlide={updateSlide}
+            updateAll={updateAll}
+            onPasteAnswers={onPasteAnswers}
+            onAnswerCopies={onAnswerCopies}
+            onJumpToSlide={onJumpToSlide}
+          />
+        )}
+
         {/* ----------------------------- footnote ---------------------------- */}
         {tab === "footnote" && (
           <FootnotePanel
@@ -729,7 +759,7 @@ function ScopeBar({
   const [section, setSection] = useState<ApplySection>("all");
   const [toast, setToast] = useState<string | null>(null);
   /**
-   * The scope bar is collapsible: with 17 navigation destinations above it, the
+   * The scope bar is collapsible: with 18 navigation destinations above it, the
    * panel needs the vertical room. The choice is remembered between sessions.
    */
   const [open, setOpen] = useState<boolean>(() => localStorage.getItem("inspector:scope") !== "0");

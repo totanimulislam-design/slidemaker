@@ -1,16 +1,37 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
-import type { BackgroundSettings, Box, ElementId, ThemeSettings } from "../lib/types";
+import { useEffect, useRef, useState } from "react";
+import type { BackgroundSettings, Box, ElementId, QuizOption, ThemeSettings } from "../lib/types";
 import { DEFAULT_FRAME } from "../lib/types";
 import { boxFontLabel, boxTypeface, setBoxFont } from "../lib/boxFonts";
-import type { ShapeItem } from "../lib/shapes";
-import { loadImageFile } from "../lib/shapes";
+import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, type ShapeItem, type ShapeKind } from "../lib/shapes";
 import type { AlignOp } from "../lib/shapeAlign";
+import { usePointerDrag } from "../lib/dragSession";
 import { Z_LABELS, type ZOp } from "../lib/zorder";
 import FontPicker from "./FontPicker";
 import ShapeDesignPanel from "./ShapeDesignPanel";
 import FramePanel from "./FramePanel";
 import GradientEditor from "./GradientEditor";
+import { SegButtons, Toggle } from "./ui";
+import { cn } from "../utils/cn";
+
+/**
+ * The answer-key half of the toolbar, handed over by App while the "Answer key"
+ * navigation destination is open.
+ */
+export interface AnswerKeyTools {
+  answer: string | null;
+  showAnswer: boolean;
+  options: QuizOption[];
+  onSetAnswer: (key: string | null) => void;
+  onToggleReveal: () => void;
+  onRevealAll: () => void;
+  onHideAll: () => void;
+  onClearAll: () => void;
+  /** opens the paste-answers dialog */
+  onPaste: () => void;
+  /** duplicate every slide with its answer revealed */
+  onCopies: () => void;
+}
 
 interface Props {
   shape?: ShapeItem; element: ElementId | null; surface: "frame" | "background" | null;
@@ -19,7 +40,21 @@ interface Props {
   patchBox: (p: Partial<Box>) => void; patchBackground: (p: Partial<BackgroundSettings>) => void;
   align: (op: AlignOp) => void; reorder: (op: ZOp) => void;
   group: () => void; ungroup: () => void; duplicate: () => void; remove: () => void;
+  /**
+   * Which inspector destination asked for this toolbar. The destinations that
+   * own no single board element (Answer key, Insert images, Insert shapes) bring
+   * their own related tools here instead of leaving the strip empty.
+   */
+  nav?: string | null;
+  answerKey?: AnswerKeyTools;
+  /** quick insert: a shape/text box on the current slide (Insert shapes) */
+  insertShape?: (kind: ShapeKind) => void;
+  /** quick insert: image files on the current slide (Insert images) */
+  onAddImages?: (files: File[]) => void;
 }
+
+/** the shapes offered by the Insert-shapes strip, in the same order as below the board */
+const INSERT_SHAPES: ShapeKind[] = ["text", "rect", "rounded", "ellipse", "triangle", "diamond", "star", "line", "arrow"];
 
 /** tiny Canva-style text-alignment glyphs */
 const ALIGN_GLYPH: Record<"left" | "center" | "right", ReactNode> = (["left", "center", "right"] as const).reduce(
@@ -40,10 +75,84 @@ const ALIGN_GLYPH: Record<"left" | "center" | "right", ReactNode> = (["left", "c
 export default function ContextToolbar(p: Props) {
   const [panel, setPanel] = useState<string | null>(null);
   const { shape: s, element: el, surface, theme, patchShape: patch } = p;
+  /** the answer-key half of the toolbar (only present on the Answer key destination) */
+  const ak = p.answerKey;
   const multi = p.count > 1 || p.grouped;
   const text = !surface && !multi && (s?.kind === "text" || (!!el && el !== "logo" && !s));
   const tf = el ? boxTypeface(theme, el) : {};
   const fontPatch = (v: Parameters<typeof setBoxFont>[2]) => el && p.patchTheme({ boxFonts: setBoxFont(theme.boxFonts, el, v) });
+
+  /* ---------------------------------------------------------------------- *
+   * Movable pop-up panel
+   *
+   * The card a toolbar toggle opens (Font, Spacing, Frame, Answer …) can be
+   * dragged anywhere by its header, so it never covers the slide area you are
+   * working on. It starts life centred under the pill — the historical look —
+   * and only switches to free (fixed) positioning once a real drag begins; a
+   * press that never travels past the 4px threshold stays a plain click, exactly
+   * like every other gesture in the editor (lib/dragSession owns the rules).
+   * ---------------------------------------------------------------------- */
+  const popRef = useRef<HTMLDivElement | null>(null);
+  /** the card's measured box at the moment a drag was armed */
+  const popBox = useRef<{ x: number; y: number; w: number; h: number }>({ x: 0, y: 0, w: 480, h: 280 });
+  const [popPos, setPopPos] = useState<{ x: number; y: number; w: number } | null>(null);
+
+  const measurePop = () => {
+    const node = popRef.current;
+    const r = node?.getBoundingClientRect();
+    const w = Math.round(r?.width || node?.offsetWidth || 0) || 480;
+    const h = Math.round(r?.height || node?.offsetHeight || 0) || 280;
+    return { x: Math.round(r?.left ?? 0), y: Math.round(r?.top ?? 0), w, h };
+  };
+
+  /** keep the card reachable: the header (and a slice of the body) stays on screen */
+  const clampPop = (x: number, y: number, w: number) => {
+    const vw = typeof window === "undefined" ? 1280 : window.innerWidth;
+    const vh = typeof window === "undefined" ? 800 : window.innerHeight;
+    return {
+      x: Math.round(Math.min(Math.max(x, 96 - w), Math.max(8, vw - 96))),
+      y: Math.round(Math.min(Math.max(y, 4), Math.max(4, vh - 48))),
+    };
+  };
+
+  /** the same position, readable from the window-resize listener without re-binding it */
+  const popPosRef = useRef<{ x: number; y: number; w: number } | null>(null);
+  const movePop = (next: { x: number; y: number; w: number } | null) => {
+    popPosRef.current = next;
+    setPopPos(next);
+  };
+
+  const { begin: beginPop, end: endPop } = usePointerDrag({
+    onMove: (e, st) => {
+      const pos = clampPop(
+        st.initialObjectX + (e.clientX - st.dragStartX),
+        st.initialObjectY + (e.clientY - st.dragStartY),
+        popBox.current.w,
+      );
+      movePop({ x: pos.x, y: pos.y, w: popBox.current.w });
+    },
+  });
+
+  const startPopDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    // the close button keeps behaving like a button, not a drag handle
+    if ((e.target as HTMLElement | null)?.closest("button, input, select, textarea, a")) return;
+    const box = measurePop();
+    popBox.current = box;
+    // the card keeps its centred default until a real drag moves it
+    beginPop(e, { x: box.x, y: box.y });
+  };
+
+  // a resized window must not strand a dragged card off screen
+  useEffect(() => {
+    const onResize = () => {
+      const cur = popPosRef.current;
+      if (!cur) return;
+      const pos = clampPop(cur.x, cur.y, cur.w);
+      if (pos.x !== cur.x || pos.y !== cur.y) movePop({ ...cur, ...pos });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const button = (content: ReactNode, action: () => void, active?: boolean, title?: string, tone?: "danger") => {
     const name = title ?? (typeof content === "string" ? content : undefined);
@@ -143,18 +252,110 @@ export default function ContextToolbar(p: Props) {
       {!multi && button(<>{s.locked ? "🔓 Unlock" : "🔒 Lock"}</>, () => patch({ locked: !s.locked }), undefined, s.locked ? "Unlock" : "Lock")}
     </div>
   );
+  // the related panel of the "Answer key" destination: style, deck-wide actions,
+  // and the paste-key entry point — everything the answer key needs, on the board
+  if (panel === "Answer" && ak) content = (
+    <div className="space-y-2">
+      <p className="ctx-menu-cap">How a revealed answer is painted</p>
+      <SegButtons
+        value={theme.answerStyle}
+        options={[
+          { value: "glow", label: "Glow" },
+          { value: "tick", label: "Tick ✓" },
+          { value: "fill", label: "Fill" },
+        ]}
+        onChange={(v) => p.patchTheme({ answerStyle: v })}
+      />
+      <Toggle
+        label="Keep marker colours on the answer"
+        checked={theme.optionBulletCustomOnAnswer}
+        onChange={(v) => p.patchTheme({ optionBulletCustomOnAnswer: v })}
+      />
+      <p className="ctx-menu-cap">Whole deck</p>
+      <div className="ctx-menu-grid">
+        <span>{button(<>👁 Reveal all</>, ak.onRevealAll, undefined, "Reveal the answer on every slide")}</span>
+        <span>{button(<>🚫 Hide all</>, ak.onHideAll, undefined, "Hide the answer on every slide")}</span>
+        <span>{button(<>⧉ Answer copies</>, ak.onCopies, undefined, "Duplicate every slide with its answer revealed")}</span>
+        <span>{button(<>⌫ Clear all answers</>, ak.onClearAll, undefined, "Remove the marked answer from every slide", "danger")}</span>
+      </div>
+      <p className="ctx-menu-cap">Import</p>
+      {button(<>✓ Paste an answer key…</>, ak.onPaste, undefined, "Paste an answer key (1. ঘ 2. গ …) in any format")}
+      <p className="text-[10px] leading-relaxed text-slate-500">
+        Mark the correct choice on the board by clicking an option, or pick it in the panel below. Drag this card by its
+        header to move it out of the way.
+      </p>
+    </div>
+  );
 
   const size = s?.fontSize ?? Math.round((tf.scale ?? 1) * 100);
   const setSize = (v: number) => s ? patch({ fontSize: Math.max(10, Math.min(120, v)) }) : fontPatch({ scale: Math.max(.6, Math.min(1.8, v / 100)) });
   const alignVal = s?.align ?? (el ? theme.layout[el].align : "left");
   const setAlign = (a: "left" | "center" | "right") => { const align = a as Box['align']; s ? patch({ align }) : p.patchBox({ align }); };
-  const kindLabel = surface || (multi ? `Group · ${p.count}` : text ? 'Text' : s?.kind || 'Image');
-  const toolbarLabel = `${surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
+  /** the Insert destinations show their quick-add tools when nothing else is selected */
+  const inserting = !s && !surface && (p.nav === "images" || p.nav === "shapes");
+  const kindLabel = ak
+    ? "Answer key"
+    : inserting
+      ? (p.nav === "images" ? "Insert image" : "Insert shape")
+      : surface || (multi ? `Group · ${p.count}` : text ? 'Text' : s?.kind || 'Image');
+  const toolbarLabel = `${ak ? "answer" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
 
   return (
     <section className="context-toolbar" aria-label="Contextual editing tools">
       <div role="toolbar" aria-label={toolbarLabel} className="ctx-pill">
         <span className="ctx-kind">{kindLabel}</span>
+        {/* the answer-key destination: mark, reveal, style, paste — right on the board */}
+        {ak && <>
+          {button(
+            <>{ak.showAnswer ? "👁 Revealed" : "👁 Hidden"}</>,
+            ak.onToggleReveal,
+            ak.showAnswer,
+            "Reveal / hide the answer on this slide",
+          )}
+          <select
+            aria-label="Correct answer"
+            title="Which option is correct on this slide"
+            className="ctx-select"
+            value={ak.answer ?? ""}
+            onChange={e => ak.onSetAnswer(e.currentTarget.value || null)}
+          >
+            <option value="">— no answer —</option>
+            {ak.options.map(o => (
+              <option key={o.key} value={o.key}>
+                {o.key}{o.text ? ` · ${o.text.slice(0, 18)}` : ""}
+              </option>
+            ))}
+          </select>
+          {toggle("Answer")}
+          {button(<>✓ Paste key</>, ak.onPaste, undefined, "Paste an answer key (1. ঘ 2. গ …) for the whole deck")}
+          {sep()}
+        </>}
+        {/* the insert destinations: quick-add tools above the board */}
+        {inserting && p.nav === "images" && <>
+          <label className="ctx-btn ctx-upload" title="Add image files to this slide">
+            🖼 Add image
+            <input
+              aria-label="Add image files"
+              type="file"
+              accept="image/*"
+              multiple
+              className="ctx-file"
+              onChange={e => {
+                const files = Array.from(e.target.files ?? []);
+                if (files.length) p.onAddImages?.(files);
+                e.currentTarget.value = "";
+              }}
+            />
+          </label>
+          <span className="ctx-hint">or drop files on the slide · Shift+drop sets the background</span>
+          {sep()}
+        </>}
+        {inserting && p.nav === "shapes" && <>
+          {INSERT_SHAPES.map(k => (
+            <span key={k}>{button(SHAPE_ICONS[k], () => p.insertShape?.(k), undefined, SHAPE_LABELS[k])}</span>
+          ))}
+          {sep()}
+        </>}
         {text && <>
           {toggle("Font")}
           {stepper(s ? "Font size" : "Size %", size, setSize, s ? 10 : 60, s ? 120 : 180, .1, { dec: "Decrease font size", inc: "Increase font size", jump: 1 })}
@@ -197,8 +398,44 @@ export default function ContextToolbar(p: Props) {
         )}
       </div>
       {content && (
-        <div className="ctx-pop" role="dialog" aria-label={`${panel} settings`}>
-          <div className="ctx-pop-head"><span>{panel}</span>{button('✕', () => setPanel(null), undefined, 'Close toolbar panel')}</div>
+        <div
+          ref={popRef}
+          role="dialog"
+          aria-label={`${panel} settings`}
+          data-pop-panel={panel}
+          className={cn("ctx-pop", popPos && "ctx-pop-floating")}
+          style={popPos ? { left: popPos.x, top: popPos.y, width: popPos.w } : undefined}
+        >
+          {/* the header is the drag handle: free positioning, double-click to re-centre */}
+          <div
+            className="ctx-pop-head"
+            data-pop-handle={panel}
+            title="Drag to move this panel · double-click to re-centre"
+            onPointerDown={startPopDrag}
+            onPointerUp={endPop}
+            onPointerCancel={endPop}
+            onDoubleClick={() => movePop(null)}
+          >
+            <span className="ctx-pop-title">
+              <span className="ctx-grip" aria-hidden="true">⠿</span>
+              {panel}
+            </span>
+            <span className="flex items-center gap-1">
+              {popPos && (
+                <button
+                  type="button"
+                  className="ctx-btn"
+                  style={{ height: 24, minWidth: 24, padding: "0 6px" }}
+                  title="Re-centre this panel under the toolbar"
+                  aria-label="Re-centre panel"
+                  onClick={() => movePop(null)}
+                >
+                  ⌖
+                </button>
+              )}
+              {button('✕', () => setPanel(null), undefined, 'Close toolbar panel')}
+            </span>
+          </div>
           <div className="ctx-pop-body">{content}</div>
         </div>
       )}
