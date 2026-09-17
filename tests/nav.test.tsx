@@ -42,6 +42,7 @@ const NAV: [id: string, label: string, heading: string][] = [
   ["optionBullet", "Option bullet", "Option Bullet"],
   ["optionBulletText", "Opt bullet text", "Text inside option bullet"],
   ["optionText", "Option text", "Option text"],
+  ["answerKey", "Answer key", "Answer key"],
   ["footnote", "Footnote", "Footnote"],
   ["background", "Slide background", "Slide background"],
   ["frame", "Slide frame", "Slide frame"],
@@ -63,6 +64,7 @@ const SELECTS: Record<string, string | null> = {
   optionBullet: "options",
   optionBulletText: "options",
   optionText: "options",
+  answerKey: "options",
   footnote: "note",
   background: null,
   frame: null,
@@ -188,7 +190,7 @@ export async function runNavTests(): Promise<CaseResult[]> {
   /* ------------------------------- the nav itself -------------------------- */
   const ids = navButtons().map((b) => b.getAttribute("data-nav"));
   out.push({
-    name: "navigation lists all 17 destinations, in order",
+    name: "navigation lists all 18 destinations, in order",
     pass: ids.length === NAV.length && NAV.every(([id], i) => ids[i] === id),
     detail: ids.join(","),
   });
@@ -203,12 +205,17 @@ export async function runNavTests(): Promise<CaseResult[]> {
   /* ------------------------- each destination opens ------------------------ */
   const badPanels: string[] = [];
   const badSelections: string[] = [];
+  const badToolbars: string[] = [];
   for (const [id, , heading] of NAV) {
     click(doc.querySelector(`aside nav button[data-nav="${id}"]`));
     if (panelHeading() !== heading) badPanels.push(`${id}→"${panelHeading()}"`);
     const want = SELECTS[id];
     const got = overlayOf();
     if (want !== got) badSelections.push(`${id}: want ${want} got ${got}`);
+    // every destination — element, surface or insert/answer — puts its related
+    // tools in the toolbar above the slide
+    const bar = toolbar();
+    if (!bar) badToolbars.push(id);
   }
   out.push({
     name: "each destination opens its own panel",
@@ -219,6 +226,11 @@ export async function runNavTests(): Promise<CaseResult[]> {
     name: "each destination selects the matching content on the slide",
     pass: badSelections.length === 0,
     detail: badSelections.join(" | "),
+  });
+  out.push({
+    name: "every destination opens a related toolbar above the slide",
+    pass: badToolbars.length === 0,
+    detail: badToolbars.length ? `no toolbar for: ${badToolbars.join(", ")}` : "18/18",
   });
 
   /* ------------------------- surfaces get their toolbar -------------------- */
@@ -234,6 +246,125 @@ export async function runNavTests(): Promise<CaseResult[]> {
     name: "Insert images releases the element outline but keeps its panel",
     pass: overlayOf() === null && panelHeading() === "Insert images",
     detail: `overlay=${overlayOf()} panel=${panelHeading()}`,
+  });
+
+  /* ---------------- the Answer key destination and its tools --------------- */
+  click(doc.querySelector('aside nav button[data-nav="answerKey"]'));
+  out.push({ name: "Answer key opens its own panel", pass: panelHeading() === "Answer key", detail: panelHeading() });
+  out.push({
+    name: "Answer key outlines the options block on the slide",
+    pass: overlayOf() === "options",
+    detail: String(overlayOf()),
+  });
+  out.push({
+    name: "Answer key opens a related toolbar above the slide",
+    pass: toolbar() === "answer tools",
+    detail: String(toolbar()),
+  });
+
+  const answerOption = (key: string) =>
+    doc.querySelector<HTMLElement>(`aside [data-answer-option="${key}"]`);
+  click(answerOption("খ"));
+  out.push({
+    name: "the panel marks the correct choice for the slide",
+    pass:
+      answerOption("খ")?.getAttribute("aria-pressed") === "true" &&
+      answerOption("ক")?.getAttribute("aria-pressed") === "false",
+    detail: `খ=${answerOption("খ")?.getAttribute("aria-pressed")} ক=${answerOption("ক")?.getAttribute("aria-pressed")}`,
+  });
+
+  /** the revealed answer paints the correct option text in the "answer green" */
+  const answerInk = () =>
+    Array.from(doc.querySelectorAll<HTMLElement>('.slide-editable [data-el="options"] *'))
+      .map((el) => el.style.color)
+      .filter(Boolean)
+      .join(" ");
+  const revealed = () => /5cff9d|92,\s*255,\s*157/i.test(answerInk());
+  const revealBtn = () =>
+    doc.querySelector<HTMLElement>('.context-toolbar [aria-label="Reveal / hide the answer on this slide"]');
+
+  click(revealBtn());
+  out.push({
+    name: "the toolbar reveal toggle paints the answer on the slide",
+    pass: revealBtn()?.getAttribute("aria-pressed") === "true" && revealed(),
+    detail: `pressed=${revealBtn()?.getAttribute("aria-pressed")} ink=${answerInk().slice(0, 60)}`,
+  });
+  click(revealBtn());
+  out.push({
+    name: "clicking it again hides the answer",
+    pass: revealBtn()?.getAttribute("aria-pressed") === "false" && !revealed(),
+    detail: `pressed=${revealBtn()?.getAttribute("aria-pressed")} ink=${answerInk().slice(0, 60)}`,
+  });
+
+  const keyRow = doc.querySelector<HTMLElement>('aside [data-key-row="sl1"]');
+  out.push({
+    name: "the deck-key overview lists every slide with its answer",
+    pass: !!keyRow && /খ/.test(keyRow.textContent ?? ""),
+    detail: keyRow?.textContent ?? "",
+  });
+  const pasteBtn = Array.from(doc.querySelectorAll<HTMLElement>("aside button")).find((b) =>
+    b.textContent?.includes("Paste answers"),
+  );
+  out.push({
+    name: "the panel exposes the paste-answers dialog",
+    pass: !!pasteBtn,
+    detail: pasteBtn?.textContent ?? "",
+  });
+
+  /* --------------------- the toolbar pop-up is movable --------------------- */
+  click(doc.querySelector('.context-toolbar [aria-label="Answer"]'));
+  const pop = () => doc.querySelector<HTMLElement>(".context-toolbar .ctx-pop");
+  const head = () => doc.querySelector<HTMLElement>(".context-toolbar .ctx-pop-head");
+  out.push({
+    name: "the toolbar pop-up opens under the pill",
+    pass: pop()?.getAttribute("data-pop-panel") === "Answer",
+    detail: String(pop()?.getAttribute("data-pop-panel")),
+  });
+
+  // a press that stays inside the 4px threshold is a click, never a drag
+  fire(head()!, "pointerdown", 300, 120, 1);
+  fire(head()!, "pointermove", 302, 121, 1);
+  fire(head()!, "pointerup", 302, 121, 0);
+  out.push({
+    name: "a click on the pop-up header does not move the panel",
+    pass: (pop()?.style.left ?? "") === "",
+    detail: `left=${pop()?.style.left} position=${pop()?.style.position}`,
+  });
+
+  fire(head()!, "pointerdown", 300, 120, 1);
+  fire(head()!, "pointermove", 380, 200, 1);
+  fire(head()!, "pointerup", 380, 200, 0);
+  out.push({
+    name: "dragging the pop-up header moves the panel",
+    pass:
+      // the floating class is what lifts the card out of its centred default
+      !!pop()?.classList.contains("ctx-pop-floating") &&
+      parseFloat(pop()?.style.left ?? "0") === 80 &&
+      parseFloat(pop()?.style.top ?? "0") === 80,
+    detail: `floating=${pop()?.classList.contains("ctx-pop-floating")} left=${pop()?.style.left} top=${pop()?.style.top}`,
+  });
+
+  act(() => {
+    head()?.dispatchEvent(new win.MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  });
+  out.push({
+    name: "double-clicking the header re-centres the pop-up",
+    pass: (pop()?.style.left ?? "x") === "",
+    detail: `left=${pop()?.style.left}`,
+  });
+
+  /* ------------------ the insert destinations get tools too ---------------- */
+  click(doc.querySelector('aside nav button[data-nav="images"]'));
+  out.push({
+    name: "Insert images opens a related toolbar above the slide",
+    pass: toolbar() === "insert tools" && !!doc.querySelector('.context-toolbar [aria-label="Add image files"]'),
+    detail: String(toolbar()),
+  });
+  click(doc.querySelector('aside nav button[data-nav="shapes"]'));
+  out.push({
+    name: "Insert shapes opens its quick insert tools",
+    pass: toolbar() === "insert tools" && !!doc.querySelector('.context-toolbar [aria-label="Rectangle"]'),
+    detail: String(toolbar()),
   });
 
   /* --------------------- reverse sync: canvas → nav ------------------------ */

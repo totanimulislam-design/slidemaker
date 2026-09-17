@@ -139,6 +139,48 @@ export function resolveOnSlide(slide: SlideData, pair: AnswerPair): string | nul
   return null;
 }
 
+/** How many slides carry an answer, and where the first gap is. */
+export interface AnswerSummary {
+  total: number;
+  set: number;
+  missing: number;
+  revealed: number;
+  /** index (0-based) of the first slide without an answer, or null */
+  firstMissing: number | null;
+}
+
+export function answerSummary(slides: SlideData[]): AnswerSummary {
+  const set = slides.filter((s) => !!s.answer).length;
+  const firstMissing = slides.findIndex((s) => !s.answer);
+  return {
+    total: slides.length,
+    set,
+    missing: slides.length - set,
+    revealed: slides.filter((s) => s.showAnswer).length,
+    firstMissing: firstMissing < 0 ? null : firstMissing,
+  };
+}
+
+/**
+ * The deck's answers as plain text — the same shape the parser accepts, so an
+ * exported key can be pasted straight back into "Paste answers".
+ *
+ *   ১. ঘ
+ *   ২. গ
+ *   ৩. —
+ */
+export function formatAnswerKey(
+  slides: SlideData[],
+  opts: { includeMissing?: boolean; missingMark?: string } = {},
+): string {
+  const { includeMissing = false, missingMark = "—" } = opts;
+  return slides
+    .map((s, i) => ({ slide: s, number: (s.number || String(i + 1)).trim() }))
+    .filter(({ slide }) => includeMissing || !!slide.answer)
+    .map(({ slide, number }) => `${number}. ${slide.answer ?? missingMark}`)
+    .join("\n");
+}
+
 /**
  * Builds the mapping preview. Numbered pairs match slides by their `number`
  * (falling back to position); bare sequences map by position starting at
