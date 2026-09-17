@@ -54,9 +54,9 @@ shapes panel into their own "Insert images" destination.
 ### Merged contents show every related toolbar
 
 Some destinations style parts that are painted as **one merged thing** on the
-board. Selecting any of them — or clicking the merged block on the slide —
-stacks a preview of every related part's tools in the context toolbar, one line
-each, in board-reading order:
+board. Selecting any of them — or clicking the merged block on the slide, or
+picking its row in the **Layers** list — stacks a preview of every related
+part's tools in the context toolbar, one line each, in board-reading order:
 
 | Merged block | Lines, top to bottom |
 | --- | --- |
@@ -65,8 +65,11 @@ each, in board-reading order:
 | **Badges** | Badge 1 · Badge 2 |
 | **Options** | Option text · Option bullet · Bullet text |
 
-The line that owns the open destination is highlighted (`ctx-pill-active`);
-the others are one click away from being styled without leaving the board.
+The line you are editing is highlighted (`ctx-pill-active`) — the one that owns
+the open destination, or, from the Layers list, the part the selected layer
+leads with (the **Title** row opens on *Title text*, the **Number bullet** row
+on *Question bullet*, and so on, matching the panel's *Edit … →* jump); the
+others are one click away from being styled without leaving the board.
 Every line carries the compact slice of its inspector panel — **Question text**
 gets font, size, ink, bold/italic/underline and alignment; **Question bullet**
 its design, size, accent colour and show/hide; **Q bullet text** the number's
@@ -125,7 +128,11 @@ because they all share a single stacking order (`lib/layers.ts`):
 - **Click to select, both ways.** A row selects that shape / text / element on
   the slide with its outline, handles and its own tools; clicking the board
   scrolls the matching row into view and highlights it. Order changes repaint
-  the canvas immediately.
+  the canvas immediately. The destination stays on **Layers** while you do it —
+  the toolbar above the slide follows the selection instead, previewing every
+  merged part of the row you picked (*Title* → *Title text* + *Title
+  background*) and keeping the Bring / Send steps in an **Arrange** line beside
+  them.
 - **Keyboard.** The list is a `listbox` with roving focus: ↑/↓ walk the rows,
   `Home`/`End` jump to the ends, `Enter`/`Space` select, **Alt+↑ / Alt+↓** step a
   layer forward / backward, `F2` renames, `Delete` removes. Double-clicking a

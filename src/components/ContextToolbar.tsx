@@ -124,6 +124,28 @@ const MERGED_LINE: Record<MergedLineId, MergedLineMeta> = {
   optionBulletText: { chip: "Bullet text", aria: "Text inside option bullet tools", element: "options" },
 };
 
+/**
+ * Destinations that LIST the board instead of styling one part of it (the
+ * Layers stack). App keeps such a destination open when a row is picked — the
+ * list is *about* the selection, so it must not navigate away from it — which
+ * leaves the destination unable to say which merged block is being edited. The
+ * SELECTION answers that, through the line each element leads with.
+ */
+const LISTING_NAV = new Set<string | undefined>(["layers", undefined]);
+
+/**
+ * The merged line a board element leads with: the destination the editor opens
+ * for it (App's `tabOfElement`), kept here as the line it owns. Must stay in
+ * step with the element → destination map App and the Inspector use.
+ */
+const ELEMENT_LEAD_LINE: Partial<Record<ElementId, MergedLineId>> = {
+  title: "titleText",
+  brand: "badge1",
+  question: "questionText",
+  bullet: "questionBullet",
+  options: "optionText",
+};
+
 /** nav destination → the lines its merged block previews, in board-reading order */
 const MERGED_GROUP: Record<string, MergedLineId[]> = {
   titleText: ["titleText", "titleBg"],
@@ -142,18 +164,25 @@ const MERGED_GROUP: Record<string, MergedLineId[]> = {
  * The merged line-up a destination previews, or null when the ordinary single
  * toolbar should show instead.
  *
- * A detached number bullet (`bulletSeparate`) is its own movable element, so
- * the question stem is then no longer merged with it and drops out of its
- * stack. The selection must own one of the parts: a drawn shape, another
- * element or a multi-selection always keeps the plain toolbar.
+ * A listing destination (Layers) styles nothing itself, so the block comes from
+ * the selection: picking the "Title" row there previews the same title stack the
+ * Title text destination does. A detached number bullet (`bulletSeparate`) is
+ * its own movable element, so the question stem is then no longer merged with it
+ * and drops out of its stack. The selection must own one of the parts: a drawn
+ * shape, another element or a multi-selection always keeps the plain toolbar.
  */
 export function mergedLinesFor(
   nav: string | null | undefined,
   element: ElementId | null,
   theme: ThemeSettings,
 ): MergedLineId[] | null {
-  const group = nav ? MERGED_GROUP[nav] : undefined;
-  if (!group || !element) return null;
+  if (!element) return null;
+  /** the destination that decides the block: the open one when it owns a merged
+   *  block, otherwise — from a listing destination — the selection's own line */
+  const open = nav ?? "";
+  const dest = (MERGED_GROUP[open] ? open : undefined) ?? (LISTING_NAV.has(nav ?? undefined) ? ELEMENT_LEAD_LINE[element] : undefined);
+  const group = dest ? MERGED_GROUP[dest] : undefined;
+  if (!group) return null;
   const lines = group.filter((id) => !(id === "questionText" && theme.bulletSeparate));
   if (!lines.length) return null;
   return lines.some((id) => MERGED_LINE[id].element === element) ? lines : null;
@@ -209,9 +238,17 @@ export default function ContextToolbar(p: Props) {
    * The merged line-up this selection previews — null means the ordinary single
    * toolbar. Every destination that styles a part of a merged block lands here:
    * question stem + bullet + number, title text + banner, badge 1 + badge 2,
-   * option text + marker + letter.
+   * option text + marker + letter — and so does a row picked from the Layers
+   * list, which styles nothing itself and therefore follows the selection.
    */
   const stack = !surface && !multi && !s ? mergedLinesFor(p.nav, el, theme) : null;
+  /**
+   * The line that owns the open destination — the one highlighted in the stack.
+   * A listing destination (Layers) owns no line, so the selected element's own
+   * line leads instead: picking the "Title" row there highlights "Title text",
+   * exactly where its one-click *Edit … →* jump lands.
+   */
+  const activeLine = stack?.find((id) => id === p.nav) ?? (el ? ELEMENT_LEAD_LINE[el] : undefined);
   /** the banner settings the Title background line and its pickers write */
   const banner: BannerSettings = {
     ...DEFAULT_BANNER,
@@ -570,6 +607,12 @@ export default function ContextToolbar(p: Props) {
   const layering = !!p.layerTools && !s && !surface && !el && !multi;
   /** arrange inline, one click away, while the Layers destination is open */
   const arrangeBar = !!p.layerTools && !layering && !surface;
+  /** the four Bring / Send steps, shared by the single strip and the stack */
+  const arrangeButtons = (["front", "forward", "backward", "back"] as ZOp[]).map(op => (
+    <span key={op}>
+      {button(Z_LABELS[op].icon, () => p.reorder(op), undefined, `${Z_LABELS[op].label} — ${Z_LABELS[op].hint}`)}
+    </span>
+  ));
   const kindLabel = ak
     ? "Answer key"
     : layering
@@ -831,12 +874,20 @@ export default function ContextToolbar(p: Props) {
               key={id}
               role="toolbar"
               aria-label={MERGED_LINE[id].aria}
-              className={cn("ctx-pill", p.nav === id && "ctx-pill-active")}
+              className={cn("ctx-pill", activeLine === id && "ctx-pill-active")}
             >
               <span className="ctx-kind">{MERGED_LINE[id].chip}</span>
               {lineControls(id)}
             </div>
           ))}
+          {/* the Layers destination keeps its arrange tools: restyling a part
+              of a merged block is no reason to lose Bring / Send */}
+          {arrangeBar && (
+            <div role="toolbar" aria-label="Arrange tools" className="ctx-pill">
+              <span className="ctx-kind">Arrange</span>
+              {arrangeButtons}
+            </div>
+          )}
         </div>
         {popNode}
       </section>
@@ -881,11 +932,7 @@ export default function ContextToolbar(p: Props) {
           </span>
         </>}
         {arrangeBar && <>
-          {(["front", "forward", "backward", "back"] as ZOp[]).map(op => (
-            <span key={op}>
-              {button(Z_LABELS[op].icon, () => p.reorder(op), undefined, `${Z_LABELS[op].label} — ${Z_LABELS[op].hint}`)}
-            </span>
-          ))}
+          {arrangeButtons}
           {sep()}
         </>}
         {/* the insert destinations: quick-add tools above the board */}
