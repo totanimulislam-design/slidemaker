@@ -1,13 +1,18 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import type { BackgroundSettings, Box, ElementId, QuizOption, ThemeSettings } from "../lib/types";
+import type { BackgroundSettings, Box, ElementId, OptionsLayout, QuizOption, ThemeSettings } from "../lib/types";
 import { DEFAULT_FRAME } from "../lib/types";
 import { boxFontLabel, boxTypeface, setBoxFont } from "../lib/boxFonts";
 import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, type ShapeItem, type ShapeKind } from "../lib/shapes";
 import type { AlignOp } from "../lib/shapeAlign";
 import { usePointerDrag } from "../lib/dragSession";
 import { Z_LABELS, type ZOp } from "../lib/zorder";
+import { shade } from "../lib/color";
+import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
 import FontPicker from "./FontPicker";
+import OptionBulletShapePicker from "./OptionBulletShapePicker";
+import OptionStylePicker from "./OptionStylePicker";
+import PlainNumberingPicker from "./PlainNumberingPicker";
 import ShapeDesignPanel from "./ShapeDesignPanel";
 import FramePanel from "./FramePanel";
 import GradientEditor from "./GradientEditor";
@@ -287,6 +292,43 @@ export default function ContextToolbar(p: Props) {
     </div>
   );
 
+  /* ---------------------------------------------------------------------- *
+   * Merged contents — one toolbar line per restylable part
+   *
+   * Several navigation destinations style parts that are painted as ONE
+   * merged thing on the board. The options row is the prime example: the
+   * option text, the bullet marker, and the letter inside the marker are
+   * merged into a single options block. Selecting any of them therefore shows
+   * a stacked toolbar — one line per related part, in board-reading order:
+   *
+   *   1. Option text                 2. Option bullet                 3. Bullet text
+   *
+   * The lines are previews of each other's tools exactly like the inspector's
+   * split panels: every line owns the same compact controls its panel owns,
+   * and the deeper pickers (marker shape, row style, numbering, fonts) open
+   * in the same movable pop-up card as every other toolbar toggle.
+   * ---------------------------------------------------------------------- */
+  const mergedOptions =
+    !surface && !multi && !s && el === "options" &&
+    (p.nav === "optionText" || p.nav === "optionBullet" || p.nav === "optionBulletText");
+
+  if (panel === "Marker shape" && mergedOptions) content = <OptionBulletShapePicker theme={theme} setTheme={p.patchTheme} />;
+  if (panel === "Row style" && mergedOptions) content = <OptionStylePicker theme={theme} setTheme={p.patchTheme} />;
+  if (panel === "Numbering" && mergedOptions) content = <PlainNumberingPicker theme={theme} setTheme={p.patchTheme} />;
+  if (panel === "Marker font" && mergedOptions) content = (
+    <FontPicker
+      label="Marker typeface"
+      script="all"
+      compact
+      value={theme.optionBulletFontFamily ?? ""}
+      onChange={family => {
+        const meta = FONT_BY_FAMILY.get(family.toLowerCase());
+        if (meta) ensureFontStylesheet([meta]);
+        p.patchTheme({ optionBulletFontFamily: family });
+      }}
+    />
+  );
+
   const size = s?.fontSize ?? Math.round((tf.scale ?? 1) * 100);
   const setSize = (v: number) => s ? patch({ fontSize: Math.max(10, Math.min(120, v)) }) : fontPatch({ scale: Math.max(.6, Math.min(1.8, v / 100)) });
   const alignVal = s?.align ?? (el ? theme.layout[el].align : "left");
@@ -299,6 +341,145 @@ export default function ContextToolbar(p: Props) {
       ? (p.nav === "images" ? "Insert image" : "Insert shape")
       : surface || (multi ? `Group · ${p.count}` : text ? 'Text' : s?.kind || 'Image');
   const toolbarLabel = `${ak ? "answer" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
+
+  /* the movable pop-up card every toolbar toggle shares (single or stacked) */
+  const popNode = content && (
+    <div
+      ref={popRef}
+      role="dialog"
+      aria-label={`${panel} settings`}
+      data-pop-panel={panel}
+      className={cn("ctx-pop", popPos && "ctx-pop-floating")}
+      style={popPos ? { left: popPos.x, top: popPos.y, width: popPos.w } : undefined}
+    >
+      {/* the header is the drag handle: free positioning, double-click to re-centre */}
+      <div
+        className="ctx-pop-head"
+        data-pop-handle={panel}
+        title="Drag to move this panel · double-click to re-centre"
+        onPointerDown={startPopDrag}
+        onPointerUp={endPop}
+        onPointerCancel={endPop}
+        onDoubleClick={() => movePop(null)}
+      >
+        <span className="ctx-pop-title">
+          <span className="ctx-grip" aria-hidden="true">⠿</span>
+          {panel}
+        </span>
+        <span className="flex items-center gap-1">
+          {popPos && (
+            <button
+              type="button"
+              className="ctx-btn"
+              style={{ height: 24, minWidth: 24, padding: "0 6px" }}
+              title="Re-centre this panel under the toolbar"
+              aria-label="Re-centre panel"
+              onClick={() => movePop(null)}
+            >
+              ⌖
+            </button>
+          )}
+          {button('✕', () => setPanel(null), undefined, 'Close toolbar panel')}
+        </span>
+      </div>
+      <div className="ctx-pop-body">{content}</div>
+    </div>
+  );
+
+  /* ---------------------------------------------------------------------- *
+   * The merged OPTIONS line-up: option text · option bullet · bullet text.
+   * All three are painted as one options block on the slide, so selecting any
+   * of them previews the tools of every related part — one line each.
+   * ---------------------------------------------------------------------- */
+  if (mergedOptions) {
+    const base = theme.optionAccent || theme.accent || "#2f4fff";
+    const picked = (v: string) => (/^#[0-9a-f]{6}$/i.test(v) ? v : base);
+    const markerWeight = theme.optionBulletTextWeight ?? 0;
+    return (
+      <section className="context-toolbar" aria-label="Contextual editing tools">
+        <div className="ctx-rows">
+          {/* line 1 — the option text (wording, face, colour, wrap, alignment) */}
+          <div
+            role="toolbar"
+            aria-label="Option text tools"
+            className={cn("ctx-pill", p.nav === "optionText" && "ctx-pill-active")}
+          >
+            <span className="ctx-kind">Option text</span>
+            {toggle("Font")}
+            {stepper("Option text size", theme.optionSize, optionSize => p.patchTheme({ optionSize }), 16, 46, 1, { prefix: "Size" })}
+            {sep()}
+            {textSwatch("Option text colour", theme.optionTextColor, optionTextColor => p.patchTheme({ optionTextColor }))}
+            {stepper("Option line height", theme.optionLineHeight ?? 1.45, v => p.patchTheme({ optionLineHeight: Math.round(v * 20) / 20 }), 1, 2.2, .05, { prefix: "Line" })}
+            {sep()}
+            {(["left", "center", "right"] as const).map(a => <span key={a}>{button(ALIGN_GLYPH[a], () => setAlign(a), alignVal === a, `Align ${a}`)}</span>)}
+            {sep()}
+            {toggle("Position")}
+          </div>
+
+          {/* line 2 — the option bullet (marker shape, colours, row, layout) */}
+          <div
+            role="toolbar"
+            aria-label="Option bullet tools"
+            className={cn("ctx-pill", p.nav === "optionBullet" && "ctx-pill-active")}
+          >
+            <span className="ctx-kind">Option bullet</span>
+            {toggle("Marker shape", <span aria-hidden="true">⬤</span>)}
+            {toggle("Row style", <span aria-hidden="true">▭</span>)}
+            {sep()}
+            {swatch("Marker colour (auto base)", picked(theme.optionAccent), v => p.patchTheme({ optionAccent: v }), <span className="ctx-dot" style={{ background: picked(theme.optionAccent) }} />)}
+            {swatch(`Marker fill${theme.optionBulletFill ? "" : " (auto until set)"}`, picked(theme.optionBulletFill || shade(base, 0.2)), v => p.patchTheme({ optionBulletFill: v }), <span className="ctx-dot" style={{ background: picked(theme.optionBulletFill || shade(base, 0.2)) }} />)}
+            {swatch(`Marker ring${theme.optionBulletBorder ? "" : " (auto until set)"}`, picked(theme.optionBulletBorder || shade(base, 0.5)), v => p.patchTheme({ optionBulletBorder: v }), <span className="ctx-ring" style={{ borderColor: picked(theme.optionBulletBorder || shade(base, 0.5)) }} />)}
+            {button(<>◐ Backplate</>, () => p.patchTheme({ optionBulletBgColor: theme.optionBulletBgColor ? "" : shade(base, -0.35) }), !!theme.optionBulletBgColor, "Shape behind every marker (on / off)")}
+            {sep()}
+            <select
+              aria-label="Options layout"
+              title="Options layout"
+              className="ctx-select"
+              value={theme.optionsLayout}
+              onChange={e => p.patchTheme({ optionsLayout: e.currentTarget.value as OptionsLayout })}
+            >
+              <option value="right">Right</option>
+              <option value="left">Left</option>
+              <option value="two-col">2 columns</option>
+              <option value="grid">Grid</option>
+            </select>
+            {stepper("Gap between rows", theme.optionGap ?? 0, v => p.patchTheme({ optionGap: v }), 0, 14, .5, { prefix: "Gap" })}
+          </div>
+
+          {/* line 3 — the text inside the option bullet (letter: what + how) */}
+          <div
+            role="toolbar"
+            aria-label="Text inside option bullet tools"
+            className={cn("ctx-pill", p.nav === "optionBulletText" && "ctx-pill-active")}
+          >
+            <span className="ctx-kind">Bullet text</span>
+            {toggle("Numbering", <span aria-hidden="true">#</span>)}
+            {toggle("Marker font", <span aria-hidden="true">A</span>)}
+            {sep()}
+            {swatch(`Marker letter ink${theme.optionBulletInk ? "" : " (auto until set)"}`, picked(theme.optionBulletInk || base), v => p.patchTheme({ optionBulletInk: v }), <span className="ctx-a" style={{ borderBottomColor: picked(theme.optionBulletInk || base) }}>A</span>)}
+            {button("Aa", () => p.patchTheme({ optionBulletUppercase: !(theme.optionBulletUppercase ?? false) }), !!(theme.optionBulletUppercase ?? false), "UPPERCASE letters")}
+            {sep()}
+            <select
+              aria-label="Letter weight"
+              title="Letter weight"
+              className="ctx-select"
+              value={String(markerWeight)}
+              onChange={e => p.patchTheme({ optionBulletTextWeight: Number(e.currentTarget.value) })}
+            >
+              <option value="0">Auto weight</option>
+              <option value="400">Regular</option>
+              <option value="500">Medium</option>
+              <option value="600">Semi</option>
+              <option value="700">Bold</option>
+              <option value="800">Extra</option>
+            </select>
+            {stepper("Letter size %", theme.optionBulletTextSize ?? 100, v => p.patchTheme({ optionBulletTextSize: v }), 50, 170, 5, { prefix: "Size" })}
+          </div>
+        </div>
+        {popNode}
+      </section>
+    );
+  }
 
   return (
     <section className="context-toolbar" aria-label="Contextual editing tools">
@@ -397,48 +578,7 @@ export default function ContextToolbar(p: Props) {
           >⋯</button>
         )}
       </div>
-      {content && (
-        <div
-          ref={popRef}
-          role="dialog"
-          aria-label={`${panel} settings`}
-          data-pop-panel={panel}
-          className={cn("ctx-pop", popPos && "ctx-pop-floating")}
-          style={popPos ? { left: popPos.x, top: popPos.y, width: popPos.w } : undefined}
-        >
-          {/* the header is the drag handle: free positioning, double-click to re-centre */}
-          <div
-            className="ctx-pop-head"
-            data-pop-handle={panel}
-            title="Drag to move this panel · double-click to re-centre"
-            onPointerDown={startPopDrag}
-            onPointerUp={endPop}
-            onPointerCancel={endPop}
-            onDoubleClick={() => movePop(null)}
-          >
-            <span className="ctx-pop-title">
-              <span className="ctx-grip" aria-hidden="true">⠿</span>
-              {panel}
-            </span>
-            <span className="flex items-center gap-1">
-              {popPos && (
-                <button
-                  type="button"
-                  className="ctx-btn"
-                  style={{ height: 24, minWidth: 24, padding: "0 6px" }}
-                  title="Re-centre this panel under the toolbar"
-                  aria-label="Re-centre panel"
-                  onClick={() => movePop(null)}
-                >
-                  ⌖
-                </button>
-              )}
-              {button('✕', () => setPanel(null), undefined, 'Close toolbar panel')}
-            </span>
-          </div>
-          <div className="ctx-pop-body">{content}</div>
-        </div>
-      )}
+      {popNode}
     </section>
   );
 }

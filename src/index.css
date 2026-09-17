@@ -116,7 +116,12 @@ input[type="text"] {
 
 /* Canva-style floating selection toolbar: a centered pill of icon groups plus a dropdown card. */
 .context-toolbar { position: relative; z-index: 30; flex-shrink: 0; display: flex; justify-content: center; padding: 10px 12px 2px; }
+/* merged contents (e.g. option text + option bullet + bullet text): the
+   toolbar stacks one pill line per related part, in board-reading order */
+.ctx-rows { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 100%; }
 .ctx-pill { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; overflow-x: auto; padding: 6px 8px; border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(15,23,42,.96); box-shadow: 0 12px 32px rgba(0,0,0,.5); backdrop-filter: blur(8px); }
+/* the line whose part the active destination owns */
+.ctx-pill-active { border-color: rgba(251,191,36,.55); box-shadow: 0 12px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(251,191,36,.3); }
 .ctx-pill > * { flex-shrink: 0; }
 .ctx-kind { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #fcd34d; background: rgba(251,191,36,.12); border-radius: 7px; padding: 5px 8px; margin-right: 4px; }
 .ctx-sep { width: 1px; height: 22px; background: rgba(255,255,255,.12); margin: 0 5px; }
