@@ -887,9 +887,11 @@ export default function App() {
                     onPaste: () => setAnswersOpen(true),
                     onCopies: addAnswerCopies,
                   } : undefined}
+                  header={currentHeader}
                   theme={currentTheme} background={effectiveBackground(deck, slide)}
                   patchShape={patch => selectedShape && updateShapeOnSlide(selectedShape, patch, slide.id)}
                   patchTheme={patch => setThemeScoped(patch, "slide", [slide.id])}
+                  patchHeader={scopedHeader}
                   patchBox={patch => selectedEl && patchLayoutScoped(selectedEl, patch, "slide", [slide.id])}
                   patchBackground={patch => setBackground(patch, "slide", slide.id)}
                   align={op => {

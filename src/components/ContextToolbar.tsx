@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import type { BackgroundSettings, Box, ElementId, OptionsLayout, QuizOption, ThemeSettings } from "../lib/types";
-import { DEFAULT_FRAME } from "../lib/types";
-import { boxFontLabel, boxTypeface, setBoxFont } from "../lib/boxFonts";
+import type {
+  BackgroundSettings, BannerSettings, BannerShape, Box, DeckHeader, ElementId, OptionsLayout, QuizOption, ThemeSettings,
+} from "../lib/types";
+import { DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
+import { TEXT_GRADIENT_PRESETS } from "../lib/banner";
+import { WEIGHTS, boxFontLabel, boxTypeface, setBoxFont } from "../lib/boxFonts";
 import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, type ShapeItem, type ShapeKind } from "../lib/shapes";
 import type { AlignOp } from "../lib/shapeAlign";
 import { usePointerDrag } from "../lib/dragSession";
@@ -13,6 +16,7 @@ import FontPicker from "./FontPicker";
 import OptionBulletShapePicker from "./OptionBulletShapePicker";
 import OptionStylePicker from "./OptionStylePicker";
 import PlainNumberingPicker from "./PlainNumberingPicker";
+import NumberStylePicker from "./NumberStylePicker";
 import ShapeDesignPanel from "./ShapeDesignPanel";
 import FramePanel from "./FramePanel";
 import GradientEditor from "./GradientEditor";
@@ -41,8 +45,11 @@ export interface AnswerKeyTools {
 interface Props {
   shape?: ShapeItem; element: ElementId | null; surface: "frame" | "background" | null;
   count: number; grouped: boolean; theme: ThemeSettings; background: BackgroundSettings;
+  /** the header the board is painting right now (badge text, banner on/off) */
+  header?: DeckHeader;
   patchShape: (p: Partial<ShapeItem>) => void; patchTheme: (p: Partial<ThemeSettings>) => void;
   patchBox: (p: Partial<Box>) => void; patchBackground: (p: Partial<BackgroundSettings>) => void;
+  patchHeader?: (p: Partial<DeckHeader>) => void;
   align: (op: AlignOp) => void; reorder: (op: ZOp) => void;
   group: () => void; ungroup: () => void; duplicate: () => void; remove: () => void;
   /**
@@ -60,6 +67,111 @@ interface Props {
 
 /** the shapes offered by the Insert-shapes strip, in the same order as below the board */
 const INSERT_SHAPES: ShapeKind[] = ["text", "rect", "rounded", "ellipse", "triangle", "diamond", "star", "line", "arrow"];
+
+/* ------------------------------------------------------------------------- *
+ * Merged contents — one toolbar line per related part
+ *
+ * Several navigation destinations style parts that are painted as ONE merged
+ * thing on the board, so selecting any of them previews every related part's
+ * tools — one line each, in board-reading order:
+ *
+ *   question · Question text  → Question bullet → Q bullet text
+ *   title    · Title text     → Title background
+ *   badges   · Badge 1        → Badge 2
+ *   options  · Option text    → Option bullet → Bullet text
+ *
+ * The line that owns the open destination is highlighted; the deeper pickers
+ * (bullet designs, marker shapes, numbering, fonts, banner shapes) open from
+ * their line in the same movable pop-up card every other toolbar toggle uses.
+ * ------------------------------------------------------------------------- */
+export type MergedLineId =
+  | "titleText"
+  | "titleBg"
+  | "badge1"
+  | "badge2"
+  | "questionText"
+  | "questionBullet"
+  | "bulletText"
+  | "optionText"
+  | "optionBullet"
+  | "optionBulletText";
+
+interface MergedLineMeta {
+  /** the eyebrow chip at the head of the line */
+  chip: string;
+  /** the line's accessible name (what the strip announces) */
+  aria: string;
+  /** the board element this line's part is painted inside */
+  element: ElementId;
+}
+
+const MERGED_LINE: Record<MergedLineId, MergedLineMeta> = {
+  titleText: { chip: "Title text", aria: "Title text tools", element: "title" },
+  titleBg: { chip: "Title background", aria: "Title background tools", element: "title" },
+  badge1: { chip: "Badge 1", aria: "Badge 1 tools", element: "brand" },
+  badge2: { chip: "Badge 2", aria: "Badge 2 tools", element: "brand" },
+  questionText: { chip: "Question text", aria: "Question text tools", element: "question" },
+  questionBullet: { chip: "Question bullet", aria: "Question bullet tools", element: "bullet" },
+  bulletText: { chip: "Q bullet text", aria: "Text inside question bullet tools", element: "bullet" },
+  optionText: { chip: "Option text", aria: "Option text tools", element: "options" },
+  optionBullet: { chip: "Option bullet", aria: "Option bullet tools", element: "options" },
+  optionBulletText: { chip: "Bullet text", aria: "Text inside option bullet tools", element: "options" },
+};
+
+/** nav destination → the lines its merged block previews, in board-reading order */
+const MERGED_GROUP: Record<string, MergedLineId[]> = {
+  titleText: ["titleText", "titleBg"],
+  titleBg: ["titleText", "titleBg"],
+  badge1: ["badge1", "badge2"],
+  badge2: ["badge1", "badge2"],
+  questionText: ["questionText", "questionBullet", "bulletText"],
+  questionBullet: ["questionText", "questionBullet", "bulletText"],
+  bulletText: ["questionText", "questionBullet", "bulletText"],
+  optionText: ["optionText", "optionBullet", "optionBulletText"],
+  optionBullet: ["optionText", "optionBullet", "optionBulletText"],
+  optionBulletText: ["optionText", "optionBullet", "optionBulletText"],
+};
+
+/**
+ * The merged line-up a destination previews, or null when the ordinary single
+ * toolbar should show instead.
+ *
+ * A detached number bullet (`bulletSeparate`) is its own movable element, so
+ * the question stem is then no longer merged with it and drops out of its
+ * stack. The selection must own one of the parts: a drawn shape, another
+ * element or a multi-selection always keeps the plain toolbar.
+ */
+export function mergedLinesFor(
+  nav: string | null | undefined,
+  element: ElementId | null,
+  theme: ThemeSettings,
+): MergedLineId[] | null {
+  const group = nav ? MERGED_GROUP[nav] : undefined;
+  if (!group || !element) return null;
+  const lines = group.filter((id) => !(id === "questionText" && theme.bulletSeparate));
+  if (!lines.length) return null;
+  return lines.some((id) => MERGED_LINE[id].element === element) ? lines : null;
+}
+
+/** banner silhouettes, in the same order as the Title background panel */
+const BANNER_SHAPES: { id: BannerShape; label: string; icon: string }[] = [
+  { id: "glow", label: "Glow", icon: "◉" },
+  { id: "pill", label: "Pill", icon: "⬭" },
+  { id: "rounded", label: "Rounded", icon: "▢" },
+  { id: "rect", label: "Box", icon: "▭" },
+  { id: "ribbon", label: "Ribbon", icon: "⧓" },
+  { id: "underline", label: "Underline", icon: "▁" },
+  { id: "none", label: "None", icon: "∅" },
+];
+
+/**
+ * Badge 1 and Badge 2 are the two lines of one brand block; each owns its own
+ * size / colour / visibility keys (see the Brand line panel).
+ */
+const BADGE_LINE = {
+  badge1: { n: 1, size: "brandTopSize", color: "brandTopColor", show: "showBrandTop", fallback: 25 },
+  badge2: { n: 2, size: "brandBottomSize", color: "brandBottomColor", show: "showBrandBottom", fallback: 27 },
+} as const;
 
 /** tiny Canva-style text-alignment glyphs */
 const ALIGN_GLYPH: Record<"left" | "center" | "right", ReactNode> = (["left", "center", "right"] as const).reduce(
@@ -86,6 +198,32 @@ export default function ContextToolbar(p: Props) {
   const text = !surface && !multi && (s?.kind === "text" || (!!el && el !== "logo" && !s));
   const tf = el ? boxTypeface(theme, el) : {};
   const fontPatch = (v: Parameters<typeof setBoxFont>[2]) => el && p.patchTheme({ boxFonts: setBoxFont(theme.boxFonts, el, v) });
+
+  /**
+   * The merged line-up this selection previews — null means the ordinary single
+   * toolbar. Every destination that styles a part of a merged block lands here:
+   * question stem + bullet + number, title text + banner, badge 1 + badge 2,
+   * option text + marker + letter.
+   */
+  const stack = !surface && !multi && !s ? mergedLinesFor(p.nav, el, theme) : null;
+  /** the banner settings the Title background line and its pickers write */
+  const banner: BannerSettings = {
+    ...DEFAULT_BANNER,
+    ...(theme.banner ?? {}),
+    color: theme.banner?.color ?? theme.titleBanner,
+  };
+  /** banner colour writes both the design and the legacy solid `titleBanner` */
+  const patchBanner = (patch: Partial<BannerSettings>) =>
+    p.patchTheme({ banner: { ...banner, ...patch }, ...(patch.color ? { titleBanner: patch.color } : {}) });
+  /** per-box typeface writes, for the font pickers of the merged lines */
+  const patchBoxFont = (id: ElementId, patch: Parameters<typeof setBoxFont>[2]) =>
+    p.patchTheme({ boxFonts: setBoxFont(theme.boxFonts, id, patch) });
+  /** BADGE_LINE's per-line keys are a union, so those writes go through one cast */
+  const patchLine = (patch: Record<string, unknown>) => p.patchTheme(patch as Partial<ThemeSettings>);
+  /** the options block derives every auto colour from this base */
+  const optionBase = theme.optionAccent || theme.accent || "#2f4fff";
+  const picked = (v: string) => (/^#[0-9a-f]{6}$/i.test(v) ? v : optionBase);
+  const markerWeight = theme.optionBulletTextWeight ?? 0;
 
   /* ---------------------------------------------------------------------- *
    * Movable pop-up panel
@@ -293,29 +431,18 @@ export default function ContextToolbar(p: Props) {
   );
 
   /* ---------------------------------------------------------------------- *
-   * Merged contents — one toolbar line per restylable part
+   * The deeper pickers of the merged lines
    *
-   * Several navigation destinations style parts that are painted as ONE
-   * merged thing on the board. The options row is the prime example: the
-   * option text, the bullet marker, and the letter inside the marker are
-   * merged into a single options block. Selecting any of them therefore shows
-   * a stacked toolbar — one line per related part, in board-reading order:
-   *
-   *   1. Option text                 2. Option bullet                 3. Bullet text
-   *
-   * The lines are previews of each other's tools exactly like the inspector's
-   * split panels: every line owns the same compact controls its panel owns,
-   * and the deeper pickers (marker shape, row style, numbering, fonts) open
-   * in the same movable pop-up card as every other toolbar toggle.
+   * Every line's toggles open here, in the same movable pop-up card as the
+   * single-destination toolbar's.
    * ---------------------------------------------------------------------- */
-  const mergedOptions =
-    !surface && !multi && !s && el === "options" &&
-    (p.nav === "optionText" || p.nav === "optionBullet" || p.nav === "optionBulletText");
+  const optLine = (id: MergedLineId) => stack?.includes(id) ?? false;
 
-  if (panel === "Marker shape" && mergedOptions) content = <OptionBulletShapePicker theme={theme} setTheme={p.patchTheme} />;
-  if (panel === "Row style" && mergedOptions) content = <OptionStylePicker theme={theme} setTheme={p.patchTheme} />;
-  if (panel === "Numbering" && mergedOptions) content = <PlainNumberingPicker theme={theme} setTheme={p.patchTheme} />;
-  if (panel === "Marker font" && mergedOptions) content = (
+  /* ---- options: option bullet + bullet text ----------------------------- */
+  if (panel === "Marker shape" && optLine("optionBullet")) content = <OptionBulletShapePicker theme={theme} setTheme={p.patchTheme} />;
+  if (panel === "Row style" && optLine("optionBullet")) content = <OptionStylePicker theme={theme} setTheme={p.patchTheme} />;
+  if (panel === "Numbering" && optLine("optionBulletText")) content = <PlainNumberingPicker theme={theme} setTheme={p.patchTheme} />;
+  if (panel === "Marker font" && optLine("optionBulletText")) content = (
     <FontPicker
       label="Marker typeface"
       script="all"
@@ -326,6 +453,98 @@ export default function ContextToolbar(p: Props) {
         if (meta) ensureFontStylesheet([meta]);
         p.patchTheme({ optionBulletFontFamily: family });
       }}
+    />
+  );
+
+  /* ---- title text: typeface + glyph effects ----------------------------- */
+  if (panel === "Title font" && optLine("titleText")) content = (
+    <FontPicker
+      label="Title typeface"
+      script="all"
+      compact
+      value={boxFontLabel(theme, "title")}
+      onChange={family => patchBoxFont("title", { family })}
+    />
+  );
+  if (panel === "Title effects" && optLine("titleText")) content = (
+    <div className="space-y-2">
+      <div className="ctx-field">
+        <span>Text glow</span>
+        {stepper("Text glow", banner.textGlow, v => patchBanner({ textGlow: v }), 0, 100, 5)}
+      </div>
+      <Toggle label="Drop shadow" checked={banner.textShadow} onChange={v => patchBanner({ textShadow: v })} />
+      <GradientEditor
+        label="Gradient text"
+        value={banner.textGradient}
+        fallback={theme.titleColor}
+        onChange={g => patchBanner({ textGradient: g })}
+        presets={TEXT_GRADIENT_PRESETS}
+      />
+    </div>
+  );
+
+  /* ---- title background: banner plate ----------------------------------- */
+  if (panel === "Banner shape" && optLine("titleBg")) content = (
+    <div className="ctx-menu-grid">
+      {BANNER_SHAPES.map(b => (
+        <span key={b.id}>
+          {button(<>{b.icon} {b.label}</>, () => patchBanner({ shape: b.id }), banner.shape === b.id, `Banner shape: ${b.label}`)}
+        </span>
+      ))}
+    </div>
+  );
+  if (panel === "Banner fill" && optLine("titleBg")) content = (
+    <GradientEditor
+      label="Banner gradient"
+      value={banner.gradient}
+      fallback={banner.color}
+      onChange={g => patchBanner({ gradient: g })}
+    />
+  );
+  if (panel === "Banner padding" && optLine("titleBg")) content = (
+    <div>
+      <div className="ctx-field">
+        <span>Width padding</span>
+        {stepper("Width padding", banner.padX, v => patchBanner({ padX: v }), 0, 40)}
+      </div>
+      <div className="ctx-field">
+        <span>Height padding</span>
+        {stepper("Height padding", banner.padY, v => patchBanner({ padY: v }), 0, 80)}
+      </div>
+    </div>
+  );
+
+  /* ---- badges 1 & 2: the one typeface both lines share ------------------- */
+  if (panel === "Badge font" && (optLine("badge1") || optLine("badge2"))) content = (
+    <FontPicker
+      label="Badge typeface"
+      script="all"
+      compact
+      value={boxFontLabel(theme, "brand")}
+      onChange={family => patchBoxFont("brand", { family })}
+    />
+  );
+
+  /* ---- question: stem typeface, bullet design, number typeface ----------- */
+  if (panel === "Question font" && optLine("questionText")) content = (
+    <FontPicker
+      label="Question typeface"
+      script="all"
+      compact
+      value={boxFontLabel(theme, "question")}
+      onChange={family => patchBoxFont("question", { family })}
+    />
+  );
+  if (panel === "Bullet design" && optLine("questionBullet")) content = (
+    <NumberStylePicker theme={theme} setTheme={p.patchTheme} />
+  );
+  if (panel === "Bullet font" && optLine("bulletText")) content = (
+    <FontPicker
+      label="Number typeface"
+      script="all"
+      compact
+      value={boxFontLabel(theme, "bullet")}
+      onChange={family => patchBoxFont("bullet", { family })}
     />
   );
 
@@ -387,49 +606,158 @@ export default function ContextToolbar(p: Props) {
   );
 
   /* ---------------------------------------------------------------------- *
-   * The merged OPTIONS line-up: option text · option bullet · bullet text.
-   * All three are painted as one options block on the slide, so selecting any
-   * of them previews the tools of every related part — one line each.
+   * Merged contents — the stacked line-up
+   *
+   * One toolbar line per related part, in board-reading order, with the line
+   * that owns the open destination highlighted. Every line carries the compact
+   * slice of its inspector panel that fits a toolbar row, and every control
+   * writes through that line's OWN element — a control on the "Question
+   * bullet" row can never restyle the question stem, and vice versa.
    * ---------------------------------------------------------------------- */
-  if (mergedOptions) {
-    const base = theme.optionAccent || theme.accent || "#2f4fff";
-    const picked = (v: string) => (/^#[0-9a-f]{6}$/i.test(v) ? v : base);
-    const markerWeight = theme.optionBulletTextWeight ?? 0;
-    return (
-      <section className="context-toolbar" aria-label="Contextual editing tools">
-        <div className="ctx-rows">
-          {/* line 1 — the option text (wording, face, colour, wrap, alignment) */}
-          <div
-            role="toolbar"
-            aria-label="Option text tools"
-            className={cn("ctx-pill", p.nav === "optionText" && "ctx-pill-active")}
-          >
-            <span className="ctx-kind">Option text</span>
+  const lineControls = (id: MergedLineId): ReactNode => {
+    const target = MERGED_LINE[id].element;
+    const lineFont = boxTypeface(theme, target);
+    const setLineFont = (patch: Parameters<typeof setBoxFont>[2]) => patchBoxFont(target, patch);
+    /** align this line's own box, whichever part happens to be selected */
+    const alignLine = (a: "left" | "center" | "right") =>
+      p.patchTheme({ layout: { ...theme.layout, [target]: { ...theme.layout[target], align: a } } });
+    const alignIs = (a: "left" | "center" | "right") => (theme.layout[target]?.align ?? "left") === a;
+    const aligns = () =>
+      (["left", "center", "right"] as const).map(a => (
+        <span key={a}>{button(ALIGN_GLYPH[a], () => alignLine(a), alignIs(a), `Align ${a}`)}</span>
+      ));
+
+    switch (id) {
+      /* -------- title text: the heading glyphs (Title text panel) -------- */
+      case "titleText":
+        return (
+          <>
+            {toggle("Title font")}
+            {stepper("Title size", theme.titleSize ?? 54, v => p.patchTheme({ titleSize: v }), 20, 96, 1, { prefix: "Size" })}
+            {textSwatch("Title colour", theme.titleColor, v => p.patchTheme({ titleColor: v }))}
+            {button("Aa", () => setLineFont({ uppercase: !(lineFont.uppercase ?? false) }), lineFont.uppercase === true, "UPPERCASE title")}
+            {toggle("Title effects", <span aria-hidden="true">☀</span>)}
+            {sep()}
+            {toggle("Position")}
+          </>
+        );
+
+      /* ----- the banner plate (Title background panel) ------------------- */
+      case "titleBg": {
+        const shown = p.header?.showBanner ?? true;
+        return (
+          <>
+            {toggle("Banner shape", <span aria-hidden="true">▣</span>)}
+            {swatch("Banner colour", banner.color, v => patchBanner({ color: v }), <span className="ctx-dot" style={{ background: banner.color }} />)}
+            {toggle("Banner fill")}
+            {stepper("Banner opacity %", Math.round(banner.opacity * 100), v => patchBanner({ opacity: v / 100 }), 10, 100, 5, { prefix: "◐" })}
+            {stepper("Banner halo", banner.halo, v => patchBanner({ halo: v }), 0, 100, 5, { prefix: "☀" })}
+            {toggle("Banner padding")}
+            {sep()}
+            {button("▣ Banner", () => p.patchHeader?.({ showBanner: !shown }), shown, "Show / hide the banner behind the title")}
+          </>
+        );
+      }
+
+      /* ----- badges 1 & 2: one brand block, a line each (Brand line panel) */
+      case "badge1":
+      case "badge2": {
+        const c = BADGE_LINE[id];
+        const own = theme[c.color] ?? "";
+        const shown = theme[c.show] ?? true;
+        return (
+          <>
+            {toggle("Badge font", <span aria-hidden="true">A</span>)}
+            {textSwatch(`Badge ${c.n} colour`, own || theme.brandColor, v => patchLine({ [c.color]: v }))}
+            {button("auto", () => patchLine({ [c.color]: "" }), !own, "Follow the shared brand colour")}
+            {stepper(`Badge ${c.n} size`, theme[c.size] ?? c.fallback, v => patchLine({ [c.size]: v }), 12, 64, 1, { prefix: "Size" })}
+            {sep()}
+            {button(<span aria-hidden="true">👁</span>, () => patchLine({ [c.show]: !shown }), shown, `Show / hide badge ${c.n}`)}
+            {id === "badge1" && <>{sep()}{toggle("Position")}</>}
+          </>
+        );
+      }
+
+      /* -------- the stem (Question text panel) --------------------------- */
+      case "questionText":
+        return (
+          <>
+            {toggle("Question font")}
+            {stepper("Question size %", Math.round((lineFont.scale ?? 1) * 100), v => setLineFont({ scale: Math.max(.6, Math.min(1.8, v / 100)) }), 60, 180, 5, { prefix: "Size" })}
+            {textSwatch("Question colour", lineFont.color || theme.questionColor, v => setLineFont({ color: v }))}
+            {sep()}
+            {button(<span className="ctx-glyph-b">B</span>, () => setLineFont({ weight: (lineFont.weight ?? 600) >= 700 ? 600 : 700 }), (lineFont.weight ?? 600) >= 700, "Bold")}
+            {button(<span className="ctx-glyph-i">I</span>, () => setLineFont({ italic: !lineFont.italic }), !!lineFont.italic, "Italic")}
+            {button(<span className="ctx-glyph-u">U</span>, () => setLineFont({ underline: !lineFont.underline }), !!lineFont.underline, "Underline")}
+            {sep()}
+            {aligns()}
+            {sep()}
+            {toggle("Position")}
+          </>
+        );
+
+      /* ---- the marker body (Question bullet panel) ---------------------- */
+      case "questionBullet":
+        return (
+          <>
+            {toggle("Bullet design", <span aria-hidden="true">⬤</span>)}
+            {stepper("Bullet size", theme.bulletSize ?? 54, v => p.patchTheme({ bulletSize: v }), 28, 96, 1, { prefix: "Size" })}
+            {swatch("Bullet colour", theme.accent, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: theme.accent }} />)}
+            {sep()}
+            {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
+          </>
+        );
+
+      /* --- the number inside it (Text inside question bullet panel) ------ */
+      case "bulletText":
+        return (
+          <>
+            {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showNumber: !theme.showNumber }), theme.showNumber, "Show / hide the number inside the bullet")}
+            {toggle("Bullet font", <span aria-hidden="true">A</span>)}
+            {swatch("Number ink", lineFont.color || theme.accent, v => setLineFont({ color: v }), <span className="ctx-a" style={{ borderBottomColor: lineFont.color || theme.accent }}>A</span>)}
+            {button("auto", () => setLineFont({ color: undefined }), !lineFont.color, "Let the bullet design pick its own ink")}
+            {sep()}
+            <select
+              aria-label="Number weight"
+              title="Number weight"
+              className="ctx-select"
+              value={String(lineFont.weight ?? 0)}
+              onChange={e => setLineFont({ weight: Number(e.currentTarget.value) || undefined })}
+            >
+              <option value="0">Auto weight</option>
+              {WEIGHTS.map(w => <option key={w.v} value={String(w.v)}>{w.l}</option>)}
+            </select>
+            {stepper("Number size %", Math.round((lineFont.scale ?? 1) * 100), v => setLineFont({ scale: v / 100 }), 50, 170, 5, { prefix: "Size" })}
+          </>
+        );
+
+      /* ------- option text: the choices (Option text panel) -------------- */
+      case "optionText":
+        return (
+          <>
             {toggle("Font")}
             {stepper("Option text size", theme.optionSize, optionSize => p.patchTheme({ optionSize }), 16, 46, 1, { prefix: "Size" })}
             {sep()}
             {textSwatch("Option text colour", theme.optionTextColor, optionTextColor => p.patchTheme({ optionTextColor }))}
             {stepper("Option line height", theme.optionLineHeight ?? 1.45, v => p.patchTheme({ optionLineHeight: Math.round(v * 20) / 20 }), 1, 2.2, .05, { prefix: "Line" })}
             {sep()}
-            {(["left", "center", "right"] as const).map(a => <span key={a}>{button(ALIGN_GLYPH[a], () => setAlign(a), alignVal === a, `Align ${a}`)}</span>)}
+            {aligns()}
             {sep()}
             {toggle("Position")}
-          </div>
+          </>
+        );
 
-          {/* line 2 — the option bullet (marker shape, colours, row, layout) */}
-          <div
-            role="toolbar"
-            aria-label="Option bullet tools"
-            className={cn("ctx-pill", p.nav === "optionBullet" && "ctx-pill-active")}
-          >
-            <span className="ctx-kind">Option bullet</span>
+      /* ---- the markers (Option bullet panel) ---------------------------- */
+      case "optionBullet":
+        return (
+          <>
             {toggle("Marker shape", <span aria-hidden="true">⬤</span>)}
             {toggle("Row style", <span aria-hidden="true">▭</span>)}
             {sep()}
             {swatch("Marker colour (auto base)", picked(theme.optionAccent), v => p.patchTheme({ optionAccent: v }), <span className="ctx-dot" style={{ background: picked(theme.optionAccent) }} />)}
-            {swatch(`Marker fill${theme.optionBulletFill ? "" : " (auto until set)"}`, picked(theme.optionBulletFill || shade(base, 0.2)), v => p.patchTheme({ optionBulletFill: v }), <span className="ctx-dot" style={{ background: picked(theme.optionBulletFill || shade(base, 0.2)) }} />)}
-            {swatch(`Marker ring${theme.optionBulletBorder ? "" : " (auto until set)"}`, picked(theme.optionBulletBorder || shade(base, 0.5)), v => p.patchTheme({ optionBulletBorder: v }), <span className="ctx-ring" style={{ borderColor: picked(theme.optionBulletBorder || shade(base, 0.5)) }} />)}
-            {button(<>◐ Backplate</>, () => p.patchTheme({ optionBulletBgColor: theme.optionBulletBgColor ? "" : shade(base, -0.35) }), !!theme.optionBulletBgColor, "Shape behind every marker (on / off)")}
+            {swatch(`Marker fill${theme.optionBulletFill ? "" : " (auto until set)"}`, picked(theme.optionBulletFill || shade(optionBase, 0.2)), v => p.patchTheme({ optionBulletFill: v }), <span className="ctx-dot" style={{ background: picked(theme.optionBulletFill || shade(optionBase, 0.2)) }} />)}
+            {swatch(`Marker ring${theme.optionBulletBorder ? "" : " (auto until set)"}`, picked(theme.optionBulletBorder || shade(optionBase, 0.5)), v => p.patchTheme({ optionBulletBorder: v }), <span className="ctx-ring" style={{ borderColor: picked(theme.optionBulletBorder || shade(optionBase, 0.5)) }} />)}
+            {button("◐ Backplate", () => p.patchTheme({ optionBulletBgColor: theme.optionBulletBgColor ? "" : shade(optionBase, -0.35) }), !!theme.optionBulletBgColor, "Shape behind every marker (on / off)")}
             {sep()}
             <select
               aria-label="Options layout"
@@ -444,19 +772,17 @@ export default function ContextToolbar(p: Props) {
               <option value="grid">Grid</option>
             </select>
             {stepper("Gap between rows", theme.optionGap ?? 0, v => p.patchTheme({ optionGap: v }), 0, 14, .5, { prefix: "Gap" })}
-          </div>
+          </>
+        );
 
-          {/* line 3 — the text inside the option bullet (letter: what + how) */}
-          <div
-            role="toolbar"
-            aria-label="Text inside option bullet tools"
-            className={cn("ctx-pill", p.nav === "optionBulletText" && "ctx-pill-active")}
-          >
-            <span className="ctx-kind">Bullet text</span>
+      /* --- the letter inside the markers (Option bullet text panel) ------ */
+      case "optionBulletText":
+        return (
+          <>
             {toggle("Numbering", <span aria-hidden="true">#</span>)}
             {toggle("Marker font", <span aria-hidden="true">A</span>)}
             {sep()}
-            {swatch(`Marker letter ink${theme.optionBulletInk ? "" : " (auto until set)"}`, picked(theme.optionBulletInk || base), v => p.patchTheme({ optionBulletInk: v }), <span className="ctx-a" style={{ borderBottomColor: picked(theme.optionBulletInk || base) }}>A</span>)}
+            {swatch(`Marker letter ink${theme.optionBulletInk ? "" : " (auto until set)"}`, picked(theme.optionBulletInk || optionBase), v => p.patchTheme({ optionBulletInk: v }), <span className="ctx-a" style={{ borderBottomColor: picked(theme.optionBulletInk || optionBase) }}>A</span>)}
             {button("Aa", () => p.patchTheme({ optionBulletUppercase: !(theme.optionBulletUppercase ?? false) }), !!(theme.optionBulletUppercase ?? false), "UPPERCASE letters")}
             {sep()}
             <select
@@ -467,14 +793,32 @@ export default function ContextToolbar(p: Props) {
               onChange={e => p.patchTheme({ optionBulletTextWeight: Number(e.currentTarget.value) })}
             >
               <option value="0">Auto weight</option>
-              <option value="400">Regular</option>
-              <option value="500">Medium</option>
-              <option value="600">Semi</option>
-              <option value="700">Bold</option>
-              <option value="800">Extra</option>
+              {WEIGHTS.map(w => <option key={w.v} value={String(w.v)}>{w.l}</option>)}
             </select>
             {stepper("Letter size %", theme.optionBulletTextSize ?? 100, v => p.patchTheme({ optionBulletTextSize: v }), 50, 170, 5, { prefix: "Size" })}
-          </div>
+          </>
+        );
+    }
+  };
+
+  /* ---------------------------------------------------------------------- *
+   * The stacked render: every related part's line, the owner highlighted.
+   * ---------------------------------------------------------------------- */
+  if (stack) {
+    return (
+      <section className="context-toolbar" aria-label="Contextual editing tools">
+        <div className="ctx-rows">
+          {stack.map(id => (
+            <div
+              key={id}
+              role="toolbar"
+              aria-label={MERGED_LINE[id].aria}
+              className={cn("ctx-pill", p.nav === id && "ctx-pill-active")}
+            >
+              <span className="ctx-kind">{MERGED_LINE[id].chip}</span>
+              {lineControls(id)}
+            </div>
+          ))}
         </div>
         {popNode}
       </section>

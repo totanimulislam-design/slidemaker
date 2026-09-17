@@ -412,6 +412,147 @@ export async function runNavTests(): Promise<CaseResult[]> {
     detail: optionLines().join(" | "),
   });
 
+  /* ------- merged contents: title, badges and the whole question block ----- */
+  const lineLabels = () =>
+    Array.from(doc.querySelectorAll('.context-toolbar [role="toolbar"]')).map((t) =>
+      t.getAttribute("aria-label"),
+    );
+  const lineClass = (label: string) =>
+    doc.querySelector(`.context-toolbar [aria-label="${label}"]`)?.className ?? "";
+  /** each merged block with the lines its destinations must preview, in order */
+  const BLOCKS: { navs: [string, string][]; lines: string[] }[] = [
+    {
+      navs: [
+        ["titleText", "Title text tools"],
+        ["titleBg", "Title background tools"],
+      ],
+      lines: ["Title text tools", "Title background tools"],
+    },
+    {
+      navs: [
+        ["badge1", "Badge 1 tools"],
+        ["badge2", "Badge 2 tools"],
+      ],
+      lines: ["Badge 1 tools", "Badge 2 tools"],
+    },
+    {
+      // the number bullet is detached in this fixture, so the stem is not merged
+      navs: [
+        ["questionBullet", "Question bullet tools"],
+        ["bulletText", "Text inside question bullet tools"],
+      ],
+      lines: ["Question bullet tools", "Text inside question bullet tools"],
+    },
+  ];
+  for (const block of BLOCKS) {
+    for (const [id, own] of block.navs) {
+      click(doc.querySelector(`aside nav button[data-nav="${id}"]`));
+      const got = lineLabels().join("|");
+      out.push({
+        name: `${id} previews every part of its merged block, one line each`,
+        pass: got === block.lines.join("|"),
+        detail: got,
+      });
+      out.push({
+        name: `${id} highlights its own line and dims its siblings`,
+        pass:
+          lineClass(own).includes("ctx-pill-active") &&
+          block.lines
+            .filter((l) => l !== own)
+            .every((l) => !lineClass(l).includes("ctx-pill-active")),
+        detail: block.lines.map((l) => `${l}: ${lineClass(l)}`).join(" | "),
+      });
+    }
+  }
+
+  /* --- the stem joins the block while the bullet rides along with it ------- */
+  click(doc.querySelector('aside nav button[data-nav="questionBullet"]'));
+  const bulletDetach = () =>
+    Array.from(doc.querySelectorAll<HTMLElement>("aside button")).find((b) =>
+      b.textContent?.trim().startsWith("Bullet is a separate movable element"),
+    ) ?? null;
+  click(bulletDetach());
+  const QUESTION_TRIO =
+    "Question text tools|Question bullet tools|Text inside question bullet tools";
+  for (const id of ["questionText", "questionBullet", "bulletText"]) {
+    click(doc.querySelector(`aside nav button[data-nav="${id}"]`));
+    out.push({
+      name: `${id} previews the whole merged question block while the bullet rides along`,
+      pass: lineLabels().join("|") === QUESTION_TRIO,
+      detail: lineLabels().join(" | "),
+    });
+  }
+
+  /* --- a line's controls write that line's own part, never a sibling's ----- */
+  click(doc.querySelector('aside nav button[data-nav="questionText"]'));
+  // the stem's own span — the bullet graphic is a div beside it, so `> span`
+  // always measures the question text, never the marker
+  const stemSize = () =>
+    parseFloat(
+      doc.querySelector<HTMLElement>('.slide-editable [data-el="question"] > span')?.style.fontSize ?? "0",
+    );
+  const stemBefore = stemSize();
+  type(doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label="Question size %"]'), "120");
+  out.push({
+    name: "the Question text line resizes the stem",
+    pass: stemSize() > stemBefore && stemSize() > 0,
+    detail: `${stemBefore}px → ${stemSize()}px`,
+  });
+  type(doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label="Question size %"]'), "100");
+
+  click(doc.querySelector('aside nav button[data-nav="badge2"]'));
+  const brandSizesNow = () =>
+    Array.from(doc.querySelectorAll<HTMLElement>('.slide-editable [data-el="brand"] > div')).map(
+      (d) => d.style.fontSize,
+    );
+  type(doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label="Badge 2 size"]'), "40");
+  out.push({
+    name: "the Badge 2 line resizes badge 2 only",
+    pass: brandSizesNow()[0] === "31px" && brandSizesNow()[1] === "40px",
+    detail: brandSizesNow().join(" / "),
+  });
+  type(doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label="Badge 2 size"]'), "19");
+
+  /* --- the new lines' deeper pickers open in the shared movable pop-up ----- */
+  click(doc.querySelector('aside nav button[data-nav="questionBullet"]'));
+  click(doc.querySelector('.context-toolbar [aria-label="Bullet design"]'));
+  out.push({
+    name: "the question bullet line opens its bullet designs in the shared pop-up",
+    pass: pop()?.getAttribute("data-pop-panel") === "Bullet design",
+    detail: String(pop()?.getAttribute("data-pop-panel")),
+  });
+  click(doc.querySelector(".context-toolbar .ctx-pop-head [aria-label='Close toolbar panel']"));
+  click(doc.querySelector('aside nav button[data-nav="titleBg"]'));
+  click(doc.querySelector('.context-toolbar [aria-label="Banner shape"]'));
+  out.push({
+    name: "the title background line opens the banner shapes in the shared pop-up",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Banner shape" &&
+      !!doc.querySelector('.context-toolbar [aria-label="Banner shape: Pill"]'),
+    detail: String(pop()?.getAttribute("data-pop-panel")),
+  });
+  const bannerRadii = () =>
+    Array.from(doc.querySelectorAll<HTMLElement>('.slide-editable [data-el="title"] div')).map(
+      (d) => d.style.borderRadius,
+    );
+  click(doc.querySelector('.context-toolbar [aria-label="Banner shape: Pill"]'));
+  out.push({
+    name: "picking a banner shape repaints the title plate",
+    pass: bannerRadii().includes("999px"),
+    detail: bannerRadii().join(" / "),
+  });
+  click(doc.querySelector(".context-toolbar .ctx-pop-head [aria-label='Close toolbar panel']"));
+
+  /* …and the stem leaves the block again once the bullet detaches ----------- */
+  click(doc.querySelector('aside nav button[data-nav="questionBullet"]'));
+  click(bulletDetach());
+  click(doc.querySelector('aside nav button[data-nav="questionText"]'));
+  out.push({
+    name: "a detached bullet drops the stem out of the merged question block",
+    pass: lineLabels().join("|") === "Text tools",
+    detail: lineLabels().join(" | "),
+  });
+
   /* --------------------- reverse sync: canvas → nav ------------------------ */
   const title = doc.querySelector<HTMLElement>('.slide-editable [data-el="title"]');
   if (title) {
