@@ -51,21 +51,42 @@ shapes panel into their own "Insert images" destination.
 ### Merged contents show every related toolbar
 
 Some destinations style parts that are painted as **one merged thing** on the
-board. The options row is the prime example: the option text, the option
-bullet, and the text inside the bullet are merged into a single options block.
-Selecting any of them — or clicking an option on the slide — stacks a preview
-of every related part's tools in the context toolbar, one line each, in
-board-reading order:
+board. Selecting any of them — or clicking the merged block on the slide —
+stacks a preview of every related part's tools in the context toolbar, one line
+each, in board-reading order:
 
-1. **Option text** — font, size, ink, line height, alignment, position
-2. **Option bullet** — marker shape, row style, marker/fill/ring colours,
-   backplate, layout, row gap
-3. **Text inside option bullet** — numbering, marker font, ink, case, weight,
-   letter size
+| Merged block | Lines, top to bottom |
+| --- | --- |
+| **Question** (bullet riding along) | Question text · Question bullet · Q bullet text |
+| **Title** | Title text · Title background |
+| **Badges** | Badge 1 · Badge 2 |
+| **Options** | Option text · Option bullet · Bullet text |
 
-The line that owns the open destination is highlighted; the deeper pickers
-(marker shapes, row styles, plain numbering, fonts) open from their line in
-the same movable pop-up card every other toolbar toggle uses.
+The line that owns the open destination is highlighted (`ctx-pill-active`);
+the others are one click away from being styled without leaving the board.
+Every line carries the compact slice of its inspector panel — **Question text**
+gets font, size, ink, bold/italic/underline and alignment; **Question bullet**
+its design, size, accent colour and show/hide; **Q bullet text** the number's
+ink, typeface, weight and size; **Title text** typeface, size, colour, case and
+glyph effects; **Title background** the banner silhouette, colour, gradient,
+opacity, halo, padding and on/off; each **badge line** its own typeface, colour
+(with *auto* back to the shared brand colour), size and visibility; the
+**options trio** keeps marker shape / row style / numbering / fonts as before.
+
+Two rules keep the stack honest:
+
+- **A line's controls write through its own part.** Aligning from the Question
+  text line moves the stem's box, never the marker's — and a badge line only
+  ever touches its own brand line.
+- **Un-merge and the extra lines leave.** With *Bullet is a separate movable
+  element* on, the number bullet is its own element, so the question block
+  shrinks to *Question bullet · Q bullet text* and the stem falls back to the
+  ordinary single toolbar.
+
+The deeper pickers (bullet designs, banner shapes, marker shapes, row styles,
+plain numbering, fonts) open from their line in the same movable pop-up card
+every other toolbar toggle uses. A multi-selection or a drawn shape always gets
+the plain toolbar, never a merged stack.
 
 ## Answer key
 
