@@ -122,6 +122,9 @@ function SlideBase({
     const b = L[id];
     const free = (b.mode ?? "align") === "free";
     const rot = b.rot ? ` rotate(${b.rot}deg)` : "";
+    // hidden by the Layers panel: it keeps its slot in the stack, but nothing
+    // is painted — on the board, in the thumbnails and in every export alike
+    if (b.hidden) return { display: "none" };
     return {
       position: "absolute",
       left: `${b.x}%`,
@@ -192,7 +195,13 @@ function SlideBase({
     return r;
   };
 
+  /** the Layers panel's 👁 — the layer keeps its slot, the board stops painting it */
+  const layerHidden = (id: ElementId) => !!L[id]?.hidden;
+  /** the Layers panel's 🔒 — the layer is painted but cannot be dragged/resized */
+  const layerLocked = (id: ElementId) => !!L[id]?.locked;
+
   const elementShown = (id: ElementId) => {
+    if (layerHidden(id)) return false;
     if (id === "logo") return !!(header.showLogo && header.logo);
     if (id === "note") return !!slide.note?.trim() && (theme.showNote ?? true);
     if (id === "brand") return (theme.showBrandTop ?? true) || (theme.showBrandBottom ?? true);
@@ -208,6 +217,7 @@ function SlideBase({
       out.push({ x: r.x, y: r.y, w: r.w, h: r.h });
     });
     [...(globalShapes ?? []), ...(slide.shapes ?? [])].forEach((sh) => {
+      if (sh.hidden) return; // a hidden layer is not on the board to snap to
       if (`shape:${sh.id}` !== except) out.push({ x: sh.x, y: sh.y, w: sh.w, h: sh.h });
     });
     return out;
@@ -305,7 +315,8 @@ function SlideBase({
       onSelectShapeIds?.([]);
       onField?.(null);
     }
-    if (!movable || e.button !== 0) return;
+    // a locked layer still selects (so it can be unlocked) but never moves
+    if (!movable || e.button !== 0 || layerLocked(id)) return;
     // snapshot the visual position for a possible drag — no write happens here
     const r = freeRectOf(id);
     arm({ kind: "move", id, dx: 0, dy: 0 }, e, { x: r.x, y: r.y });
@@ -313,7 +324,7 @@ function SlideBase({
 
   const startResize = (id: ElementId, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (!movable || e.button !== 0) return;
+    if (!movable || e.button !== 0 || layerLocked(id)) return;
     const r = freeRectOf(id);
     arm({ kind: "resize", id, handle, sx: e.clientX, sy: e.clientY, start: r, ratio: r.h > 0 ? r.w / r.h : 1 }, e, {
       x: r.x,
@@ -323,7 +334,7 @@ function SlideBase({
 
   const startRotate = (id: ElementId) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (!movable || e.button !== 0) return;
+    if (!movable || e.button !== 0 || layerLocked(id)) return;
     const b = boardRef.current?.getBoundingClientRect();
     if (!b) return;
     const r = freeRectOf(id);
@@ -372,9 +383,14 @@ function SlideBase({
     const style: CSSProperties = free
       ? { left: `${b.x}%`, top: `${b.y}%`, width: `${b.w}%`, height: b.h ? `${b.h}%` : `${r.h}%` }
       : { left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` };
+    // a locked layer shows the frame (so you can see what is selected) but no
+    // handles at all — there is nothing you could drag
+    const locked = layerLocked(id);
+    const ink = locked ? "#ffd633" : "#5ef2ff";
     return (
       <div
         data-el-overlay={id}
+        data-el-locked={locked ? "true" : undefined}
         style={{
           position: "absolute",
           ...style,
@@ -382,31 +398,36 @@ function SlideBase({
           transformOrigin: "center center",
           zIndex: BAND_UI + 15,
           pointerEvents: "none",
-          outline: "1.5px solid rgba(94,242,255,.95)",
+          outline: locked ? `1.5px dashed ${ink}` : "1.5px solid rgba(94,242,255,.95)",
           outlineOffset: 3,
           boxSizing: "border-box",
         }}
       >
-        {HANDLES.map(({ h, cursor, style: hs }) => (
-          <div
-            key={h}
-            data-handle={h}
-            title="Drag to resize · Shift keeps ratio · Alt disables snapping"
-            onPointerDown={startResize(id, h)}
-            onPointerUp={end}
-            onPointerCancel={end}
-            style={{ ...handleBase, ...hs, cursor, background: "#5ef2ff", borderRadius: h.length === 1 ? 8 : 3 }}
-          />
-        ))}
-        <div
-          data-rotate=""
-          title="Rotate · Shift snaps to 15°"
-          onPointerDown={startRotate(id)}
-          onPointerUp={end}
-          onPointerCancel={end}
-          style={{ ...handleBase, left: "50%", top: -34, marginLeft: -8, borderRadius: "50%", background: "#5ef2ff", cursor: "grab" }}
-        />
-        <div style={{ position: "absolute", left: "50%", top: -18, width: 2, height: 16, marginLeft: -1, background: "rgba(94,242,255,.8)" }} />
+        {!locked &&
+          HANDLES.map(({ h, cursor, style: hs }) => (
+            <div
+              key={h}
+              data-handle={h}
+              title="Drag to resize · Shift keeps ratio · Alt disables snapping"
+              onPointerDown={startResize(id, h)}
+              onPointerUp={end}
+              onPointerCancel={end}
+              style={{ ...handleBase, ...hs, cursor, background: "#5ef2ff", borderRadius: h.length === 1 ? 8 : 3 }}
+            />
+          ))}
+        {!locked && (
+          <>
+            <div
+              data-rotate=""
+              title="Rotate · Shift snaps to 15°"
+              onPointerDown={startRotate(id)}
+              onPointerUp={end}
+              onPointerCancel={end}
+              style={{ ...handleBase, left: "50%", top: -34, marginLeft: -8, borderRadius: "50%", background: "#5ef2ff", cursor: "grab" }}
+            />
+            <div style={{ position: "absolute", left: "50%", top: -18, width: 2, height: 16, marginLeft: -1, background: "rgba(94,242,255,.8)" }} />
+          </>
+        )}
         <div
           style={{
             position: "absolute",
@@ -415,7 +436,7 @@ function SlideBase({
             padding: "2px 6px",
             borderRadius: 4,
             background: "rgba(0,0,0,.75)",
-            color: "#5ef2ff",
+            color: ink,
             fontFamily: "monospace",
             fontSize: 11,
             whiteSpace: "nowrap",
@@ -423,6 +444,7 @@ function SlideBase({
             transformOrigin: "left top",
           }}
         >
+          {locked ? "🔒 " : ""}
           {ELEMENT_LABEL[id]} · {r1(r.x)}, {r1(r.y)} · {r1(r.w)}×{r1(r.h)}{b.rot ? ` · ${b.rot}°` : ""}{free ? "" : " · aligned"}
         </div>
       </div>
@@ -490,7 +512,12 @@ function SlideBase({
         return snapAnchor(Math.round(v / step) * step, 1.2);
       }
     : undefined;
-  const allShapes = [...(globalShapes ?? []), ...(slide.shapes ?? [])];
+  /**
+   * Drawn items on this slide, minus the ones the Layers panel hid: a hidden
+   * layer keeps its z and its row, but is not painted, not selectable and not
+   * caught by the rubber band — on the board, in thumbnails and in exports.
+   */
+  const allShapes = [...(globalShapes ?? []), ...(slide.shapes ?? [])].filter((s) => !s.hidden);
 
   /* ---------------------- drag-marquee selection ---------------------- */
   const pctPoint = (clientX: number, clientY: number) => {

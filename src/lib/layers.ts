@@ -29,9 +29,22 @@ export interface LayerEntry {
   /** deck-wide (shows on every slide) */
   global: boolean;
   locked?: boolean;
+  /**
+   * Hidden by the user (the 👁 toggle). The layer KEEPS its slot in the stack,
+   * stays listed and can still be reordered, selected and shown again — it is
+   * simply not painted on the board or in exports.
+   */
   hidden?: boolean;
+  /**
+   * Not painted on this slide at all, structurally: no logo uploaded, an empty
+   * footnote, a bullet merged into the question. Those rows are listed for
+   * completeness but have nothing to reorder.
+   */
+  absent?: boolean;
   /** drawn item: id of the group it belongs to, when grouped */
   groupId?: string;
+  /** the drawn item behind this row (shapes / text boxes / images), for previews */
+  shape?: ShapeItem;
 }
 
 export const layerKey = (r: LayerRef) => `${r.kind}:${r.id}`;
@@ -83,13 +96,15 @@ export function collectLayers(deck: Deck, slide: SlideData | undefined): LayerEn
   const out: LayerEntry[] = [];
   const layout = effectiveTheme(deck, slide).layout;
 
-  const elementVisible = (id: ElementId) =>
+  /** structurally on the slide? (no logo uploaded, empty footnote, merged bullet) */
+  const elementPresent = (id: ElementId) =>
     id === "logo" ? deck.header.showLogo && !!deck.header.logo
     : id === "note" ? !!slide?.note?.trim()
     : id === "bullet" ? deck.theme.showBullet && (deck.theme.bulletSeparate !== false || !!deck.theme.showNumber)
     : true;
 
   (Object.keys(ELEMENT_LABELS) as ElementId[]).forEach((id) => {
+    const absent = !elementPresent(id);
     out.push({
       ref: { kind: "element", id },
       key: `element:${id}`,
@@ -97,7 +112,9 @@ export function collectLayers(deck: Deck, slide: SlideData | undefined): LayerEn
       label: ELEMENT_LABELS[id],
       icon: ELEMENT_ICONS[id],
       global: true,
-      hidden: !elementVisible(id),
+      absent,
+      hidden: !!layout[id]?.hidden,
+      locked: !!layout[id]?.locked,
     });
   });
 
@@ -106,16 +123,36 @@ export function collectLayers(deck: Deck, slide: SlideData | undefined): LayerEn
       ref: { kind: "shape", id: s.id },
       key: `shape:${s.id}`,
       z: Number.isFinite(s.z) ? s.z : Z_BASE,
-      label: s.kind === "text" && s.text ? s.text.replace(/\n/g, " ").slice(0, 28) : SHAPE_LABELS[s.kind],
+      label: layerLabel(s),
       icon: SHAPE_ICONS[s.kind],
       global,
       locked: s.locked,
+      hidden: !!s.hidden,
       groupId: s.groupId,
+      shape: s,
     });
   (deck.globalShapes ?? []).forEach((s) => pushShape(s, true));
   (slide?.shapes ?? []).forEach((s) => pushShape(s, false));
   return out;
 }
+
+/** Row name of a drawn item: its own name, else its text, else the kind. */
+export const layerLabel = (s: ShapeItem): string =>
+  s.name?.trim() ||
+  (s.kind === "text" && s.text ? s.text.replace(/\s+/g, " ").trim().slice(0, 28) : "") ||
+  SHAPE_LABELS[s.kind];
+
+/** The drawn item behind a layer ref, wherever it lives (deck-wide or on the slide). */
+export const findShape = (deck: Deck, slide: SlideData | undefined, id: string): ShapeItem | undefined =>
+  [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])].find((x) => x.id === id) ??
+  deck.slides.flatMap((s) => s.shapes ?? []).find((x) => x.id === id);
+
+/**
+ * Whether a layer can actually be reordered: everything painted on the slide,
+ * hidden-by-the-user layers included (Canva keeps those in the stack too). Only
+ * built-ins this slide does not have at all are frozen.
+ */
+export const isStackable = (e: LayerEntry) => !e.absent;
 
 /** Bottom → top. */
 export const sortedLayers = (deck: Deck, slide: SlideData | undefined) =>
@@ -126,49 +163,58 @@ export const sortedLayers = (deck: Deck, slide: SlideData | undefined) =>
  * Only entries whose z changes are written.
  */
 /**
- * Bring/Send over the layers that are actually VISIBLE on the slide. Hidden
- * built-ins (no logo, empty footnote) are skipped so one click always produces
- * a visible change; they're re-slotted afterwards to keep every z distinct.
+ * Bring/Send over the layers that belong to this slide's stack — layers the
+ * user hid with 👁 included, because they keep their slot exactly like in
+ * Canva. Only built-ins the slide does not have AT ALL (no logo uploaded, empty
+ * footnote, merged bullet) are skipped, and they are re-slotted above the stack
+ * afterwards so every z stays distinct.
  */
 export function reorderLayer(deck: Deck, slide: SlideData | undefined, ref: LayerRef, op: ZOp): Deck {
   const all = collectLayers(deck, slide);
-  const visible = all.filter((e) => !e.hidden).map((e) => ({ id: e.key, z: e.z }));
+  const stack = all.filter(isStackable).map((e) => ({ id: e.key, z: e.z }));
   const key = layerKey(ref);
-  if (!visible.some((v) => v.id === key)) return deck; // can't reorder a hidden layer
-  const { changes } = reorder(visible, key, op);
+  if (!stack.some((v) => v.id === key)) return deck; // not on this slide at all
+  const { changes } = reorder(stack, key, op);
   if (!Object.keys(changes).length) return deck;
 
-  // park hidden layers above the visible stack so they never collide
-  const top = Math.max(...visible.map((v) => changes[v.id] ?? v.z));
-  all.filter((e) => e.hidden).forEach((e, i) => {
+  // park the rows that are not on this slide above the stack so they never collide
+  const top = Math.max(...stack.map((v) => changes[v.id] ?? v.z));
+  all.filter((e) => !isStackable(e)).forEach((e, i) => {
     changes[e.key] = top + 1 + i;
   });
   return applyZChanges(deck, changes, slide?.id ?? null);
 }
 
 /**
- * Drag & drop: moves `ref` into an exact slot of the VISIBLE stack.
+ * Drag & drop: moves `ref` (or a whole set of refs) into an exact slot of the
+ * slide's stack.
  *
  * `index` counts from the BOTTOM (0 = back … n-1 = front) and is clamped, so a
  * drop anywhere in the list — including past either end — always yields a
- * valid, gap-free stack. Hidden built-ins are parked above it, exactly like
- * `reorderLayer`, so every z stays distinct.
+ * valid, gap-free stack. Rows that are not on this slide are parked above it,
+ * exactly like `reorderLayer`, so every z stays distinct.
  *
- * Returns the deck unchanged when the layer would not move, which lets callers
- * treat a drop on its own slot as a no-op (no undo step, no re-render).
+ * Returns the deck unchanged when nothing would move, which lets callers treat
+ * a drop on its own slot as a no-op (no undo step, no re-render).
  */
-export function moveLayerTo(deck: Deck, slide: SlideData | undefined, ref: LayerRef, index: number): Deck {
+export function moveLayerTo(
+  deck: Deck,
+  slide: SlideData | undefined,
+  ref: LayerRef | LayerRef[],
+  index: number,
+): Deck {
   const all = collectLayers(deck, slide);
-  const visible = sortByZ(all.filter((e) => !e.hidden).map((e) => ({ id: e.key, z: e.z })));
-  const key = layerKey(ref);
-  const from = visible.findIndex((v) => v.id === key);
-  if (from < 0 || visible.length < 2) return deck; // hidden layers never reorder
-  const to = Math.max(0, Math.min(visible.length - 1, Math.round(Number(index))));
-  if (to === from) return deck;
+  const stack = sortByZ(all.filter(isStackable).map((e) => ({ id: e.key, z: e.z })));
+  if (stack.length < 2) return deck;
 
-  const next = [...visible];
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved);
+  /** the carried set, in their current bottom-up order (a multi-drag keeps it) */
+  const keys = (Array.isArray(ref) ? ref : [ref]).map(layerKey);
+  const moving = stack.filter((v) => keys.includes(v.id));
+  if (!moving.length) return deck;
+
+  const rest = stack.filter((v) => !keys.includes(v.id));
+  const to = Math.max(0, Math.min(rest.length, Math.round(Number(index))));
+  const next = [...rest.slice(0, to), ...moving, ...rest.slice(to)];
 
   const changes: Record<string, number> = {};
   next.forEach((it, i) => {
@@ -177,9 +223,9 @@ export function moveLayerTo(deck: Deck, slide: SlideData | undefined, ref: Layer
   });
   if (!Object.keys(changes).length) return deck;
 
-  // park hidden layers above the visible stack so they never collide
+  // park the rows that are not on this slide above the stack so they never collide
   const top = Z_BASE + next.length - 1;
-  all.filter((e) => e.hidden).forEach((e, i) => {
+  all.filter((e) => !isStackable(e)).forEach((e, i) => {
     changes[e.key] = top + 1 + i;
   });
   return applyZChanges(deck, changes, slide?.id ?? null);
@@ -189,31 +235,117 @@ export function moveLayerTo(deck: Deck, slide: SlideData | undefined, ref: Layer
  * The stack slot a dragged layer lands in, from the pointer's row index.
  *
  * The layer list is painted TOP-FIRST while the stack counts from the BOTTOM,
- * and the list also shows hidden built-ins that cannot be reordered — so the
- * drag source and the drop target are both counted over the VISIBLE rows only
- * and then flipped. One helper owns that mapping so the panel and the tests
- * agree on it.
+ * and the list also shows rows that are not on this slide and cannot be
+ * reordered — so the drag source and the drop target are both counted over the
+ * STACKABLE rows only and then flipped. One helper owns that mapping so the
+ * panel and the tests agree on it.
  *
- * @param visibleCount  visible rows in the list
- * @param fromVisible   the dragged row, top-first among the visible rows
+ * A multi-row drag carries its rows as one block: `movingCount` says how many
+ * travel together, and the returned slot positions the BLOCK so its top-most
+ * row lands on `overVisible`.
+ *
+ * @param rowCount      stackable rows in the list
+ * @param fromVisible   the dragged row (top-most of the block), top-first
  * @param overVisible   the row the pointer hovers (its insertion point), top-first
+ * @param movingCount   how many rows travel together (default 1)
  * @returns the bottom-up index to hand to `moveLayerTo`, or null when it is a no-op
  */
 export function dropSlot(
-  visibleCount: number,
+  rowCount: number,
   fromVisible: number,
   overVisible: number,
+  movingCount = 1,
 ): number | null {
-  if (visibleCount < 2) return null;
-  const from = Math.max(0, Math.min(visibleCount - 1, Math.round(fromVisible)));
-  const over = Math.max(0, Math.min(visibleCount - 1, Math.round(overVisible)));
-  if (over === from) return null;
-  return visibleCount - 1 - over; // top-first row → bottom-up stack slot
+  if (rowCount < 2) return null;
+  const moving = Math.max(1, Math.min(rowCount, Math.round(movingCount)));
+  const from = Math.max(0, Math.min(rowCount - 1, Math.round(fromVisible)));
+  const over = Math.max(0, Math.min(rowCount - 1, Math.round(overVisible)));
+  if (moving === 1 && over === from) return null;
+  // top-first row → bottom-up stack slot, counted over the rows that stay put
+  return Math.max(0, Math.min(rowCount - moving, rowCount - moving - over));
 }
 
-/** stack used by UI to decide whether an op is possible (visible layers only) */
+/** stack used by UI to decide whether an op is possible (this slide's layers) */
 export function visibleStack(deck: Deck, slide: SlideData | undefined): { id: string; z: number }[] {
-  return sortByZ(collectLayers(deck, slide).filter((e) => !e.hidden).map((e) => ({ ...e, id: e.key })));
+  return sortByZ(collectLayers(deck, slide).filter(isStackable).map((e) => ({ ...e, id: e.key })));
+}
+
+/**
+ * The layers actually PAINTED right now: `visibleStack` minus the ones hidden
+ * with 👁. This is what canvas-side navigation (Tab-walking, Alt+click layer
+ * cycling) must use — you cannot select something that is not on the board.
+ */
+export function paintedStack(deck: Deck, slide: SlideData | undefined): { id: string; z: number }[] {
+  return sortByZ(
+    collectLayers(deck, slide)
+      .filter((e) => isStackable(e) && !e.hidden)
+      .map((e) => ({ ...e, id: e.key })),
+  );
+}
+
+/* ------------------------------------------------------- layer properties */
+
+/** What the Layers panel can toggle on any row, element or drawn item alike. */
+export interface LayerPatch {
+  /** 👁 — keep the slot in the stack, stop painting it */
+  hidden?: boolean;
+  /** 🔒 — no dragging, resizing or rotating on the board */
+  locked?: boolean;
+  /** the row's name (drawn items only; built-ins keep their fixed labels) */
+  name?: string;
+}
+
+/**
+ * Writes hidden / locked / name onto any set of layers.
+ *
+ * Elements live in `theme.layout`, and a slide that was arranged by hand
+ * shadows that map with its own `themeOverride.layout` copy — so the patch has
+ * to reach both, exactly like `applyZChanges`, or hiding the title would look
+ * like it did nothing on precisely the slides the user has customised.
+ */
+export function patchLayers(
+  deck: Deck,
+  refs: LayerRef[],
+  patch: LayerPatch,
+  slideId?: string | null,
+): Deck {
+  if (!refs.length) return deck;
+  const elementIds = refs.filter((r) => r.kind === "element").map((r) => r.id as ElementId);
+  const shapeIds = new Set(refs.filter((r) => r.kind === "shape").map((r) => r.id));
+  const boxPatch: Partial<Box> = {};
+  if (patch.hidden !== undefined) boxPatch.hidden = patch.hidden;
+  if (patch.locked !== undefined) boxPatch.locked = patch.locked;
+
+  const layout = { ...deck.theme.layout };
+  if (elementIds.length && Object.keys(boxPatch).length) {
+    for (const id of elementIds) layout[id] = { ...layout[id], ...boxPatch };
+  }
+
+  const fix = (x: ShapeItem): ShapeItem => (shapeIds.has(x.id) ? { ...x, ...patch } : x);
+  const fixSlide = (s: SlideData): SlideData => {
+    const shapes = s.shapes?.length ? s.shapes.map(fix) : s.shapes;
+    const over = s.id === slideId ? s.themeOverride?.layout : undefined;
+    const themeOverride =
+      over && elementIds.some((id) => over[id]) && Object.keys(boxPatch).length
+        ? {
+            ...s.themeOverride!,
+            layout: {
+              ...over,
+              ...(Object.fromEntries(
+                elementIds.filter((id) => over[id]).map((id) => [id, { ...over[id], ...boxPatch }]),
+              ) as LayoutMap),
+            },
+          }
+        : s.themeOverride;
+    return shapes === s.shapes && themeOverride === s.themeOverride ? s : { ...s, shapes, themeOverride };
+  };
+
+  return {
+    ...deck,
+    theme: { ...deck.theme, layout },
+    globalShapes: deck.globalShapes?.map(fix),
+    slides: deck.slides.map(fixSlide),
+  };
 }
 
 /**
@@ -373,6 +505,7 @@ export function alignLayer(
     };
   }
   const b = deck.theme.layout[ref.id];
+  if (!b || b.locked) return deck; // a locked layer never moves
   const next: Box = { ...b, mode: "free", x: rect.x, y: rect.y, w: rect.w, h: b.h ?? rect.h, ...patch };
   return { ...deck, theme: { ...deck.theme, layout: { ...deck.theme.layout, [ref.id]: next } } };
 }
