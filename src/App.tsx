@@ -17,6 +17,7 @@ import SlidePicker from "./components/SlidePicker";
 import PasteModal from "./components/PasteModal";
 import PdfImportModal, { type PdfImportResult } from "./components/PdfImportModal";
 import { DECK_ACCEPT, isDeckFile, onPdfImportRequest } from "./lib/pdf";
+import { openDeckUpload } from "./lib/uploadDocs";
 import { buildImportedSlides, importPageLabel } from "./lib/importSlides";
 import Presenter from "./components/Presenter";
 import ExportModal, { type ExportSettings } from "./components/ExportModal";
@@ -458,9 +459,10 @@ function AppContent() {
   /** image files from clipboard / drag-drop → slide */
   const importImageFiles = useCallback(
     async (files: File[], at?: { x: number; y: number }) => {
-      // a PDF / PPTX opens the page picker (whole document or chosen pages)
+      // a PDF / PPTX is saved to Uploads as the document itself and opens its
+      // page preview (whole document or chosen pages)
       const pdf = files.find(isDeckFile);
-      if (pdf) setPdfFile(pdf);
+      if (pdf) void openDeckUpload(pdf);
       const imgs = files.filter((f) => f.type.startsWith("image/"));
       if (!imgs.length) return !!pdf;
       setBusy(`Loading ${imgs.length} image${imgs.length > 1 ? "s" : ""}…`);
@@ -496,8 +498,10 @@ function AppContent() {
   }, [importImageFiles, presenting, pasteOpen, exportOpen]);
 
   /**
-   * PDF pages / PPTX slides picked in the import dialog → deck. Pages are
-   * already rendered to data-URLs; every one is also saved to Uploads.
+   * PDF pages / PPTX slides picked in the import dialog → deck. The pages arrive
+   * already rendered to data-URLs and are rendered into the deck only: the
+   * Uploads library keeps the DOCUMENT (saved by lib/uploadDocs when the file
+   * came in), never a picture per page.
    *
    * Pages that become slides are merged in as PLAIN pages (lib/importSlides):
    * separate slides of the user's own, without the project's built-in design on
@@ -506,14 +510,18 @@ function AppContent() {
   const importPdfPages = useCallback(
     (res: PdfImportResult) => {
       const pptx = /\.pptx$/i.test(res.name);
-      res.pages.forEach((p) => addUpload(p.src, p.ratio, importPageLabel(res.name, p.page)));
       if (res.placement === "current-slide") {
         const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
         if (!sl) return;
         let last: string | null = null;
         res.pages.forEach((p, i) => {
-          // cascade so several pages don't land exactly on top of each other
-          last = addImage(p.src, p.ratio, sl.id, i ? { x: 50 + i * 2, y: 50 + i * 2 } : undefined);
+          // cascade so several pages don't land exactly on top of each other;
+          // `importedPage` keeps the page out of the Uploads library, where the
+          // document itself is what is saved
+          last = addImage(p.src, p.ratio, sl.id, i ? { x: 50 + i * 2, y: 50 + i * 2 } : undefined, {
+            importedPage: true,
+            name: importPageLabel(res.name, p.page),
+          });
         });
         if (last) {
           setSurface(null);
@@ -1380,7 +1388,7 @@ function AppContent() {
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) setPdfFile(f);
+                if (f) void openDeckUpload(f);
                 e.target.value = "";
               }}
             />

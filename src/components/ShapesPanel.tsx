@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { SHAPE_ICONS, SHAPE_LABELS, inlineRemoteImage, loadImageFile, shrinkDataUrl, type ShapeItem, type ShapeKind } from "../lib/shapes";
-import { DECK_ACCEPT, isDeckFile, requestPdfImport } from "../lib/pdf";
+import { DECK_ACCEPT, isDeckFile } from "../lib/pdf";
+import { openDeckUpload } from "../lib/uploadDocs";
 import { addUpload } from "../lib/uploads";
 import { handleSmartPaste } from "../lib/richPaste";
 import { alignShape, boundsOf, distributeShapes, type AlignOp } from "../lib/shapeAlign";
@@ -109,8 +110,9 @@ export default function ShapesPanel({
   const importFiles = async (files: FileList | File[] | null | undefined, sc: InsertScope = scope, replaceId?: string) => {
     if (!files) return;
     const all = Array.from(files);
+    // a PDF / PPTX is saved to Uploads as the document itself and opens its page preview
     const pdf = all.find(isDeckFile);
-    if (pdf && !replaceId) requestPdfImport(pdf);
+    if (pdf && !replaceId) void openDeckUpload(pdf);
     const list = all.filter((f) => f.type.startsWith("image/"));
     if (!list.length) return;
     setImgBusy(`Loading ${list.length} image${list.length > 1 ? "s" : ""}…`);

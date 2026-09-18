@@ -101,6 +101,12 @@ export interface ShapeItem {
   src?: string;
   /** natural aspect ratio (w / h) captured at insert time */
   naturalRatio?: number;
+  /**
+   * This picture is a page of an imported PDF / PowerPoint. It is kept out of
+   * the Uploads library: the document itself is what is saved there, and its
+   * page preview is how the page comes back.
+   */
+  importedPage?: boolean;
   /** how the bitmap fills its box */
   fit?: "contain" | "cover" | "fill";
   /** 0–1 */

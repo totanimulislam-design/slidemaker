@@ -83,6 +83,10 @@ export function installDom() {
     "navigator", "HTMLElement", "Element", "Node", "Event", "MouseEvent", "CustomEvent", "KeyboardEvent",
     "getComputedStyle", "requestAnimationFrame", "cancelAnimationFrame", "Image", "localStorage",
     "DOMParser", "PointerEvent", "MutationObserver", "ResizeObserver", "matchMedia", "CSS",
+    // Blob / File / FileReader come from jsdom too: node has its own File, and a
+    // jsdom blob handed to it is stringified instead of read, so anything the
+    // app stores and reads back (an uploaded PDF) would come back corrupted
+    "Blob", "File", "FileReader",
   ]) {
     if (!(key in window)) continue;
     try {
