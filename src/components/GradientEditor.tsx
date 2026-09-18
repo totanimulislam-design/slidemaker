@@ -1,9 +1,11 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { Gradient, GradientStop, GradientType } from "../lib/types";
 import { gradientCss } from "../lib/banner";
 import { GRADIENT_CATEGORIES, GRADIENT_PRESETS } from "../lib/gradientPresets";
 import { Field, SegButtons, Slider, Toggle } from "./ui";
 import { ColorWheel, GradientAngleWheel } from "./GradientWheel";
+import { usePointerDrag } from "../lib/dragSession";
+import { useFrameSend } from "../lib/frameSend";
 import { cn } from "../utils/cn";
 
 interface PresetInput {
@@ -92,6 +94,56 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
     const r = el.getBoundingClientRect();
     return Math.max(0, Math.min(100, ((clientX - r.left) / r.width) * 100));
   };
+
+  /**
+   * Dragging a colour stop runs on the same Canva system as the picker: the
+   * carried knob paints its position straight into the DOM in the event that
+   * moved it (a render fed from the last flush may not know it yet), the bar's
+   * box is measured once per press, and the deck is told at most once per
+   * frame — one undoable write per frame instead of one per pointermove. A
+   * press only GRABS the knob (it never jumps to the pointer) and the release
+   * settles whatever the last move is still holding.
+   */
+  const barBox = useRef<DOMRect | null>(null);
+  /** the position the carried knob is showing, which React may not know yet */
+  const liveAt = useRef<number | null>(null);
+  const knobEls = useRef<(HTMLDivElement | null)[]>([]);
+
+  const sendAt = useFrameSend(({ i, at }: { i: number; at: number }) => setStop(i, { at }));
+
+  const paintStop = (i: number, at: number) => {
+    liveAt.current = at;
+    const el = knobEls.current[i];
+    if (el) el.style.left = `${at}%`;
+  };
+
+  const { begin: beginStop, release: releaseStop } = usePointerDrag({
+    threshold: 0,
+    enabled: () => dragStop.current !== null,
+    onMove: (e) => {
+      const i = dragStop.current;
+      const rect = barBox.current;
+      if (i === null || !rect) return;
+      const at = Math.round(Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)));
+      paintStop(i, at);
+      sendAt.offer({ i, at });
+    },
+    onEnd: () => {
+      const i = dragStop.current;
+      dragStop.current = null;
+      barBox.current = null;
+      liveAt.current = null;
+      if (i !== null) sendAt.flush(); // the release settles the position shown
+    },
+  });
+
+  // while a knob is carried, its position is the pointer's — re-assert it after
+  // any render (a no-op whenever React is current, and reads no layout)
+  useLayoutEffect(() => {
+    const i = dragStop.current;
+    const at = liveAt.current;
+    if (i !== null && at !== null) paintStop(i, at);
+  });
 
   const commitHex = (raw: string) => {
     const v = raw.trim();
@@ -250,14 +302,8 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
             </div>
             <div
               ref={barRef}
+              data-stop-bar=""
               onDoubleClick={(e) => addStopAt(atFromPointer(e.clientX))}
-              onPointerMove={(e) => {
-                if (dragStop.current === null) return;
-                e.preventDefault();
-                setStop(dragStop.current, { at: Math.round(atFromPointer(e.clientX)) });
-              }}
-              onPointerUp={() => (dragStop.current = null)}
-              onPointerCancel={() => (dragStop.current = null)}
               title="Drag a knob to move it · double-click the bar to add a colour here"
               className="relative h-8 cursor-crosshair rounded-lg border border-white/15"
               style={{ background: gradientCss(g, fallback), touchAction: "none" }}
@@ -265,12 +311,24 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
               {g.stops.map((s, i) => (
                 <div
                   key={i}
+                  ref={(el) => {
+                    knobEls.current[i] = el;
+                  }}
+                  data-stop-knob={i}
                   onPointerDown={(e) => {
                     e.stopPropagation();
                     setActiveStop(i);
-                    dragStop.current = i;
-                    e.currentTarget.setPointerCapture(e.pointerId);
+                    dragStop.current = i; // a press only grabs — it never jumps
+                    barBox.current = barRef.current?.getBoundingClientRect() ?? null;
+                    liveAt.current = s.at;
+                    if (!beginStop(e)) {
+                      dragStop.current = null;
+                      barBox.current = null;
+                      liveAt.current = null;
+                    }
                   }}
+                  onPointerUp={releaseStop}
+                  onPointerCancel={releaseStop}
                   title={`${s.color} · ${s.at}% — drag to move`}
                   className={cn(
                     "absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border-2 shadow active:cursor-grabbing",
@@ -345,13 +403,13 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
             </div>
           </div>
 
-          {/* colour wheel for the selected stop */}
+          {/* the picker for the selected stop */}
           <div className="rounded-lg border border-white/10 bg-slate-900/40 p-2">
             <button
               onClick={() => setShowWheel((v) => !v)}
               className="flex w-full items-center justify-between text-[11px] font-medium tracking-wide text-slate-400 uppercase"
             >
-              <span>Colour wheel — stop {sel + 1}</span>
+              <span>Colour picker — stop {sel + 1}</span>
               <span>{showWheel ? "▾" : "▸"}</span>
             </button>
             {showWheel && g.stops[sel] && (
