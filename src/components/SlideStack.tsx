@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Slide from "./Slide";
 import { Thumb } from "./SlideViews";
 import { DRAG_THRESHOLD_PX, usePointerDrag } from "../lib/dragSession";
@@ -67,6 +67,34 @@ const slotFor = (n: number, from: number, p: number): number => {
   const to = g - (from < g ? 1 : 0);
   return Math.max(0, Math.min(n - 1, to));
 };
+
+/**
+ * A rail preview that fills the card's content box exactly, whatever its
+ * current width (the list's scrollbar steals 8px when it shows up). The
+ * card's border — the current slide's gradient ring, a ticked card's sky
+ * frame — then runs evenly around the slide instead of hugging one side.
+ */
+function RailThumb({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [w, setW] = useState(194);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const cw = el.clientWidth;
+      if (cw > 0) setW(cw);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className="w-full">
+      <Thumb width={w}>{children}</Thumb>
+    </div>
+  );
+}
 
 /**
  * The slide rail: one card per slide, top of the deck first.
@@ -431,7 +459,7 @@ export default function SlideStack({
               onPointerLeave={handleLeave}
             >
               <div className="pointer-events-none">
-                <Thumb width={196}>
+                <RailThumb>
                   <Slide
                     key={`t-${revision}`}
                     slide={s}
@@ -440,17 +468,17 @@ export default function SlideStack({
                     globalShapes={deck.globalShapes}
                     background={effectiveBackground(deck, s)}
                   />
-                </Thumb>
+                </RailThumb>
               </div>
               {/* selection box + slide number: the box fades in on hover and stays
                   put while ticked, so the number never jumps sideways */}
-              <div className="absolute top-1.5 left-1.5 z-[3] flex items-center gap-1">
+              <div className="absolute top-2 left-2 z-[3] flex items-center gap-1">
                 <label
                   data-slide-select-wrap={s.id}
                   title={checked ? `Slide ${i + 1} selected — untick to drop it` : `Select slide ${i + 1}`}
                   onClick={(e) => e.stopPropagation()}
                   className={cn(
-                    "grid h-[18px] w-[18px] cursor-pointer place-items-center rounded border bg-slate-950/80 transition-opacity",
+                    "grid h-[22px] w-[22px] cursor-pointer place-items-center rounded-md border bg-slate-950/80 transition-opacity",
                     checked
                       ? "border-amber-400/80 opacity-100"
                       : "border-white/25 opacity-0 group-hover:opacity-100 focus-within:opacity-100",
@@ -464,7 +492,7 @@ export default function SlideStack({
                     onChange={() =>
                       onSelected(checked ? selected.filter((x) => x !== s.id) : [...selected, s.id])
                     }
-                    className="h-3 w-3 cursor-pointer accent-amber-400"
+                    className="h-3.5 w-3.5 cursor-pointer accent-amber-400"
                   />
                 </label>
                 <span className="rounded bg-black/70 px-1.5 text-[10px] font-semibold text-amber-300">
