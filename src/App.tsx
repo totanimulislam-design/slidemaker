@@ -19,15 +19,36 @@ import Presenter from "./components/Presenter";
 import ExportModal, { type ExportSettings } from "./components/ExportModal";
 import type { InspectorTab } from "./components/Inspector";
 import type { InsertScope } from "./components/ShapesPanel";
-import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, shrinkDataUrl, type ShapeItem, type ShapeKind } from "./lib/shapes";
+import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, shrinkDataUrl, shapeId, type ShapeItem, type ShapeKind } from "./lib/shapes";
 import type { AlignOp } from "./lib/shapeAlign";
 import { type ZOp } from "./lib/zorder";
 import { paintedStack, parseLayerKey, visibleStack, type LayerPatch, type LayerRef } from "./lib/layers";
 import { boardLayerChain, selectionBounds, moveMembers } from "./lib/groups";
+import ContextMenu, { type MenuAction } from "./components/ContextMenu";
+import {
+  getShapeClipboard,
+  hasShapeClipboard,
+  markCutPast,
+  setShapeClipboard,
+} from "./lib/clipboard";
 import HistoryPanel from "./components/HistoryPanel";
 import AnswerKeyModal from "./components/AnswerKeyModal";
 import { Btn } from "./components/ui";
 import { normalizeDeckZ, useDeck } from "./lib/useDeck";
+
+/** glyph / names for the right-click Layer submenu (mirrors lib/zorder) */
+const Z_LABEL_Glyph: Record<ZOp, string> = {
+  front: "⏫",
+  forward: "▲",
+  backward: "▼",
+  back: "⏬",
+};
+const Z_LABEL_Menu: Record<ZOp, string> = {
+  front: "Bring to front",
+  forward: "Bring forward",
+  backward: "Send backward",
+  back: "Send to back",
+};
 import { useFontCoverage } from "./lib/useFontCoverage";
 import { restoreCustomFonts } from "./lib/customFonts";
 import { downloadDataUrl, exportZip, slideToPng } from "./lib/exporter";
@@ -68,11 +89,13 @@ function AppContent() {
     copyShapeTo,
     updateShapeOnSlide,
     updateShapesOnSlide,
-    updateShapes,
+    updateShapesBatch,
     groupShapes,
     ungroupShapes,
     removeShapes,
+    removeShapesOnSlide,
     duplicateShapes,
+    duplicateShapesOnSlide,
     applyShapeDesign,
     reorderShape,
     reorderLayerOp,
@@ -133,6 +156,10 @@ function AppContent() {
    * Mirrors `tabRequest`, so canvas clicks and navigation picks always agree.
    */
   const [activeNav, setActiveNav] = useState<InspectorTab | null>(null);
+  /** Canva-style right-click menu state (a snapshot of where + what was clicked) */
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number; y: number; shapeId: string | null; elementId: ElementId | null; surface: "frame" | "background" | null;
+  } | null>(null);
   const requestTab = useCallback((tab: InspectorTab) => {
     setTabRequest((r) => ({ tab, n: (r?.n ?? 0) + 1 }));
     setActiveNav(tab);
@@ -524,6 +551,77 @@ function AppContent() {
 
   const currentTheme = previewedTheme;
 
+  /** every drawn item on the open slide, deck-wide + slide-local (order kept) */
+  const slideShapes = useMemo(
+    () => [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])],
+    [deck.globalShapes, slide?.shapes],
+  );
+
+  /** paste the internal shape clipboard onto the open slide; returns the new ids */
+  const pasteShapesAt = useCallback(
+    (slideId: string, at?: { x: number; y: number }): string[] => {
+      const data = getShapeClipboard();
+      if (!data || !data.items.length || !slideId) return [];
+      const ids = data.items.map(() => shapeId());
+      const zTop = Math.max(
+        ...slideShapes.map((s) => (Number.isFinite(s.z) ? s.z : 10)),
+        ...(Object.values(currentTheme.layout).map((b) => (typeof b.z === "number" ? (b.z as number) : 0))),
+        0,
+      );
+      setSelectedEl(null);
+      setSurface(null);
+      if (data.cut) {
+        setDeck(
+          (d) => {
+            const gone = new Set(data.cutIds);
+            const dx = at ? at.x - data.items[0].x : 0;
+            const dy = at ? at.y - data.items[0].y : 0;
+            const slides = d.slides.map((s) => {
+              const filtered = s.shapes?.filter((x) => !gone.has(x.id));
+              if (s.id !== slideId) return filtered !== s.shapes ? { ...s, shapes: filtered } : s;
+              const moved = data.items.map((it, i) => ({
+                ...it,
+                id: ids[i],
+                x: Math.round((it.x + dx) * 10) / 10,
+                y: Math.round((it.y + dy) * 10) / 10,
+                z: zTop + 1 + i,
+                groupId:
+                  it.groupId && data.items.length > 1 && data.items.every((o) => o.groupId === it.groupId)
+                    ? it.groupId
+                    : undefined,
+              }));
+              return { ...s, shapes: [...(filtered ?? []), ...moved] };
+            });
+            return { ...d, globalShapes: d.globalShapes?.filter((g) => !gone.has(g.id)), slides };
+          },
+          "Cut & paste",
+        );
+        markCutPast();
+      } else {
+        setDeck(
+          (d) => {
+            const clones = data.items.map((it, i) => ({
+              ...it,
+              id: ids[i],
+              x: Math.round(((at ? at.x : it.x + 3) + (i ? 3 : 0)) * 10) / 10,
+              y: Math.round(((at ? at.y : it.y + 3) + (i ? 3 : 0)) * 10) / 10,
+              z: zTop + 1 + i,
+            }));
+            return {
+              ...d,
+              slides: d.slides.map((s) => (s.id === slideId ? { ...s, shapes: [...(s.shapes ?? []), ...clones] } : s)),
+            };
+          },
+          "Paste",
+        );
+      }
+      if (activeNavRef.current !== "layers") requestTab(data.items[0]?.kind === "image" ? "images" : "shapes");
+      setSelectedShapes(ids);
+      return ids;
+    },
+    [slideShapes, currentTheme.layout, setDeck, requestTab],
+  );
+
   // preview for shapes (text boxes)
   const previewedGlobalShapes = useMemo(() => {
     if (!preview || !preview.target.startsWith("shape:")) return deck.globalShapes;
@@ -602,6 +700,26 @@ function AppContent() {
         if (isRedo) redo();
         else undo();
         return;
+      }
+      // ---- Canva-style copy / cut / paste of the drawn items (text fields
+      //      keep their native clipboard behaviour) -------------------------
+      if (mod && !e.altKey && !inField) {
+        const k = e.key.toLowerCase();
+        if (k === "c" || k === "x" || k === "v") {
+          if (k === "v") {
+            const data = getShapeClipboard();
+            if (data?.items.length && slide) {
+              e.preventDefault();
+              pasteShapesAt(slide.id);
+              return;
+            }
+          } else if (selectedShapes.length) {
+            e.preventDefault();
+            const items = slideShapes.filter((s) => selectedShapes.includes(s.id));
+            if (items.length) setShapeClipboard(items, k === "x");
+            return;
+          }
+        }
       }
       if (inField) return;
 
@@ -689,7 +807,7 @@ function AppContent() {
               id: sh.id,
               patch: { x: Math.round((sh.x + dx) * 10) / 10, y: Math.round((sh.y + dy) * 10) / 10 },
             }));
-          updateShapes(updates, "Move shape");
+          updateShapesBatch(updates, "Move shape");
           return;
         }
       }
@@ -743,8 +861,10 @@ function AppContent() {
     ungroupShapes,
     removeShapes,
     duplicateShapes,
-    updateShapes,
+    updateShapesBatch,
     reorderSelected,
+    slideShapes,
+    pasteShapesAt,
     undo,
     redo,
   ]);
@@ -872,6 +992,267 @@ function AppContent() {
     const set = new Set(selectedShapes);
     return [...(deck.globalShapes ?? []), ...(slide?.shapes ?? [])].some((x) => set.has(x.id) && !!x.groupId);
   }, [selectedShapes, deck.globalShapes, slide]);
+
+  /* ---------------------------------------------------------------------- *
+   * Canva-style right-click menu
+   * ---------------------------------------------------------------------- */
+  /** align N shapes as one block to the slide */
+  const alignShapesToSlide = useCallback(
+    (ids: string[], op: AlignOp) => {
+      const items = slideShapes.filter((s) => ids.includes(s.id));
+      if (items.length < 2 || items.some((s) => s.locked) || !slide) return;
+      const rect = selectionBounds(items);
+      const dx = op === "left" ? -rect.x : op === "right" ? 100 - rect.x - rect.w : op === "hcenter" ? 50 - rect.x - rect.w / 2 : 0;
+      const dy = op === "top" ? -rect.y : op === "bottom" ? 100 - rect.y - rect.h : op === "vcenter" ? 50 - rect.y - rect.h / 2 : 0;
+      updateShapesOnSlide(moveMembers(items.map((s) => ({ id: s.id, geo: s })), dx, dy), slide.id);
+    },
+    [slideShapes, slide, updateShapesOnSlide],
+  );
+
+  /* ----------------------------- menu builders ---------------------------- */
+  const zEntry = (id: string, op: ZOp): MenuAction => ({
+    id,
+    label: (
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" className="w-3.5 text-center text-[10px] text-slate-500">{Z_LABEL_Glyph[op]}</span>
+        {Z_LABEL_Menu[op]}
+      </span>
+    ),
+    onPick: () => reorderSelected(op),
+  });
+
+  const alignEntry = (onPick: () => void, op: AlignOp, glyph: string, label: string): MenuAction => ({
+    id: `align:${op}`,
+    label: (
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" className="w-3.5 text-center text-[10px] text-slate-500">{glyph}</span>
+        {label}
+      </span>
+    ),
+    onPick,
+  });
+
+  /** the menu a drawn item (or a set of them) shows */
+  const buildShapeMenu = useCallback(
+    (ids: string[]): MenuAction[] => {
+      const items = slideShapes.filter((s) => ids.includes(s.id));
+      if (!items.length) return [];
+      const locked = items.some((s) => s.locked);
+      const single = items.length === 1;
+      const allGrouped = !single && items.every((s) => !!s.groupId && s.groupId === items[0].groupId);
+      const hasClip = hasShapeClipboard();
+      const menu: MenuAction[] = [];
+      menu.push({ id: "copy", label: "Copy", shortcut: "Ctrl+C", onPick: () => setShapeClipboard(items) });
+      menu.push({ id: "cut", label: "Cut", shortcut: "Ctrl+X", onPick: () => setShapeClipboard(items, true) });
+      menu.push({
+        id: "paste",
+        label: "Paste",
+        shortcut: "Ctrl+V",
+        disabled: !hasClip,
+        onPick: () => {
+          if (!slide) return;
+          pasteShapesAt(slide.id, { x: items[0].x + items[0].w / 2, y: items[0].y + items[0].h / 2 });
+        },
+      });
+      menu.push({
+        id: "duplicate",
+        label: "Duplicate",
+        shortcut: "Ctrl+D",
+        onPick: () => {
+          if (!slide) return;
+          setSelectedShapes(duplicateShapesOnSlide(ids, slide.id));
+        },
+      });
+      menu.push({
+        id: "delete",
+        label: "Delete",
+        shortcut: "Del",
+        danger: true,
+        disabled: locked,
+        onPick: () => {
+          if (!slide) return;
+          removeShapesOnSlide(ids, slide.id);
+          setSelectedShapes([]);
+        },
+      });
+      menu.push({
+        id: "layer",
+        label: "Layer",
+        sub: [zEntry("layer:front", "front"), zEntry("layer:forward", "forward"), zEntry("layer:backward", "backward"), zEntry("layer:back", "back")],
+      });
+      menu.push({
+        id: "align",
+        label: "Align element",
+        sub: [
+          alignEntry(() => (single ? alignSelected("left") : alignShapesToSlide(ids, "left")), "left", "⇤", "Align left"),
+          alignEntry(() => (single ? alignSelected("hcenter") : alignShapesToSlide(ids, "hcenter")), "hcenter", "↔", "Center horizontally"),
+          alignEntry(() => (single ? alignSelected("right") : alignShapesToSlide(ids, "right")), "right", "⇥", "Align right"),
+          alignEntry(() => (single ? alignSelected("top") : alignShapesToSlide(ids, "top")), "top", "⤒", "Align top"),
+          alignEntry(() => (single ? alignSelected("vcenter") : alignShapesToSlide(ids, "vcenter")), "vcenter", "↕", "Center vertically"),
+          alignEntry(() => (single ? alignSelected("bottom") : alignShapesToSlide(ids, "bottom")), "bottom", "⤓", "Align bottom"),
+        ],
+      });
+      if (!single) {
+        menu.push({
+          id: allGrouped ? "ungroup" : "group",
+          label: allGrouped ? "Ungroup" : "Group",
+          shortcut: "Ctrl+G",
+          onPick: () => {
+            if (locked) return;
+            if (allGrouped) {
+              ungroupShapes(ids);
+              setSelectedShapes([]);
+            } else {
+              const byGroup = new Map<string, string[]>();
+              const loose: string[] = [];
+              items.forEach((s) => (s.groupId ? byGroup.set(s.groupId, [...(byGroup.get(s.groupId) ?? []), s.id]) : loose.push(s.id)));
+              [...byGroup.values()].forEach((g) => ungroupShapes(g));
+              groupShapes(loose.length >= 2 ? loose : []);
+            }
+          },
+        });
+      }
+      return menu;
+    },
+    [slideShapes, slide, alignSelected, alignShapesToSlide, groupShapes, ungroupShapes, duplicateShapesOnSlide, removeShapesOnSlide, pasteShapesAt],
+  );
+
+  /** the menu a built-in slide element shows */
+  const buildElementMenu = useCallback(
+    (el: ElementId): MenuAction[] => {
+      if (!slide) return [];
+      const box = currentTheme.layout[el];
+      const locked = !!box?.locked;
+      const hidden = !!box?.hidden;
+      const hasClip = hasShapeClipboard();
+      const menu: MenuAction[] = [];
+      menu.push({
+        id: "paste",
+        label: "Paste",
+        shortcut: "Ctrl+V",
+        disabled: !hasClip,
+        onPick: () => pasteShapesAt(slide.id),
+      });
+      menu.push({
+        id: "hide",
+        label: hidden ? "Show layer" : "Hide layer",
+        onPick: () => patchLayersOp([{ kind: "element", id: el }], { hidden: !hidden }, slide.id),
+      });
+      menu.push({
+        id: "lock",
+        label: locked ? "Unlock" : "Lock",
+        onPick: () => patchLayersOp([{ kind: "element", id: el }], { locked: !locked }, slide.id),
+      });
+      menu.push({
+        id: "layer",
+        label: "Layer",
+        sub: [zEntry("layer:front", "front"), zEntry("layer:forward", "forward"), zEntry("layer:backward", "backward"), zEntry("layer:back", "back")],
+      });
+      menu.push({
+        id: "align",
+        label: "Align element",
+        sub: [
+          alignEntry(() => alignLayerOp({ kind: "element", id: el }, "left", slide.id), "left", "⇤", "Align left"),
+          alignEntry(() => alignLayerOp({ kind: "element", id: el }, "hcenter", slide.id), "hcenter", "↔", "Center horizontally"),
+          alignEntry(() => alignLayerOp({ kind: "element", id: el }, "right", slide.id), "right", "⇥", "Align right"),
+          alignEntry(() => alignLayerOp({ kind: "element", id: el }, "top", slide.id), "top", "⤒", "Align top"),
+          alignEntry(() => alignLayerOp({ kind: "element", id: el }, "vcenter", slide.id), "vcenter", "↕", "Center vertically"),
+          alignEntry(() => alignLayerOp({ kind: "element", id: el }, "bottom", slide.id), "bottom", "⤓", "Align bottom"),
+          { id: "align:center", label: "Center", onPick: () => alignSelected("center") },
+        ],
+      });
+      return menu;
+    },
+    [slide, currentTheme.layout, alignSelected, alignLayerOp, patchLayersOp, pasteShapesAt],
+  );
+
+  /** the menu for the empty board / slide surface */
+  const buildBoardMenu = useCallback((): MenuAction[] => {
+    if (!slide) return [];
+    const menu: MenuAction[] = [];
+    menu.push({
+      id: "paste",
+      label: "Paste",
+      shortcut: "Ctrl+V",
+      disabled: !hasShapeClipboard(),
+      onPick: () => pasteShapesAt(slide.id),
+    });
+    menu.push({ id: "paste-questions", label: "Paste questions…", onPick: () => setPasteOpen(true) });
+    menu.push({
+      id: "sel-all",
+      label: "Select all",
+      shortcut: "Ctrl+A",
+      onPick: () => {
+        const ids = slideShapes.map((s) => s.id);
+        if (ids.length) selectShapeIds(ids);
+      },
+    });
+    menu.push({
+      id: "insert",
+      label: "Insert shape",
+      sub: [
+        { id: "ins:text", label: "Text box", onPick: () => insertShape("text", false) },
+        { id: "ins:rect", label: "Rectangle", onPick: () => insertShape("rect", false) },
+        { id: "ins:ellipse", label: "Circle", onPick: () => insertShape("ellipse", false) },
+        { id: "ins:image", label: "Image…", onPick: () => requestTab("images") },
+      ],
+    });
+    return menu;
+  }, [slide, slideShapes, selectShapeIds, insertShape, requestTab, pasteShapesAt, setPasteOpen]);
+
+  /* -------- the actual event handlers (wired onto the Slide below) -------- */
+  const onShapeContextMenu = useCallback(
+    (shapeId: string, x: number, y: number) => {
+      if (!slide) return;
+      const hit = slideShapes.find((s) => s.id === shapeId);
+      let targets: string[];
+      if (selectedShapes.includes(shapeId) && selectedShapes.length > 1) {
+        targets = [...selectedShapes];
+      } else if (hit?.groupId) {
+        targets = slideShapes.filter((s) => s.groupId === hit.groupId).map((s) => s.id);
+      } else {
+        targets = [shapeId];
+      }
+      setSurface(null);
+      setSelectedEl(null);
+      setSelectedShapes(targets);
+      setCtxMenu({ x, y, shapeId, elementId: null, surface: null });
+    },
+    [slide, selectedShapes, slideShapes],
+  );
+
+  const onElementContextMenu = useCallback(
+    (el: ElementId, x: number, y: number) => {
+      if (!slide) return;
+      setSurface(null);
+      setSelectedShapes([]);
+      setSelectedEl(el);
+      setCtxMenu({ x, y, shapeId: null, elementId: el, surface: null });
+    },
+    [slide],
+  );
+
+  const onBoardContextMenu = useCallback(
+    (x: number, y: number) => {
+      if (!slide) return;
+      setSelectedShapes([]);
+      setSelectedEl(null);
+      setSurface("background");
+      setCtxMenu({ x, y, shapeId: null, elementId: null, surface: "background" });
+    },
+    [slide],
+  );
+
+  /** what the open menu shows, resolved from its snapshot */
+  const ctxActions: MenuAction[] = useMemo(() => {
+    if (!ctxMenu || !slide) return [];
+    if (ctxMenu.shapeId) {
+      const targets = selectedShapes.length > 1 && selectedShapes.includes(ctxMenu.shapeId) ? selectedShapes : [ctxMenu.shapeId];
+      return buildShapeMenu(targets);
+    }
+    if (ctxMenu.elementId) return buildElementMenu(ctxMenu.elementId);
+    return buildBoardMenu();
+  }, [ctxMenu, slide, selectedShapes, buildShapeMenu, buildElementMenu, buildBoardMenu]);
 
   return (
     <>
@@ -1108,6 +1489,9 @@ function AppContent() {
                     onGroupShapes={(ids) => groupShapes(ids)}
                     onUngroupShapes={(ids) => ungroupShapes(ids)}
                     onLayerCycle={cycleLayers}
+                    onShapeContextMenu={(id, x, y) => onShapeContextMenu(id, x, y)}
+                    onElementContextMenu={(el, x, y) => onElementContextMenu(el, x, y)}
+                    onBoardContextMenu={(x, y) => onBoardContextMenu(x, y)}
                     onGestureEnd={history.commit}
                     background={effectiveBackground(deck, slide)}
                   />
@@ -1319,6 +1703,12 @@ function AppContent() {
           ))}
         </div>
       )}
+
+      <ContextMenu
+        menu={ctxMenu ? { x: ctxMenu.x, y: ctxMenu.y } : null}
+        actions={ctxActions}
+        onClose={() => setCtxMenu(null)}
+      />
 
       <ExportModal
         open={exportOpen}

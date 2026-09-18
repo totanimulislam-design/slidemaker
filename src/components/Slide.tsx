@@ -64,6 +64,12 @@ interface Props {
   onUngroupShapes?: (ids: string[]) => void;
   /** Alt+click on any layer: select the layer beneath it (overlap navigation) */
   onLayerCycle?: (clientX: number, clientY: number) => void;
+  /** right-click on a drawn item (or a set of them) — Canva-style menu */
+  onShapeContextMenu?: (id: string, clientX: number, clientY: number) => void;
+  /** right-click on a built-in element — Canva-style menu */
+  onElementContextMenu?: (id: ElementId, clientX: number, clientY: number) => void;
+  /** right-click on the empty board / slide surface */
+  onBoardContextMenu?: (clientX: number, clientY: number) => void;
   /** called when a drag/resize/rotate finishes — closes the undo coalescing window */
   onGestureEnd?: () => void;
   /** effective background for this slide (deck default merged with the slide override) */
@@ -100,6 +106,9 @@ function SlideBase({
   onGroupShapes,
   onUngroupShapes,
   onLayerCycle,
+  onShapeContextMenu,
+  onElementContextMenu,
+  onBoardContextMenu,
   onGestureEnd,
   background,
 }: Props) {
@@ -354,6 +363,11 @@ function SlideBase({
         onPointerUp: end,
         onPointerCancel: end,
         onPointerLeave: leave,
+        onContextMenu: (e: React.MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onElementContextMenu?.(id, e.clientX, e.clientY);
+        },
       })
     : (id: ElementId) => ({ "data-el": id });
 
@@ -679,6 +693,13 @@ function SlideBase({
           onPointerUp={endMarquee}
           onPointerCancel={endMarquee}
           onPointerLeave={boardLeave}
+          onContextMenu={(e) => {
+            // the empty board (or the slide surface) shows the board menu; a
+            // right-click on a layer underneath stops propagation first
+            e.preventDefault();
+            e.stopPropagation();
+            onBoardContextMenu?.(e.clientX, e.clientY);
+          }}
           style={{
             width: "100%",
             height: "100%",
@@ -993,6 +1014,7 @@ function SlideBase({
               onGroup={onGroupShapes}
               onUngroup={onUngroupShapes}
               onLayerCycle={onLayerCycle}
+              onContextMenu={onShapeContextMenu}
               fontFamily={bodyStack}
               snap={shapeSnap}
               smartGuides={theme.smartGuides ?? true}
