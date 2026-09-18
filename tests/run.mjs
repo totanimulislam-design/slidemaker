@@ -44,6 +44,7 @@ const suites = [
   ["colour picker (Canva system: indicators ride the cursor, one deck write per frame)", "wheel.test.tsx", "runWheelTests"],
   ["colour picker latency (what a drag is allowed to cost per pointer event)", "latency.test.tsx", "runLatencyTests"],
   ["solid native colour wells (one deck write per frame, the swatch painted in the event)", "colorframe.test.tsx", "runColorFrameTests"],
+  ["every colour control (the picker stays open, and the colour reaches the slide)", "colors.test.tsx", "runColorTests"],
 ];
 
 installDom();

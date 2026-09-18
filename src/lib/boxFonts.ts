@@ -81,7 +81,66 @@ export function setBoxFont(fonts: BoxFonts | undefined, id: ElementId, patch: Pa
   const prev = fonts?.[id] ?? {};
   const next: BoxTypeface = { ...prev, ...patch };
   if (next.family === "") delete next.family;
+  // "no override" must be the ABSENCE of the key, not an explicit undefined:
+  // a stored `color: undefined` still shadows the deck field once it is merged
+  // into a per-slide override (see lib/overrides).
+  if (next.color === undefined) delete next.color;
   return { ...(fonts ?? {}), [id]: next };
+}
+
+/* ------------------------------------------------------------------ *
+ * Text ink — ONE source of truth per box
+ * ------------------------------------------------------------------ *
+ * An element's colour used to be reachable from two different places: the
+ * deck field the renderer reads (`questionColor`, `optionTextColor`, …) and
+ * the per-box typeface override (`boxFonts[id].color`). Whichever one the
+ * renderer consults LAST silently wins, so a colour picked in one panel could
+ * do nothing at all — picking "Question colour" in the Question text panel
+ * after the toolbar had written a box override left the stem unchanged.
+ *
+ * These two helpers give every surface the same answer: `elementInk` reads the
+ * colour that is actually painted, and `setElementInk` writes the one field
+ * that paints it — clearing the override that would otherwise shadow it.
+ */
+
+/** the deck field that paints each box's text */
+export const ELEMENT_INK_FIELD: Partial<Record<ElementId, keyof ThemeSettings>> = {
+  title: "titleColor",
+  badge: "badgeColor",
+  brand: "brandColor",
+  question: "questionColor",
+  options: "optionTextColor",
+  note: "noteColor",
+};
+
+/**
+ * Boxes whose text is rendered through `boxFontCss`, where a per-box
+ * `color` override really does paint over the deck field. Option text is
+ * deliberately absent: it is painted with its own explicit inline colour
+ * (`optionTextColor`), so a box override there paints nothing.
+ */
+const INK_FROM_BOX_CSS = new Set<ElementId>(["title", "badge", "brand", "question", "note", "bullet"]);
+
+/** The colour actually painted on a box's text ("" when it has none of its own). */
+export function elementInk(theme: ThemeSettings, id: ElementId): string {
+  const tf = boxTypeface(theme, id);
+  if (INK_FROM_BOX_CSS.has(id) && tf.color) return tf.color;
+  const field = ELEMENT_INK_FIELD[id];
+  return field ? String(theme[field] ?? "") : "";
+}
+
+/**
+ * The theme patch that paints `color` on a box's text, whichever surface asked
+ * for it. A box with a deck field of its own writes that field and drops any
+ * stale per-box override, so the pick can never be shadowed; a box without one
+ * (the question bullet's number) keeps using its typeface override.
+ */
+export function setElementInk(theme: ThemeSettings, id: ElementId, color: string): Partial<ThemeSettings> {
+  const field = ELEMENT_INK_FIELD[id];
+  if (!field) return { boxFonts: setBoxFont(theme.boxFonts, id, { color }) };
+  const patch = { [field]: color } as Partial<ThemeSettings>;
+  if (boxTypeface(theme, id).color) patch.boxFonts = setBoxFont(theme.boxFonts, id, { color: undefined });
+  return patch;
 }
 
 export function clearBoxFont(fonts: BoxFonts | undefined, id: ElementId): BoxFonts {

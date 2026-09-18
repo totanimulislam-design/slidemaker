@@ -10,7 +10,7 @@ import {
   hasManualOptionLabels,
 } from "../lib/plainNumbering";
 import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
-import { boxFontLabel, setBoxFont } from "../lib/boxFonts";
+import { boxFontLabel, elementInk, setBoxFont, setElementInk } from "../lib/boxFonts";
 import FontPicker from "./FontPicker";
 import { Btn, ColorInput, Field, Slider, TextInput } from "./ui";
 import { cn } from "../utils/cn";
@@ -155,7 +155,7 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
         compact
       />
       <div className="grid grid-cols-2 gap-2">
-        <ColorInput label="Option text" value={T.optionTextColor} onChange={(v) => setTheme({ optionTextColor: v })} />
+        <ColorInput label="Option text" value={elementInk(T, "options")} onChange={(v) => setTheme(setElementInk(T, "options", v))} />
       </div>
       {/* the label painted inside each marker is styled under "Opt bullet text" */}
       <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">

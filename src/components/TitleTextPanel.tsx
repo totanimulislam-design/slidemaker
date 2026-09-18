@@ -1,7 +1,7 @@
 import type { Box, DeckHeader, ElementId, ThemeSettings } from "../lib/types";
 import { DEFAULT_BANNER } from "../lib/types";
 import { TEXT_GRADIENT_PRESETS, bannerCss } from "../lib/banner";
-import { boxStack, clearBoxFont } from "../lib/boxFonts";
+import { boxStack, clearBoxFont, elementInk, setElementInk } from "../lib/boxFonts";
 import GradientEditor from "./GradientEditor";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
@@ -68,7 +68,7 @@ export default function TitleTextPanel({ theme, header, setTheme, setHeader, pat
       </Field>
 
       {!b.textGradient.enabled && (
-        <ColorInput label="Title colour" value={theme.titleColor} onChange={(v) => setTheme({ titleColor: v })} />
+        <ColorInput label="Title colour" value={elementInk(theme, "title")} onChange={(v) => setTheme(setElementInk(theme, "title", v))} />
       )}
 
       <GradientEditor
