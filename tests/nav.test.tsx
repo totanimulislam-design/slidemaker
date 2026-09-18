@@ -261,8 +261,8 @@ export async function runNavTests(): Promise<CaseResult[]> {
   });
 
   out.push({
-    name: "Uploads panel exposes upload files button",
-    pass: !!doc.querySelector('aside input[type="file"][accept="image/*"]'),
+    name: "Uploads panel exposes upload files button (images + PDF)",
+    pass: !!doc.querySelector('aside input[type="file"][accept^="image/*"][accept*="pdf"]'),
     detail: "file input found",
   });
 
@@ -470,7 +470,7 @@ export async function runNavTests(): Promise<CaseResult[]> {
   click(doc.querySelector('aside nav button[data-nav="images"]'));
   out.push({
     name: "Uploads opens a related toolbar above the slide",
-    pass: toolbar() === "insert tools" && !!doc.querySelector('.context-toolbar [aria-label="Add image files"]'),
+    pass: toolbar() === "insert tools" && !!doc.querySelector('.context-toolbar [aria-label="Add image or PDF files"]'),
     detail: String(toolbar()),
   });
   click(doc.querySelector('aside nav button[data-nav="shapes"]'));

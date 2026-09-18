@@ -463,6 +463,25 @@ export function useDeck() {
     [setDeckH],
   );
 
+  /**
+   * Insert ready-made slides directly after slot `afterIndex` (−1 = at the
+   * start, ≥ length = at the end) and follow them with the editor. One undo
+   * step — used by the PDF import so pages land next to the slide being edited.
+   */
+  const insertSlidesAfter = useCallback(
+    (slides: SlideData[], afterIndex: number, label?: string) => {
+      if (!slides.length) return;
+      setDeckH((d) => {
+        const at = Math.max(0, Math.min(d.slides.length, afterIndex + 1));
+        const next = [...d.slides];
+        next.splice(at, 0, ...slides);
+        window.setTimeout(() => setCurrent(at), 0);
+        return { ...d, slides: next.map((s, i) => ({ ...s, number: s.number || String(i + 1) })) };
+      }, label ?? `Add ${slides.length} slide${slides.length === 1 ? "" : "s"}`);
+    },
+    [setDeckH],
+  );
+
   const insertBlank = useCallback(() => {
     setDeckH((d) => {
       const s = emptySlide(d.slides.length + 1);
@@ -1360,6 +1379,7 @@ export function useDeck() {
     updateAll,
     transformAll,
     addSlides,
+    insertSlidesAfter,
     insertBlank,
     removeSlide,
     duplicateSlide,
