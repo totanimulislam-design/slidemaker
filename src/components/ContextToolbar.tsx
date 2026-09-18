@@ -21,7 +21,72 @@ import ShapeDesignPanel from "./ShapeDesignPanel";
 import FramePanel from "./FramePanel";
 import GradientEditor from "./GradientEditor";
 import { SegButtons, Toggle } from "./ui";
+import { useColorFrame } from "../lib/frameSend";
 import { cn } from "../utils/cn";
+
+const normColor = (v: string): string => {
+  const c = String(v ?? "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(c)) return `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`.toLowerCase();
+  return "";
+};
+
+/**
+ * The toolbar's colour well as a component of its own, so it can own the
+ * one-frame commit channel (see useColorFrame). The caller keys it: a value
+ * change remounts the input and its echo-filter re-arms, with no hooks rules
+ * to break across the conditional swatch rows.
+ */
+function Swatch({
+  name,
+  value,
+  onChange,
+  glyph,
+}: {
+  name: string;
+  value: string;
+  onChange: (v: string) => void;
+  glyph?: ReactNode;
+}) {
+  const dotRef = useRef<HTMLLabelElement>(null);
+  const channel = useColorFrame(onChange);
+  const paint = (hex: string) => {
+    const ink = dotRef.current?.querySelector<HTMLElement>(".ctx-dot, .ctx-a, .ctx-ring");
+    if (!ink) return;
+    /* each glyph paints a different property: a dot is background, the letter
+       underline is border-bottom, the ring is border-colour */
+    if (ink.classList.contains("ctx-a")) {
+      if (ink.style.borderBottomColor !== hex) ink.style.borderBottomColor = hex;
+    } else if (ink.classList.contains("ctx-ring")) {
+      if (ink.style.borderColor !== hex) ink.style.borderColor = hex;
+    } else if (ink.style.background !== hex) {
+      ink.style.background = hex;
+    }
+  };
+  return (
+    <label className="ctx-swatch" title={name} ref={dotRef}>
+      <input
+        aria-label={name} type="color"
+        value={normColor(value) || "#ffffff"}
+        onInput={e => {
+          const v = normColor(e.currentTarget.value);
+          if (!v) return;
+          paint(v);
+          channel.offer(v);
+        }}
+        onChange={e => {
+          /* React folds a color input's native `change` into onChange too; a
+             dialog close is the newest move, so offer it like any other step */
+          const v = normColor(e.currentTarget.value);
+          if (!v) return;
+          paint(v);
+          channel.offer(v);
+        }}
+      />
+      {glyph ?? <span className="ctx-dot" style={{ background: value }} />}
+    </label>
+  );
+}
 
 /**
  * The answer-key half of the toolbar, handed over by App while the "Answer key"
@@ -392,16 +457,14 @@ export default function ContextToolbar(p: Props) {
       </span>
     );
   };
-  /** colour well: the glyph previews the value, the native picker opens on click */
+  /**
+   * colour well: the glyph previews the value, the native picker opens on
+   * click. The dialog's per-move `input` is committed once per frame through
+   * `useColorFrame` and only the glyph is painted inside the event, so the
+   * deck never spends a render on every step of the OS indicator.
+   */
   const swatch = (name: string, value: string, change: (v: string) => void, glyph?: ReactNode) => (
-    <label className="ctx-swatch" title={name}>
-      <input
-        aria-label={name} type="color"
-        value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#ffffff"}
-        onChange={e => change(e.target.value)}
-      />
-      {glyph ?? <span className="ctx-dot" style={{ background: value }} />}
-    </label>
+    <Swatch key={`${name}:${value}`} name={name} value={value} onChange={change} glyph={glyph} />
   );
   const textSwatch = (name: string, value: string, change: (v: string) => void) =>
     swatch(name, value, change, <span className="ctx-a" style={{ borderBottomColor: value }}>A</span>);

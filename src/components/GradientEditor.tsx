@@ -5,8 +5,15 @@ import { GRADIENT_CATEGORIES, GRADIENT_PRESETS } from "../lib/gradientPresets";
 import { Field, SegButtons, Slider, Toggle } from "./ui";
 import { ColorWheel, GradientAngleWheel } from "./GradientWheel";
 import { usePointerDrag } from "../lib/dragSession";
-import { useFrameSend } from "../lib/frameSend";
+import { useColorFrame, useFrameSend } from "../lib/frameSend";
 import { cn } from "../utils/cn";
+
+const normColor = (v: string): string => {
+  const c = String(v ?? "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(c)) return `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`.toLowerCase();
+  return "";
+};
 
 interface PresetInput {
   name: string;
@@ -53,6 +60,9 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
 
   const setStop = (i: number, p: Partial<GradientStop>) =>
     set({ stops: g.stops.map((s, j) => (j === i ? { ...s, ...p } : s)) });
+
+  /* the selected stop's native colour well commits once per frame */
+  const sendColor = useColorFrame((hex: string) => setStop(sel, { color: hex }));
 
   const addStopAt = (at: number, color?: string) => {
     if (g.stops.length >= 8) return;
@@ -377,7 +387,14 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
               <input
                 type="color"
                 value={toHex6(selStop.color)}
-                onChange={(e) => setStop(sel, { color: e.target.value })}
+                onInput={(e) => {
+                  const v = normColor((e.target as HTMLInputElement).value);
+                  if (v) sendColor.offer(v);
+                }}
+                onChange={(e) => {
+                  const v = normColor((e.target as HTMLInputElement).value);
+                  if (v) sendColor.offer(v);
+                }}
                 title="Pick a colour"
                 className="h-8 w-9 shrink-0 cursor-pointer rounded border border-white/20 bg-transparent p-0.5"
               />

@@ -141,3 +141,83 @@ export function useFrameSend<T>(send: (v: T) => void, { lateFrameMs = 26 }: Fram
 
   return { offer, sendNow, flush, drop };
 }
+
+/* ------------------------------------------------------------------ *
+ * useColorFrame — the one-frame channel for a NATIVE colour picker.
+ * ------------------------------------------------------------------ *
+ * The in-app wheel (GradientWheel) never routes its pointer through React,
+ * but every SOLID colour — a frame, an option bullet, a text ink — is picked
+ * with the browser's own `<input type="color">`. That dialog is a Canva-style
+ * surface too: for such an input React maps BOTH the native `input` (one per
+ * move of the cursor through its saturation field) AND the native `change`
+ * (the dialog closing) onto `onChange`, so the handler runs on every step.
+ * Committing on every step re-renders the whole deck (board + every rail
+ * thumbnail) once per move, the main thread fills with React, and the OS
+ * indicator falls behind the cursor — the exact trailing-handle symptom people
+ * report. This channel gives those events the discipline the wheel already has:
+ *
+ *   - `offer(hex)` — a move (or the close). The newest value wins; ONE
+ *     animation frame later the latest value is committed, whatever the event
+ *     rate. The cursor in the OS dialog is compositor-owned and unaffected;
+ *     our side does at most one deck write per frame — a sweep is a handful of
+ *     writes instead of one per step — and the last colour lands on the next
+ *     frame after the dialog is let go, nothing left pending beyond it.
+ *   - `flush()` / `drop()` — a pending value is settled exactly once when the
+ *     picker unmounts, and a frame still queued when it goes away is cancelled
+ *     so it cannot fire into nothing.
+ *
+ * The visible swatch is painted straight into the DOM inside the move handler
+ * by the caller (so the glyph the user is looking at follows the dialog in the
+ * same event), and only the deck write waits for the frame — exactly the split
+ * the wheel uses between its indicator and its document.
+ */
+export function useColorFrame(onCommit: (v: string) => void) {
+  /** the newest value the editor has not yet committed in a frame */
+  const valueRef = useRef<string | null>(null);
+  /** the frame that will commit it, if one is on the way */
+  const frameRef = useRef<number | null>(null);
+  /** latest onCommit — the frame must not close over a stale editor writer */
+  const onCommitRef = useRef(onCommit);
+  onCommitRef.current = onCommit;
+
+  /** commit whatever is pending right now (idempotent) */
+  const settle = useCallback(() => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    const v = valueRef.current;
+    if (v !== null) {
+      valueRef.current = null;
+      onCommitRef.current(v);
+    }
+  }, []);
+
+  /** a move or a close: newest wins, one commit per frame */
+  const offer = useCallback(
+    (hex: string) => {
+      valueRef.current = hex;
+      if (frameRef.current === null) {
+        frameRef.current = requestAnimationFrame(() => {
+          frameRef.current = null;
+          const v = valueRef.current;
+          if (v !== null) {
+            valueRef.current = null;
+            onCommitRef.current(v);
+          }
+        });
+      }
+    },
+    [],
+  );
+
+  const flush = useCallback(() => settle(), [settle]);
+
+  /** exactly-once settle + cancel a queued frame, on unmount */
+  const drop = useCallback(() => settle(), [settle]);
+
+  // a frame still queued when the picker goes away must not fire into nothing
+  useEffect(() => drop, [drop]);
+
+  return { offer, flush, drop };
+}
