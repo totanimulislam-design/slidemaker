@@ -17,6 +17,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import App from "../src/App";
 import { DEFAULT_LOGO } from "../src/lib/types";
+import { addUpload, getUploads, removeUpload, clearUploads } from "../src/lib/uploads";
 
 type Win = Window & typeof globalThis & { PointerEvent: new (t: string, i?: unknown) => Event };
 const win = window as unknown as Win;
@@ -46,7 +47,7 @@ const NAV: [id: string, label: string, heading: string][] = [
   ["footnote", "Footnote", "Footnote"],
   ["background", "Slide background", "Slide background"],
   ["frame", "Slide frame", "Slide frame"],
-  ["images", "Insert images", "Insert images"],
+  ["images", "Uploads", "Uploads"],
   ["shapes", "Insert shapes", "Insert shapes"],
   ["layers", "Layers", "Layers"],
 ];
@@ -254,9 +255,45 @@ export async function runNavTests(): Promise<CaseResult[]> {
   click(doc.querySelector('aside nav button[data-nav="badge3"]'));
   click(doc.querySelector('aside nav button[data-nav="images"]'));
   out.push({
-    name: "Insert images releases the element outline but keeps its panel",
-    pass: overlayOf() === null && panelHeading() === "Insert images",
+    name: "Uploads releases the element outline but keeps its panel",
+    pass: overlayOf() === null && panelHeading() === "Uploads",
     detail: `overlay=${overlayOf()} panel=${panelHeading()}`,
+  });
+
+  out.push({
+    name: "Uploads panel exposes upload files button",
+    pass: !!doc.querySelector('aside input[type="file"][accept="image/*"]'),
+    detail: "file input found",
+  });
+
+  // Adding an upload saves it here in the library
+  act(() => {
+    addUpload("data:image/svg+xml;utf8,<svg></svg>", 1, "test-pic.svg");
+  });
+  const uploadedCards = () => Array.from(doc.querySelectorAll('aside [title*="Click to add to slide"]'));
+  out.push({
+    name: "Uploaded elements save in the Uploads library",
+    pass: uploadedCards().length >= 1,
+    detail: `cards=${uploadedCards().length}`,
+  });
+
+  // Hovering / clicking delete button triggers confirmation and removes it like Canva
+  const delBtn = doc.querySelector<HTMLButtonElement>('aside button[title="Delete from uploads"]');
+  click(delBtn);
+  const confirmDeleteBtn = Array.from(doc.querySelectorAll<HTMLButtonElement>("aside button")).find(
+    (b) => b.textContent?.trim() === "Delete",
+  );
+  out.push({
+    name: "Delete button on upload card prompts confirmation",
+    pass: !!confirmDeleteBtn,
+    detail: `confirmBtn=${!!confirmDeleteBtn}`,
+  });
+
+  click(confirmDeleteBtn);
+  out.push({
+    name: "Confirming delete removes the uploaded element from the library like Canva",
+    pass: !getUploads().some((u) => u.name === "test-pic.svg"),
+    detail: `uploads=${getUploads().map((u) => u.name).join(",")}`,
   });
 
   /* --------------------- the Layers destination ---------------------------- */
@@ -432,7 +469,7 @@ export async function runNavTests(): Promise<CaseResult[]> {
   /* ------------------ the insert destinations get tools too ---------------- */
   click(doc.querySelector('aside nav button[data-nav="images"]'));
   out.push({
-    name: "Insert images opens a related toolbar above the slide",
+    name: "Uploads opens a related toolbar above the slide",
     pass: toolbar() === "insert tools" && !!doc.querySelector('.context-toolbar [aria-label="Add image files"]'),
     detail: String(toolbar()),
   });

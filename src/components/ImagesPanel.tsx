@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { inlineRemoteImage, loadImageFile, shrinkDataUrl, type ShapeItem } from "../lib/shapes";
 import { canMove, Z_LABELS, type ZOp } from "../lib/zorder";
+import { addUpload, removeUpload, useUploads, type UploadedItem } from "../lib/uploads";
 import { Btn, Field, PanelHead, SegButtons, Slider, TextArea } from "./ui";
 import { cn } from "../utils/cn";
 
 /**
- * Navigation ▸ "Insert images".
+ * Navigation ▸ "Uploads".
  *
- * A dedicated home for pictures: upload / paste / link, then the image-only
- * controls (fit, crop mask, corner radius, flips, opacity, shadow, caption) and
- * the layer order. Shapes, text boxes and the full design editor stay in
- * "Insert shapes".
+ * Canva-style uploads library: uploaded images, diagrams and media are saved here
+ * and can be reused anytime across slides or removed like Canva.
+ *
+ * When an image on the slide is selected, this panel also provides image-only
+ * styling controls (fit, crop mask, corner radius, flips, opacity, shadow, caption)
+ * and layer ordering.
  */
 interface Props {
   slideShapes: ShapeItem[];
@@ -51,8 +54,12 @@ export default function ImagesPanel({
   onOpenDesign,
   onUseAsBackground,
 }: Props) {
+  const uploads = useUploads();
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const all = [...globalShapes, ...slideShapes];
   const images = all.filter((x) => x.kind === "image");
@@ -64,11 +71,13 @@ export default function ImagesPanel({
     if (!files) return;
     const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
     if (!list.length) return;
-    setBusy(`Loading ${list.length} image${list.length > 1 ? "s" : ""}…`);
+    setBusy(`Loading ${list.length} file${list.length > 1 ? "s" : ""}…`);
     try {
       for (const f of list) {
         const { src, ratio } = await loadImageFile(f);
         const small = await shrinkDataUrl(src);
+        // Save to uploads library (Canva-style)
+        addUpload(small, ratio, f.name);
         if (replaceId) onChange(replaceId, { src: small, naturalRatio: ratio });
         else onAddImage(small, ratio);
       }
@@ -85,7 +94,10 @@ export default function ImagesPanel({
     setBusy("Fetching image…");
     try {
       const { src, ratio } = await inlineRemoteImage(u);
-      onAddImage(await shrinkDataUrl(src), ratio);
+      const small = await shrinkDataUrl(src);
+      const name = u.split("/").pop()?.split("?")[0] || "Web image";
+      addUpload(small, ratio, name);
+      onAddImage(small, ratio);
       setUrl("");
     } catch {
       alert("Could not load an image from that URL.");
@@ -94,27 +106,35 @@ export default function ImagesPanel({
     }
   };
 
+  const filteredUploads = search.trim()
+    ? uploads.filter((u) => (u.name ?? "").toLowerCase().includes(search.toLowerCase()))
+    : uploads;
+
   return (
     <div className="space-y-4">
       <PanelHead
-        title="Insert images"
-        subtitle="Pictures, diagrams and photos placed on the slide."
-        right={<span className="shrink-0 text-[10px] text-slate-500">{images.length} on slide</span>}
+        title="Uploads"
+        subtitle="Pictures, diagrams and graphics saved to your library."
+        right={
+          <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+            {uploads.length} saved
+          </span>
+        }
       />
 
       <p className="rounded-lg border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-[11px] text-sky-200">
-        Images land on <b>this slide</b> first. Use <b>Apply Changes</b> above to copy the whole composition to your
-        target slides.
+        Uploaded elements are <b>saved here</b> and ready to use across your slides. Click any item to add it to the current slide.
       </p>
 
-      {/* --------------------------------- insert ---------------------------- */}
-      <div className="space-y-2 rounded-xl border border-sky-400/25 bg-sky-400/[0.06] p-3">
+      {/* --------------------------- upload section -------------------------- */}
+      <div className="space-y-2.5 rounded-xl border border-sky-400/25 bg-sky-400/[0.06] p-3">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold tracking-wide text-sky-200 uppercase">Add a picture</span>
-          {busy && <span className="text-[10px] text-sky-300">{busy}</span>}
+          <span className="text-[11px] font-semibold tracking-wide text-sky-200 uppercase">Upload media</span>
+          {busy && <span className="text-[10px] text-sky-300 animate-pulse">{busy}</span>}
         </div>
-        <label className="block cursor-pointer rounded-lg bg-sky-400 px-3 py-2 text-center text-xs font-semibold text-slate-950 hover:bg-sky-300">
-          ⬆ Upload from device
+
+        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-sky-400 px-3 py-2.5 text-center text-xs font-semibold text-slate-950 transition hover:bg-sky-300 active:scale-[0.99] shadow">
+          <span>⬆ Upload files</span>
           <input
             type="file"
             accept="image/*"
@@ -126,27 +146,170 @@ export default function ImagesPanel({
             }}
           />
         </label>
+
         <div className="flex gap-1.5">
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && void importUrl()}
-            placeholder="https://… image URL"
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-900/70 px-2 py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-400/60"
+            placeholder="Paste image URL (https://…)"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-900/70 px-2.5 py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-400/60"
           />
           <Btn size="sm" onClick={() => void importUrl()} disabled={!url.trim()}>
             Add
           </Btn>
         </div>
+
         <p className="text-[10px] leading-relaxed text-slate-500">
-          You can also <b>paste</b> an image (Ctrl/⌘ + V) or <b>drag a file</b> onto the slide — hold <b>Shift</b> while
-          dropping to make it the slide background instead.
+          Or <b>paste</b> an image (Ctrl/⌘ + V) or <b>drag files</b> straight onto the slide.
         </p>
       </div>
 
-      {/* ---------------------------------- list ----------------------------- */}
-      {images.length > 0 ? (
-        <Field label={`Pictures (${images.length})`} hint="click to select" as="div">
+      {/* ------------------------ uploaded elements library ------------------ */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-semibold tracking-wide text-slate-200 uppercase">
+              Uploaded elements
+            </span>
+            <span className="rounded bg-white/10 px-1.5 py-0.2 text-[10px] text-slate-400 font-mono">
+              {uploads.length}
+            </span>
+          </div>
+          {uploads.length > 6 && (
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search…"
+              className="w-24 rounded border border-white/10 bg-slate-900/70 px-1.5 py-0.5 text-[10px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-sky-400/60"
+            />
+          )}
+        </div>
+
+        {uploads.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-6 text-center">
+            <div className="text-2xl mb-1.5">📤</div>
+            <div className="text-xs font-semibold text-slate-300">No uploaded elements yet</div>
+            <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+              Upload photos, logos, or graphics from your device. They will be saved here so you can reuse them across all your slides.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
+            {filteredUploads.map((item: UploadedItem) => {
+              const isConfirming = confirmDeleteId === item.id;
+              const wasJustAdded = justAddedId === item.id;
+              return (
+                <div
+                  key={item.id}
+                  className="group relative aspect-square rounded-lg border border-white/10 bg-black/40 overflow-hidden hover:border-sky-400/70 transition-all select-none"
+                  title={`${item.name || "Uploaded image"} · Click to add to slide · Drag to position`}
+                >
+                  {/* Thumbnail / click to insert */}
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(
+                        "application/json",
+                        JSON.stringify({
+                          type: "slidemaker-upload",
+                          src: item.src,
+                          ratio: item.ratio,
+                          name: item.name,
+                        }),
+                      );
+                      e.dataTransfer.effectAllowed = "copy";
+                    }}
+                    onClick={() => {
+                      onAddImage(item.src, item.ratio);
+                      setJustAddedId(item.id);
+                      setTimeout(() => setJustAddedId(null), 1200);
+                    }}
+                    className="h-full w-full flex items-center justify-center p-1 cursor-pointer active:scale-95 transition-transform"
+                  >
+                    <img
+                      src={item.src}
+                      alt={item.name || "Uploaded image"}
+                      className="max-h-full max-w-full object-contain pointer-events-none"
+                    />
+                  </button>
+
+                  {/* Added feedback */}
+                  {wasJustAdded && (
+                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-emerald-500/80 text-white font-semibold text-[10px] rounded-lg animate-in fade-in">
+                      ✓ Added!
+                    </div>
+                  )}
+
+                  {/* Canva-style Hover overlay and delete affordance */}
+                  {!isConfirming && !wasJustAdded && (
+                    <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-1 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/80 via-transparent to-black/60">
+                      <div className="flex justify-between items-center w-full">
+                        <span className="truncate text-[9px] text-slate-300 px-1 drop-shadow">
+                          {item.name || "Image"}
+                        </span>
+                        {/* Remove button like Canva */}
+                        <button
+                          type="button"
+                          title="Delete from uploads"
+                          aria-label={`Delete ${item.name || "image"} from uploads`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDeleteId(item.id);
+                          }}
+                          className="pointer-events-auto h-5 w-5 rounded bg-black/80 hover:bg-rose-600 text-slate-300 hover:text-white flex items-center justify-center text-[10px] transition-colors shadow"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                      <span className="text-[9px] text-sky-300 text-center font-medium drop-shadow">
+                        + Add to slide
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Inline Delete Confirmation (Canva-style) */}
+                  {isConfirming && (
+                    <div
+                      className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-1.5 bg-slate-950/95 p-1 text-center rounded-lg backdrop-blur-xs"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <p className="text-[10px] font-semibold text-rose-300 leading-tight">
+                        Delete upload?
+                      </p>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            removeUpload(item.id);
+                            setConfirmDeleteId(null);
+                          }}
+                          className="rounded bg-rose-600 hover:bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold text-white transition-colors"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="rounded bg-slate-800 hover:bg-slate-700 px-1.5 py-0.5 text-[9px] text-slate-300 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ------------------------ pictures on this slide --------------------- */}
+      {images.length > 0 && !sel && (
+        <Field label={`Images on this slide (${images.length})`} hint="click to edit" as="div">
           <div className="grid grid-cols-4 gap-1.5">
             {[...images]
               .sort((a, b) => b.z - a.z)
@@ -155,11 +318,8 @@ export default function ImagesPanel({
                   key={x.id}
                   type="button"
                   onClick={() => onSelect(x.id)}
-                  title={x.text || "Image"}
-                  className={cn(
-                    "flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-black/50",
-                    selectedId === x.id ? "border-amber-400 ring-1 ring-amber-400/50" : "border-white/10 hover:border-white/30",
-                  )}
+                  title={x.text || "Image on slide"}
+                  className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black/50 hover:border-white/30 transition-colors"
                 >
                   {x.src ? (
                     <img src={x.src} alt="" className="h-full w-full object-cover" />
@@ -170,13 +330,9 @@ export default function ImagesPanel({
               ))}
           </div>
         </Field>
-      ) : (
-        <p className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-relaxed text-slate-400">
-          No pictures on this slide yet. Upload one above, or drop a file straight onto the canvas.
-        </p>
       )}
 
-      {/* --------------------------------- editor ---------------------------- */}
+      {/* ------------------- selected picture properties editor -------------- */}
       {sel && (
         <div className="space-y-3 rounded-xl border border-sky-400/25 bg-sky-400/[0.05] p-3">
           <div className="flex items-center justify-between">

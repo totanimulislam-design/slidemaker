@@ -68,7 +68,7 @@ slide**, in board order — a compact icon + label tile for each:
 | Title text | Question bullet | Option bullet | Footnote |
 | Title background | Q bullet text | Opt bullet text | Slide background |
 | Badge 1 · Badge 2 · Badge 3 · Logo | Question text | Option text | Slide frame |
-|  |  | **Answer key** | Insert images · Insert shapes · **Layers** |
+|  |  | **Answer key** | Uploads · Insert shapes · **Layers** |
 
 Two-way selection sync ties the navigation to the canvas:
 
@@ -84,7 +84,7 @@ Two-way selection sync ties the navigation to the canvas:
   *Edit … →* jump to the tile that styles whatever is selected.
 - **Navigation → toolbar.** Every tile also opens the related tools in the
   context toolbar above the board. Tiles that own an element or a surface
-  already did; the destinations that don't — **Answer key**, **Insert images**,
+  already did; the destinations that don't — **Answer key**, **Uploads**,
   **Insert shapes** and **Layers** — bring their own tools instead of leaving the
   strip empty (answer marking/reveal/style/paste-key, quick image insert, quick
   shape insert, and the layer count plus the arrange buttons). `Esc`, changing slides, or picking another tile changes what the
@@ -98,7 +98,7 @@ can be hidden, resized and recoloured independently (`brandTop*` /
 The split panels keep one concern each: a bullet's *body* (design, size, accent)
 is separate from the *text inside it* (wording, ink, face, weight, case, size),
 for both the question bullet and the option markers. Pictures moved out of the
-shapes panel into their own "Insert images" destination.
+shapes panel into their own "Uploads" destination.
 
 ### Merged contents show every related toolbar
 

@@ -54,7 +54,7 @@ interface Props {
   group: () => void; ungroup: () => void; duplicate: () => void; remove: () => void;
   /**
    * Which inspector destination asked for this toolbar. The destinations that
-   * own no single board element (Answer key, Insert images, Insert shapes) bring
+   * own no single board element (Answer key, Uploads, Insert shapes) bring
    * their own related tools here instead of leaving the strip empty.
    */
   nav?: string | null;
@@ -67,7 +67,7 @@ interface Props {
   layerTools?: { total: number };
   /** quick insert: a shape/text box on the current slide (Insert shapes) */
   insertShape?: (kind: ShapeKind) => void;
-  /** quick insert: image files on the current slide (Insert images) */
+  /** quick insert: image files on the current slide (Uploads) */
   onAddImages?: (files: File[]) => void;
 }
 
@@ -623,7 +623,7 @@ export default function ContextToolbar(p: Props) {
     : layering
       ? "Layers"
       : inserting
-        ? (p.nav === "images" ? "Insert image" : "Insert shape")
+        ? (p.nav === "images" ? "Uploads" : "Insert shape")
         : surface || (multi ? `Group · ${p.count}` : text ? 'Text' : s?.kind || 'Image');
   const toolbarLabel = `${ak ? "answer" : layering ? "layers" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
 
@@ -942,8 +942,8 @@ export default function ContextToolbar(p: Props) {
         </>}
         {/* the insert destinations: quick-add tools above the board */}
         {inserting && p.nav === "images" && <>
-          <label className="ctx-btn ctx-upload" title="Add image files to this slide">
-            🖼 Add image
+          <label className="ctx-btn ctx-upload" title="Upload image files to this slide and library">
+            📤 Upload image
             <input
               aria-label="Add image files"
               type="file"
