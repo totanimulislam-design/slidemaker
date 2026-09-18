@@ -303,21 +303,40 @@ dial and its colour-stop bar run on the same system. The indicators belong to
 the pointer, and nothing about the size of the editor behind them may change
 that:
 
-- **React never positions an indicator.** The ring, the hue knob, the dial knob
-  and a carried stop are all placed with a compositor-friendly
+- **React is not in the path at all while a gesture is live.** The ring, the
+  hue knob and the dial knob are placed with a compositor-friendly
   `transform: translate3d` written straight into the DOM in the very event
-  that moved them. No coordinate ever passes through React state, so a render
-  cannot stamp a stale position over the live one — what is under the cursor
-  is on screen at once, mid-sweep, with no render in between. (The readouts —
-  swatch, hex, H/S/L — DO follow the drag live; that render simply cannot
-  touch the indicators.)
+  that moved them, and so are the readouts (swatch, hex, H/S/L). The drag sets
+  no state, so there is never a render — the picker's or the deck's — standing
+  between the cursor and the indicator. State is taken up again the moment the
+  pointer stops, and every render that happens in between reads the gesture's
+  own values, so it can only agree with what was painted or be a no-op; it can
+  never stamp a stale pixel over a live one.
+- **The indicator rides the pointer, not the colour.** `s`/`l`/`h` are whole
+  per cent, because that is what the deck stores — but a ring placed at
+  `round(s) %` of the area stands ~1.3 px away from a 260 px cursor and
+  refuses to move for several events at a time, and that stepping is exactly
+  what a laggy picker looks like. The transform comes from the raw
+  `clientX`/`clientY`; only the colour is rounded.
 - **Geometry is measured once per press.** The picker caches its box on
   pointer-down, so no move ever forces layout.
+- **The one expensive paint waits for its frame.** The area's two stacked
+  gradients are re-rasterised whenever the hue moves, so that write is
+  coalesced to once per frame instead of once per event; the 16 px indicators,
+  which must be instant, are written every event. A write of a value the
+  element already has is skipped entirely.
+- **Chromium moves the ring faster than a frame.** While a gesture is live the
+  picker also listens to `pointerrawupdate` — the un-coalesced pointer stream —
+  so the indicator tracks the mouse at the mouse's own rate. Where that event
+  does not exist, `pointermove` paints the same pixels.
 - **The deck is told once per frame** (`useFrameSend` in
   `src/lib/frameSend.ts`). Moves are collected and the newest colour is handed
   to the editor on the next animation frame, so a sweep is a handful of
   undoable writes instead of one per `pointermove` — and the slide below still
-  previews live.
+  previews live. When a frame is already late, the channel hands the *next*
+  one back to the pointer and writes on the frame after it (never two skips in
+  a row): a heavy deck then costs the preview ~30 Hz instead of costing the
+  cursor its frames.
 - **The press and the release always settle.** A press commits its colour
   immediately (a click never waits for a frame; a stop-knob press only grabs —
   it never jumps), and the end of the gesture flushes whatever is still
@@ -332,6 +351,10 @@ that:
   that arrives mid-drag is ignored instead of dragging them back.
 - **Reachable without a pointer.** Both surfaces take focus; the arrow keys
   nudge the picked colour (Shift = 10 steps).
+- **One marker, not two.** The area carries no crosshair or other cursor
+  decoration — just the plain pointer — because the ring under it is the thing
+  being aimed at. A second marker on the surface only shows up as lag whenever
+  the page is busy.
 
 ## Board gestures
 
@@ -352,6 +375,10 @@ by one pointer state machine, `src/lib/dragSession.ts`. Its guarantees:
 
 `npm run test:drag` covers the sequences above, plus regression cases proving the
 old pattern (gesture armed on press + `onPointerMove` on the item) did leak, and
-the picker suite (`tests/wheel.test.tsx`) pins the indicators' tracking, the
+the picker suites pin the gesture down from both sides:
+`tests/wheel.test.tsx` the contract (the indicators' tracking, the
 one-write-per-frame budget and the press / release settlement across the
-picker, the hue ramp, the angle dial and the stop bar.
+picker, the hue ramp, the angle dial and the stop bar) and
+`tests/latency.test.tsx` the cost (zero layout reads and zero React renders per
+sweep, sub-pixel tracking under the cursor, the face repainted once per frame,
+backpressure under a slow deck).

@@ -42,14 +42,22 @@ const suites = [
   ["slide stack (drag to reorder + multi-select boxes + bulk ops + the open slide's border)", "slides.test.tsx", "runSlideStackTests"],
   ["imported pages (a PDF / PowerPoint merged in as plain slides, the file kept whole in Uploads)", "import.test.tsx", "runImportTests", [pdfStubPlugin]],
   ["colour picker (Canva system: indicators ride the cursor, one deck write per frame)", "wheel.test.tsx", "runWheelTests"],
+  ["colour picker latency (what a drag is allowed to cost per pointer event)", "latency.test.tsx", "runLatencyTests"],
 ];
 
 installDom();
 mkdirSync(outDir, { recursive: true });
 
+/**
+ * `node tests/run.mjs latency` runs only the suites whose file name matches, so
+ * one suite can be iterated on without bundling the whole editor eight times.
+ */
+const only = process.argv.slice(2).filter((a) => !a.startsWith("-"));
+const picked = suites.filter(([label, entry]) => !only.length || only.some((f) => entry.includes(f) || label.toLowerCase().includes(f.toLowerCase())));
+
 let failed = 0;
 let total = 0;
-for (const [label, entry, exportName, plugins] of suites) {
+for (const [label, entry, exportName, plugins] of picked) {
   const outfile = resolve(outDir, entry.replace(/\.tsx?$/, ".mjs"));
   await build({
     entryPoints: [resolve(here, entry)],

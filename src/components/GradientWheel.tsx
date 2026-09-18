@@ -1,4 +1,11 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useLayoutEffect,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type { Gradient } from "../lib/types";
 import { gradientCss } from "../lib/banner";
 import { usePointerDrag } from "../lib/dragSession";
@@ -283,6 +290,25 @@ const INDICATOR_SHADOW = "0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.45)";
 type Hsl = { h: number; s: number; l: number };
 
 /**
+ * A style write the element does not already have. Worth spelling out: a
+ * redundant write still invalidates style and paint, and a drag at a mouse's
+ * 120Hz makes a hundred of them a second on its own.
+ */
+const setStyle = (el: HTMLElement | null, prop: "transform" | "background", v: string) => {
+  if (el && el.style[prop] !== v) el.style[prop] = v;
+};
+
+/**
+ * The same discipline for the fields beside the surfaces: a drag PAINTS them in
+ * the event that moved the pointer, rather than waiting for a render to do it —
+ * and it never overwrites whatever the user is typing into one.
+ */
+const setField = (el: HTMLInputElement | null, v: string) => {
+  if (!el || el.value === v || el.ownerDocument?.activeElement === el) return;
+  el.value = v;
+};
+
+/**
  * The colour picker, laid out and behaved like Canva's:
  *
  *   ┌──────────────────────────┐
@@ -292,29 +318,54 @@ type Hsl = { h: number; s: number; l: number };
  *   ●━━━━━━━━━●━━━━━━━━━━━━━━━     ← hue ramp with its own knob
  *   ◎ ▇ #HEX   H S L               ← eyedropper · live swatch · readouts
  *
- * The system that keeps the indicator GLUED to the cursor (a picker that
- * trails the pointer is not a picker) — the gesture paints first and records
- * second:
+ * ## the rules that make it feel instant
  *
- *  1. React never positions an indicator. Both the ring and the hue knob are
- *     placed with a compositor-friendly `transform: translate3d` written
- *     straight into the DOM in the very event that moved them (`paint`).
- *     Because no coordinate ever passes through React state, a render cannot
- *     stamp a stale position over the live one — the old left/top dance of
- *     "render, then repair in a layout effect" is gone entirely.
- *  2. Surface geometry is measured ONCE per press and cached, so no move ever
- *     forces layout.
- *  3. the editor is told ONCE PER FRAME (`useFrameSend`), with the newest
- *     colour, so a sweep is ~60 writes instead of one per pointermove and the
- *     board below still previews live. A press flushes at once — a click must
- *     not wait for a frame — and the end of the gesture flushes what is still
- *     pending, so the colour the indicator shows is the colour that is
- *     committed.
- *  4. nothing paints without a live gesture: the gesture runs on
- *     `src/lib/dragSession.ts` like every other drag in the editor (moves stay
- *     window-wide, a secondary button is not a pick, a release/cancel/blur
- *     ends it), and an echo of the picker's own colour landing mid-drag is
- *     ignored instead of yanking the indicator back.
+ * A picker is judged on one thing: is the ring under the cursor, this instant,
+ * while the pointer is moving? A trailing ring is a broken picker, however
+ * correct the colour turns out to be. So:
+ *
+ *  1. React is not in the path. The ring, the hue knob, the swatch, the hex box
+ *     and the h / s / l fields are all written straight into the DOM inside the
+ *     event that moved the pointer (`paint`). The gesture never sets state, so
+ *     there is no render between the cursor and the indicator — not one, ever.
+ *     State is taken up again the moment the pointer stops, and every render in
+ *     between reads from `live` so it can only ever agree with what was painted
+ *     (a render fed from the last flush is a frame behind the pointer by
+ *     construction; a render that knows that can't stamp a stale pixel).
+ *  2. The indicator rides the POINTER, not the colour. `s` / `l` / `h` are
+ *     whole per cent — that is what the deck stores — but a ring placed at
+ *     `round(s) %` of the area stands up to 1.3 px away from a 260 px cursor
+ *     and does not move at all for several events in a row. That stepping IS
+ *     the lag people see, so the transform is painted from the raw clientX /
+ *     clientY and only the colour is rounded.
+ *  3. No move ever asks the layout where anything is: both surfaces are
+ *     measured once on press (`areaBox` / `hueBox`) and every move after that
+ *     is arithmetic. A `getBoundingClientRect` mid-drag is a forced reflow of
+ *     the whole inspector.
+ *  4. Nothing is written that the element already has (§ `setStyle`), and the
+ *     one genuinely expensive paint on the panel — the area's two stacked
+ *     gradients, re-rasterised whenever the hue moves — happens at most ONCE
+ *     PER FRAME, not once per event. A ring is 16px; a backdrop is the size of
+ *     the panel, and it can wait for the frame it shares with the deck.
+ *  5. The document is told at most once per frame (`useFrameSend`), with the
+ *     newest colour — and when a frame is already late, `useFrameSend` skips
+ *     the next one so the pointer gets a gap to move the ring in. A press
+ *     commits at once (a click is a decision, not a preview) and the release
+ *     settles whatever is still pending, so the colour the ring shows is
+ *     always the colour that ends up in the deck.
+ *  6. In Chromium the indicator moves sooner than a frame: while a gesture is
+ *     live the picker also listens to `pointerrawupdate`, the un-coalesced
+ *     stream the OS feeds the browser, so the ring tracks the mouse at the
+ *     mouse's own rate. Where that event does not exist nothing is missed —
+ *     `pointermove` is the same paint.
+ *
+ * Nothing paints without a live gesture: the drag runs on
+ * `src/lib/dragSession.ts` like every other drag in the editor (moves stay
+ * window-wide, a secondary button is not a pick, a release / cancel / blur ends
+ * it), a hover paints nothing, and an echo of the picker's own colour landing
+ * mid-drag is ignored instead of yanking the indicator back. There is no
+ * crosshair or other cursor decoration over the area either — the ring IS the
+ * cursor while it is held, so it stays a plain pointer and one marker.
  */
 export function ColorWheel({ value, onChange }: ColorWheelProps) {
   const [hsl, setHsl] = useState<Hsl>(() => hexToHsl(value));
@@ -323,6 +374,11 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
   const hueRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
+  const swatchRef = useRef<HTMLDivElement>(null);
+  const hexRef = useRef<HTMLInputElement>(null);
+  const hRef = useRef<HTMLInputElement>(null);
+  const sRef = useRef<HTMLInputElement>(null);
+  const lRef = useRef<HTMLInputElement>(null);
   /** which surface the live gesture is painting — the hue ramp or the area */
   const mode = useRef<"hue" | "sq" | null>(null);
   /** the colour the pointer has picked: the truth while a gesture is live */
@@ -337,39 +393,90 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
   /** picker geometry, measured on press so moves don't force layout */
   const areaBox = useRef<DOMRect | null>(null);
   const hueBox = useRef<DOMRect | null>(null);
+  /**
+   * The exact pixel the pointer put each indicator on, inside its own surface.
+   * `null` means "no pointer pixel: place it from the colour", which is what
+   * every non-pointer source (a field, a preset, an undo) does.
+   */
+  const dotPx = useRef<{ x: number; y: number } | null>(null);
+  const knobPx = useRef<number | null>(null);
+  /** the area's gradient, deferred to the frame it will be seen in */
+  const faceFrame = useRef<number | null>(null);
 
   const send = useFrameSend((next: Hsl) => {
     const hex = hslToHex(next.h, next.s, next.l);
     echo.current = normHex(hex);
-    setHsl(next); // the readouts (swatch, hex, h/s/l) follow the drag live —
-    // the indicators cannot be stamped by this render: React does not know
-    // their positions at all.
+    // and deliberately NO setHsl here: the picker's pixels were painted in the
+    // event that picked the colour, so the only thing left for a frame to do is
+    // the document. React joins in again when the pointer stops.
     onChangeRef.current(hex);
   });
 
-  /** paints both indicators + the area's face from one hsl triple */
-  const paint = (h: number, s: number, l: number) => {
-    live.current = { h, s, l };
-    const dot = dotRef.current;
-    if (dot) {
-      // geometry only when a box is known — never read layout speculatively
-      const area = mode.current ? areaBox.current : (areaBox.current ?? areaRef.current?.getBoundingClientRect() ?? null);
-      if (area && area.width > 0 && area.height > 0) {
-        dot.style.transform = `translate3d(${(s / 100) * area.width}px, ${((100 - l) / 100) * area.height}px, 0)`;
-      }
-      dot.style.background = hslToHex(h, s, l);
-    }
+  /* ------------------------------------------------------------- the face */
+
+  const writeFace = () => {
+    const h = live.current.h;
     const face = areaRef.current;
     if (face && paintedHue.current !== h) {
       face.style.background = squareFace(h);
       paintedHue.current = h;
     }
-    const knob = knobRef.current;
-    if (knob) {
-      const bar = mode.current ? hueBox.current : (hueBox.current ?? hueRef.current?.getBoundingClientRect() ?? null);
-      if (bar && bar.width > 0) knob.style.transform = `translate3d(${(h / 360) * bar.width}px, 0px, 0)`;
-      knob.style.background = hslToHex(h, 100, 50);
+  };
+  const cancelFace = () => {
+    if (faceFrame.current !== null) {
+      cancelAnimationFrame(faceFrame.current);
+      faceFrame.current = null;
     }
+  };
+  /** idle → now; a live gesture → once this frame, however many moves it holds */
+  const queueFace = () => {
+    if (!mode.current) {
+      cancelFace();
+      writeFace();
+      return;
+    }
+    if (faceFrame.current === null) {
+      faceFrame.current = requestAnimationFrame(() => {
+        faceFrame.current = null;
+        writeFace();
+      });
+    }
+  };
+
+  /* ---------------------------------------------------------------- paint */
+
+  /** paints both indicators and every readout from one hsl triple — no React */
+  const paint = (h: number, s: number, l: number) => {
+    live.current = { h, s, l };
+    const hex = hslToHex(h, s, l);
+
+    // geometry only when a box is known — never read layout speculatively
+    const area = mode.current ? areaBox.current : (areaBox.current ?? areaRef.current?.getBoundingClientRect() ?? null);
+    if (area && area.width > 0 && area.height > 0) {
+      const at = dotPx.current ?? { x: (s / 100) * area.width, y: ((100 - l) / 100) * area.height };
+      setStyle(dotRef.current, "transform", `translate3d(${at.x}px, ${at.y}px, 0)`);
+    }
+    const bar = mode.current ? hueBox.current : (hueBox.current ?? hueRef.current?.getBoundingClientRect() ?? null);
+    if (bar && bar.width > 0) {
+      setStyle(knobRef.current, "transform", `translate3d(${knobPx.current ?? (h / 360) * bar.width}px, 0px, 0)`);
+    }
+
+    setStyle(dotRef.current, "background", hex);
+    setStyle(swatchRef.current, "background", hex);
+    setStyle(knobRef.current, "background", hslToHex(h, 100, 50));
+    setField(hexRef.current, hex);
+    setField(hRef.current, String(h));
+    setField(sRef.current, String(s));
+    setField(lRef.current, String(l));
+    hueRef.current?.setAttribute("aria-valuenow", String(h));
+    queueFace();
+  };
+
+  /** paint from the colour alone (a source that is not the pointer) */
+  const paintFrom = (h: number, s: number, l: number) => {
+    dotPx.current = null;
+    knobPx.current = null;
+    paint(h, s, l);
   };
 
   /** a panel field (the hex box, the h / s / l numbers): applied at once */
@@ -377,7 +484,7 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
     const hex = hslToHex(h, s, l);
     echo.current = normHex(hex);
     setHsl({ h, s, l });
-    paint(h, s, l);
+    paintFrom(h, s, l);
     send.sendNow({ h, s, l });
   };
 
@@ -387,19 +494,29 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
     apply(next.h, next.s, next.l);
   };
 
+  /* ------------------------------------------------------------- picking */
+
   const pickFromArea = (e: { clientX: number; clientY: number }) => {
     const rect = mode.current ? areaBox.current : areaRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const s = clamp(Math.round(((e.clientX - rect.left) / rect.width) * 100), 0, 100);
-    const l = clamp(Math.round(100 - ((e.clientY - rect.top) / rect.height) * 100), 0, 100);
-    pick(live.current.h, s, l);
+    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+    const x = clamp(e.clientX - rect.left, 0, rect.width);
+    const y = clamp(e.clientY - rect.top, 0, rect.height);
+    dotPx.current = { x, y };
+    knobPx.current = null; // the ramp only moves when the ramp is dragged
+    pick(
+      live.current.h,
+      clamp(Math.round((x / rect.width) * 100), 0, 100),
+      clamp(Math.round(100 - (y / rect.height) * 100), 0, 100),
+    );
   };
 
   const pickFromHue = (e: { clientX: number; clientY: number }) => {
     const rect = mode.current ? hueBox.current : hueRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const h = clamp(Math.round(((e.clientX - rect.left) / rect.width) * 360), 0, 359);
-    pick(h, live.current.s, live.current.l);
+    if (!rect || rect.width <= 0) return;
+    const x = clamp(e.clientX - rect.left, 0, rect.width);
+    knobPx.current = x;
+    dotPx.current = null;
+    pick(clamp(Math.round((x / rect.width) * 360), 0, 359), live.current.s, live.current.l);
   };
 
   /** a pointer move (or press) picks: paint now, tell the editor this frame */
@@ -408,16 +525,81 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
     send.offer({ h, s, l });
   };
 
-  const { begin, release, handleLeave } = usePointerDrag({
+  /** what the live gesture does with any pointer sample, however it arrived */
+  const track = (e: { clientX: number; clientY: number }) => (mode.current === "hue" ? pickFromHue(e) : pickFromArea(e));
+  const trackRef = useRef(track);
+  trackRef.current = track;
+
+  /* ------------------------------------------- raw (un-coalesced) pointer */
+
+  const rawOn = useRef(false);
+  const onRaw = useRef((ev: Event) => {
+    const e = ev as PointerEvent;
+    if (!mode.current) return; // never paint for a pointer nobody is holding
+    if (e.pointerType && e.pointerType !== "mouse") return;
+    const session = stateRef.current;
+    if (session.pointerId !== -1 && e.pointerId !== session.pointerId) return;
+    trackRef.current(e);
+  });
+  const startRaw = () => {
+    if (rawOn.current || typeof window === "undefined" || !("onpointerrawupdate" in window)) return;
+    rawOn.current = true;
+    window.addEventListener("pointerrawupdate", onRaw.current);
+  };
+  const stopRaw = () => {
+    if (!rawOn.current) return;
+    rawOn.current = false;
+    window.removeEventListener("pointerrawupdate", onRaw.current);
+  };
+
+  /* ----------------------------------------------------------- the gesture */
+
+  const { begin, release, handleLeave, state } = usePointerDrag({
     threshold: 0, // a press on the picker picks exactly where it lands
-    onMove: (e) => (mode.current === "hue" ? pickFromHue(e) : pickFromArea(e)),
+    onMove: (e) => trackRef.current(e),
     onEnd: () => {
+      const last = { ...live.current };
       mode.current = null;
       areaBox.current = null;
       hueBox.current = null;
+      stopRaw();
+      cancelFace();
+      writeFace(); // the backdrop settles with the gesture, not a frame later
+      // the pointer has let go: React takes the pixels back, from the exact
+      // colour the gesture ended on, so nothing it renders can disagree
+      setHsl(last);
       send.flush(); // the release settles the colour the last move is holding
     },
   });
+  /** the session's pointer id, for the raw stream (a second pointer is ignored) */
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // a listener armed for one gesture, and a face write still queued, must not
+  // outlive the picker — refs only, so nothing here needs an identity
+  useEffect(
+    () => () => {
+      if (rawOn.current) {
+        rawOn.current = false;
+        window.removeEventListener("pointerrawupdate", onRaw.current);
+      }
+      if (faceFrame.current !== null) cancelAnimationFrame(faceFrame.current);
+    },
+    [],
+  );
+
+  /* --------------------------------------------------- press, release, keys */
+
+  const press = (e: ReactPointerEvent, surface: "hue" | "sq") => {
+    if (!begin(e)) return; // a secondary button is not a pick
+    mode.current = surface;
+    areaBox.current = areaRef.current?.getBoundingClientRect() ?? null;
+    hueBox.current = hueRef.current?.getBoundingClientRect() ?? null;
+    track(e);
+    writeFace(); // a press is a click: the backdrop moves with it
+    send.sendNow({ ...live.current }); // the press itself is a colour
+    startRaw();
+  };
 
   // the Canva eyedropper, when the browser has one (Chromium; behind a gesture)
   const eyeDrop = () => {
@@ -457,17 +639,25 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
     const next = hexToHsl(value);
     paintedHue.current = null;
     setHsl(next);
-    paint(next.h, next.s, next.l);
+    paintFrom(next.h, next.s, next.l);
   }, [value]);
 
   // a render fed from the last flush may be one frame behind the pointer —
-  // re-assert whatever the pointer last painted. When React is current (idle,
-  // or right after a flush) this is a no-op and reads no layout.
+  // re-assert whatever the pointer last painted. With no state in the gesture
+  // there is usually nothing to re-assert, and it reads no layout either way.
   useLayoutEffect(() => {
     if (!mode.current) return;
     const { h, s, l } = live.current;
-    if (h !== hsl.h || s !== hsl.s || l !== hsl.l) paint(h, s, l);
+    paint(h, s, l);
   });
+
+  /* --------------------------------------------------------------- render */
+
+  // What the panel shows. While a gesture is live the truth is `live`, never
+  // `hsl` / `value` — a render must reproduce the pixels under the cursor, so a
+  // re-render can only ever agree with the paint or be a no-op, never undo it.
+  const shown = mode.current ? live.current : hsl;
+  const shownHex = mode.current ? hslToHex(live.current.h, live.current.s, live.current.l) : value;
 
   return (
     <div className="flex flex-col gap-2">
@@ -477,28 +667,23 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
         data-wheel-face=""
         tabIndex={0}
         aria-label="Saturation and lightness — drag to pick"
-        onPointerDown={(e) => {
-          if (!begin(e)) return; // a secondary button is not a pick
-          mode.current = "sq";
-          areaBox.current = areaRef.current?.getBoundingClientRect() ?? null;
-          hueBox.current = hueRef.current?.getBoundingClientRect() ?? null;
-          pickFromArea(e);
-          send.sendNow({ ...live.current }); // the press itself is a colour
-        }}
+        onPointerDown={(e) => press(e, "sq")}
         onPointerUp={release}
         onPointerCancel={release}
         onPointerLeave={handleLeave}
         onKeyDown={areaKeys}
-        title="Drag to pick a colour · the dot follows the pointer"
-        className="relative h-36 w-full cursor-crosshair touch-none select-none rounded-xl border border-white/10"
-        style={{ background: squareFace(hsl.h) }}
+        title="Drag to pick a colour · the ring follows the pointer"
+        className="relative h-36 w-full cursor-default touch-none select-none rounded-xl border border-white/10"
+        /* the backdrop is `paint`'s alone: one gradient per frame, and a render
+           that rewrote it too would be a second full repaint of the largest
+           element on the panel for nothing */
       >
-        {/* the ring indicator — position lives ONLY in its transform */}
+        {/* the ring indicator — its position and colour live ONLY on the node */}
         <div
           ref={dotRef}
           data-wheel-marker=""
           className="pointer-events-none absolute top-0 left-0 -mt-2 -ml-2 h-4 w-4 rounded-full border-2 border-white will-change-transform"
-          style={{ boxShadow: INDICATOR_SHADOW, background: hslToHex(hsl.h, hsl.s, hsl.l) }}
+          style={{ boxShadow: INDICATOR_SHADOW, background: hslToHex(shown.h, shown.s, shown.l) }}
         />
       </div>
 
@@ -511,15 +696,8 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
         role="slider"
         aria-valuemin={0}
         aria-valuemax={359}
-        aria-valuenow={hsl.h}
-        onPointerDown={(e) => {
-          if (!begin(e)) return;
-          mode.current = "hue";
-          areaBox.current = areaRef.current?.getBoundingClientRect() ?? null;
-          hueBox.current = hueRef.current?.getBoundingClientRect() ?? null;
-          pickFromHue(e);
-          send.sendNow({ ...live.current });
-        }}
+        aria-valuenow={shown.h}
+        onPointerDown={(e) => press(e, "hue")}
         onPointerUp={release}
         onPointerCancel={release}
         onPointerLeave={handleLeave}
@@ -528,12 +706,12 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
         className="relative h-3.5 w-full cursor-pointer touch-none select-none rounded-full border border-white/10"
         style={{ background: HUE_RAMP }}
       >
-        {/* the hue knob — position lives ONLY in its transform */}
+        {/* the hue knob — its position and colour live ONLY on the node */}
         <div
           ref={knobRef}
           data-wheel-hue=""
           className="pointer-events-none absolute top-1/2 left-0 -mt-[9px] -ml-[9px] h-[18px] w-[18px] rounded-full border-2 border-white will-change-transform"
-          style={{ boxShadow: INDICATOR_SHADOW, background: hslToHex(hsl.h, 100, 50) }}
+          style={{ boxShadow: INDICATOR_SHADOW, background: hslToHex(shown.h, 100, 50) }}
         />
       </div>
 
@@ -550,12 +728,14 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
           </button>
         )}
         <div
+          ref={swatchRef}
           className="h-8 w-9 shrink-0 rounded-lg border border-white/15"
-          style={{ background: hslToHex(hsl.h, hsl.s, hsl.l) }}
+          style={{ background: hslToHex(shown.h, shown.s, shown.l) }}
           title="The colour the picker is holding"
         />
         <input
-          value={value}
+          ref={hexRef}
+          value={shownHex}
           onChange={(e) => {
             const hex = e.target.value;
             if (/^#[0-9a-fA-F]{6}$/.test(hex)) applyHex(hex);
@@ -567,14 +747,19 @@ export function ColorWheel({ value, onChange }: ColorWheelProps) {
 
       {/* --------------------------- h / s / l ----------------------------- */}
       <div className="grid grid-cols-3 gap-1.5">
-        {(["h", "s", "l"] as const).map((k) => (
+        {([
+          ["h", hRef],
+          ["s", sRef],
+          ["l", lRef],
+        ] as const).map(([k, field]) => (
           <label key={k} className="flex items-center gap-1 text-[10px] tracking-wide text-slate-500 uppercase">
             {k}
             <input
+              ref={field}
               type="number"
               min={0}
               max={k === "h" ? 360 : 100}
-              value={hsl[k]}
+              value={shown[k]}
               onChange={(e) => {
                 const v = clamp(Number(e.target.value), 0, k === "h" ? 360 : 100);
                 apply(k === "h" ? v : live.current.h, k === "s" ? v : live.current.s, k === "l" ? v : live.current.l);
