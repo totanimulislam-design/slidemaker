@@ -41,6 +41,7 @@ const suites = [
   ["layers panel (drag to reorder the unified stack + selection sync)", "layers.test.tsx", "runLayersTests"],
   ["slide stack (drag to reorder + multi-select boxes + bulk ops + the open slide's border)", "slides.test.tsx", "runSlideStackTests"],
   ["imported pages (a PDF / PowerPoint merged in as plain slides, the file kept whole in Uploads)", "import.test.tsx", "runImportTests", [pdfStubPlugin]],
+  ["colour picker (the wheel follows the cursor, one deck write per frame)", "wheel.test.tsx", "runWheelTests"],
 ];
 
 installDom();
