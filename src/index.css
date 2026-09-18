@@ -114,6 +114,51 @@ input[type="text"] {
   100% { background-position: -120% 0; }
 }
 
+/* ------------------------------------------------------------------ *
+ * The slide the editor is showing wears a moving gradient border.
+ *
+ * Two stacked backgrounds do the work: the card's own surface clipped to
+ * the padding box, the colour ramp clipped to the border box — so only the
+ * 2px frame shows colour and the card keeps its rounded corners. Animating
+ * background-position slides the ramp along the frame; one full tile per
+ * cycle means the loop has no seam (the ramp starts and ends on the same
+ * colour). A background-position animation is used instead of a registered
+ * custom property so the border still flows where @property is unavailable.
+ * ------------------------------------------------------------------ */
+.slide-card-current {
+  border-color: transparent;
+  background-image:
+    linear-gradient(#131a2c, #0b1120),
+    linear-gradient(100deg, #fbbf24 0%, #f472b6 25%, #38bdf8 50%, #34d399 75%, #fbbf24 100%);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: 100% 100%, 240px 100%;
+  background-repeat: no-repeat, repeat-x;
+  animation:
+    slideCardBorderFlow 4.5s linear infinite,
+    slideCardBorderGlow 2.6s ease-in-out infinite;
+}
+@keyframes slideCardBorderFlow {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 0 0, 240px 0; }
+}
+@keyframes slideCardBorderGlow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.14), 0 8px 22px rgba(2, 6, 23, 0.6); }
+  50% { box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.34), 0 10px 26px rgba(2, 6, 23, 0.65); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide-card-current {
+    animation: none;
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.24);
+  }
+}
+
+/* the rail's selection boxes fade in on hover — on touch there is no hover,
+   so they stay put there (and on keyboard focus, via focus-within) */
+@media (hover: none) {
+  [data-slide-select-wrap] { opacity: 1; }
+}
+
 /* Canva-style floating selection toolbar: a centered pill of icon groups plus a dropdown card. */
 .context-toolbar { position: relative; z-index: 30; flex-shrink: 0; display: flex; justify-content: center; padding: 10px 12px 2px; }
 /* merged contents (e.g. option text + option bullet + bullet text): the

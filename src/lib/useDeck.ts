@@ -493,6 +493,51 @@ export function useDeck() {
     [setDeckH],
   );
 
+  /**
+   * Bulk duplicate for the rail's ticked slides: every copy lands directly
+   * after its original (so the deck keeps its reading order) and the whole
+   * batch is ONE undo step.
+   */
+  const duplicateSlides = useCallback(
+    (ids: string[]) => {
+      const set = new Set(ids);
+      if (!set.size) return;
+      setDeckH((d) => {
+        let added = 0;
+        const slides = d.slides.flatMap((s) => {
+          if (!set.has(s.id)) return [s];
+          added++;
+          return [s, { ...s, id: `${s.id}-c${Math.random().toString(36).slice(2, 6)}` }];
+        });
+        if (!added) return d; // nothing ticked survived in this deck
+        return { ...d, slides };
+      }, `Duplicate ${ids.length} slide${ids.length === 1 ? "" : "s"}`);
+    },
+    [setDeckH],
+  );
+
+  /**
+   * Bulk delete for the rail's ticked slides — again one undo step. The editor
+   * keeps showing the slide it had open when that one survived; otherwise it
+   * settles on the nearest remaining slide instead of an empty slot.
+   */
+  const removeSlides = useCallback(
+    (ids: string[]) => {
+      const set = new Set(ids);
+      if (!set.size) return;
+      setDeckH((d) => {
+        const slides = d.slides.filter((s) => !set.has(s.id));
+        if (slides.length === d.slides.length) return d;
+        const open = d.slides[current];
+        const kept = open && !set.has(open.id) ? slides.findIndex((s) => s.id === open.id) : -1;
+        const next = kept >= 0 ? kept : Math.max(0, Math.min(slides.length - 1, current));
+        window.setTimeout(() => setCurrent(next), 0);
+        return { ...d, slides };
+      }, `Delete ${ids.length} slide${ids.length === 1 ? "" : "s"}`);
+    },
+    [setDeckH, current],
+  );
+
   const moveSlide = useCallback(
     (id: string, dir: -1 | 1) => {
       setDeckH((d) => {
@@ -1227,6 +1272,8 @@ export function useDeck() {
     insertBlank,
     removeSlide,
     duplicateSlide,
+    removeSlides,
+    duplicateSlides,
     moveSlide,
     moveSlideTo,
     addAnswerCopies,
