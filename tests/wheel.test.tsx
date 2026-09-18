@@ -1,27 +1,31 @@
 /**
- * Colour picker suite.
+ * Colour picker suite (the Canva system).
  *
- * The wheel is the colour picker behind every gradient (title background,
- * slide background, shape fill…): a hue ring plus a saturation / lightness
- * square. These tests pin the three things that make it a picker rather than a
- * laggy preview of one:
+ * The picker behind every gradient (title background, slide background, shape
+ * fill) is a full-width saturation / lightness area with a ring indicator, a
+ * hue ramp under it, and the gradient editor's angle dial + stop bar beside
+ * it. These tests pin the system that keeps every indicator GLUED to the
+ * pointer rather than trailing it:
  *
- *   1. the marker is where the pointer is — painted in the very event that
- *      moved it, and it keeps following when the move is delivered somewhere
- *      else (a lost pointer capture, the pointer off the wheel);
+ *   1. the indicator is where the pointer is — painted into the DOM in the
+ *      very event that moved it, mid-sweep with no render in between, and it
+ *      keeps following when the move is delivered somewhere else (a lost
+ *      pointer capture, the pointer off the picker);
  *   2. the editor is told ONCE PER FRAME with the newest colour, so a sweep is
  *      a handful of deck writes instead of one per pointermove — and the press
  *      and the release always settle, so nothing is left uncommitted;
  *   3. nothing paints without a live gesture: a hover never does, a
- *      secondary-button press never does, and an echo of the wheel's own
- *      colour that lands mid-drag cannot drag the marker back.
+ *      secondary-button press never does, a press on a stop knob never jumps
+ *      it, and an echo of the picker's own colour that lands mid-drag cannot
+ *      drag the indicator back.
  *
- * The last two cases drive the wheel through its real consumer, GradientEditor,
- * so the colour is graded on what the gradient — and therefore the deck — gets.
+ * The last cases drive the surfaces through their real consumer,
+ * GradientEditor, so the colour / angle / position is graded on what the
+ * gradient — and therefore the deck — gets.
  */
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ColorWheel, hexToHsl, hslToHex } from "../src/components/GradientWheel";
+import { ColorWheel, GradientAngleWheel, hexToHsl, hslToHex } from "../src/components/GradientWheel";
 import GradientEditor from "../src/components/GradientEditor";
 import type { Gradient } from "../src/lib/types";
 
@@ -37,44 +41,62 @@ export interface CaseResult {
 
 /* --------------------------------- geometry -------------------------------- */
 
-/** where the 148px wheel sits in the test page, and what it is made of */
-const SIZE = 148;
-const R = SIZE / 2; // 74
-const BAND = 16;
-const SIDE = 74; // Math.round((r - band - 6) * √2)
-const CENTRE = { x: 274, y: 174 };
-const SQUARE = { left: CENTRE.x - SIDE / 2, top: CENTRE.y - SIDE / 2 };
+/** the boxes the picker paints in, as laid out by the stubs below */
+const AREA = { left: 100, top: 100, width: 260, height: 144 };
+const RAMP = { left: 100, top: 252, width: 260, height: 14 };
+const BAR = { left: 100, top: 300, width: 260, height: 32 };
+const DIAL = { left: 420, top: 100, width: 148, height: 148 };
 
-const box = (left: number, top: number, width: number, height: number) => ({
-  left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}),
+const box = (b: { left: number; top: number; width: number; height: number }) => ({
+  ...b,
+  right: b.left + b.width,
+  bottom: b.top + b.height,
+  x: b.left,
+  y: b.top,
+  toJSON: () => ({}),
 }) as DOMRect;
 
-/** the point on the S/L square for a saturation / lightness pair */
-const squarePoint = (s: number, l: number) => ({
-  x: SQUARE.left + (s / 100) * SIDE,
-  y: SQUARE.top + ((100 - l) / 100) * SIDE,
+/** the pointer point inside the S/L area for a saturation / lightness pair */
+const areaPoint = (s: number, l: number) => ({
+  x: AREA.left + (s / 100) * AREA.width,
+  y: AREA.top + ((100 - l) / 100) * AREA.height,
 });
-/** the point on the hue ring for a hue */
-const ringPoint = (h: number) => {
-  const a = ((h - 90) * Math.PI) / 180;
-  return { x: CENTRE.x + (R - BAND / 2) * Math.cos(a), y: CENTRE.y + (R - BAND / 2) * Math.sin(a) };
-};
-/** where the square's marker must sit for a saturation / lightness pair */
-const squareMarker = (s: number, l: number) => ({ left: (s / 100) * SIDE - 7, top: ((100 - l) / 100) * SIDE - 7 });
-/** where the ring's marker must sit for a hue */
-const hueMarker = (h: number) => {
-  const a = ((h - 90) * Math.PI) / 180;
-  return { left: R + (R - BAND / 2) * Math.cos(a) - 8, top: R + (R - BAND / 2) * Math.sin(a) - 8 };
+/** the pointer point on the hue ramp for a hue */
+const rampPoint = (h: number) => ({ x: RAMP.left + (h / 360) * RAMP.width, y: RAMP.top + RAMP.height / 2 });
+/** the pointer point on the stop bar for an at% */
+const barPoint = (at: number) => ({ x: BAR.left + (at / 100) * BAR.width, y: BAR.top + BAR.height / 2 });
+/** the pointer point on the angle dial for a gradient angle (0° = up) */
+const dialPoint = (deg: number) => {
+  const a = ((deg - 90) * Math.PI) / 180;
+  return { x: DIAL.left + 74 + 50 * Math.cos(a), y: DIAL.top + 74 + 50 * Math.sin(a) };
 };
 
-const near = (px: string | undefined, want: number, tol = 0.6) => Math.abs(parseFloat(px ?? "NaN") - want) <= tol;
-const at = (el: HTMLElement | null, want: { left: number; top: number }, tol = 0.6) =>
-  !!el && near(el.style.left, want.left, tol) && near(el.style.top, want.top, tol);
-const pos = (el: HTMLElement | null) => `${el?.style.left ?? "?"}/${el?.style.top ?? "?"}`;
+/** where the ring indicator must sit (local translate) for an s/l pair */
+const dotAt = (s: number, l: number) => ({ x: (s / 100) * AREA.width, y: ((100 - l) / 100) * AREA.height });
+/** where the hue knob must sit (local translate) for a hue */
+const knobAt = (h: number) => ({ x: (h / 360) * RAMP.width, y: 0 });
+/** where the dial knob must sit (local translate) for an angle */
+const dialKnobAt = (deg: number) => {
+  const a = ((deg - 90) * Math.PI) / 180;
+  return { x: 74 + 62 * Math.cos(a) - 10, y: 74 + 62 * Math.sin(a) - 10 };
+};
 
-/* ---------------------------------- the editor ----------------------------- */
+/** the local translate an indicator was painted at */
+const tf = (el: HTMLElement | null) => {
+  const m = /translate3d\((-?[\d.]+)px,\s*(-?[\d.]+)px/.exec(el?.style.transform ?? "");
+  return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : null;
+};
+const near = (v: number | undefined, want: number, tol = 0.6) => v !== undefined && Math.abs(v - want) <= tol;
+const atTf = (el: HTMLElement | null, want: { x: number; y: number }, tol = 0.6) => {
+  const p = tf(el);
+  return !!p && near(p.x, want.x, tol) && near(p.y, want.y, tol);
+};
+const pos = (el: HTMLElement | null) => el?.style.transform ?? "(none)";
+const leftPct = (el: HTMLElement | null) => el?.style.left ?? "(none)";
 
-/** everything the wheel asked the editor for, in order */
+/* ---------------------------------- harnesses ------------------------------ */
+
+/** everything the picker asked the editor for, in order */
 let asked: string[] = [];
 /** a heavy editor: the colour is logged but only applied when the test says so */
 let defer = false;
@@ -107,19 +129,22 @@ export async function runWheelTests(): Promise<CaseResult[]> {
   });
 
   const el = (sel: string) => host.querySelector<HTMLElement>(sel);
-  const hueDot = () => el("[data-wheel-hue]");
-  const sqDot = () => el("[data-wheel-marker]");
-  const ring = () => hueDot()?.parentElement ?? null;
-  const square = () => el("[data-wheel-face]");
+  const dot = () => el("[data-wheel-marker]");
+  const knob = () => el("[data-wheel-hue]");
+  const area = () => el("[data-wheel-face]");
+  const ramp = () => el("[data-wheel-hue-ramp]");
 
-  /** jsdom has no layout: give the wheel and its square the boxes they paint in */
-  const layOut = () => {
-    const r = ring();
-    const f = square();
-    if (r) r.getBoundingClientRect = () => box(CENTRE.x - R, CENTRE.y - R, SIZE, SIZE);
-    if (f) f.getBoundingClientRect = () => box(SQUARE.left, SQUARE.top, SIDE, SIDE);
+  /** jsdom has no layout: give every surface the box it paints in */
+  const layOut = (scope: ParentNode) => {
+    const pairs: [HTMLElement | null, DOMRect][] = [
+      [scope.querySelector<HTMLElement>("[data-wheel-face]"), box(AREA)],
+      [scope.querySelector<HTMLElement>("[data-wheel-hue-ramp]"), box(RAMP)],
+      [scope.querySelector<HTMLElement>("[data-stop-bar]"), box(BAR)],
+      [scope.querySelector<HTMLElement>("[data-angle-dial]"), box(DIAL)],
+    ];
+    for (const [node, b] of pairs) if (node) node.getBoundingClientRect = () => b;
   };
-  layOut();
+  layOut(host);
 
   const fire = (target: EventTarget, type: string, x: number, y: number, buttons: number, button = 0) => {
     try {
@@ -136,19 +161,19 @@ export async function runWheelTests(): Promise<CaseResult[]> {
       errors.push(`${type}: ${(err as Error).message}`);
     }
   };
-  /** one animation frame (two: the first is the one the wheel asked for) */
+  /** one animation frame (two: the first is the one the picker asked for) */
   const frame = () =>
     act(async () => {
       await new Promise<void>((res) => win.requestAnimationFrame(() => win.requestAnimationFrame(() => res())));
     });
-  /** the editor applying a colour from outside the wheel (a preset, an undo, a hex field) */
+  /** the editor applying a colour from outside the picker (a preset, an undo) */
   const fromOutside = (hex: string) => act(() => setEditorValue?.(hex));
 
   const out: CaseResult[] = [];
   const reset = () => {
     asked = [];
   };
-  /** the wheel starts each case on the same colour */
+  /** the picker starts each case on the same colour */
   const startAt = (hex: string) => {
     fromOutside(hex);
     reset();
@@ -158,100 +183,109 @@ export async function runWheelTests(): Promise<CaseResult[]> {
 
   /* ---------------------- a press is already a colour ---------------------- */
 
-  const onRing = ringPoint(90);
-  fire(ring()!, "pointerdown", onRing.x, onRing.y, 1);
+  const onArea = areaPoint(50, 50);
+  fire(area()!, "pointerdown", onArea.x, onArea.y, 1);
   const pressed = asked.at(-1) ?? "";
   out.push({
     name: "a press picks the colour under the cursor, before the mouse moves",
-    pass: pressed === hslToHex(90, 100, 50) && hexToHsl(pressed).h === 90,
-    detail: `asked=${pressed || "(nothing)"} want=${hslToHex(90, 100, 50)}`,
+    pass: pressed === hslToHex(0, 50, 50) && hexToHsl(pressed).s === 50 && hexToHsl(pressed).l === 50,
+    detail: `asked=${pressed || "(nothing)"} want=${hslToHex(0, 50, 50)}`,
   });
   out.push({
-    name: "…and both markers already sit where the press landed",
-    pass: at(hueDot(), hueMarker(90)) && at(sqDot(), squareMarker(100, 50)),
-    detail: `hue=${pos(hueDot())} want=${JSON.stringify(hueMarker(90))} square=${pos(sqDot())} want=${JSON.stringify(squareMarker(100, 50))}`,
+    name: "…and the ring indicator already sits where the press landed",
+    pass: atTf(dot(), dotAt(50, 50)),
+    detail: `dot=${pos(dot())} want=${JSON.stringify(dotAt(50, 50))}`,
   });
-  fire(win, "pointerup", onRing.x, onRing.y, 0);
+  fire(win, "pointerup", onArea.x, onArea.y, 0);
 
-  /* ------------------- the marker follows every single move ----------------- */
+  /* ------------------- the indicator follows every single move -------------- */
 
   startAt("#ff0000");
-  const p0 = squarePoint(50, 50);
-  fire(square()!, "pointerdown", p0.x, p0.y, 1);
-  const moved = squarePoint(100, 100);
-  fire(win, "pointermove", moved.x, moved.y, 1); // delivered to the window, not to the wheel
+  const p0 = areaPoint(50, 50);
+  fire(area()!, "pointerdown", p0.x, p0.y, 1);
+  const moved = areaPoint(100, 100);
+  fire(win, "pointermove", moved.x, moved.y, 1); // delivered to the window, not to the picker
   out.push({
-    name: "the marker follows a move the wheel never sees (a lost pointer capture can't freeze it)",
-    pass: at(sqDot(), squareMarker(100, 100)),
-    detail: `square=${pos(sqDot())} want=${JSON.stringify(squareMarker(100, 100))}`,
+    name: "the indicator follows a move the picker never sees (a lost pointer capture can't freeze it)",
+    pass: atTf(dot(), dotAt(100, 100)),
+    detail: `dot=${pos(dot())} want=${JSON.stringify(dotAt(100, 100))}`,
   });
   fire(win, "pointerup", moved.x, moved.y, 0);
 
-  /* ------------------- one frame of moves is one deck write ---------------- */
+  /* ------------- a sweep paints as it goes, then is ONE deck write ---------- */
 
   startAt("#ff0000");
-  fire(square()!, "pointerdown", p0.x, p0.y, 1);
+  fire(area()!, "pointerdown", p0.x, p0.y, 1);
   await frame();
   reset();
   let end = p0;
   for (const s of [60, 70, 80, 90, 95, 25]) {
-    end = squarePoint(s, 50);
+    end = areaPoint(s, 50);
     fire(win, "pointermove", end.x, end.y, 1);
+    // THE anti-lag pin: with no frame and no render in between, the indicator
+    // is already under the pointer — it never waits for React
+    if (s === 90 && !atTf(dot(), dotAt(90, 50))) {
+      out.push({
+        name: "mid-sweep, with no render in between, the indicator is already at the newest pointer position",
+        pass: false,
+        detail: `dot=${pos(dot())} want=${JSON.stringify(dotAt(90, 50))}`,
+      });
+    }
   }
   const duringSweep = asked.length;
-  const trackedLastMove = at(sqDot(), squareMarker(25, 50));
+  const trackedLastMove = atTf(dot(), dotAt(25, 50));
   await frame();
   out.push({
     name: "a sweep across one frame tells the editor once, at the newest colour",
     pass: duringSweep === 0 && trackedLastMove && asked.length === 1 && asked[0] === hslToHex(0, 25, 50),
-    detail: `during=${duringSweep} after=${asked.length} asked=${asked[0] ?? "-"} want=${hslToHex(0, 25, 50)} marker=${pos(sqDot())}`,
+    detail: `during=${duringSweep} after=${asked.length} asked=${asked[0] ?? "-"} want=${hslToHex(0, 25, 50)} dot=${pos(dot())}`,
   });
 
   /* ------------------ the release settles what is pending ------------------ */
 
   reset();
-  const last = squarePoint(75, 25);
+  const last = areaPoint(75, 25);
   fire(win, "pointermove", last.x, last.y, 1);
   fire(win, "pointerup", last.x, last.y, 0);
   const settled = asked.at(-1) ?? "";
   await frame();
   out.push({
-    name: "the release commits the colour the marker is showing — even between two frames",
-    pass: settled === hslToHex(0, 75, 25) && at(sqDot(), squareMarker(75, 25)) && asked.length === 1,
+    name: "the release commits the colour the indicator is showing — even between two frames",
+    pass: settled === hslToHex(0, 75, 25) && atTf(dot(), dotAt(75, 25)) && asked.length === 1,
     detail: `asked=${settled || "(nothing)"} want=${hslToHex(0, 75, 25)} calls=${asked.length}`,
   });
 
   /* ------------------- after the release nothing is live ------------------- */
 
   reset();
-  const before = pos(sqDot());
-  const over = squarePoint(40, 60);
-  fire(square()!, "pointermove", over.x, over.y, 0);
-  fire(ring()!, "pointermove", 0, 0, 0);
+  const before = pos(dot());
+  const over = areaPoint(40, 60);
+  fire(area()!, "pointermove", over.x, over.y, 0);
+  fire(win, "pointermove", over.x, over.y, 0);
   out.push({
-    name: "a release outside the wheel leaves nothing live: a hover never paints",
-    pass: asked.length === 0 && pos(sqDot()) === before,
-    detail: `asked=${asked.length} marker ${before} → ${pos(sqDot())}`,
+    name: "a release outside the picker leaves nothing live: a hover never paints",
+    pass: asked.length === 0 && pos(dot()) === before,
+    detail: `asked=${asked.length} dot ${before} → ${pos(dot())}`,
   });
 
   /* ------------------ an echo landing mid-drag cannot yank it -------------- */
 
   defer = true;
-  const drag0 = squarePoint(50, 50);
-  fire(square()!, "pointerdown", drag0.x, drag0.y, 1);
+  const drag0 = areaPoint(50, 50);
+  fire(area()!, "pointerdown", drag0.x, drag0.y, 1);
   await frame(); // ← the editor has now been told the press colour
-  const drag1 = squarePoint(80, 40);
+  const drag1 = areaPoint(80, 40);
   fire(win, "pointermove", drag1.x, drag1.y, 1);
   await frame(); // ← and now drag1; its echo is the one that arrives late
   const stale = deferred;
-  const drag2 = squarePoint(20, 60);
+  const drag2 = areaPoint(20, 60);
   fire(win, "pointermove", drag2.x, drag2.y, 1);
-  const heldAtDrag2 = at(sqDot(), squareMarker(20, 60));
+  const heldAtDrag2 = atTf(dot(), dotAt(20, 60));
   fromOutside(stale ?? "#000000"); // the editor finally lands the previous frame's colour
   out.push({
-    name: "an echo that lands mid-drag cannot drag the marker back",
-    pass: heldAtDrag2 && at(sqDot(), squareMarker(20, 60)),
-    detail: `at move=${heldAtDrag2} after echo ${stale} = ${pos(sqDot())} want=${JSON.stringify(squareMarker(20, 60))}`,
+    name: "an echo that lands mid-drag cannot drag the indicator back",
+    pass: heldAtDrag2 && atTf(dot(), dotAt(20, 60)),
+    detail: `at move=${heldAtDrag2} after echo ${stale} = ${pos(dot())} want=${JSON.stringify(dotAt(20, 60))}`,
   });
   defer = false;
   reset();
@@ -262,35 +296,59 @@ export async function runWheelTests(): Promise<CaseResult[]> {
     detail: `asked=${asked.at(-1) ?? "(nothing)"} want=${hslToHex(0, 20, 60)}`,
   });
 
-  /* ------------------- an outside colour still moves the wheel -------------- */
+  /* ------------------- an outside colour still moves the picker ------------- */
 
   fromOutside("#0000ff");
   out.push({
-    name: "a colour from outside (a preset, the hex field) still moves both markers",
-    pass: at(hueDot(), hueMarker(240)) && at(sqDot(), squareMarker(100, 50)),
-    detail: `hue=${pos(hueDot())} square=${pos(sqDot())} want ${JSON.stringify(hueMarker(240))}/${JSON.stringify(squareMarker(100, 50))}`,
+    name: "a colour from outside (a preset, the hex field) still moves both indicators",
+    pass: atTf(dot(), dotAt(100, 50)) && atTf(knob(), knobAt(240)),
+    detail: `dot=${pos(dot())} knob=${pos(knob())} want ${JSON.stringify(dotAt(100, 50))}/${JSON.stringify(knobAt(240))}`,
   });
 
   /* ------------------- a secondary-button press is not a pick -------------- */
 
   reset();
-  const beforeRight = pos(sqDot());
-  const right = squarePoint(30, 30);
-  fire(square()!, "pointerdown", right.x, right.y, 2, 2);
-  fire(square()!, "pointermove", right.x, right.y, 2, 2);
+  const beforeRight = pos(dot());
+  const right = areaPoint(30, 30);
+  fire(area()!, "pointerdown", right.x, right.y, 2, 2);
+  fire(area()!, "pointermove", right.x, right.y, 2, 2);
   fire(win, "pointerup", right.x, right.y, 0, 2);
-  fire(square()!, "pointermove", squarePoint(10, 90).x, squarePoint(10, 90).y, 0);
+  fire(area()!, "pointermove", areaPoint(10, 90).x, areaPoint(10, 90).y, 0);
   out.push({
     name: "a secondary-button press picks nothing, and arms no gesture",
-    pass: asked.length === 0 && pos(sqDot()) === beforeRight,
-    detail: `asked=${asked.length} marker ${beforeRight} → ${pos(sqDot())}`,
+    pass: asked.length === 0 && pos(dot()) === beforeRight,
+    detail: `asked=${asked.length} dot ${beforeRight} → ${pos(dot())}`,
   });
+
+  /* ----------------------------- the hue ramp ------------------------------ */
+
+  startAt("#ff0000");
+  const onRamp = rampPoint(240);
+  fire(ramp()!, "pointerdown", onRamp.x, onRamp.y, 1);
+  const huePress = asked.at(-1) ?? "";
+  out.push({
+    name: "a press on the hue ramp is a colour at once, with the knob under the cursor",
+    pass: huePress === hslToHex(240, 100, 50) && atTf(knob(), knobAt(240)),
+    detail: `asked=${huePress || "(nothing)"} want=${hslToHex(240, 100, 50)} knob=${pos(knob())}`,
+  });
+  reset();
+  const green = rampPoint(120);
+  fire(win, "pointermove", green.x, green.y, 1);
+  const hueMid = asked.length;
+  await frame();
+  out.push({
+    name: "a hue sweep is one write per frame too",
+    pass: hueMid === 0 && asked.length === 1 && asked[0] === hslToHex(120, 100, 50) && atTf(knob(), knobAt(120)),
+    detail: `mid=${hueMid} asked=${asked[0] ?? "-"} want=${hslToHex(120, 100, 50)} knob=${pos(knob())}`,
+  });
+  fire(win, "pointerup", green.x, green.y, 0);
 
   /* ------------------ the real consumer, end to end ------------------------- */
 
-  // The wheel is only ever reached through GradientEditor (slide background,
-  // title banner, shape fill …). Same drag, but now graded on what the gradient
-  // — and therefore the deck — actually receives.
+  // The picker is only ever reached through GradientEditor (slide background,
+  // title banner, shape fill …). Same gestures, but now graded on what the
+  // gradient — and therefore the deck — actually receives: the stop colour from
+  // the picker, the angle from the dial, the stop position from the bar.
   const editorHost = doc.createElement("div");
   doc.body.appendChild(editorHost);
   const START: Gradient = {
@@ -321,44 +379,92 @@ export async function runWheelTests(): Promise<CaseResult[]> {
     setEditorRoot = createRoot(editorHost);
     setEditorRoot.render(createElement(EditorHarness));
   });
-  const wheelIn = (sel: string) => editorHost.querySelector<HTMLElement>(sel);
-  const editorRing = wheelIn("[data-wheel-hue]")?.parentElement ?? null;
-  const editorSquare = wheelIn("[data-wheel-face]");
-  if (editorRing) editorRing.getBoundingClientRect = () => box(CENTRE.x - R, CENTRE.y - R, SIZE, SIZE);
-  if (editorSquare) editorSquare.getBoundingClientRect = () => box(SQUARE.left, SQUARE.top, SIDE, SIDE);
+  layOut(editorHost);
+  const eEl = (sel: string) => editorHost.querySelector<HTMLElement>(sel);
 
-  const grab = ringPoint(210);
-  fire(editorRing!, "pointerdown", grab.x, grab.y, 1);
+  /* … the picker drives the selected stop … */
+  const eDot = () => eEl("[data-wheel-marker]");
+  const eArea = () => eEl("[data-wheel-face]")!;
+  const grabArea = areaPoint(100, 50);
+  fire(eArea(), "pointerdown", grabArea.x, grabArea.y, 1);
   const pressWrite = writes.length;
   const pressColour = editorNow.stops[0].color;
   writes = [];
-  let swept: { x: number; y: number } = grab;
-  for (const h of [220, 230, 240, 250]) {
-    swept = ringPoint(h);
-    fire(win, "pointermove", swept.x, swept.y, 1);
-  }
+  const sweepTo = areaPoint(25, 50);
+  fire(win, "pointermove", sweepTo.x, sweepTo.y, 1);
   const midSweep = writes.length;
   await frame();
   const afterFrame = writes.length;
-  fire(win, "pointerup", swept.x, swept.y, 0);
+  fire(win, "pointerup", sweepTo.x, sweepTo.y, 0);
   out.push({
-    name: "the gradient editor gets the press at once, then one write per frame",
-    pass: pressWrite === 1 && pressColour === hslToHex(210, 100, 50) && midSweep === 0 && afterFrame === 1,
+    name: "the gradient editor gets the picker's press at once, then one write per frame",
+    pass: pressWrite === 1 && pressColour === hslToHex(0, 100, 50) && midSweep === 0 && afterFrame === 1,
     detail: `press=${pressWrite}/${pressColour} sweep=${midSweep} frame=${afterFrame}`,
   });
   out.push({
     name: "…and the colour the pointer left on is the gradient's colour",
-    pass: editorNow.stops[0].color === hslToHex(250, 100, 50) && at(wheelIn("[data-wheel-marker]"), squareMarker(100, 50)),
-    detail: `stop=${editorNow.stops[0].color} want=${hslToHex(250, 100, 50)}`,
+    pass: editorNow.stops[0].color === hslToHex(0, 25, 50) && atTf(eDot(), dotAt(25, 50)),
+    detail: `stop=${editorNow.stops[0].color} want=${hslToHex(0, 25, 50)} dot=${pos(eDot())}`,
   });
-  act(() => setEditorRoot?.unmount());
-  editorHost.remove();
+
+  /* … the angle dial … */
+  writes = [];
+  const eKnob = () => eEl("[data-angle-knob]");
+  const dial = () => eEl("[data-angle-dial]")!;
+  const grabDial = dialPoint(90);
+  fire(dial(), "pointerdown", grabDial.x, grabDial.y, 1);
+  const anglePress = editorNow.angle;
+  writes = [];
+  let sweptDial = grabDial;
+  for (const deg of [120, 150, 180]) {
+    sweptDial = dialPoint(deg);
+    fire(win, "pointermove", sweptDial.x, sweptDial.y, 1);
+  }
+  const dialMid = writes.length;
+  const dialKnobLive = atTf(eKnob(), dialKnobAt(180));
+  await frame();
+  const dialAfter = writes.length;
+  fire(win, "pointerup", sweptDial.x, sweptDial.y, 0);
+  out.push({
+    name: "the dial's press is an angle at once, its sweep paints the knob live and is one write per frame",
+    pass: anglePress === 90 && dialMid === 0 && dialKnobLive && dialAfter === 1 && editorNow.angle === 180,
+    detail: `press=${anglePress} mid=${dialMid} knobLive=${dialKnobLive} (${pos(eKnob())}) frame=${dialAfter} angle=${editorNow.angle}`,
+  });
+
+  /* … the stop bar … */
+  writes = [];
+  const stopBar = () => eEl("[data-stop-bar]")!;
+  const stopKnob = () => eEl('[data-stop-knob="0"]');
+  const grabKnob = barPoint(0);
+  fire(stopKnob()!, "pointerdown", grabKnob.x, grabKnob.y, 1);
+  const grabbedWrites = writes.length; // a press grabs the knob — it never jumps
+  const atPress = editorNow.stops[0].at;
+  const dragBar = barPoint(50);
+  fire(win, "pointermove", dragBar.x, dragBar.y, 1);
+  const barMid = writes.length;
+  const knobLive = leftPct(stopKnob()) === "50%";
+  await frame();
+  const barAfter = writes.length;
+  fire(stopKnob()!, "pointerup", dragBar.x, dragBar.y, 0);
+  await frame();
+  out.push({
+    name: "a press on a stop knob grabs it without moving it; the drag paints it live and is one write per frame",
+    pass: grabbedWrites === 0 && atPress === 0 && barMid === 0 && knobLive && barAfter === 1 && editorNow.stops[0].at === 50,
+    detail: `grab=${grabbedWrites} atPress=${atPress} mid=${barMid} left=${leftPct(stopKnob())} frame=${barAfter} at=${editorNow.stops[0].at}`,
+  });
+  out.push({
+    name: "…and the release leaves the knob where the pointer left it",
+    pass: leftPct(stopKnob()) === "50%" && editorNow.stops[0].at === 50,
+    detail: `left=${leftPct(stopKnob())} at=${editorNow.stops[0].at}`,
+  });
 
   out.push({ name: "no uncaught errors in the colour-picker suite", pass: errors.length === 0, detail: errors.join(" | ") });
 
   win.removeEventListener("error", onErr as EventListener);
   act(() => {
+    setEditorRoot?.unmount();
     root?.unmount();
   });
+  editorHost.remove();
   return out;
 }

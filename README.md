@@ -295,32 +295,43 @@ following the cursor.
 ## The colour picker keeps up with the pointer
 
 Every gradient in the editor — slide background, title banner, shape fill — is
-set with the same picker: a hue ring with a saturation / lightness square inside
-it (`ColorWheel` in `src/components/GradientWheel.tsx`). Its markers belong to
-the pointer, and nothing about the size of the editor behind it may change that:
+set with the same picker (`ColorWheel` in `src/components/GradientWheel.tsx`),
+laid out and behaved like Canva's: a full-width saturation / lightness area
+with a ring indicator, a hue ramp under it, an eyedropper where the browser
+has one, and live swatch / hex / H·S·L readouts. The gradient editor's angle
+dial and its colour-stop bar run on the same system. The indicators belong to
+the pointer, and nothing about the size of the editor behind them may change
+that:
 
-- **The paint goes straight into the DOM.** A move writes the ring's marker, the
-  square's ramp and the square's marker in the same event that moved them, so
-  what is under the cursor is on screen at once. The picker does not wait for a
-  React render — the colour it picks re-renders the whole board, and waiting for
-  that is what used to make the markers trail the mouse.
-- **The deck is told once per frame.** Moves are collected and the newest colour
-  is handed to the editor on the next animation frame, so a sweep across the ring
-  is a handful of undoable writes instead of one per `pointermove` — and the
-  slide below still previews live.
+- **React never positions an indicator.** The ring, the hue knob, the dial knob
+  and a carried stop are all placed with a compositor-friendly
+  `transform: translate3d` written straight into the DOM in the very event
+  that moved them. No coordinate ever passes through React state, so a render
+  cannot stamp a stale position over the live one — what is under the cursor
+  is on screen at once, mid-sweep, with no render in between. (The readouts —
+  swatch, hex, H/S/L — DO follow the drag live; that render simply cannot
+  touch the indicators.)
+- **Geometry is measured once per press.** The picker caches its box on
+  pointer-down, so no move ever forces layout.
+- **The deck is told once per frame** (`useFrameSend` in
+  `src/lib/frameSend.ts`). Moves are collected and the newest colour is handed
+  to the editor on the next animation frame, so a sweep is a handful of
+  undoable writes instead of one per `pointermove` — and the slide below still
+  previews live.
 - **The press and the release always settle.** A press commits its colour
-  immediately (a click never waits for a frame) and the end of the gesture
-  flushes whatever is still pending, so the colour the marker shows is the colour
-  that is committed.
-- **Nothing paints without a gesture.** The picker runs on
+  immediately (a click never waits for a frame; a stop-knob press only grabs —
+  it never jumps), and the end of the gesture flushes whatever is still
+  pending, so the colour the indicator shows is the colour that is committed.
+- **Nothing paints without a gesture.** Every surface runs on
   `src/lib/dragSession.ts` like every other gesture in the editor: moves are
-  window-wide, so it keeps tracking when the pointer leaves the wheel; a
-  secondary-button press is not a pick; and a release, cancel or blur ends it, so
-  a later hover cannot paint — the wheel used to keep painting under a moving
-  cursor after a release it never saw.
-- **An outside colour still moves the wheel.** A preset, the hex field or an undo
-  repositions both markers, while an echo of the wheel's own colour that arrives
-  mid-drag is ignored instead of dragging the marker back.
+  window-wide, so a picker keeps tracking when the pointer leaves it; a
+  secondary-button press is not a pick; and a release, cancel or blur ends it,
+  so a later hover cannot paint.
+- **An outside colour still moves the picker.** A preset, the hex field or an
+  undo repositions the indicators, while an echo of the picker's own colour
+  that arrives mid-drag is ignored instead of dragging them back.
+- **Reachable without a pointer.** Both surfaces take focus; the arrow keys
+  nudge the picked colour (Shift = 10 steps).
 
 ## Board gestures
 
@@ -341,5 +352,6 @@ by one pointer state machine, `src/lib/dragSession.ts`. Its guarantees:
 
 `npm run test:drag` covers the sequences above, plus regression cases proving the
 old pattern (gesture armed on press + `onPointerMove` on the item) did leak, and
-the picker suite (`tests/wheel.test.tsx`) pins the wheel's tracking, its
-one-write-per-frame budget and its press / release settlement.
+the picker suite (`tests/wheel.test.tsx`) pins the indicators' tracking, the
+one-write-per-frame budget and the press / release settlement across the
+picker, the hue ramp, the angle dial and the stop bar.
