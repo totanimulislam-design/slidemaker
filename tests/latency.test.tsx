@@ -23,6 +23,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { ColorWheel, hslToHex } from "../src/components/GradientWheel";
 import { useFrameSend } from "../src/lib/frameSend";
 import GradientEditor from "../src/components/GradientEditor";
+import App from "../src/App";
 import type { Gradient } from "../src/lib/types";
 
 type Win = Window & typeof globalThis & { PointerEvent: new (t: string, i?: unknown) => Event };
@@ -552,6 +553,119 @@ export async function runLatencyTests(): Promise<CaseResult[]> {
     pass: !areaClass.includes("cursor-crosshair") && (area.style.cursor === "" || area.style.cursor === "default"),
     detail: `class says: ${/cursor-[\w-]+/.exec(areaClass)?.[0] ?? "(no cursor class)"}; inline: ${area.style.cursor || "(none)"}`,
   });
+
+  /* ---------- 10. in the REAL app, a move frame never reflows the page ----- */
+
+  // The ring IS painted in the event that moved the pointer — but it is only
+  // SEEN the next time the browser produces a frame. The once-per-frame deck
+  // commit decides how soon that is, so a slide render is not allowed to touch
+  // the document: a render-time querySelector / getBoundingClientRect is a
+  // forced synchronous reflow of the whole editor behind every commit, and
+  // THE thing that made the ring trail the cursor on a large deck. Mount the
+  // real editor (deck with a shape on every slide, so the shape layer and its
+  // snap targets exist), drag the real picker's area, and count document
+  // queries + layout reads per move frame: the only correct number is ZERO.
+  const savedDeck = localStorage.getItem("mcq-slide-studio-v2");
+  localStorage.setItem(
+    "mcq-slide-studio-v2",
+    JSON.stringify({
+      header: { title: "MCQ", brandTop: "B", brandBottom: "", badge: "Q", logo: null, showLogo: false, showBanner: false },
+      theme: {
+        background: {
+          gradient: {
+            enabled: true,
+            type: "linear",
+            angle: 90,
+            stops: [{ color: "#22aa77", at: 0 }, { color: "#223377", at: 100 }],
+          },
+        },
+      },
+      slides: ["sl1", "sl2", "sl3"].map((id, i) => ({
+        id,
+        number: String(i + 1),
+        question: `প্রশ্ন ${i + 1}: $x^2+${i + 1}x=0$`,
+        options: [{ key: "ক", text: "১" }, { key: "খ", text: "২" }],
+        answer: "ক",
+        scale: 1,
+        showAnswer: false,
+      })),
+      globalShapes: [
+        { id: "g1", kind: "rect", x: 20, y: 20, w: 20, h: 10, rot: 0, z: 10, fill: "#2f4fff", fillOpacity: 1, stroke: "", strokeWidth: 0, dash: false, text: "", textColor: "#fff", fontSize: 20, bold: false, italic: false, align: "center", valign: "middle" },
+      ],
+    }),
+  );
+  const appHost = doc.createElement("div");
+  doc.body.appendChild(appHost);
+  let appRoot: Root | null = null;
+  act(() => {
+    appRoot = createRoot(appHost);
+    appRoot.render(createElement(App));
+  });
+  const navBg = appHost.querySelector<HTMLElement>('[data-nav="background"]');
+  act(() => {
+    navBg?.dispatchEvent(new win.MouseEvent("click", { bubbles: true, cancelable: true }));
+  });
+  await frame();
+  const appArea = appHost.querySelector<HTMLElement>("[data-wheel-face]")!;
+  const appRamp = appHost.querySelector<HTMLElement>("[data-wheel-hue-ramp]")!;
+  /* the picker measures its OWN surfaces on press — hand them their boxes as
+     own properties so they never hit the document instrumentation below */
+  const APP_AREA = { left: 500, top: 200, width: 260, height: 144 };
+  const APP_RAMP = { left: 500, top: 360, width: 260, height: 14 };
+  appArea.getBoundingClientRect = () => box(APP_AREA);
+  appRamp.getBoundingClientRect = () => box(APP_RAMP);
+
+  let appQueries = 0;
+  let appRectReads = 0;
+  const realQS = doc.querySelector.bind(doc);
+  const realQSA = doc.querySelectorAll.bind(doc);
+  doc.querySelector = ((sel: string) => {
+    appQueries++;
+    return realQS(sel);
+  }) as typeof doc.querySelector;
+  doc.querySelectorAll = ((sel: string) => {
+    appQueries++;
+    return realQSA(sel);
+  }) as typeof doc.querySelectorAll;
+  const elProto = win.Element.prototype as HTMLElement;
+  const realRect = elProto.getBoundingClientRect;
+  elProto.getBoundingClientRect = function (this: Element) {
+    appRectReads++;
+    return realRect.call(this);
+  } as typeof elProto.getBoundingClientRect;
+
+  fire(appArea, "pointerdown", APP_AREA.left + APP_AREA.width / 2, APP_AREA.top + APP_AREA.height / 2, 1);
+  await frame();
+  // per-frame counts across three move bursts (each ≈ one deck commit)
+  const frameReads: { q: number; r: number }[] = [];
+  for (let burst = 0; burst < 3; burst++) {
+    appQueries = 0;
+    appRectReads = 0;
+    for (let i = 0; i < 10; i++) {
+      const px = APP_AREA.left + (((burst * 10 + i) % 29) / 29) * APP_AREA.width;
+      const py = APP_AREA.top + (((burst * 10 + i) % 17) / 17) * APP_AREA.height;
+      fire(win, "pointermove", px, py, 1);
+    }
+    await frame();
+    frameReads.push({ q: appQueries, r: appRectReads });
+  }
+  fire(win, "pointerup", APP_AREA.left + APP_AREA.width / 2, APP_AREA.top + APP_AREA.height / 2, 0);
+  await frame();
+  doc.querySelector = realQS;
+  doc.querySelectorAll = realQSA;
+  elProto.getBoundingClientRect = realRect;
+  const worstQ = Math.max(...frameReads.map((f) => f.q));
+  const worstR = Math.max(...frameReads.map((f) => f.r));
+  out.push({
+    name: "in the real app a move frame performs ZERO document queries / layout reads (a render-time reflow is what made the ring trail)",
+    pass: worstQ === 0 && worstR === 0,
+    detail: `queries/frame=${frameReads.map((f) => f.q).join(",")} layoutReads/frame=${frameReads.map((f) => f.r).join(",")} across 3 move frames`,
+  });
+  act(() => appRoot?.unmount());
+  appHost.remove();
+  // leave the store as the suite found it — later suites seed their own deck
+  if (savedDeck === null) localStorage.removeItem("mcq-slide-studio-v2");
+  else localStorage.setItem("mcq-slide-studio-v2", savedDeck);
 
   /* --------------------------------- teardown ------------------------------ */
 

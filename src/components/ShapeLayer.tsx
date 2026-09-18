@@ -39,8 +39,14 @@ interface Props {
   /** smart guides: align edges/centres with other shapes while dragging */
   smartGuides?: boolean;
   onGestureEnd?: () => void;
-  /** additional snap targets (the built-in slide elements) */
-  extraTargets?: { x: number; y: number; w: number; h: number }[];
+  /**
+   * Additional snap targets (the built-in slide elements). Pass a GETTER when
+   * producing them touches the DOM (Slide measures the elements' live boxes):
+   * it is called only when a real single-shape drag is armed, so a render —
+   * which may run once per colour-write frame on every visible slide — never
+   * pays a layout read it does not need.
+   */
+  extraTargets?: { x: number; y: number; w: number; h: number }[] | (() => { x: number; y: number; w: number; h: number }[]);
 }
 
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
@@ -564,11 +570,14 @@ export default function ShapeLayer({
     // hover, or re-selecting this shape leaves every coordinate untouched.
     if (movable.length === 1 && targets.length === 1) {
       const it = shapes.find((x) => x.id === movable[0])!;
+      // a lazy target list resolves NOW, at arm time — fresh geometry exactly
+      // when snapping needs it, and no cost on any render that leads nowhere
+      const extra = typeof extraTargets === "function" ? extraTargets() : (extraTargets ?? []);
       arm(
         {
           kind: "move",
           id: it.id,
-          others: [...shapes.filter((o) => o.id !== it.id), ...((extraTargets ?? []) as ShapeItem[])],
+          others: [...shapes.filter((o) => o.id !== it.id), ...(extra as ShapeItem[])],
         },
         e,
         { x: it.x, y: it.y },

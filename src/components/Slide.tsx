@@ -1048,7 +1048,13 @@ function SlideBase({
               fontFamily={bodyStack}
               snap={shapeSnap}
               smartGuides={theme.smartGuides ?? true}
-              extraTargets={theme.smartGuides === false ? [] : snapTargets("")}
+              /* LAZY: snapTargets measures the elements' live DOM boxes, so it
+                 must not run per render — a colour drag re-renders every
+                 visible slide once per frame, and a render-time layout read
+                 here is a forced reflow (and a document-wide element query)
+                 behind each of them. ShapeLayer resolves the getter only when
+                 it arms a real single-shape drag. */
+              extraTargets={theme.smartGuides === false ? [] : () => snapTargets("")}
               onGestureEnd={onGestureEnd}
             />
           )}
