@@ -36,20 +36,11 @@ let libPromise: Promise<typeof import("pdfjs-dist")> | null = null;
 async function lib() {
   if (!libPromise) {
     libPromise = (async () => {
-      // Import through the package entry point (resolves identically on
-      // pdfjs-dist v4–v6) rather than a deep `legacy/build` path, which
-      // breaks resolution on installs that lack that layout.
-      const pdfjs = await import("pdfjs-dist");
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
       // main-thread worker: pdf.js picks it up through globalThis.pdfjsWorker
-      try {
-        // @ts-expect-error — the worker bundle ships without type declarations
-        const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs");
-        (globalThis as unknown as { pdfjsWorker: unknown }).pdfjsWorker = worker;
-      } catch (err) {
-        // Not fatal: pdf.js falls back to running a "fake worker" on the
-        // main thread when no worker bundle is registered.
-        console.warn("pdf.js worker bundle unavailable, using fake worker:", err);
-      }
+      // @ts-expect-error — the worker bundle ships without type declarations
+      const worker = await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs");
+      (globalThis as unknown as { pdfjsWorker: unknown }).pdfjsWorker = worker;
       return pdfjs;
     })();
   }
