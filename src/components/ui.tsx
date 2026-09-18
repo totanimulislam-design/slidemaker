@@ -1,5 +1,21 @@
-import { useState, type ComponentProps, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { cn } from "../utils/cn";
+import { useColorFrame } from "../lib/frameSend";
+
+/** `#abc` / `#AABBCC` → `#aabbcc`, so browser echoes compare equal; otherwise "" */
+const normColor = (v: string): string => {
+  const c = String(v ?? "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(c)) return `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`.toLowerCase();
+  return "";
+};
 
 export function Btn({
   children,
@@ -85,15 +101,78 @@ export function TextArea(props: ComponentProps<"textarea">) {
   return <textarea {...props} className={cn(base, "resize-y leading-relaxed", props.className)} />;
 }
 
-export function ColorInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+/**
+ * A solid-colour well: the glyph previews the colour, the native picker opens
+ * on click.
+ *
+ * The OS dialog fires an `input` for every move of the cursor, so its commit is
+ * routed through `useColorFrame` — one deck write per frame — while only the
+ * swatch is painted inside the event. The dialog's own indicator belongs to
+ * the compositor; this side never has to render for it, so there is nothing
+ * left to fall behind the cursor.
+ */
+export function ColorInput({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  /** the colour the swatch is showing — the committed truth until a drag paints over it */
+  const [ui, setUi] = useState<string>(value);
+  const swatchRef = useRef<HTMLSpanElement>(null);
+  /** the colour we last handed to the editor, so its echo is not read back as an outside change */
+  const sentRef = useRef<string>(normColor(value));
+
+  /* paint first (the swatch follows the dialog NOW), commit once per frame */
+  const paint = useCallback((hex: string) => {
+    const el = swatchRef.current;
+    if (el && el.style.background !== hex) el.style.background = hex;
+  }, []);
+  const channel = useColorFrame(onChange);
+
+  /* an outside change (a preset, an undo, the deck) moves the well — but never
+     the echo of what this very input just sent */
+  useEffect(() => {
+    const nv = normColor(value);
+    if (nv === sentRef.current) return;
+    sentRef.current = nv;
+    setUi(value);
+    paint(nv || value);
+  }, [value, paint]);
+
+  /* the dialog's own indicator is compositor-owned; our side paints the swatch
+     in the event and lets the frame channel decide when the deck hears about it */
+  const onInput = useCallback(
+    (v: string) => {
+      paint(v);
+      setUi(v);
+      channel.offer(v);
+    },
+    [paint, channel],
+  );
+  const readInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = normColor(e.target.value);
+      if (v) onInput(v);
+    },
+    [onInput],
+  );
+
   return (
     <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1.5">
-      <input
-        type="color"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-7 w-7 shrink-0 cursor-pointer rounded border border-white/20 bg-transparent p-0"
-      />
+      <label className="relative flex h-7 w-7 shrink-0 cursor-pointer rounded border border-white/20">
+        <span ref={swatchRef} className="absolute inset-0 rounded-sm" style={{ background: ui }} />
+        <input
+          type="color"
+          value={normColor(value) || "#000000"}
+          onInput={readInput}
+          onChange={readInput}
+          className="absolute inset-0 h-7 w-7 cursor-pointer opacity-0"
+        />
+      </label>
       <span className="truncate text-xs text-slate-300">{label}</span>
     </div>
   );
@@ -129,6 +208,17 @@ export function ColorField({
   const isNone = value === "transparent";
   const [draft, setDraft] = useState<string | null>(null);
   const shown = (draft ?? hex).toUpperCase();
+  const swatchRef = useRef<HTMLSpanElement>(null);
+  /* the native picker commits through the one-frame channel, like ColorInput */
+  const channel = useColorFrame((v: string) => {
+    onChange(v);
+    setDraft(null);
+  });
+
+  const paintSwatch = useCallback((v: string) => {
+    const el = swatchRef.current;
+    if (el && el.style.background !== v) el.style.background = v;
+  }, []);
 
   const commit = (raw: string) => {
     const v = raw.trim();
@@ -183,6 +273,7 @@ export function ColorField({
       <div className="flex items-center gap-1.5">
         <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded border border-white/20">
           <span
+            ref={swatchRef}
             className="absolute inset-0"
             style={{
               background: isNone ? "repeating-conic-gradient(#3a3a44 0% 25%, #1c1c22 0% 50%) 50% / 8px 8px" : hex || fallback,
@@ -191,9 +282,21 @@ export function ColorField({
           <input
             type="color"
             value={/^#[0-9a-f]{6}$/i.test(hex) ? hex : fallback}
+            onInput={(e) => {
+              const v = normColor((e.target as HTMLInputElement).value);
+              if (!v) return;
+              paintSwatch(v);
+              setDraft(v);
+              channel.offer(v);
+            }}
             onChange={(e) => {
-              onChange(e.target.value);
+              /* React maps a color input's native `change` to onChange too, so a
+                 close is just the newest move — offer it the same way */
+              const v = normColor((e.target as HTMLInputElement).value);
+              if (!v) return;
+              paintSwatch(v);
               setDraft(null);
+              channel.offer(v);
             }}
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             title={hex ? `Custom: ${hex}` : `Auto: ${fallback}`}

@@ -356,6 +356,30 @@ that:
   being aimed at. A second marker on the surface only shows up as lag whenever
   the page is busy.
 
+### The solid (native) colour wells keep up too
+
+Every *solid* one-colour control — the frame colour, the board, the option
+markers, a title's ink … — is the browser's own `<input type="color">`
+(`ColorInput` in `src/components/ui.tsx`, plus the toolbar's swatches and the
+gradient editor's selected-stop chip). For such an input React folds the dialog's
+native `input` (one per move of the cursor through its saturation field) **and**
+its native `change` (the dialog closing) into a single `onChange`, so the handler
+fires on every step. Committing on every step re-renders the whole deck — board
+and every rail thumbnail — once per move, and that busy main thread is exactly
+what makes the dialog's own indicator trail the cursor.
+
+So the wells route `onChange` through `useColorFrame` (`src/lib/frameSend.ts`):
+
+- **The visible swatch is painted in the event** — the glyph under the well
+  follows the dialog the same instant, with no render in between; the dialog's
+  indicator itself belongs to the compose, so this side has nothing to lag
+  behind.
+- **The deck is told once per frame, newest value first.** A sweep collapses to
+  a handful of undoable writes instead of one per step; the colour the user
+  settles on is committed on the frame after they let go, and unmounting a well
+  settles whatever is still pending exactly once (so no dialled colour is ever
+  dropped, and none can fire into nothing).
+
 ## Board gestures
 
 Every item on the slide board — shapes that come from the Deck, deck-generated
@@ -378,7 +402,9 @@ old pattern (gesture armed on press + `onPointerMove` on the item) did leak, and
 the picker suites pin the gesture down from both sides:
 `tests/wheel.test.tsx` the contract (the indicators' tracking, the
 one-write-per-frame budget and the press / release settlement across the
-picker, the hue ramp, the angle dial and the stop bar) and
+picker, the hue ramp, the angle dial and the stop bar),
 `tests/latency.test.tsx` the cost (zero layout reads and zero React renders per
 sweep, sub-pixel tracking under the cursor, the face repainted once per frame,
-backpressure under a slow deck).
+backpressure under a slow deck), and `tests/colorframe.test.tsx` the native
+colour wells (one deck write per burst of dialog moves, the swatch painted in
+the event, no dialled colour settled more than once or dropped on unmount).
