@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Gradient } from "../lib/types";
 import { gradientCss } from "../lib/banner";
+import { usePointerDrag } from "../lib/dragSession";
 import { cn } from "../utils/cn";
 
 /* ------------------------------------------------------------------ math */
@@ -206,48 +207,168 @@ interface ColorWheelProps {
   size?: number;
 }
 
+/** `#abc` / `#AABBCC` → `#aabbcc`, so the wheel's own echo compares equal */
+const normHex = (hex: string) => {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return "";
+  const body = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
+  return `#${body.toLowerCase()}`;
+};
+
+/** the S/L square's paint: a white→black lightness shade over the hue ramp */
+const squareFace = (h: number) =>
+  "linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0) 50%, rgba(0,0,0,1) 100%), " +
+  `linear-gradient(to right, hsl(${h} 0% 50%), hsl(${h} 100% 50%))`;
+
 /**
- * Hue ring + saturation/lightness square. Drag on the ring to change hue,
- * drag in the square to change saturation (x) and lightness (y).
+ * Hue ring + saturation/lightness square. Drag on the ring to change hue, drag
+ * in the square to change saturation (x) and lightness (y).
+ *
+ * The marker has to BE the pointer — a picker that trails the cursor is not a
+ * picker — so the gesture paints first and records second:
+ *
+ *  1. `paint()` writes the ring's marker, the square's ramp and the square's
+ *     marker straight into the DOM on every move, so what is under the cursor
+ *     is on screen in that same event. A React render is not in that path: the
+ *     editor's deck write re-renders the whole board, and waiting for it is
+ *     what made the wheel lag behind the mouse.
+ *  2. the editor is told ONCE PER FRAME (`flush`), with the newest colour, so a
+ *     sweep is ~60 writes instead of one per pointermove and the board below
+ *     still previews live. A press flushes at once — a click must not wait for
+ *     a frame — and the end of the gesture flushes what is still pending, so
+ *     the colour the marker shows is always the colour that is committed.
+ *  3. the gesture runs on the shared drag session, so it survives the pointer
+ *     leaving the wheel (window-wide moves, not just the element's), and a
+ *     release, cancel or blur ends it — a hover can never paint.
  */
 export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
   const [hsl, setHsl] = useState(() => hexToHsl(value));
   const ringRef = useRef<HTMLDivElement>(null);
-  const sqRef = useRef<HTMLDivElement>(null);
+  const squareRef = useRef<HTMLDivElement>(null);
+  const hueDotRef = useRef<HTMLDivElement>(null);
+  const sqDotRef = useRef<HTMLDivElement>(null);
+  /** which surface the live gesture is painting — the hue ring or the square */
   const mode = useRef<"ring" | "sq" | null>(null);
-
-  // keep in sync when the outside value changes (e.g. preset applied)
-  useEffect(() => {
-    const next = hexToHsl(value);
-    setHsl((cur) => (hslToHex(cur.h, cur.s, cur.l).toLowerCase() === value.toLowerCase() ? cur : next));
-  }, [value]);
-
-  const commit = (h: number, s: number, l: number) => {
-    setHsl({ h, s, l });
-    onChange(hslToHex(h, s, l));
-  };
+  /** the colour the pointer has picked: the truth while a gesture is live */
+  const live = useRef(hsl);
+  /** the colour the editor has not been told about yet, and the frame that tells it */
+  const pending = useRef<{ h: number; s: number; l: number } | null>(null);
+  const frame = useRef<number | null>(null);
+  /** the last colour handed to the editor, so its echo is not read as an outside change */
+  const echo = useRef("");
 
   const r = size / 2;
   const ring = 16;
   const sq = Math.round((r - ring - 6) * Math.SQRT2);
 
-  const fromRing = (e: React.PointerEvent | PointerEvent) => {
+  /** paints the wheel from one hsl triple — no React render in the way */
+  const paint = (h: number, s: number, l: number) => {
+    const angle = ((h - 90) * Math.PI) / 180;
+    const hue = hueDotRef.current;
+    if (hue) {
+      hue.style.left = `${r + (r - ring / 2) * Math.cos(angle) - 8}px`;
+      hue.style.top = `${r + (r - ring / 2) * Math.sin(angle) - 8}px`;
+      hue.style.background = hslToHex(h, 100, 50);
+    }
+    const face = squareRef.current;
+    if (face) face.style.background = squareFace(h);
+    const marker = sqDotRef.current;
+    if (marker) {
+      marker.style.left = `${(s / 100) * sq - 7}px`;
+      marker.style.top = `${((100 - l) / 100) * sq - 7}px`;
+      marker.style.background = hslToHex(h, s, l);
+    }
+  };
+
+  /** hands the newest colour to the editor, at most once per frame */
+  const flush = () => {
+    if (frame.current !== null) {
+      cancelAnimationFrame(frame.current);
+      frame.current = null;
+    }
+    const next = pending.current;
+    if (!next) return;
+    pending.current = null;
+    live.current = next;
+    const hex = hslToHex(next.h, next.s, next.l);
+    echo.current = normHex(hex);
+    setHsl(next); // React now shows the colour the DOM already has
+    onChange(hex);
+  };
+
+  /** a pointer move (or press) picks: paint now, tell the editor this frame */
+  const pick = (h: number, s: number, l: number) => {
+    live.current = { h, s, l };
+    paint(h, s, l);
+    pending.current = { h, s, l };
+    if (frame.current === null) frame.current = requestAnimationFrame(flush);
+  };
+
+  /** a panel field (the h / s / l numbers): applied at once, so the field keeps its draft */
+  const apply = (h: number, s: number, l: number) => {
+    const hex = hslToHex(h, s, l);
+    live.current = { h, s, l };
+    echo.current = normHex(hex);
+    setHsl({ h, s, l });
+    paint(h, s, l);
+    onChange(hex);
+  };
+
+  /** the hex field: the spelling typed is what the deck gets, the wheel follows it */
+  const applyHex = (hex: string) => {
+    const next = hexToHsl(hex);
+    live.current = next;
+    echo.current = normHex(hex);
+    setHsl(next);
+    paint(next.h, next.s, next.l);
+    onChange(hex);
+  };
+
+  const pickFromRing = (e: { clientX: number; clientY: number }) => {
     const el = ringRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const dx = e.clientX - (rect.left + rect.width / 2);
     const dy = e.clientY - (rect.top + rect.height / 2);
     const h = (Math.round((Math.atan2(dy, dx) * 180) / Math.PI + 90) + 360) % 360;
-    commit(h, hsl.s, hsl.l);
+    pick(h, live.current.s, live.current.l);
   };
-  const fromSquare = (e: React.PointerEvent | PointerEvent) => {
-    const el = sqRef.current;
+
+  const pickFromSquare = (e: { clientX: number; clientY: number }) => {
+    const el = squareRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const s = clamp(Math.round(((e.clientX - rect.left) / rect.width) * 100), 0, 100);
     const l = clamp(Math.round(100 - ((e.clientY - rect.top) / rect.height) * 100), 0, 100);
-    commit(hsl.h, s, l);
+    pick(live.current.h, s, l);
   };
+
+  const { begin, release, handleLeave } = usePointerDrag({
+    threshold: 0, // a press on the wheel picks exactly where it lands
+    onMove: (e) => (mode.current === "ring" ? pickFromRing(e) : pickFromSquare(e)),
+    onEnd: () => {
+      mode.current = null;
+      flush(); // the release settles the colour the last move is still holding
+    },
+  });
+
+  // an outside colour (a preset, the hex field, an undo) moves the wheel — but
+  // never the echo of what this wheel just sent, and never while the pointer
+  // owns it: an update landing mid-drag must not drag the marker back
+  useEffect(() => {
+    if (mode.current || normHex(value) === echo.current) return;
+    const next = hexToHsl(value);
+    live.current = next;
+    setHsl(next);
+  }, [value]);
+
+  // a frame still waiting when the wheel goes away must not fire into nothing
+  useEffect(
+    () => () => {
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+    },
+    [],
+  );
 
   const hueAngle = ((hsl.h - 90) * Math.PI) / 180;
   const hx = r + (r - ring / 2) * Math.cos(hueAngle);
@@ -263,25 +384,16 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
           const rect = e.currentTarget.getBoundingClientRect();
           const dx = e.clientX - (rect.left + rect.width / 2);
           const dy = e.clientY - (rect.top + rect.height / 2);
-          const dist = Math.hypot(dx, dy);
-          mode.current = dist > r - ring - 4 ? "ring" : "sq";
-          e.currentTarget.setPointerCapture(e.pointerId);
-          if (mode.current === "ring") fromRing(e);
-          else fromSquare(e);
+          const surface = Math.hypot(dx, dy) > r - ring - 4 ? "ring" : "sq";
+          if (!begin(e)) return; // a secondary button is not a pick
+          mode.current = surface;
+          if (surface === "ring") pickFromRing(e);
+          else pickFromSquare(e);
+          flush(); // the press itself is a colour: commit it now, not in a frame
         }}
-        onPointerMove={(e) => {
-          if (!mode.current) return;
-          if (mode.current === "ring") fromRing(e);
-          else fromSquare(e);
-        }}
-        onPointerUp={(e) => {
-          mode.current = null;
-          try {
-            e.currentTarget.releasePointerCapture(e.pointerId);
-          } catch {
-            /* ignore */
-          }
-        }}
+        onPointerUp={release}
+        onPointerCancel={release}
+        onPointerLeave={handleLeave}
       >
         {/* hue ring */}
         <div
@@ -295,12 +407,15 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
         />
         {/* hue marker */}
         <div
+          ref={hueDotRef}
+          data-wheel-hue=""
           className="pointer-events-none absolute h-4 w-4 rounded-full border-2 border-white shadow"
           style={{ left: hx - 8, top: hy - 8, background: hslToHex(hsl.h, 100, 50) }}
         />
         {/* S/L square */}
         <div
-          ref={sqRef}
+          ref={squareRef}
+          data-wheel-face=""
           className="absolute rounded-md border border-black/40"
           style={{
             width: sq,
@@ -309,13 +424,12 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
             top: r - sq / 2,
             cursor: "crosshair",
             // x = saturation (grey → pure hue), y = lightness (white top → black bottom)
-            background: [
-              "linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0) 50%, rgba(0,0,0,1) 100%)",
-              `linear-gradient(to right, hsl(${hsl.h} 0% 50%), hsl(${hsl.h} 100% 50%))`,
-            ].join(", "),
+            background: squareFace(hsl.h),
           }}
         >
           <div
+            ref={sqDotRef}
+            data-wheel-marker=""
             className="pointer-events-none absolute h-3.5 w-3.5 rounded-full border-2 border-white shadow"
             style={{
               left: (hsl.s / 100) * sq - 7,
@@ -330,7 +444,10 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
         <div className="h-8 w-20 rounded-lg border border-white/15" style={{ background: value }} />
         <input
           value={value}
-          onChange={(e) => /^#[0-9a-fA-F]{6}$/.test(e.target.value) && onChange(e.target.value)}
+          onChange={(e) => {
+            const hex = e.target.value;
+            if (/^#[0-9a-fA-F]{6}$/.test(hex)) applyHex(hex);
+          }}
           className="w-20 rounded-lg border border-white/10 bg-slate-900/70 px-2 py-1 font-mono text-[11px] text-slate-100 outline-none focus:border-amber-400/60"
         />
         {(["h", "s", "l"] as const).map((k) => (
@@ -343,7 +460,7 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
               value={hsl[k]}
               onChange={(e) => {
                 const v = clamp(Number(e.target.value), 0, k === "h" ? 360 : 100);
-                commit(k === "h" ? v : hsl.h, k === "s" ? v : hsl.s, k === "l" ? v : hsl.l);
+                apply(k === "h" ? v : live.current.h, k === "s" ? v : live.current.s, k === "l" ? v : live.current.l);
               }}
               className="w-14 rounded border border-white/10 bg-slate-900/70 px-1.5 py-0.5 font-mono text-[11px] text-slate-100 outline-none"
             />
