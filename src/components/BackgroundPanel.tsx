@@ -16,6 +16,8 @@ interface Props {
   onSet: (patch: Partial<BackgroundSettings>, scope: "deck" | "slide" | string[]) => void;
   onReset: (scope: "deck" | "slide" | string[]) => void;
   onClearSlide: (ids: string[]) => void;
+  /** change the board's base colour (the surface every background layer sits on) */
+  onBoardColor?: (v: string) => void;
   /** promote an image shape to the background (and optionally delete the shape) */
   onRemoveShape?: (id: string) => void;
   /**
@@ -37,7 +39,7 @@ const sameGradient = (a: Gradient, b: Gradient) =>
   a.stops.length === b.stops.length &&
   a.stops.every((s, i) => s.color.toLowerCase() === b.stops[i].color.toLowerCase() && s.at === b.stops[i].at);
 
-export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSlide, onRemoveShape, onPlainPage, managedScope = false }: Props) {
+export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSlide, onBoardColor, onRemoveShape, onPlainPage, managedScope = false }: Props) {
   const [scope, setScope] = useState<Scope>("slide");
   const [picked, setPicked] = useState<string[]>([]);
   const [url, setUrl] = useState("");
@@ -140,6 +142,21 @@ export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSl
           <span className="shrink-0">{hasOverride ? "this slide's own background" : "from deck (all slides)"}</span>
         </div>
       </div>
+
+      {/* --------------------------- surface base colour --------------------- */}
+      {onBoardColor && (
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="flex-1">
+            <span className="text-[11px] font-semibold tracking-wide text-slate-200 uppercase">Board colour</span>
+            <p className="mt-0.5 text-[10px] leading-snug text-slate-500">
+              The surface under everything — gradients, shapes and image layers paint on top of it.
+            </p>
+          </div>
+          <div className="w-36 shrink-0">
+            <ColorInput label={deck.theme.board} value={deck.theme.board} onChange={onBoardColor} />
+          </div>
+        </div>
+      )}
 
       {/* ---------------- deck design on / off for this slide --------------- */}
       {onPlainPage && slide && (

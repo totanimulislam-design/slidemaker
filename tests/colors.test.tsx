@@ -43,7 +43,7 @@ export interface CaseResult {
 
 /** every destination that paints something colourable */
 const NAVS = [
-  "titleText", "titleBg", "badge1", "badge2", "badge3",
+  "theme", "titleText", "titleBg", "badge1", "badge2", "badge3",
   "questionBullet", "bulletText", "questionText",
   "optionBullet", "optionBulletText", "optionText",
   "answerKey", "footnote", "background", "frame",

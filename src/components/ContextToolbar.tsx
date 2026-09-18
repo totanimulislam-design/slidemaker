@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   BackgroundSettings, BannerSettings, BannerShape, Box, DeckHeader, ElementId, OptionsLayout, QuizOption, ThemeSettings,
 } from "../lib/types";
-import { DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
+import { DEFAULT_BANNER, DEFAULT_FRAME, ELEMENT_LABELS } from "../lib/types";
 import { TEXT_GRADIENT_PRESETS } from "../lib/banner";
 import { WEIGHTS, boxFontLabel, boxTypeface, elementInk, setBoxFont, setElementInk } from "../lib/boxFonts";
 import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, type ShapeItem, type ShapeKind } from "../lib/shapes";
@@ -162,6 +162,8 @@ interface Props {
   insertShape?: (kind: ShapeKind) => void;
   /** quick insert: image files on the current slide (Uploads) */
   onAddImages?: (files: File[]) => void;
+  /** pick a fixed element on the board (the Layout destination's element picker) */
+  onPickElement?: (id: ElementId) => void;
 }
 
 /** the shapes offered by the Insert-shapes strip, in the same order as below the board */
@@ -706,6 +708,14 @@ export default function ContextToolbar(p: Props) {
   /** the Insert destinations show their quick-add tools when nothing else is selected */
   const inserting = !s && !surface && (p.nav === "images" || p.nav === "shapes");
   /**
+   * The Design and Layout destinations own no board element, so with nothing
+   * selected the strip brings THEIR tools: the deck's base colours for Design,
+   * an element picker plus the snapping switches for Layout. As soon as a
+   * layer gets selected the ordinary tools take over, exactly like Layers.
+   */
+  const themePill = p.nav === "theme" && !s && !surface && !el && !multi;
+  const layoutPill = p.nav === "layout" && !s && !surface && !el && !multi;
+  /**
    * The Layers destination with nothing selected yet: the strip explains the
    * stack instead of staying empty. As soon as a row is picked, the ordinary
    * tools for that layer take over and gain the arrange buttons below.
@@ -721,12 +731,16 @@ export default function ContextToolbar(p: Props) {
   ));
   const kindLabel = ak
     ? "Answer key"
-    : layering
-      ? "Layers"
-      : inserting
-        ? (p.nav === "images" ? "Uploads" : "Insert shape")
-        : surface || (multi ? `Group · ${p.count}` : text ? 'Text' : s?.kind || 'Image');
-  const toolbarLabel = `${ak ? "answer" : layering ? "layers" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
+    : themePill
+      ? "Design"
+      : layoutPill
+        ? "Layout"
+        : layering
+          ? "Layers"
+          : inserting
+            ? (p.nav === "images" ? "Uploads" : "Insert shape")
+            : surface || (multi ? `Group · ${p.count}` : text ? 'Text' : s?.kind || 'Image');
+  const toolbarLabel = `${ak ? "answer" : themePill ? "theme" : layoutPill ? "layout" : layering ? "layers" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
 
   /* the movable pop-up card every toolbar toggle shares (single or stacked) */
   const popNode = content && (
@@ -1034,6 +1048,37 @@ export default function ContextToolbar(p: Props) {
           </select>
           {toggle("Answer")}
           {button(<>✓ Paste key</>, ak.onPaste, undefined, "Paste an answer key (1. ঘ 2. গ …) for the whole deck")}
+          {sep()}
+        </>}
+        {/* the Design destination: the deck's base colours, one well each */}
+        {themePill && <>
+          {swatch("Accent colour", theme.accent, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: theme.accent }} />)}
+          {swatch("Board colour", theme.board, v => p.patchTheme({ board: v }), <span className="ctx-dot" style={{ background: theme.board }} />)}
+          {swatch("Brand colour", theme.brandColor, v => p.patchTheme({ brandColor: v }), <span className="ctx-dot" style={{ background: theme.brandColor }} />)}
+          <span className="ctx-hint">theme presets & shared fonts are in the panel</span>
+          {sep()}
+        </>}
+        {/* the Layout destination: jump to an element, snapping switches */}
+        {layoutPill && <>
+          <select
+            aria-label="Element to position"
+            title="Pick an element to position (Layout panel opens its controls)"
+            className="ctx-select"
+            value=""
+            onChange={e => {
+              const v = e.currentTarget.value;
+              if (v) p.onPickElement?.(v as ElementId);
+            }}
+          >
+            <option value="">— element… —</option>
+            {(["title", "brand", "logo", "badge", "question", "options", "note"] as ElementId[]).map(id => (
+              <option key={id} value={id}>{ELEMENT_LABELS[id]}</option>
+            ))}
+          </select>
+          {sep()}
+          {button(<><span aria-hidden="true">🧲</span> Snap</>, () => p.patchTheme({ snapEnabled: !theme.snapEnabled }), theme.snapEnabled, "Magnetic snapping while dragging")}
+          {button(<><span aria-hidden="true">⌖</span> Guides</>, () => p.patchTheme({ smartGuides: !(theme.smartGuides ?? true) }), theme.smartGuides ?? true, "Smart guides while dragging")}
+          <span className="ctx-hint">X / Y / W / H, rotation and the position map are in the panel</span>
           {sep()}
         </>}
         {/* the Layers destination: the stack, and how to move things in it */}

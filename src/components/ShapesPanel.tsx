@@ -166,7 +166,7 @@ export default function ShapesPanel({
     <div className="space-y-4">
       <PanelHead
         title="Insert shapes"
-        subtitle="Boxes, circles, arrows, text boxes — plus every layer's position and order."
+        subtitle="Boxes, circles, arrows and text boxes — insert, style and order them. Fixed-element positions live under Layout."
       />
       {/* --------------------------------- insert ---------------------------- */}
       {/* Scope is normally handled by the main Apply Changes bar. */}

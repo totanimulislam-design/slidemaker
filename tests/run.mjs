@@ -37,7 +37,7 @@ const suites = [
   ["pointer state machine (lib/dragSession)", "session.test.ts", "runSessionTests"],
   ["editor chrome resizers (SplitPane divider)", "chrome.test.tsx", "runChromeTests"],
   ["app boot smoke test (full editor)", "smoke.test.tsx", "runSmokeTests"],
-  ["inspector navigation (19 destinations, selection sync + merged toolbar stacks)", "nav.test.tsx", "runNavTests"],
+  ["inspector navigation (21 destinations, selection sync + merged toolbar stacks)", "nav.test.tsx", "runNavTests"],
   ["layers panel (drag to reorder the unified stack + selection sync)", "layers.test.tsx", "runLayersTests"],
   ["slide stack (drag to reorder + multi-select boxes + bulk ops + the open slide's border)", "slides.test.tsx", "runSlideStackTests"],
   ["imported pages (a PDF / PowerPoint merged in as plain slides, the file kept whole in Uploads)", "import.test.tsx", "runImportTests", [pdfStubPlugin]],
