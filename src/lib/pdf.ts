@@ -28,6 +28,28 @@ export interface PdfPageRender {
   height: number;
 }
 
+/**
+ * Where the picked pages go:
+ *
+ *  • `slides-background` — every page becomes its OWN slide with the page as
+ *    that slide's background. The slide is a PLAIN page (`plainPage`): the
+ *    deck's built-in design stays off it, so the imported page is merged into
+ *    the project as a separate slide of the user's own to work on.
+ *  • `slides-image` — every page becomes its own plain slide carrying the page
+ *    as a movable / croppable picture layer.
+ *  • `current-slide` — the pages are dropped onto the slide being edited, on top
+ *    of whatever design that slide already has.
+ */
+export type PdfPlacement = "slides-background" | "slides-image" | "current-slide";
+
+/** The rendered pages the picker hands back to the app. */
+export interface PdfImportResult {
+  placement: PdfPlacement;
+  pages: { page: number; src: string; ratio: number }[];
+  /** the file's name — decides the labels and the Uploads entries */
+  name: string;
+}
+
 export interface OpenedPdf {
   name: string;
   numPages: number;

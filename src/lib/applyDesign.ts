@@ -205,7 +205,9 @@ export function applySlideDesign(
 }
 
 /**
- * Reverts slide(s) to follow the deck default design by clearing their overrides.
+ * Reverts slide(s) to follow the deck default design by clearing their
+ * overrides. A plain page (an imported PDF / PowerPoint slide) also starts
+ * wearing the deck design again — that is what "follow the deck default" means.
  */
 export function revertSlideDesign(deck: Deck, slideIds: string[]): Deck {
   const ids = new Set(slideIds);
@@ -213,7 +215,14 @@ export function revertSlideDesign(deck: Deck, slideIds: string[]): Deck {
     ...deck,
     slides: deck.slides.map((s) =>
       ids.has(s.id)
-        ? { ...s, themeOverride: undefined, headerOverride: undefined, background: undefined, shapes: [] }
+        ? {
+            ...s,
+            themeOverride: undefined,
+            headerOverride: undefined,
+            background: undefined,
+            shapes: [],
+            plainPage: undefined,
+          }
         : s,
     ),
   };

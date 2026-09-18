@@ -12,6 +12,25 @@ import { installDom } from "./dom-env.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(here, ".build");
+
+/**
+ * Points every `lib/pdf` import in a suite at tests/pdf-stub.ts, so the import
+ * suite can drive the real page picker inside the real App without a pdf.js
+ * renderer (jsdom has no canvas). The stub re-exports the real module and only
+ * replaces the document opener.
+ */
+const pdfStubPlugin = {
+  name: "pdf-stub",
+  setup(build) {
+    const stub = resolve(here, "pdf-stub.ts");
+    build.onResolve({ filter: /(^|\/)(lib\/)?pdf$/ }, (args) => {
+      // the stub itself needs the REAL module — it re-exports everything else
+      if (args.importer === stub) return null;
+      return { path: stub };
+    });
+  },
+};
+
 const suites = [
   ["drag interaction (Slide + ShapeLayer, deck shapes included)", "drag.test.tsx", "runDragTests"],
   ["gesture leak (legacy pattern vs drag session)", "leak.test.tsx", "runLeakTests"],
@@ -21,6 +40,7 @@ const suites = [
   ["inspector navigation (19 destinations, selection sync + merged toolbar stacks)", "nav.test.tsx", "runNavTests"],
   ["layers panel (drag to reorder the unified stack + selection sync)", "layers.test.tsx", "runLayersTests"],
   ["slide stack (drag to reorder + multi-select boxes + bulk ops + the open slide's border)", "slides.test.tsx", "runSlideStackTests"],
+  ["imported pages (a PDF / PowerPoint merged in as plain slides of the user's own)", "import.test.tsx", "runImportTests", [pdfStubPlugin]],
 ];
 
 installDom();
@@ -28,7 +48,7 @@ mkdirSync(outDir, { recursive: true });
 
 let failed = 0;
 let total = 0;
-for (const [label, entry, exportName] of suites) {
+for (const [label, entry, exportName, plugins] of suites) {
   const outfile = resolve(outDir, entry.replace(/\.tsx?$/, ".mjs"));
   await build({
     entryPoints: [resolve(here, entry)],
@@ -41,6 +61,7 @@ for (const [label, entry, exportName] of suites) {
     external: ["react", "react-dom", "react/jsx-runtime", "react-dom/client"],
     loader: { ".ts": "ts", ".tsx": "tsx" },
     logLevel: "warning",
+    ...(plugins ? { plugins } : {}),
   });
   const mod = await import(pathToFileURL(outfile).href + "?t=" + Date.now());
   const results = await mod[exportName]();

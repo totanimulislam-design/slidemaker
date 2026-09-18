@@ -70,6 +70,27 @@ Uploads panel, the Shapes panel or pasting it — opens a page picker:
   slide**;
 - every page also lands in **Uploads** for reuse.
 
+### Imported pages are plain slides of your own
+
+A page that becomes a slide is **merged into the project as its own slide** — it
+does not get poured into your template. Those slides carry `plainPage`, so none
+of the project's built-in design is painted on them: **no frame, no logo, no
+brand lines, no title banner, no badge**, and the deck's gradient / vector
+background design does not show through the page either. What you see is the
+user's own material, on a slide that is otherwise completely ordinary: draw
+shapes and text boxes on it, reposition or crop it, give it a footnote, reorder
+it in the stack. The Layers panel lists the design rows as *absent* there, so
+nothing pretends to be on the slide that is not.
+
+**Slide background → “Deck design on this slide”** switches the project's design
+back on for that one slide (and off again). **↩ Revert to Default** in the Target
+Scope bar does the same thing along with the slide's other overrides. Applying a
+design to *all* slides leaves plain pages alone on purpose — your material is
+never re-covered by the template without asking.
+
+The pages that are dropped **onto the slide you are editing** keep that slide's
+design, because there they are content, not a slide of their own.
+
 PDF pages are rasterised with pdf.js. PowerPoint `.pptx` files are parsed in
 the browser (`pptxtojson`), each slide is laid out in an off-screen DOM at its
 native size — background, shapes, pictures, text, tables — and rasterised with
