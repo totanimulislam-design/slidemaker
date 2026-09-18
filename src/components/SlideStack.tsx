@@ -4,7 +4,7 @@ import { Thumb } from "./SlideViews";
 import { DRAG_THRESHOLD_PX, usePointerDrag } from "../lib/dragSession";
 import { effectiveBackground } from "../lib/background";
 import { effectiveHeader, effectiveTheme } from "../lib/overrides";
-import type { Deck } from "../lib/types";
+import type { BackgroundSettings, Deck, DeckHeader, SlideData, ThemeSettings } from "../lib/types";
 import { cn } from "../utils/cn";
 
 interface Props {
@@ -130,6 +130,43 @@ export default function SlideStack({
 }: Props) {
   const slides = deck.slides;
   const n = slides.length;
+
+  /**
+   * The effective per-slide view (theme / header / background) CACHED by the
+   * exact inputs the effective* helpers read. Without it, every deck write
+   * hands every thumbnail fresh object props and the memoised Slide can never
+   * bail: a colour drag committing once per frame would re-render the whole
+   * rail per frame. With it, a write that does not touch a slide (or the
+   * deck theme) leaves that thumbnail's props referentially identical and its
+   * render is skipped outright. Deleted slides' entries are dropped wholesale.
+   */
+  const effCache = useRef(
+    new Map<string, { slide: SlideData; theme: ThemeSettings; header: DeckHeader; eff: { theme: ThemeSettings; header: DeckHeader; background: BackgroundSettings } }>(),
+  );
+  const effectiveFor = (s: SlideData) => {
+    const hit = effCache.current.get(s.id);
+    if (hit && hit.slide === s && hit.theme === deck.theme && hit.header === deck.header) return hit.eff;
+    if (effCache.current.size > n * 2 + 8) effCache.current.clear();
+    const eff = { theme: effectiveTheme(deck, s), header: effectiveHeader(deck, s), background: effectiveBackground(deck, s) };
+    effCache.current.set(s.id, { slide: s, theme: deck.theme, header: deck.header, eff });
+    return eff;
+  };
+
+  /**
+   * Deck-wide shapes are handed to every thumbnail as one array prop. Deck
+   * writes rebuild that array even when not one of its items changed (a new
+   * array is a new prop identity to React), so hand out the PREVIOUS array
+   * whenever every item kept its identity — the same bail-out the effective
+   * cache gives theme/header/background.
+   */
+  const shapesCache = useRef<Deck["globalShapes"]>(deck.globalShapes);
+  const stableGlobalShapes = (() => {
+    const prev = shapesCache.current;
+    const next = deck.globalShapes;
+    if (prev && next && prev.length === next.length && next.every((x, i) => x === prev[i])) return prev;
+    shapesCache.current = next;
+    return next;
+  })();
   const draggable = !!onMoveTo && n > 1;
 
   /* ---------------------------------------------------------------------- *
@@ -405,6 +442,12 @@ export default function SlideStack({
           const shift = isDragged ? 0 : shiftFor(i);
           const checked = ticked.has(s.id);
           const isOpen = i === current;
+          /* the memoised Slide inside only bails out when every prop keeps its
+             identity — effective* build fresh objects per call, so they come
+             from a cache keyed on exactly the inputs they read. A write that
+             leaves this slide untouched (a colour drag committing once per
+             frame on ANOTHER slide's shape) then costs this thumbnail nothing. */
+          const eff = effectiveFor(s);
           return (
             <div
               key={s.id}
@@ -463,10 +506,10 @@ export default function SlideStack({
                   <Slide
                     key={`t-${revision}`}
                     slide={s}
-                    header={effectiveHeader(deck, s)}
-                    theme={effectiveTheme(deck, s)}
-                    globalShapes={deck.globalShapes}
-                    background={effectiveBackground(deck, s)}
+                    header={eff.header}
+                    theme={eff.theme}
+                    globalShapes={stableGlobalShapes}
+                    background={eff.background}
                   />
                 </RailThumb>
               </div>
