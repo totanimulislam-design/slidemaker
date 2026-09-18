@@ -26,6 +26,7 @@ import { layerKey, sortedLayers, type LayerPatch, type LayerRect, type LayerRef 
 import type { AlignOp } from "../lib/shapeAlign";
 import AnswerKeyPanel from "./AnswerKeyPanel";
 import LayersPanel from "./LayersPanel";
+import { elementInk, setElementInk } from "../lib/boxFonts";
 import { MATH_SNIPPETS, PRESETS } from "../lib/presets";
 import { describeScripts, type ScriptId } from "../lib/fonts";
 import { handleSmartPaste } from "../lib/richPaste";
@@ -619,7 +620,9 @@ export default function Inspector({
                 script="bangla"
                 compact
               />
-              <ColorInput label="Question colour" value={T.questionColor} onChange={(v) => setTheme({ questionColor: v })} />
+              {/* one write for the stem's ink: the deck field the renderer
+                  reads, minus any per-box override that would shadow it */}
+              <ColorInput label="Question colour" value={elementInk(T, "question")} onChange={(v) => setTheme(setElementInk(T, "question", v))} />
 
               <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
                 <span className="text-[11px] font-semibold tracking-wide text-slate-200 uppercase">Deck defaults</span>

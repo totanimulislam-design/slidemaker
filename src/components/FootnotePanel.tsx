@@ -1,6 +1,6 @@
 import type { Box, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { withAlpha } from "../lib/color";
-import { boxFontCss, clearBoxFont } from "../lib/boxFonts";
+import { boxFontCss, clearBoxFont, elementInk, setElementInk } from "../lib/boxFonts";
 import { handleSmartPaste } from "../lib/richPaste";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
@@ -93,7 +93,7 @@ export default function FootnotePanel({ theme: T, slide, setTheme, updateSlide, 
       <Toggle label="Show footnote" checked={shown} onChange={(v) => setTheme({ showNote: v })} />
 
       <div className="grid grid-cols-2 gap-2">
-        <ColorInput label="Footnote colour" value={color} onChange={(v) => setTheme({ noteColor: v })} />
+        <ColorInput label="Footnote colour" value={elementInk(T, "note") || color} onChange={(v) => setTheme(setElementInk(T, "note", v))} />
         <Field label="Opacity" hint={`${opacity}%`}>
           <Slider min={5} max={100} value={opacity} onChange={(v) => setTheme({ noteOpacity: v })} />
         </Field>

@@ -1,7 +1,7 @@
 import type { Box, DeckHeader, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { DEFAULT_BADGE_PLATE, cloneBadgePlate } from "../lib/types";
 import { withAlpha } from "../lib/color";
-import { boxFontCss } from "../lib/boxFonts";
+import { boxFontCss, elementInk, setElementInk } from "../lib/boxFonts";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
 import { Btn, ColorInput, Field, PanelHead, Slider, TextInput, Toggle } from "./ui";
@@ -97,7 +97,7 @@ export default function BadgePanel({ theme, header, slide, setTheme, setHeader, 
         </div>
       )}
 
-      <ColorInput label="Badge colour" value={theme.badgeColor} onChange={(v) => setTheme({ badgeColor: v })} />
+      <ColorInput label="Badge colour" value={elementInk(theme, "badge")} onChange={(v) => setTheme(setElementInk(theme, "badge", v))} />
 
       <Field label="Badge size" hint={`${size}px`}>
         <Slider min={14} max={72} value={size} onChange={(v) => setTheme({ badgeSize: v })} />

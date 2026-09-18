@@ -1,5 +1,5 @@
 import type { Box, DeckHeader, ElementId, ThemeSettings } from "../lib/types";
-import { boxFontCss } from "../lib/boxFonts";
+import { boxFontCss, elementInk, setElementInk } from "../lib/boxFonts";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
 import { Btn, ColorField, ColorInput, Field, PanelHead, Slider, TextInput, Toggle } from "./ui";
@@ -121,7 +121,7 @@ export default function BrandLinePanel({ line, theme, header, setTheme, setHeade
       />
 
       <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-        <ColorInput label="Shared brand colour" value={theme.brandColor} onChange={(v) => setTheme({ brandColor: v })} />
+        <ColorInput label="Shared brand colour" value={elementInk(theme, "brand")} onChange={(v) => setTheme(setElementInk(theme, "brand", v))} />
         <p className="text-[10px] leading-relaxed text-slate-500">
           Used by any badge line left on <b>Shared</b>. Badge {other.n} currently{" "}
           {otherOwn ? `has its own colour (${otherOwn}).` : "follows this colour too."}

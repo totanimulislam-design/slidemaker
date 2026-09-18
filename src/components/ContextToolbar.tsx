@@ -5,7 +5,7 @@ import type {
 } from "../lib/types";
 import { DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
 import { TEXT_GRADIENT_PRESETS } from "../lib/banner";
-import { WEIGHTS, boxFontLabel, boxTypeface, setBoxFont } from "../lib/boxFonts";
+import { WEIGHTS, boxFontLabel, boxTypeface, elementInk, setBoxFont, setElementInk } from "../lib/boxFonts";
 import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, type ShapeItem, type ShapeKind } from "../lib/shapes";
 import type { AlignOp } from "../lib/shapeAlign";
 import { usePointerDrag } from "../lib/dragSession";
@@ -33,9 +33,22 @@ const normColor = (v: string): string => {
 
 /**
  * The toolbar's colour well as a component of its own, so it can own the
- * one-frame commit channel (see useColorFrame). The caller keys it: a value
- * change remounts the input and its echo-filter re-arms, with no hooks rules
- * to break across the conditional swatch rows.
+ * one-frame commit channel (see useColorFrame).
+ *
+ * ## the input must SURVIVE its own commit
+ *
+ * The OS colour dialog belongs to the `<input type="color">` DOM node that
+ * opened it: unmount that node and the browser dismisses the dialog. This well
+ * used to be keyed on its own value (`key={`${name}:${value}`}`), so the first
+ * move of the cursor committed a new colour, the new key remounted the input,
+ * and the picker vanished the instant a colour was touched — you could never
+ * drag through a palette, only stab at it once.
+ *
+ * The key is now the control's IDENTITY (its name) alone, so the node is
+ * stable across commits and the dialog stays open for the whole gesture. The
+ * value is not fed back into the element while the dialog owns it either: the
+ * echo of what we just sent would fight the user's cursor. Only an outside
+ * change (a preset, an undo, switching slides) is written back to the input.
  */
 function Swatch({
   name,
@@ -49,6 +62,9 @@ function Swatch({
   glyph?: ReactNode;
 }) {
   const dotRef = useRef<HTMLLabelElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  /** the colour this well last handed over, so its echo is not written back */
+  const sentRef = useRef<string>(normColor(value));
   const channel = useColorFrame(onChange);
   const paint = (hex: string) => {
     const ink = dotRef.current?.querySelector<HTMLElement>(".ctx-dot, .ctx-a, .ctx-ring");
@@ -63,25 +79,37 @@ function Swatch({
       ink.style.background = hex;
     }
   };
+
+  /* an outside change moves the well; the echo of our own pick never does —
+     writing it back mid-gesture is what makes a native dialog jump */
+  useEffect(() => {
+    const nv = normColor(value);
+    if (!nv || nv === sentRef.current) return;
+    sentRef.current = nv;
+    if (inputRef.current && inputRef.current.value !== nv) inputRef.current.value = nv;
+    paint(nv);
+  }, [value]);
+
+  const took = (hex: string) => {
+    const v = normColor(hex);
+    if (!v) return;
+    sentRef.current = v;
+    paint(v);
+    channel.offer(v);
+  };
+
   return (
     <label className="ctx-swatch" title={name} ref={dotRef}>
+      {/* uncontrolled on purpose: React must not re-write `value` under an
+          open OS dialog — `defaultValue` seeds it, the effect above syncs it */}
       <input
+        ref={inputRef}
         aria-label={name} type="color"
-        value={normColor(value) || "#ffffff"}
-        onInput={e => {
-          const v = normColor(e.currentTarget.value);
-          if (!v) return;
-          paint(v);
-          channel.offer(v);
-        }}
-        onChange={e => {
-          /* React folds a color input's native `change` into onChange too; a
-             dialog close is the newest move, so offer it like any other step */
-          const v = normColor(e.currentTarget.value);
-          if (!v) return;
-          paint(v);
-          channel.offer(v);
-        }}
+        defaultValue={normColor(value) || "#ffffff"}
+        onInput={e => took(e.currentTarget.value)}
+        /* React folds a color input's native `change` into onChange too; a
+           dialog close is the newest move, so offer it like any other step */
+        onChange={e => took(e.currentTarget.value)}
       />
       {glyph ?? <span className="ctx-dot" style={{ background: value }} />}
     </label>
@@ -463,11 +491,21 @@ export default function ContextToolbar(p: Props) {
    * `useColorFrame` and only the glyph is painted inside the event, so the
    * deck never spends a render on every step of the OS indicator.
    */
-  const swatch = (name: string, value: string, change: (v: string) => void, glyph?: ReactNode) => (
-    <Swatch key={`${name}:${value}`} name={name} value={value} onChange={change} glyph={glyph} />
+  /**
+   * A colour well on the strip.
+   *
+   * The key is the control's IDENTITY and nothing else. A key that carried the
+   * VALUE remounted the input on every commit, which closes the OS dialog the
+   * user is still dragging in — and so does a key built from a label that
+   * changes as the value does ("Marker fill (auto until set)" loses its suffix
+   * the moment a colour is picked). `id` keeps such a well stable while its
+   * visible name stays free to describe the current state.
+   */
+  const swatch = (name: string, value: string, change: (v: string) => void, glyph?: ReactNode, id?: string) => (
+    <Swatch key={id ?? name} name={name} value={value} onChange={change} glyph={glyph} />
   );
-  const textSwatch = (name: string, value: string, change: (v: string) => void) =>
-    swatch(name, value, change, <span className="ctx-a" style={{ borderBottomColor: value }}>A</span>);
+  const textSwatch = (name: string, value: string, change: (v: string) => void, id?: string) =>
+    swatch(name, value, change, <span className="ctx-a" style={{ borderBottomColor: value }}>A</span>, id);
 
   let content: ReactNode = null;
   if (panel === "Font" && text) content = <FontPicker label="Font family" script="all" compact previewTarget={s ? `shape:${s.id}` : el ? `box:${el}` : undefined} value={s?.fontFamily || (el ? boxFontLabel(theme, el) : "")} onChange={family => s ? patch({ fontFamily: family }) : fontPatch({ family })} />;
@@ -747,6 +785,12 @@ export default function ContextToolbar(p: Props) {
     const target = MERGED_LINE[id].element;
     const lineFont = boxTypeface(theme, target);
     const setLineFont = (patch: Parameters<typeof setBoxFont>[2]) => patchBoxFont(target, patch);
+    /** the ink this line's text is actually painted with, and the one write
+     *  that changes it — see lib/boxFonts: a box with a deck colour field of
+     *  its own must not be restyled through a per-box override, or the two
+     *  surfaces shadow each other and one of them stops working */
+    const lineInk = elementInk(theme, target);
+    const setLineInk = (v: string) => p.patchTheme(setElementInk(theme, target, v));
     /** align this line's own box, whichever part happens to be selected */
     const alignLine = (a: "left" | "center" | "right") =>
       p.patchTheme({ layout: { ...theme.layout, [target]: { ...theme.layout[target], align: a } } });
@@ -763,7 +807,7 @@ export default function ContextToolbar(p: Props) {
           <>
             {toggle("Title font")}
             {stepper("Title size", theme.titleSize ?? 54, v => p.patchTheme({ titleSize: v }), 20, 96, 1, { prefix: "Size" })}
-            {textSwatch("Title colour", theme.titleColor, v => p.patchTheme({ titleColor: v }))}
+            {textSwatch("Title colour", lineInk || theme.titleColor, setLineInk)}
             {button("Aa", () => setLineFont({ uppercase: !(lineFont.uppercase ?? false) }), lineFont.uppercase === true, "UPPERCASE title")}
             {toggle("Title effects", <span aria-hidden="true">☀</span>)}
             {sep()}
@@ -813,7 +857,7 @@ export default function ContextToolbar(p: Props) {
           <>
             {toggle("Question font")}
             {stepper("Question size %", Math.round((lineFont.scale ?? 1) * 100), v => setLineFont({ scale: Math.max(.6, Math.min(1.8, v / 100)) }), 60, 180, 5, { prefix: "Size" })}
-            {textSwatch("Question colour", lineFont.color || theme.questionColor, v => setLineFont({ color: v }))}
+            {textSwatch("Question colour", lineInk || theme.questionColor, setLineInk)}
             {sep()}
             {button(<span className="ctx-glyph-b">B</span>, () => setLineFont({ weight: (lineFont.weight ?? 600) >= 700 ? 600 : 700 }), (lineFont.weight ?? 600) >= 700, "Bold")}
             {button(<span className="ctx-glyph-i">I</span>, () => setLineFont({ italic: !lineFont.italic }), !!lineFont.italic, "Italic")}
@@ -867,7 +911,7 @@ export default function ContextToolbar(p: Props) {
             {toggle("Font")}
             {stepper("Option text size", theme.optionSize, optionSize => p.patchTheme({ optionSize }), 16, 46, 1, { prefix: "Size" })}
             {sep()}
-            {textSwatch("Option text colour", theme.optionTextColor, optionTextColor => p.patchTheme({ optionTextColor }))}
+            {textSwatch("Option text colour", lineInk || theme.optionTextColor, setLineInk)}
             {stepper("Option line height", theme.optionLineHeight ?? 1.45, v => p.patchTheme({ optionLineHeight: Math.round(v * 20) / 20 }), 1, 2.2, .05, { prefix: "Line" })}
             {sep()}
             {aligns()}
@@ -884,8 +928,8 @@ export default function ContextToolbar(p: Props) {
             {toggle("Row style", <span aria-hidden="true">▭</span>)}
             {sep()}
             {swatch("Marker colour (auto base)", picked(theme.optionAccent), v => p.patchTheme({ optionAccent: v }), <span className="ctx-dot" style={{ background: picked(theme.optionAccent) }} />)}
-            {swatch(`Marker fill${theme.optionBulletFill ? "" : " (auto until set)"}`, picked(theme.optionBulletFill || shade(optionBase, 0.2)), v => p.patchTheme({ optionBulletFill: v }), <span className="ctx-dot" style={{ background: picked(theme.optionBulletFill || shade(optionBase, 0.2)) }} />)}
-            {swatch(`Marker ring${theme.optionBulletBorder ? "" : " (auto until set)"}`, picked(theme.optionBulletBorder || shade(optionBase, 0.5)), v => p.patchTheme({ optionBulletBorder: v }), <span className="ctx-ring" style={{ borderColor: picked(theme.optionBulletBorder || shade(optionBase, 0.5)) }} />)}
+            {swatch(`Marker fill${theme.optionBulletFill ? "" : " (auto until set)"}`, picked(theme.optionBulletFill || shade(optionBase, 0.2)), v => p.patchTheme({ optionBulletFill: v }), <span className="ctx-dot" style={{ background: picked(theme.optionBulletFill || shade(optionBase, 0.2)) }} />, "optionBulletFill")}
+            {swatch(`Marker ring${theme.optionBulletBorder ? "" : " (auto until set)"}`, picked(theme.optionBulletBorder || shade(optionBase, 0.5)), v => p.patchTheme({ optionBulletBorder: v }), <span className="ctx-ring" style={{ borderColor: picked(theme.optionBulletBorder || shade(optionBase, 0.5)) }} />, "optionBulletBorder")}
             {button("◐ Backplate", () => p.patchTheme({ optionBulletBgColor: theme.optionBulletBgColor ? "" : shade(optionBase, -0.35) }), !!theme.optionBulletBgColor, "Shape behind every marker (on / off)")}
             {sep()}
             <select
@@ -911,7 +955,7 @@ export default function ContextToolbar(p: Props) {
             {toggle("Numbering", <span aria-hidden="true">#</span>)}
             {toggle("Marker font", <span aria-hidden="true">A</span>)}
             {sep()}
-            {swatch(`Marker letter ink${theme.optionBulletInk ? "" : " (auto until set)"}`, picked(theme.optionBulletInk || optionBase), v => p.patchTheme({ optionBulletInk: v }), <span className="ctx-a" style={{ borderBottomColor: picked(theme.optionBulletInk || optionBase) }}>A</span>)}
+            {swatch(`Marker letter ink${theme.optionBulletInk ? "" : " (auto until set)"}`, picked(theme.optionBulletInk || optionBase), v => p.patchTheme({ optionBulletInk: v }), <span className="ctx-a" style={{ borderBottomColor: picked(theme.optionBulletInk || optionBase) }}>A</span>, "optionBulletInk")}
             {button("Aa", () => p.patchTheme({ optionBulletUppercase: !(theme.optionBulletUppercase ?? false) }), !!(theme.optionBulletUppercase ?? false), "UPPERCASE letters")}
             {sep()}
             <select
@@ -1040,7 +1084,10 @@ export default function ContextToolbar(p: Props) {
           {sep()}
           {s
             ? textSwatch("Text color", s.textColor, textColor => patch({ textColor, textGradient: s.textGradient ? { ...s.textGradient, enabled: false } : undefined }))
-            : textSwatch("Text color", tf.color ?? "#ffffff", color => fontPatch({ color }))}
+            /* an element's ink goes through the field that actually paints it:
+               `boxFonts.options.color` is never read by the option renderer, so
+               this swatch used to do nothing at all on the Answer key strip */
+            : textSwatch("Text color", (el && elementInk(theme, el)) || tf.color || "#ffffff", color => el && p.patchTheme(setElementInk(theme, el, color)))}
           {button("Aa", () => s ? patch({ uppercase: !s.uppercase }) : fontPatch({ uppercase: tf.uppercase !== true }), s ? !!s.uppercase : tf.uppercase === true, "Text case")}
           {sep()}
           {(["left", "center", "right"] as const).map(a => <span key={a}>{button(ALIGN_GLYPH[a], () => setAlign(a), alignVal === a, `Align ${a}`)}</span>)}
