@@ -764,7 +764,7 @@ export function useDeck() {
   );
 
   /** deck-wide batch patch (keeps every entry in ONE undo step) */
-  const updateShapes = useCallback(
+  const updateShapesBatch = useCallback(
     (updates: ShapeUpdate[], label = "Move shapes") => {
       if (!updates.length) return;
       setDeckH(
@@ -861,6 +861,41 @@ export function useDeck() {
   );
 
   /**
+   * Delete a batch of shapes on ONE slide only. Deck-wide (\"global\") shapes
+   * are first fanned out into per-slide copies — exactly like editing them — so
+   * deleting a shape from this slide never removes it from the rest of the deck.
+   */
+  const removeShapesOnSlide = useCallback(
+    (ids: string[], slideId: string) => {
+      if (!ids.length) return;
+      const set = new Set(ids);
+      setDeckH(
+        (d) => {
+          // deck-wide members being deleted fan out onto every OTHER slide as
+          // independent copies, so they keep appearing there
+          const globals = (d.globalShapes ?? []).filter((x) => set.has(x.id));
+          const fan = (s: SlideData): SlideData => {
+            if (s.id === slideId) {
+              return s.shapes?.some((x) => set.has(x.id))
+                ? { ...s, shapes: s.shapes.filter((x) => !set.has(x.id)) }
+                : s;
+            }
+            const copies = globals.map((x) => ({ ...x, id: shapeId() }));
+            return copies.length ? { ...s, shapes: [...(s.shapes ?? []), ...copies] } : s;
+          };
+          return {
+            ...d,
+            globalShapes: (d.globalShapes ?? []).filter((x) => !set.has(x.id)),
+            slides: d.slides.map(fan),
+          };
+        },
+        ids.length > 1 ? `Delete ${ids.length} shapes` : "Delete shape",
+      );
+    },
+    [setDeckH],
+  );
+
+  /**
    * Batch duplicate. Clones keep every property of the source; if the
    * sources were one group, the clones become their own new group.
    */
@@ -899,7 +934,63 @@ export function useDeck() {
             return own.length ? { ...s, shapes: [...(s.shapes ?? []), ...own] } : s;
           }),
         };
-      }, ids.length > 1 ? `Duplicate ${ids.length} items` : "Duplicate shape");
+        }, ids.length > 1 ? `Duplicate ${ids.length} items` : "Duplicate shape");
+      return pairs.map((p) => p.dst);
+    },
+    [setDeckH],
+  );
+
+  /**
+   * Duplicate a batch of shapes onto ONE slide only. The clones land right
+   * above the originals (offset a touch, top of the stack), each gets a fresh
+   * id (and group id, when the sources were one group), and a deck-wide source
+   * is first fanned out into a deck-wide untouched original — the live clone
+   * ends up editable on this slide alone.
+   */
+  const duplicateShapesOnSlide = useCallback(
+    (ids: string[], slideId: string): string[] => {
+      if (!ids.length) return [];
+      const pairs = ids.map((id) => ({ src: id, dst: shapeId() }));
+      const set = new Set(ids);
+      setDeckH(
+        (d) => {
+          const ownerOf = (id: string) => d.slides.find((s) => s.shapes?.some((x) => x.id === id))?.id ?? null;
+          const gnew = new Map<string, string>();
+          const made: { slideId: string; item: ShapeItem }[] = [];
+          pairs.forEach((p, i) => {
+            const src =
+              d.globalShapes?.find((x) => x.id === p.src) ??
+              d.slides.flatMap((s) => s.shapes ?? []).find((x) => x.id === p.src);
+            if (!src) return;
+            let g: string | undefined = src.groupId;
+            if (g) {
+              let fresh = gnew.get(g);
+              if (!fresh) gnew.set(g, (fresh = groupUid()));
+              g = gnew.get(g);
+            }
+            made.push({
+              slideId,
+              item: { ...src, id: p.dst, x: src.x + 3, y: src.y + 3, z: topZ(d) + 1 + i, groupId: g, hidden: false },
+            });
+          });
+          // deck-wide sources keep living on every slide; they get per-slide
+          // copies so they stay editable here without mutating the whole deck
+          const fanout = (d.globalShapes ?? []).filter((x) => set.has(x.id));
+          const slides = d.slides.map((s) => {
+            if (s.id !== slideId) return s;
+            const own = made.filter((m) => m.slideId === s.id).map((m) => m.item);
+            return own.length ? { ...s, shapes: [...(s.shapes ?? []), ...own] } : s;
+          });
+          const owner = ownerOf(pairs[0]?.src ?? "");
+          for (const g of fanout) {
+            if (owner === slideId) continue; // it was already owned here
+            const idx = slides.findIndex((s) => s.id === slideId);
+            if (idx >= 0) slides[idx] = { ...slides[idx], shapes: [...(slides[idx].shapes ?? []), { ...g, id: shapeId() }] };
+          }
+          return { ...d, slides };
+        },
+        ids.length > 1 ? `Duplicate ${ids.length} items` : "Duplicate shape",
+      );
       return pairs.map((p) => p.dst);
     },
     [setDeckH],
@@ -1283,11 +1374,13 @@ export function useDeck() {
     updateShape,
     updateShapeOnSlide,
     updateShapesOnSlide,
-    updateShapes,
+    updateShapesBatch,
     groupShapes,
     ungroupShapes,
     removeShapes,
+    removeShapesOnSlide,
     duplicateShapes,
+    duplicateShapesOnSlide,
     applyShapeDesign,
     reorderShape,
     reorderLayerOp,

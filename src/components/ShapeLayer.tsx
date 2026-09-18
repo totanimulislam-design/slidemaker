@@ -31,6 +31,8 @@ interface Props {
   onUngroup?: (ids: string[]) => void;
   /** Alt+click: walk to the layer *below* the point (overlapping selection) */
   onLayerCycle?: (clientX: number, clientY: number) => void;
+  /** right-click: opens the Canva-style menu for this item (or its set) */
+  onContextMenu?: (id: string, clientX: number, clientY: number) => void;
   fontFamily: string;
   /** snapping is applied only when this is provided AND the user isn't holding Alt */
   snap?: (v: number) => number;
@@ -330,6 +332,7 @@ export default function ShapeLayer({
   onChange,
   onBatchChange,
   onLayerCycle,
+  onContextMenu,
   fontFamily,
   snap,
   smartGuides = true,
@@ -684,6 +687,11 @@ export default function ShapeLayer({
             onPointerUp={end}
             onPointerCancel={end}
             onPointerLeave={leave}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onContextMenu?.(s.id, e.clientX, e.clientY);
+            }}
             onDoubleClick={
               clickable && s.groupId
                 ? (e) => {

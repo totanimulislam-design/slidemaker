@@ -213,3 +213,30 @@ input[type="text"] {
 .ctx-menu-col .ctx-btn { justify-content: flex-start; height: 34px; font-size: 12.5px; }
 .ctx-menu-col .ctx-btn.danger { color: #fda4af; }
 .ctx-menu-col .ctx-btn.danger:hover { background: rgba(244,63,94,.15); }
+
+/* ------------------------------------------------------------------ *
+ * Canva-style right-click menu (components/ContextMenu.tsx)
+ * ------------------------------------------------------------------ */
+/* a submenu row: its fly-out stays visible on hover (or while a child has focus) */
+.ctx-menu-parent {
+  position: relative;
+}
+.ctx-submenu {
+  position: absolute;
+  left: calc(100% - 2px);
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 172px;
+  z-index: 1;
+  display: none;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(14, 21, 38, 0.98);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+}
+.ctx-menu-parent:hover > .ctx-submenu,
+.ctx-menu-parent:focus-within > .ctx-submenu {
+  display: block;
+}
