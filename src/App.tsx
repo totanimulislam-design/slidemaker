@@ -17,9 +17,7 @@ import SlidePicker from "./components/SlidePicker";
 import PasteModal from "./components/PasteModal";
 import PdfImportModal, { type PdfImportResult } from "./components/PdfImportModal";
 import { DECK_ACCEPT, isDeckFile, onPdfImportRequest } from "./lib/pdf";
-import { emptySlide } from "./lib/parse";
-import { cloneBackground, type SlideData as SlideDataT } from "./lib/types";
-import { makeImageShape } from "./lib/shapes";
+import { buildImportedSlides, importPageLabel } from "./lib/importSlides";
 import Presenter from "./components/Presenter";
 import ExportModal, { type ExportSettings } from "./components/ExportModal";
 import type { InspectorTab } from "./components/Inspector";
@@ -500,13 +498,15 @@ function AppContent() {
   /**
    * PDF pages / PPTX slides picked in the import dialog → deck. Pages are
    * already rendered to data-URLs; every one is also saved to Uploads.
+   *
+   * Pages that become slides are merged in as PLAIN pages (lib/importSlides):
+   * separate slides of the user's own, without the project's built-in design on
+   * top of them, ready to be drawn on.
    */
   const importPdfPages = useCallback(
     (res: PdfImportResult) => {
       const pptx = /\.pptx$/i.test(res.name);
-      const base = res.name.replace(/\.(pdf|pptx)$/i, "");
-      const unit = pptx ? "slide" : "page";
-      res.pages.forEach((p) => addUpload(p.src, p.ratio, `${base} · p${p.page}`));
+      res.pages.forEach((p) => addUpload(p.src, p.ratio, importPageLabel(res.name, p.page)));
       if (res.placement === "current-slide") {
         const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
         if (!sl) return;
@@ -524,25 +524,7 @@ function AppContent() {
         return;
       }
       const n0 = deck.slides.length;
-      const slides: SlideDataT[] = res.pages.map((p, i) => {
-        const s = emptySlide(n0 + i + 1);
-        s.question = "";
-        s.options = [];
-        s.note = "";
-        if (res.placement === "slides-background") {
-          s.background = { ...cloneBackground(), src: p.src, fit: "contain" };
-          // a plain page: hide the question chrome so only the page shows
-          s.themeOverride = {
-            ...(s.themeOverride ?? {}),
-            showBullet: false,
-            showNumber: false,
-          };
-        } else {
-          const img = makeImageShape(p.src, p.ratio, 60);
-          s.shapes = [{ ...img, name: `${base} · ${unit} ${p.page}` }];
-        }
-        return s;
-      });
+      const slides = buildImportedSlides(res, n0);
       const after = n0 ? Math.min(current, n0 - 1) : -1;
       insertSlidesAfter(slides, after, `Import ${slides.length} ${pptx ? "PowerPoint slide" : "PDF page"}${slides.length === 1 ? "" : "s"}`);
     },

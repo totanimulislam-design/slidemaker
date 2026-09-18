@@ -35,6 +35,16 @@ export interface SlideData {
   showAnswer: boolean;
   /** shapes & text boxes drawn on this slide only */
   shapes?: ShapeItem[];
+  /**
+   * A slide of the user's OWN — free of the deck's built-in design.
+   *
+   * Pages imported from a PDF / PowerPoint are marked with it so the imported
+   * page lands as a separate, clean slide instead of inheriting the project's
+   * frame, logo, brand lines, title banner and badge (see PLAIN_PAGE_CHROME).
+   * The slide stays fully editable: draw on it, give it a background, and flip
+   * the deck design back on with one toggle (Inspector → Slide background).
+   */
+  plainPage?: boolean;
   /** per-slide background override (undefined = use the deck background) */
   background?: BackgroundSettings;
   /** Per-slide visual overrides. Unset fields continue to follow the deck. */
@@ -115,6 +125,17 @@ export const ELEMENT_LABELS: Record<ElementId, string> = {
   options: "Options",
   note: "Footnote",
 };
+
+/**
+ * The deck's built-in DESIGN elements — the ones a plain page (a slide of the
+ * user's own, e.g. an imported PDF page) does not paint. Content-driven elements
+ * (bullet, question, options, footnote) are deliberately NOT in this list: they
+ * follow what the user actually types on that slide.
+ */
+export const PLAIN_PAGE_CHROME: readonly ElementId[] = ["logo", "brand", "title", "badge"];
+
+/** Is `id` one of the built-in design elements a plain page keeps off? */
+export const isPlainPageChrome = (id: ElementId): boolean => PLAIN_PAGE_CHROME.includes(id);
 
 export const DEFAULT_LAYOUT: LayoutMap = {
   logo: { x: 1, y: 3, w: 6.5, align: "left" },

@@ -18,6 +18,12 @@ interface Props {
   onClearSlide: (ids: string[]) => void;
   /** promote an image shape to the background (and optionally delete the shape) */
   onRemoveShape?: (id: string) => void;
+  /**
+   * Paint this project's built-in design on this slide (frame, logo, brand
+   * lines, title banner, badge) — off = a plain slide of the user's own, which
+   * is how imported PDF / PowerPoint pages arrive.
+   */
+  onPlainPage?: (plain: boolean) => void;
   /** Scope is controlled by the main Apply Changes bar. */
   managedScope?: boolean;
 }
@@ -31,7 +37,7 @@ const sameGradient = (a: Gradient, b: Gradient) =>
   a.stops.length === b.stops.length &&
   a.stops.every((s, i) => s.color.toLowerCase() === b.stops[i].color.toLowerCase() && s.at === b.stops[i].at);
 
-export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSlide, onRemoveShape, managedScope = false }: Props) {
+export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSlide, onRemoveShape, onPlainPage, managedScope = false }: Props) {
   const [scope, setScope] = useState<Scope>("slide");
   const [picked, setPicked] = useState<string[]>([]);
   const [url, setUrl] = useState("");
@@ -134,6 +140,25 @@ export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSl
           <span className="shrink-0">{hasOverride ? "this slide's own background" : "from deck (all slides)"}</span>
         </div>
       </div>
+
+      {/* ---------------- deck design on / off for this slide --------------- */}
+      {onPlainPage && slide && (
+        <div
+          data-plain-page-toggle=""
+          className="space-y-1.5 rounded-xl border border-emerald-400/25 bg-emerald-400/[0.07] p-3"
+        >
+          <Toggle
+            label="Deck design on this slide"
+            checked={!slide.plainPage}
+            onChange={(v) => onPlainPage(!v)}
+          />
+          <p className="text-[11px] leading-snug text-slate-400">
+            {slide.plainPage
+              ? "Off — a plain slide of your own: this project's frame, logo, brand lines, title banner and badge are not painted on it (this is how imported PDF / PowerPoint pages arrive). Switch it on to bring the design back."
+              : "On — this slide wears this project's frame, logo, brand lines, title banner and badge. Switch it off to keep the slide plain and work on it on your own."}
+          </p>
+        </div>
+      )}
 
       {/* The main Apply Changes bar owns scope in the inspector. */}
       {!managedScope && <div className="space-y-2 rounded-xl border border-amber-400/30 bg-amber-400/[0.07] p-3">

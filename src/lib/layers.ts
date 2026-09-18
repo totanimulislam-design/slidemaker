@@ -1,5 +1,5 @@
 import type { Deck, ElementId, LayoutMap, SlideData } from "./types";
-import { ELEMENT_LABELS } from "./types";
+import { ELEMENT_LABELS, isPlainPageChrome } from "./types";
 import { SHAPE_ICONS, SHAPE_LABELS, type ShapeItem } from "./shapes";
 import { reorder, sortByZ, Z_BASE, type ZOp } from "./zorder";
 import { alignShape, type AlignOp } from "./shapeAlign";
@@ -98,7 +98,10 @@ export function collectLayers(deck: Deck, slide: SlideData | undefined): LayerEn
 
   /** structurally on the slide? (no logo uploaded, empty footnote, merged bullet) */
   const elementPresent = (id: ElementId) =>
-    id === "logo" ? deck.header.showLogo && !!deck.header.logo
+    // a plain page (an imported PDF / PowerPoint slide) paints none of the
+    // deck's built-in design, so those rows have nothing to reorder
+    slide?.plainPage && isPlainPageChrome(id) ? false
+    : id === "logo" ? deck.header.showLogo && !!deck.header.logo
     : id === "note" ? !!slide?.note?.trim()
     : id === "bullet" ? deck.theme.showBullet && (deck.theme.bulletSeparate !== false || !!deck.theme.showNumber)
     : true;

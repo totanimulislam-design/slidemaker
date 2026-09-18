@@ -740,6 +740,7 @@ export default function Inspector({
             onReset={background.onReset}
             onClearSlide={background.onClearSlide}
             onRemoveShape={shapes.onRemove}
+            onPlainPage={(plain) => slide && updateSlide(slide.id, { plainPage: plain })}
             managedScope
           />
         )}
@@ -904,7 +905,11 @@ function ScopeBar({
   };
 
   const hasOverride =
-    !!slide?.themeOverride || !!slide?.headerOverride || !!slide?.background || !!slide?.shapes?.length;
+    !!slide?.themeOverride ||
+    !!slide?.headerOverride ||
+    !!slide?.background ||
+    !!slide?.plainPage ||
+    !!slide?.shapes?.length;
 
   return (
     <div className="shrink-0 border-b border-white/10 bg-gradient-to-b from-amber-400/[0.08] to-transparent p-2.5 space-y-2">
@@ -1001,8 +1006,10 @@ function ScopeBar({
                 />
                 <span className="w-5 text-slate-500 font-mono">{i + 1}</span>
                 <span className="truncate">{s.question.replace(/\$[^$]*\$/g, "math").slice(0, 36) || "Blank slide"}</span>
-                {(s.themeOverride || s.headerOverride || s.background) && (
-                  <span className="ml-auto text-[8px] rounded bg-amber-400/20 text-amber-200 px-1">custom</span>
+                {(s.themeOverride || s.headerOverride || s.background || s.plainPage) && (
+                  <span className="ml-auto text-[8px] rounded bg-amber-400/20 text-amber-200 px-1">
+                    {s.plainPage ? "plain" : "custom"}
+                  </span>
                 )}
               </label>
             ))}

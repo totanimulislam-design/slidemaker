@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { formatPageRange, isPptxFile, openDocument, parsePageRange, type OpenedPdf, type PdfPageRender } from "../lib/pdf";
+import {
+  formatPageRange,
+  isPptxFile,
+  openDocument,
+  parsePageRange,
+  type OpenedPdf,
+  type PdfImportResult,
+  type PdfPageRender,
+  type PdfPlacement,
+} from "../lib/pdf";
 import { Btn, Field, SegButtons, Toggle } from "./ui";
 import ResizableDialog from "./ResizableDialog";
 import { cn } from "../utils/cn";
@@ -10,19 +19,14 @@ import { cn } from "../utils/cn";
  * slide and a PDF page are handled identically.
  *
  *  • Whole document or specific pages (click thumbnails, or type "1-3, 7").
- *  • As new slides: each page becomes its own slide in the stack, either as a
- *    full-bleed background (a clean page) or as a picture layer on a blank
- *    slide (so it can still be moved / cropped like any image).
+ *  • As new slides: each page becomes its own slide in the stack — either as the
+ *    slide's background or as a picture layer — and that slide is a PLAIN page,
+ *    free of this project's built-in design, so the user's material is merged in
+ *    as a separate slide they can work on (see lib/importSlides).
  *  • Onto the current slide: the chosen pages are placed as picture layers.
  *  • Every rendered page is also saved to the Uploads library for reuse.
  */
-export type PdfPlacement = "slides-background" | "slides-image" | "current-slide";
-
-export interface PdfImportResult {
-  placement: PdfPlacement;
-  pages: { page: number; src: string; ratio: number }[];
-  name: string;
-}
+export type { PdfImportResult, PdfPlacement };
 
 interface Props {
   file: File | null;
@@ -133,9 +137,9 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
   const Unit = pptx ? "Slide" : "Page";
 
   const placementHint: Record<PdfPlacement, string> = {
-    "slides-background": `Each ${unit} becomes a new slide with the ${unit} as its background — a clean, full-bleed copy.`,
-    "slides-image": `Each ${unit} becomes a new blank slide with the ${unit} placed as a picture you can move, crop and resize.`,
-    "current-slide": `The chosen ${unit}s are placed as pictures on the slide you are editing now.`,
+    "slides-background": `Each ${unit} becomes a new slide of your own with the ${unit} as its background — no frame, logo, title or badge from this project painted over it.`,
+    "slides-image": `Each ${unit} becomes a new slide of your own with the ${unit} placed as a picture you can move, crop and resize.`,
+    "current-slide": `The chosen ${unit}s are placed as pictures on the slide you are editing now — that slide keeps this project's design.`,
   };
 
   return (
@@ -249,7 +253,10 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
           <Toggle label={`High-resolution ${unit}s (sharper, larger file)`} checked={hiRes} onChange={setHiRes} />
 
           <p className="rounded-lg border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-[11px] text-sky-200">
-            Every imported {unit} is also saved to <b>Uploads</b>, so you can drop it onto any slide later.
+            New slides come in <b>plain</b>: they are separate slides of your own, so this project's frame, logo, title
+            and badges stay off them. Draw on them, merge them into your deck, and switch the design back on any time
+            with <b>Deck design</b> in the Slide background panel. Every imported {unit} is also saved to <b>Uploads</b>,
+            so you can drop it onto any slide later.
             {pptx && (
               <>
                 {" "}

@@ -12,7 +12,7 @@ import { ELEMENT_DEFAULT_Z } from "../lib/layers";
 import { bannerCss } from "../lib/banner";
 import { backgroundLayers } from "../lib/background";
 import type { BackgroundSettings } from "../lib/types";
-import { DEFAULT_BADGE_PLATE, DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
+import { DEFAULT_BADGE_PLATE, DEFAULT_BANNER, DEFAULT_FRAME, isPlainPageChrome } from "../lib/types";
 import { computeFrameCss } from "../lib/frameDesigns";
 import { resolveFrameImageSrc } from "../lib/frameImages";
 import { boxesOverlap } from "../lib/groups";
@@ -124,6 +124,14 @@ function SlideBase({
   const editable = !!onField;
   const movable = !!onLayoutChange;
   const L = theme.layout;
+  /**
+   * A PLAIN page: a slide of the user's own (an imported PDF / PowerPoint page,
+   * or any slide the toggle in the Slide background panel switches over). None
+   * of the deck's built-in design — frame, logo, brand lines, title banner,
+   * badge — is painted on it, so the page reads as the user's material merged
+   * into the project rather than as a slide of the project's template.
+   */
+  const plainPage = !!slide.plainPage;
   const isFree = (id: ElementId) => (L[id].mode ?? "align") === "free";
 
   /* ------------------------------ positioning ------------------------------ */
@@ -132,7 +140,9 @@ function SlideBase({
     const free = (b.mode ?? "align") === "free";
     const rot = b.rot ? ` rotate(${b.rot}deg)` : "";
     // hidden by the Layers panel: it keeps its slot in the stack, but nothing
-    // is painted — on the board, in the thumbnails and in every export alike
+    // is painted — on the board, in the thumbnails and in every export alike.
+    // (A plain page is handled earlier and harder: chromePainted() does not
+    // render the deck's built-in design at all.)
     if (b.hidden) return { display: "none" };
     return {
       position: "absolute",
@@ -211,11 +221,23 @@ function SlideBase({
 
   const elementShown = (id: ElementId) => {
     if (layerHidden(id)) return false;
+    // a plain page (an imported PDF / PowerPoint slide) never paints the deck's
+    // built-in design — that is what makes it a slide of the user's own
+    if (plainPage && isPlainPageChrome(id)) return false;
     if (id === "logo") return !!(header.showLogo && header.logo);
     if (id === "note") return !!slide.note?.trim() && (theme.showNote ?? true);
     if (id === "brand") return (theme.showBrandTop ?? true) || (theme.showBrandBottom ?? true);
     return true;
   };
+
+  /**
+   * Is this built-in element rendered AT ALL? A plain page keeps the deck's
+   * built-in design off it entirely — no node, so the board, the rail thumbnails
+   * and every export agree there is nothing there. (A layer hidden with the
+   * Layers 👁 is different: it keeps its node and is painted `display: none`,
+   * so it stays listed and can be shown again.)
+   */
+  const chromePainted = (id: ElementId) => !(plainPage && isPlainPageChrome(id));
 
   const snapTargets = (except: string) => {
     const out: { x: number; y: number; w: number; h: number }[] = [];
@@ -616,12 +638,13 @@ function SlideBase({
   const qRtl = isRtlText(slide.question);
 
   const frame = theme.frame ?? DEFAULT_FRAME;
-  const frameOn = theme.showFrame && frame.style !== "none";
+  // a plain page has no frame either — the imported page is the whole slide
+  const frameOn = !plainPage && theme.showFrame && frame.style !== "none";
   const frameCss = computeFrameCss(frame, frameOn);
 
   // If a frame image is chosen, check its placement mode (defaults to "fit" so it NEVER overlaps slide content)
   const frameImageSrc = resolveFrameImageSrc(frame.image);
-  const hasFrameImage = !!frameImageSrc;
+  const hasFrameImage = !plainPage && !!frameImageSrc;
   const isImageOverlayMode = frame.imagePlacement === "overlay";
   const imageInsetPct = hasFrameImage && !isImageOverlayMode ? (frame.imageInset ?? 10) : 0;
   // Convert percentage inset into pixels for 1280x720:
@@ -757,7 +780,7 @@ function SlideBase({
           )}
 
           {/* -------------------------------- logo ---------------------------- */}
-          {header.showLogo && header.logo && (
+          {chromePainted("logo") && header.showLogo && header.logo && (
             <div {...handlers("logo")} style={boxStyle("logo", { lineHeight: 0 })}>
               <img
                 src={header.logo}
@@ -778,33 +801,38 @@ function SlideBase({
           )}
 
           {/* -------------------------------- brand --------------------------- */}
-          <div
-            {...handlers("brand")}
-            style={boxStyle("brand", boxFontCss(theme, "brand", {
-              color: theme.brandColor,
-              textTransform: "uppercase",
-              lineHeight: 1.05,
-              fontWeight: 700,
-              letterSpacing: 0.4,
-            }))}
-          >
-            {/* Badge 1 / Badge 2 — each line can be hidden, resized and
-                recoloured independently (see the Brand Line panels) */}
-            {(theme.showBrandTop ?? true) && (
-              <div style={{ fontSize: theme.brandTopSize ?? 25, color: theme.brandTopColor || undefined }}>
-                {header.brandTop}
-              </div>
-            )}
-            {(theme.showBrandBottom ?? true) && (
-              <div style={{ fontSize: theme.brandBottomSize ?? 27, color: theme.brandBottomColor || undefined }}>
-                {header.brandBottom}
-              </div>
-            )}
-            <Grip id="brand" />
-          </div>
+          {chromePainted("brand") && (
+            <div
+              {...handlers("brand")}
+              style={boxStyle("brand", boxFontCss(theme, "brand", {
+                color: theme.brandColor,
+                textTransform: "uppercase",
+                lineHeight: 1.05,
+                fontWeight: 700,
+                letterSpacing: 0.4,
+              }))}
+            >
+              {/* Badge 1 / Badge 2 — each line can be hidden, resized and
+                  recoloured independently (see the Brand Line panels) */}
+              {(theme.showBrandTop ?? true) && (
+                <div style={{ fontSize: theme.brandTopSize ?? 25, color: theme.brandTopColor || undefined }}>
+                  {header.brandTop}
+                </div>
+              )}
+              {(theme.showBrandBottom ?? true) && (
+                <div style={{ fontSize: theme.brandBottomSize ?? 27, color: theme.brandBottomColor || undefined }}>
+                  {header.brandBottom}
+                </div>
+              )}
+              <Grip id="brand" />
+            </div>
+          )}
 
           {/* -------------------------------- title --------------------------- */}
           {(() => {
+            // a plain page carries none of the project's design — not even the
+            // title text, so an imported page is not captioned by the deck
+            if (!chromePainted("title")) return null;
             const bset = { ...DEFAULT_BANNER, ...(theme.banner ?? {}), color: theme.banner?.color ?? theme.titleBanner };
             const css = bannerCss(bset, theme.titleColor);
             return (
@@ -834,39 +862,41 @@ function SlideBase({
           })()}
 
           {/* -------------------------------- badge --------------------------- */}
-          <div
-            {...handlers("badge")}
-            style={boxStyle("badge", boxFontCss(theme, "badge", {
-              fontWeight: 700,
-              fontSize: theme.badgeSize ?? 36,
-              letterSpacing: 0.5,
-              color: theme.badgeColor,
-              textTransform: "uppercase",
-              textShadow: "0 2px 6px rgba(0,0,0,.6)",
-              lineHeight: 1.15,
-            }))}
-          >
-            {(() => {
-              const text = slide.badge?.trim() || header.badge;
-              const plate = { ...DEFAULT_BADGE_PLATE, ...(theme.badgePlate ?? {}) };
-              if (!plate.enabled) return <span>{text}</span>;
-              return (
-                <span
-                  style={{
-                    display: "inline-block",
-                    background: withAlpha(plate.color, plate.opacity),
-                    borderRadius: plate.radius,
-                    padding: `${plate.padY}px ${plate.padX}px`,
-                    border: plate.border.enabled ? `${plate.border.width}px solid ${plate.border.color}` : undefined,
-                    boxShadow: `0 2px 10px ${withAlpha("#000000", 0.45)}`,
-                  }}
-                >
-                  {text}
-                </span>
-              );
-            })()}
-            <Grip id="badge" />
-          </div>
+          {chromePainted("badge") && (
+            <div
+              {...handlers("badge")}
+              style={boxStyle("badge", boxFontCss(theme, "badge", {
+                fontWeight: 700,
+                fontSize: theme.badgeSize ?? 36,
+                letterSpacing: 0.5,
+                color: theme.badgeColor,
+                textTransform: "uppercase",
+                textShadow: "0 2px 6px rgba(0,0,0,.6)",
+                lineHeight: 1.15,
+              }))}
+            >
+              {(() => {
+                const text = slide.badge?.trim() || header.badge;
+                const plate = { ...DEFAULT_BADGE_PLATE, ...(theme.badgePlate ?? {}) };
+                if (!plate.enabled) return <span>{text}</span>;
+                return (
+                  <span
+                    style={{
+                      display: "inline-block",
+                      background: withAlpha(plate.color, plate.opacity),
+                      borderRadius: plate.radius,
+                      padding: `${plate.padY}px ${plate.padX}px`,
+                      border: plate.border.enabled ? `${plate.border.width}px solid ${plate.border.color}` : undefined,
+                      boxShadow: `0 2px 10px ${withAlpha("#000000", 0.45)}`,
+                    }}
+                  >
+                    {text}
+                  </span>
+                );
+              })()}
+              <Grip id="badge" />
+            </div>
+          )}
 
           {/* ------------------------ number bullet (own element) ------------- */}
           {theme.bulletSeparate && theme.showBullet && (() => {
