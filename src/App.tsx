@@ -15,6 +15,11 @@ import Inspector from "./components/Inspector";
 import SlideStack from "./components/SlideStack";
 import SlidePicker from "./components/SlidePicker";
 import PasteModal from "./components/PasteModal";
+import PdfImportModal, { type PdfImportResult } from "./components/PdfImportModal";
+import { isPdfFile, onPdfImportRequest } from "./lib/pdf";
+import { emptySlide } from "./lib/parse";
+import { cloneBackground, type SlideData as SlideDataT } from "./lib/types";
+import { makeImageShape } from "./lib/shapes";
 import Presenter from "./components/Presenter";
 import ExportModal, { type ExportSettings } from "./components/ExportModal";
 import type { InspectorTab } from "./components/Inspector";
@@ -77,6 +82,7 @@ function AppContent() {
     updateAll,
     transformAll,
     addSlides,
+    insertSlidesAfter,
     insertBlank,
     removeSlide,
     duplicateSlide,
@@ -135,6 +141,8 @@ function AppContent() {
   }, []);
 
   const [pasteOpen, setPasteOpen] = useState(false);
+  /** PDF waiting in the "Import PDF" page picker (null = closed) */
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
@@ -452,8 +460,11 @@ function AppContent() {
   /** image files from clipboard / drag-drop → slide */
   const importImageFiles = useCallback(
     async (files: File[], at?: { x: number; y: number }) => {
+      // a PDF opens the page picker (whole document or chosen pages)
+      const pdf = files.find(isPdfFile);
+      if (pdf) setPdfFile(pdf);
       const imgs = files.filter((f) => f.type.startsWith("image/"));
-      if (!imgs.length) return false;
+      if (!imgs.length) return !!pdf;
       setBusy(`Loading ${imgs.length} image${imgs.length > 1 ? "s" : ""}…`);
       try {
         for (const f of imgs) {
@@ -477,7 +488,7 @@ function AppContent() {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       const files = Array.from(e.clipboardData?.files ?? []);
-      if (files.some((f) => f.type.startsWith("image/"))) {
+      if (files.some((f) => f.type.startsWith("image/") || isPdfFile(f))) {
         e.preventDefault();
         void importImageFiles(files);
       }
@@ -485,6 +496,59 @@ function AppContent() {
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
   }, [importImageFiles, presenting, pasteOpen, exportOpen]);
+
+  /**
+   * PDF pages picked in the import dialog → deck. Pages are already rendered
+   * to data-URLs; every one is also saved to Uploads for later reuse.
+   */
+  const importPdfPages = useCallback(
+    (res: PdfImportResult) => {
+      const base = res.name.replace(/\.pdf$/i, "");
+      res.pages.forEach((p) => addUpload(p.src, p.ratio, `${base} · p${p.page}`));
+      if (res.placement === "current-slide") {
+        const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
+        if (!sl) return;
+        let last: string | null = null;
+        res.pages.forEach((p, i) => {
+          // cascade so several pages don't land exactly on top of each other
+          last = addImage(p.src, p.ratio, sl.id, i ? { x: 50 + i * 2, y: 50 + i * 2 } : undefined);
+        });
+        if (last) {
+          setSurface(null);
+          setSelectedEl(null);
+          setSelectedShapes([last]);
+          requestTab("images");
+        }
+        return;
+      }
+      const n0 = deck.slides.length;
+      const slides: SlideDataT[] = res.pages.map((p, i) => {
+        const s = emptySlide(n0 + i + 1);
+        s.question = "";
+        s.options = [];
+        s.note = "";
+        if (res.placement === "slides-background") {
+          s.background = { ...cloneBackground(), src: p.src, fit: "contain" };
+          // a plain page: hide the question chrome so only the page shows
+          s.themeOverride = {
+            ...(s.themeOverride ?? {}),
+            showBullet: false,
+            showNumber: false,
+          };
+        } else {
+          const img = makeImageShape(p.src, p.ratio, 60);
+          s.shapes = [{ ...img, name: `${base} · page ${p.page}` }];
+        }
+        return s;
+      });
+      const after = n0 ? Math.min(current, n0 - 1) : -1;
+      insertSlidesAfter(slides, after, `Import ${slides.length} PDF page${slides.length === 1 ? "" : "s"}`);
+    },
+    [deck.slides, current, addImage, insertSlidesAfter, requestTab],
+  );
+
+  // inspector panels (Uploads / Shapes) hand PDFs over through a window event
+  useEffect(() => onPdfImportRequest((f) => setPdfFile(f)), []);
 
   const [dropHint, setDropHint] = useState(false);
 
@@ -1321,6 +1385,22 @@ function AppContent() {
             ✓ Paste answers
           </Btn>
           <Btn onClick={insertBlank}>Blank slide</Btn>
+          <label
+            title="Import a PDF — add the whole document or specific pages as slides, or drop pages onto the current slide"
+            className="inline-flex cursor-pointer items-center rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 hover:bg-white/10"
+          >
+            📄 Import PDF
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) setPdfFile(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
           <Btn onClick={renumber} title="Renumber all slides 1..n">
             Renumber
           </Btn>
@@ -1486,7 +1566,7 @@ function AppContent() {
                 >
                   {dropHint && (
                     <div className="pointer-events-none absolute inset-3 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-sky-400 bg-sky-400/10 text-lg font-semibold text-sky-200">
-                      Drop image to place it on the slide · hold Shift to set as background
+                      Drop images or a PDF to place them on the slide · hold Shift to set as background
                     </div>
                   )}
                 <Stage>
@@ -1527,13 +1607,13 @@ function AppContent() {
                 <div className="flex shrink-0 flex-wrap items-center justify-center gap-1 border-t border-white/10 bg-slate-950/50 px-4 py-1.5">
                   <span className="mr-1 text-[10px] font-medium tracking-wide text-slate-500 uppercase">Insert</span>
                   <label
-                    title="Upload image"
+                    title="Upload image or PDF"
                     className="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-md border border-sky-400/40 bg-sky-400/10 px-2 text-sm text-sky-200 hover:bg-sky-400/20"
                   >
                     📤
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,application/pdf,.pdf"
                       multiple
                       className="hidden"
                       onChange={(e) => {
@@ -1762,6 +1842,8 @@ function AppContent() {
           setCurrent(mode === "replace" ? 0 : deck.slides.length);
         }}
       />
+
+      <PdfImportModal file={pdfFile} onClose={() => setPdfFile(null)} onImport={importPdfPages} />
 
       {presenting && slide && (
         <Presenter

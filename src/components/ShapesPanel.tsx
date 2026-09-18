@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { SHAPE_ICONS, SHAPE_LABELS, inlineRemoteImage, loadImageFile, shrinkDataUrl, type ShapeItem, type ShapeKind } from "../lib/shapes";
+import { isPdfFile, requestPdfImport } from "../lib/pdf";
 import { addUpload } from "../lib/uploads";
 import { handleSmartPaste } from "../lib/richPaste";
 import { alignShape, boundsOf, distributeShapes, type AlignOp } from "../lib/shapeAlign";
@@ -107,7 +108,10 @@ export default function ShapesPanel({
 
   const importFiles = async (files: FileList | File[] | null | undefined, sc: InsertScope = scope, replaceId?: string) => {
     if (!files) return;
-    const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    const all = Array.from(files);
+    const pdf = all.find(isPdfFile);
+    if (pdf && !replaceId) requestPdfImport(pdf);
+    const list = all.filter((f) => f.type.startsWith("image/"));
     if (!list.length) return;
     setImgBusy(`Loading ${list.length} image${list.length > 1 ? "s" : ""}…`);
     try {
@@ -310,7 +314,7 @@ export default function ShapesPanel({
             Upload → {scopeText}
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,application/pdf,.pdf"
               multiple
               className="hidden"
               onChange={(e) => {

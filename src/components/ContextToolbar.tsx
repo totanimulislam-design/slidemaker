@@ -942,12 +942,12 @@ export default function ContextToolbar(p: Props) {
         </>}
         {/* the insert destinations: quick-add tools above the board */}
         {inserting && p.nav === "images" && <>
-          <label className="ctx-btn ctx-upload" title="Upload image files to this slide and library">
-            📤 Upload image
+          <label className="ctx-btn ctx-upload" title="Upload images (or a PDF) to this slide and library">
+            📤 Upload image / PDF
             <input
-              aria-label="Add image files"
+              aria-label="Add image or PDF files"
               type="file"
-              accept="image/*"
+              accept="image/*,application/pdf,.pdf"
               multiple
               className="ctx-file"
               onChange={e => {
