@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Gradient } from "../lib/types";
 import { gradientCss } from "../lib/banner";
 import { usePointerDrag } from "../lib/dragSession";
@@ -231,7 +231,10 @@ const squareFace = (h: number) =>
  *     marker straight into the DOM on every move, so what is under the cursor
  *     is on screen in that same event. A React render is not in that path: the
  *     editor's deck write re-renders the whole board, and waiting for it is
- *     what made the wheel lag behind the mouse.
+ *     what made the wheel lag behind the mouse. Marker left/top are not driven
+ *     by React state while the pointer owns the wheel — a render would stamp
+ *     last-flushed coordinates over the live position and the marker would
+ *     trail. After any parent render, `useLayoutEffect` restores `live`.
  *  2. the editor is told ONCE PER FRAME (`flush`), with the newest colour, so a
  *     sweep is ~60 writes instead of one per pointermove and the board below
  *     still previews live. A press flushes at once — a click must not wait for
@@ -256,6 +259,14 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
   const frame = useRef<number | null>(null);
   /** the last colour handed to the editor, so its echo is not read as an outside change */
   const echo = useRef("");
+  /** latest onChange — the rAF flush must not close over a stale editor writer */
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  /** skip rewriting the square's gradient unless hue actually moved */
+  const paintedHue = useRef<number | null>(null);
+  /** picker geometry, measured on press so moves don't force layout */
+  const ringBox = useRef<DOMRect | null>(null);
+  const sqBox = useRef<DOMRect | null>(null);
 
   const r = size / 2;
   const ring = 16;
@@ -271,7 +282,10 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
       hue.style.background = hslToHex(h, 100, 50);
     }
     const face = squareRef.current;
-    if (face) face.style.background = squareFace(h);
+    if (face && paintedHue.current !== h) {
+      face.style.background = squareFace(h);
+      paintedHue.current = h;
+    }
     const marker = sqDotRef.current;
     if (marker) {
       marker.style.left = `${(s / 100) * sq - 7}px`;
@@ -280,8 +294,13 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
     }
   };
 
-  /** hands the newest colour to the editor, at most once per frame */
-  const flush = () => {
+  /**
+   * Hands the newest colour to the editor, at most once per frame.
+   * `syncUi` writes React state (the h/s/l fields). During a live drag that
+   * write is skipped: a render would stamp last-flushed left/top onto the
+   * markers and yank them behind the pointer.
+   */
+  const flush = (syncUi = false) => {
     if (frame.current !== null) {
       cancelAnimationFrame(frame.current);
       frame.current = null;
@@ -292,16 +311,24 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
     live.current = next;
     const hex = hslToHex(next.h, next.s, next.l);
     echo.current = normHex(hex);
-    setHsl(next); // React now shows the colour the DOM already has
-    onChange(hex);
+    if (syncUi || !mode.current) setHsl(next);
+    onChangeRef.current(hex);
   };
+
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
 
   /** a pointer move (or press) picks: paint now, tell the editor this frame */
   const pick = (h: number, s: number, l: number) => {
     live.current = { h, s, l };
     paint(h, s, l);
     pending.current = { h, s, l };
-    if (frame.current === null) frame.current = requestAnimationFrame(flush);
+    if (frame.current === null) {
+      frame.current = requestAnimationFrame(() => {
+        frame.current = null;
+        flushRef.current();
+      });
+    }
   };
 
   /** a panel field (the h / s / l numbers): applied at once, so the field keeps its draft */
@@ -311,7 +338,7 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
     echo.current = normHex(hex);
     setHsl({ h, s, l });
     paint(h, s, l);
-    onChange(hex);
+    onChangeRef.current(hex);
   };
 
   /** the hex field: the spelling typed is what the deck gets, the wheel follows it */
@@ -321,13 +348,12 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
     echo.current = normHex(hex);
     setHsl(next);
     paint(next.h, next.s, next.l);
-    onChange(hex);
+    onChangeRef.current(hex);
   };
 
   const pickFromRing = (e: { clientX: number; clientY: number }) => {
-    const el = ringRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
+    const rect = ringBox.current ?? ringRef.current?.getBoundingClientRect();
+    if (!rect) return;
     const dx = e.clientX - (rect.left + rect.width / 2);
     const dy = e.clientY - (rect.top + rect.height / 2);
     const h = (Math.round((Math.atan2(dy, dx) * 180) / Math.PI + 90) + 360) % 360;
@@ -335,9 +361,8 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
   };
 
   const pickFromSquare = (e: { clientX: number; clientY: number }) => {
-    const el = squareRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
+    const rect = sqBox.current ?? squareRef.current?.getBoundingClientRect();
+    if (!rect) return;
     const s = clamp(Math.round(((e.clientX - rect.left) / rect.width) * 100), 0, 100);
     const l = clamp(Math.round(100 - ((e.clientY - rect.top) / rect.height) * 100), 0, 100);
     pick(live.current.h, s, l);
@@ -348,7 +373,9 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
     onMove: (e) => (mode.current === "ring" ? pickFromRing(e) : pickFromSquare(e)),
     onEnd: () => {
       mode.current = null;
-      flush(); // the release settles the colour the last move is still holding
+      ringBox.current = null;
+      sqBox.current = null;
+      flush(true); // the release settles the colour the last move is still holding
     },
   });
 
@@ -359,8 +386,17 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
     if (mode.current || normHex(value) === echo.current) return;
     const next = hexToHsl(value);
     live.current = next;
+    paintedHue.current = null;
     setHsl(next);
+    paint(next.h, next.s, next.l);
   }, [value]);
+
+  // a parent render (the deck write) must not leave the markers on the last
+  // React-committed colour — restore whatever the pointer last painted
+  useLayoutEffect(() => {
+    const { h, s, l } = live.current;
+    paint(h, s, l);
+  });
 
   // a frame still waiting when the wheel goes away must not fire into nothing
   useEffect(
@@ -382,6 +418,8 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
         style={{ width: size, height: size, touchAction: "none" }}
         onPointerDown={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
+          ringBox.current = rect;
+          sqBox.current = squareRef.current?.getBoundingClientRect() ?? null;
           const dx = e.clientX - (rect.left + rect.width / 2);
           const dy = e.clientY - (rect.top + rect.height / 2);
           const surface = Math.hypot(dx, dy) > r - ring - 4 ? "ring" : "sq";
@@ -389,7 +427,7 @@ export function ColorWheel({ value, onChange, size = 148 }: ColorWheelProps) {
           mode.current = surface;
           if (surface === "ring") pickFromRing(e);
           else pickFromSquare(e);
-          flush(); // the press itself is a colour: commit it now, not in a frame
+          flush(true); // the press itself is a colour: commit it now, not in a frame
         }}
         onPointerUp={release}
         onPointerCancel={release}
