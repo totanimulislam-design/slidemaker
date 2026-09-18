@@ -566,11 +566,12 @@ function AppContent() {
     setSelectedEl(null);
     setSurface(null);
     setActiveField(null);
-    // the destinations that do not depend on a selection (Answer key, Insert
-    // images, Insert shapes) stay open across slides — their tools apply to the
-    // slide you just moved to; every other destination needs its element back
+    // the destinations that do not depend on a selection (Answer key, Uploads,
+    // Insert shapes, Layers, and the selection-free Design/Layout panels) stay
+    // open across slides — their tools apply to the slide you just moved to;
+    // every other destination needs its element back
     setActiveNav((nav) =>
-      nav === "answerKey" || nav === "images" || nav === "shapes" || nav === "layers" ? nav : null,
+      nav === "answerKey" || nav === "images" || nav === "shapes" || nav === "layers" || nav === "theme" || nav === "layout" ? nav : null,
     );
   }, [current]);
 
@@ -1457,11 +1458,12 @@ function AppContent() {
           <main className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(60%_60%_at_50%_0%,#141a2b_0%,#020617_70%)]">
             {slide ? (
               <>
-                {(surface || selectedLayer || activeNav === "answerKey" || activeNav === "images" || activeNav === "shapes" || activeNav === "layers") && <ContextToolbar
+                {(surface || selectedLayer || activeNav === "answerKey" || activeNav === "images" || activeNav === "shapes" || activeNav === "layers" || activeNav === "theme" || activeNav === "layout") && <ContextToolbar
                   key={`${slide.id}:${surface}:${selectedEl}:${activeNav}:${selectedShapes.join(',')}`}
                   shape={[...(slide.shapes ?? []), ...(deck.globalShapes ?? [])].find(s => s.id === selectedShape)}
                   element={selectedEl} surface={surface} count={selectedShapes.length} grouped={selectedGrouped}
                   nav={activeNav}
+                  onPickElement={id => { setSelectedEl(id); setSelectedShapes([]); setSurface(null); }}
                   insertShape={kind => insertShape(kind, { mode: "this" })}
                   onAddImages={files => void importImageFiles(files)}
                   layerTools={activeNav === "layers" ? { total: currentStack.length } : undefined}

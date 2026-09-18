@@ -122,21 +122,31 @@ audio have no renderer and are drawn as a labelled placeholder.
 ## Inspector navigation
 
 The right-hand inspector lists **one destination per restylable thing on a
-slide**, in board order — a compact icon + label tile for each:
+slide**, in board order — a compact icon + label tile for each — and every
+panel holds **only the features its tile names**:
 
-| Header | Question | Options | Slide & insert |
-| --- | --- | --- | --- |
-| Title text | Question bullet | Option bullet | Footnote |
-| Title background | Q bullet text | Opt bullet text | Slide background |
-| Badge 1 · Badge 2 · Badge 3 · Logo | Question text | Option text | Slide frame |
-|  |  | **Answer key** | Uploads · Insert shapes · **Layers** |
+| Deck | Header | Question | Options | Slide & insert |
+| --- | --- | --- | --- | --- |
+| **Design** (theme presets, base colours, shared fonts) | Title text | Question bullet | Option bullet (marker shape/colour/plate) | Footnote |
+|  | Title background | Q bullet text | Opt bullet text | Slide background (board colour too) |
+|  | Badge 1 · Badge 2 · Badge 3 · Logo | Question text | Option text (choices + rows/layout/gap) | Slide frame |
+|  |  |  | **Answer key** | **Layout** (element positions) |
+|  |  |  |  | Uploads · Insert shapes · **Layers** |
+
+The ownership rule that keeps it predictable: **deck-wide** starting points
+(presets, board + accent colours, Bangla / English / Arabic fallback faces)
+live under **Design**; **where elements sit** lives under **Layout**; the
+*surface base colour* lives under **Slide background**; *answer actions*
+(reveal all, answer copies) live under **Answer key**. No tile borrows another
+tile's feature — so the name you click is always what you get.
 
 Two-way selection sync ties the navigation to the canvas:
 
 - **Navigation → slide.** Picking a tile selects the content it edits, so the
   element is outlined with resize/rotate handles (or the surface — background,
-  frame — gets its own context toolbar). The insert tiles release the element
-  outline but keep a selected picture/shape editable.
+  frame — gets its own context toolbar). The deck/board tiles (Design, Layout)
+  and the insert tiles release the element outline but keep a selected
+  picture/shape editable.
 - **Slide → navigation.** Clicking an element on the board (or a row in the
   Layers list) opens the tile that styles it; double-clicking still drops you
   into its text field. The **Layers** tile is the one exception: it lists the
@@ -145,11 +155,13 @@ Two-way selection sync ties the navigation to the canvas:
   *Edit … →* jump to the tile that styles whatever is selected.
 - **Navigation → toolbar.** Every tile also opens the related tools in the
   context toolbar above the board. Tiles that own an element or a surface
-  already did; the destinations that don't — **Answer key**, **Uploads**,
-  **Insert shapes** and **Layers** — bring their own tools instead of leaving the
-  strip empty (answer marking/reveal/style/paste-key, quick image insert, quick
-  shape insert, and the layer count plus the arrange buttons). `Esc`, changing slides, or picking another tile changes what the
-  toolbar shows.
+  already did; the destinations that don't — **Design**, **Layout**,
+  **Answer key**, **Uploads**, **Insert shapes** and **Layers** — bring their
+  own tools instead of leaving the strip empty (the deck's base colour wells; an
+  element picker plus the snapping switches; answer
+  marking/reveal/style/paste-key; quick image insert; quick shape insert; and
+  the layer count plus the arrange buttons). `Esc`, changing slides, or picking
+  another tile changes what the toolbar shows.
 
 Badges 1 and 2 are the two brand lines ("LEARN WITH" / "FAYSAL SIR") and Badge 3
 is the right-hand tag ("DAKHIL-26"). They share one movable box but each line
@@ -158,8 +170,11 @@ can be hidden, resized and recoloured independently (`brandTop*` /
 
 The split panels keep one concern each: a bullet's *body* (design, size, accent)
 is separate from the *text inside it* (wording, ink, face, weight, case, size),
-for both the question bullet and the option markers. Pictures moved out of the
-shapes panel into their own "Uploads" destination.
+for both the question bullet and the option markers; the option *markers* are
+separate from the option *rows* (container style, column layout and gap live
+with the choices under Option text). Pictures moved out of the shapes panel
+into their own "Uploads" destination, and the fixed elements' positions moved
+out into their own "Layout" destination.
 
 ### Merged contents show every related toolbar
 

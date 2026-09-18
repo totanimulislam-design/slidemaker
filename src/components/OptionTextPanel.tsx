@@ -12,21 +12,30 @@ import {
 import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
 import { boxFontLabel, elementInk, setBoxFont, setElementInk } from "../lib/boxFonts";
 import FontPicker from "./FontPicker";
-import { Btn, ColorInput, Field, Slider, TextInput } from "./ui";
+import OptionStylePicker from "./OptionStylePicker";
+import { Btn, ColorInput, Field, SegButtons, Slider, TextInput } from "./ui";
 import { cn } from "../utils/cn";
 
+/**
+ * Navigation ▸ "Option text".
+ *
+ * Everything about the choices block on a slide: the choices themselves
+ * (add / edit / remove / labels, and which one is correct), how the option
+ * ROWS look (container style, column layout, gap) and the option text's own
+ * typography. The markers' shape/colour live in "Option bullet", the letters
+ * inside them in "Opt bullet text", and deck-wide answer actions (reveal all,
+ * answer copies) in "Answer key".
+ */
 interface Props {
   slide?: SlideData;
   theme: ThemeSettings;
   setTheme: (p: Partial<ThemeSettings>) => void;
   updateSlide: (id: string, p: Partial<SlideData>) => void;
-  updateAll: (p: Partial<SlideData>) => void;
-  onAnswerCopies: () => void;
   /** open the "text inside option bullet" panel (labels, ink and marker face) */
   onOpenBulletText?: () => void;
 }
 
-export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide, updateAll, onAnswerCopies, onOpenBulletText }: Props) {
+export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide, onOpenBulletText }: Props) {
   const refs = useRef<Record<number, HTMLInputElement | null>>({});
   /**
    * The style every AUTO label is generated from. An unknown/legacy value
@@ -55,7 +64,7 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
 
   return (
     <div className="space-y-4">
-      <div className="border-b border-white/10 pb-3"><h2 className="text-base font-semibold text-slate-100">Option text</h2><p className="text-[11px] text-slate-500">Edit choices, correct answers and option typography.</p></div>
+      <div className="border-b border-white/10 pb-3"><h2 className="text-base font-semibold text-slate-100">Option text</h2><p className="text-[11px] text-slate-500">The choices and the rows they sit in — edit, style and lay them out.</p></div>
       <div className="space-y-2">
         {slide.options.map((opt, i) => {
           const correct = slide.answer === opt.key;
@@ -134,6 +143,33 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
           </Btn>
         </div>
       </div>
+      {/* ------------------------- option rows & layout --------------------- */}
+      <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="flex items-baseline justify-between">
+          <span className="text-[11px] font-semibold tracking-wide text-slate-200 uppercase">Option rows & layout</span>
+          <span className="text-[10px] text-slate-500">the container each choice sits in</span>
+        </div>
+        <Field label="Row container style" hint="24 styles" as="div">
+          <OptionStylePicker theme={T} setTheme={setTheme} />
+        </Field>
+        <Field label="Options layout">
+          <SegButtons
+            value={T.optionsLayout}
+            onChange={(v) => setTheme({ optionsLayout: v })}
+            options={[
+              { value: "right", label: "Right" },
+              { value: "left", label: "Left" },
+              { value: "two-col", label: "2 Col" },
+              { value: "grid", label: "Grid" },
+            ]}
+          />
+        </Field>
+        <Field label="Gap between rows" hint={T.optionGap ? `${T.optionGap}%` : "auto"}>
+          <Slider min={0} max={14} step={0.5} value={T.optionGap} onChange={(v) => setTheme({ optionGap: v })} />
+        </Field>
+      </div>
+
+      {/* ------------------------- option text typography ------------------- */}
       <Field label="Option font size" hint={`${T.optionSize}px`}>
         <Slider min={16} max={46} value={T.optionSize} onChange={(v) => setTheme({ optionSize: v })} />
       </Field>
@@ -173,11 +209,10 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
           </button>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <Btn size="sm" onClick={() => updateAll({ showAnswer: true })}>Reveal all</Btn>
-        <Btn size="sm" onClick={() => updateAll({ showAnswer: false })}>Hide all</Btn>
-      </div>
-      <Btn size="sm" variant="soft" onClick={onAnswerCopies}>Add answer copy after every slide</Btn>
+      <p className="text-[10px] leading-relaxed text-slate-500">
+        Tick a row to mark the correct answer. Deck-wide answer actions — reveal all, hide all, answer copies — live
+        under <b>Answer key</b>.
+      </p>
     </div>
   );
 }

@@ -31,6 +31,7 @@ export interface CaseResult {
 
 /** navigation order + the heading each destination must open */
 const NAV: [id: string, label: string, heading: string][] = [
+  ["theme", "Design", "Design & defaults"],
   ["titleText", "Title text", "Title text"],
   ["titleBg", "Title background", "Title background"],
   ["badge1", "Badge 1", "Badge 1"],
@@ -47,6 +48,7 @@ const NAV: [id: string, label: string, heading: string][] = [
   ["footnote", "Footnote", "Footnote"],
   ["background", "Slide background", "Slide background"],
   ["frame", "Slide frame", "Slide frame"],
+  ["layout", "Layout", "Slide layout & position"],
   ["images", "Uploads", "Uploads"],
   ["shapes", "Insert shapes", "Insert shapes"],
   ["layers", "Layers", "Layers"],
@@ -54,6 +56,9 @@ const NAV: [id: string, label: string, heading: string][] = [
 
 /** nav id → the board element it must select on the slide */
 const SELECTS: Record<string, string | null> = {
+  // Design and Layout are deck/board destinations: they select nothing, like
+  // the surfaces and the insert tiles
+  theme: null,
   titleText: "title",
   titleBg: "title",
   badge1: "brand",
@@ -70,6 +75,7 @@ const SELECTS: Record<string, string | null> = {
   footnote: "note",
   background: null,
   frame: null,
+  layout: null,
   images: null,
   shapes: null,
   // the Layers destination lists whatever is already selected, so opening it
@@ -202,7 +208,7 @@ export async function runNavTests(): Promise<CaseResult[]> {
   /* ------------------------------- the nav itself -------------------------- */
   const ids = navButtons().map((b) => b.getAttribute("data-nav"));
   out.push({
-    name: "navigation lists all 19 destinations, in order",
+    name: "navigation lists all 21 destinations, in order",
     pass: ids.length === NAV.length && NAV.every(([id], i) => ids[i] === id),
     detail: ids.join(","),
   });
@@ -250,6 +256,20 @@ export async function runNavTests(): Promise<CaseResult[]> {
   out.push({ name: "Slide background selects the background surface", pass: toolbar() === "background tools", detail: String(toolbar()) });
   click(doc.querySelector('aside nav button[data-nav="frame"]'));
   out.push({ name: "Slide frame selects the frame surface", pass: toolbar() === "frame tools", detail: String(toolbar()) });
+
+  /* ------------- Design & Layout bring their own tools too ---------------- */
+  click(doc.querySelector('aside nav button[data-nav="theme"]'));
+  out.push({
+    name: "Design opens its deck tools above the slide",
+    pass: toolbar() === "theme tools" && !!doc.querySelector('.context-toolbar [aria-label="Accent colour"]'),
+    detail: String(toolbar()),
+  });
+  click(doc.querySelector('aside nav button[data-nav="layout"]'));
+  out.push({
+    name: "Layout opens its board tools above the slide",
+    pass: toolbar() === "layout tools" && !!doc.querySelector('.context-toolbar [aria-label="Element to position"]'),
+    detail: String(toolbar()),
+  });
 
   /* -------------------- insert tabs release the outline -------------------- */
   click(doc.querySelector('aside nav button[data-nav="badge3"]'));

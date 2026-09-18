@@ -3,6 +3,7 @@ import { DRAG_THRESHOLD_PX, usePointerDrag } from "../lib/dragSession";
 import type { Box, Deck, DeckHeader, ElementId, LayoutMap, SlideData, ThemeSettings } from "../lib/types";
 import { ELEMENT_LABELS } from "../lib/types";
 import LayoutPanel from "./LayoutPanel";
+import { ensureFontStylesheet, FONT_BY_FAMILY } from "../lib/fonts";
 import QuestionBulletPanel from "./QuestionBulletPanel";
 import OptionBulletPanel from "./OptionBulletPanel";
 import OptionBulletTextPanel from "./OptionBulletTextPanel";
@@ -17,7 +18,6 @@ import FootnotePanel from "./FootnotePanel";
 import ImagesPanel from "./ImagesPanel";
 import BackgroundPanel from "./BackgroundPanel";
 import FramePanel from "./FramePanel";
-import { toSingleFamily, ensureFontStylesheet, FONT_BY_FAMILY } from "../lib/fonts";
 import type { BackgroundSettings } from "../lib/types";
 import ShapesPanel, { type InsertScope } from "./ShapesPanel";
 import type { ShapeItem, ShapeKind } from "../lib/shapes";
@@ -26,9 +26,10 @@ import { layerKey, sortedLayers, type LayerPatch, type LayerRect, type LayerRef 
 import type { AlignOp } from "../lib/shapeAlign";
 import AnswerKeyPanel from "./AnswerKeyPanel";
 import LayersPanel from "./LayersPanel";
-import { elementInk, setElementInk } from "../lib/boxFonts";
-import { MATH_SNIPPETS, PRESETS } from "../lib/presets";
-import { describeScripts, type ScriptId } from "../lib/fonts";
+import { boxFontLabel, elementInk, setBoxFont, setElementInk } from "../lib/boxFonts";
+import { MATH_SNIPPETS } from "../lib/presets";
+import { type ScriptId } from "../lib/fonts";
+import ThemePanel from "./ThemePanel";
 import { handleSmartPaste } from "../lib/richPaste";
 import type { ApplySection } from "../lib/applyDesign";
 import type { SlideField } from "./Slide";
@@ -38,14 +39,19 @@ import { cn } from "../utils/cn";
 
 /**
  * The inspector's navigation: one destination per thing you can restyle on a
- * slide, in the order they appear on the board — title, badges, logo, question,
- * options, footnote, then the slide surface and the items you insert.
+ * slide, in the order they appear on the board — the deck-wide design first,
+ * then title, badges, logo, question, options, footnote, the slide surface,
+ * and finally the items you insert.
  *
- * Every entry also declares what it *selects on the canvas*, so opening a panel
- * immediately outlines the matching content on the slide (and vice-versa:
- * clicking that content on the slide opens its panel).
+ * Every panel holds ONLY the features its navigation entry names — deck-wide
+ * defaults live under "Design", element positions under "Layout" — so a name
+ * always tells you what you get. Every entry also declares what it *selects on
+ * the canvas*, so opening a panel immediately outlines the matching content on
+ * the slide (and vice-versa: clicking that content on the slide opens its
+ * panel).
  */
 type Tab =
+  | "theme"
   | "titleText"
   | "titleBg"
   | "badge1"
@@ -62,6 +68,7 @@ type Tab =
   | "footnote"
   | "background"
   | "frame"
+  | "layout"
   | "images"
   | "shapes"
   | "layers";
@@ -84,6 +91,12 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  {
+    id: "theme",
+    label: "Design",
+    icon: "🎨",
+    title: "Design & defaults — deck-wide presets, base colours and shared fonts",
+  },
   { id: "titleText", label: "Title text", icon: "T", title: "Title text — the heading itself", element: "title" },
   { id: "titleBg", label: "Title background", icon: "▣", title: "Title background — the banner behind it", element: "title" },
   { id: "badge1", label: "Badge 1", icon: "①", title: "Badge 1 — upper brand line", element: "brand" },
@@ -106,6 +119,12 @@ const NAV: NavItem[] = [
   { id: "footnote", label: "Footnote", icon: "¶", title: "Footnote — the bottom note line", element: "note" },
   { id: "background", label: "Slide background", icon: "▧", title: "Slide background", surface: "background" },
   { id: "frame", label: "Slide frame", icon: "▢", title: "Slide frame", surface: "frame" },
+  {
+    id: "layout",
+    label: "Layout",
+    icon: "✥",
+    title: "Slide layout — where every element sits and snaps: position, size, rotation, alignment",
+  },
   { id: "images", label: "Uploads", icon: "📤", title: "Uploads — pictures, diagrams and uploaded elements" },
   { id: "shapes", label: "Insert shapes", icon: "◇", title: "Insert shapes, text boxes and layers" },
   {
@@ -157,7 +176,7 @@ const LEGACY_TAB: Record<string, Tab> = {
   title: "titleText",
   header: "badge1",
   design: "badge1",
-  layout: "shapes",
+  layout: "layout",
   uploads: "images",
 };
 
@@ -422,6 +441,9 @@ export default function Inspector({
         <div className="grid grid-cols-4 gap-1">
           {NAV.map((item) => {
             const active = tab === item.id;
+            /* 21 tiles = five rows of four + a full-width Layers dock closing
+               the grid, so the layout never strands a lone orphan tile */
+            const dock = item.id === "layers";
             return (
               <button
                 key={item.id}
@@ -439,6 +461,7 @@ export default function Inspector({
                 aria-current={active ? "true" : undefined}
                 className={cn(
                   "flex min-h-[38px] flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 py-1 leading-tight transition-colors",
+                  dock && "col-span-4 min-h-0 flex-row justify-start gap-1.5 px-2.5 py-1.5",
                   active
                     ? "border-amber-400 bg-amber-400 text-slate-950"
                     : "border-transparent text-slate-400 hover:bg-white/[0.07] hover:text-slate-200",
@@ -447,7 +470,12 @@ export default function Inspector({
                 <span className="text-[13px] leading-none" aria-hidden>
                   {item.icon}
                 </span>
-                <span className="text-center text-[9px] font-medium">{item.label}</span>
+                <span className={cn("text-center text-[9px] font-medium", dock && "text-left text-[10px]")}>{item.label}</span>
+                {dock && (
+                  <span className={cn("ml-auto text-[9px] font-normal", active ? "text-slate-800/80" : "text-slate-500")} aria-hidden>
+                    everything on the slide, stacked
+                  </span>
+                )}
               </button>
             );
           })}
@@ -466,6 +494,9 @@ export default function Inspector({
       />
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        {/* ------------------------ design & defaults ------------------------ */}
+        {tab === "theme" && <ThemePanel theme={T} setTheme={setTheme} scripts={scripts} />}
+
         {/* --------------------------- title text ---------------------------- */}
         {tab === "titleText" && (
           <TitleTextPanel
@@ -608,14 +639,16 @@ export default function Inspector({
               <Field label="Question font size" hint={`${T.questionSize}px`}>
                 <Slider min={20} max={52} value={T.questionSize} onChange={(v) => setTheme({ questionSize: v })} />
               </Field>
+              {/* the stem's own typeface (this box only) — the deck-wide default
+                  faces live under "Design & defaults" */}
               <FontPicker
                 label="Question font"
-                value={toSingleFamily(T.bengaliFont)}
-                previewTarget="deck:bengali"
+                value={boxFontLabel(T, "question")}
+                previewTarget="box:question"
                 onChange={(family) => {
                   const meta = FONT_BY_FAMILY.get(family.toLowerCase());
                   if (meta) ensureFontStylesheet([meta]);
-                  setTheme({ bengaliFont: `'${family}', sans-serif` });
+                  setTheme({ boxFonts: setBoxFont(T.boxFonts, "question", { family }) });
                 }}
                 script="bangla"
                 compact
@@ -624,65 +657,10 @@ export default function Inspector({
                   reads, minus any per-box override that would shadow it */}
               <ColorInput label="Question colour" value={elementInk(T, "question")} onChange={(v) => setTheme(setElementInk(T, "question", v))} />
 
-              <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <span className="text-[11px] font-semibold tracking-wide text-slate-200 uppercase">Deck defaults</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <ColorInput label="Board" value={T.board} onChange={(v) => setTheme({ board: v })} />
-                  <ColorInput label="Accent" value={T.accent} onChange={(v) => setTheme({ accent: v })} />
-                </div>
-                {/* deck-wide fallback faces: every box without its own override
-                    resolves through these (per-box picks live in each panel) */}
-                <FontPicker
-                  label="English / Latin default face"
-                  value={toSingleFamily(T.latinFont)}
-                  previewTarget="deck:latin"
-                  onChange={(family) => {
-                    const meta = FONT_BY_FAMILY.get(family.toLowerCase());
-                    if (meta) ensureFontStylesheet([meta]);
-                    setTheme({ latinFont: `'${family}', sans-serif` });
-                  }}
-                  script="latin"
-                  compact
-                />
-                <FontPicker
-                  label="Arabic / Urdu fallback"
-                  value={toSingleFamily(T.arabicFont)}
-                  previewTarget="deck:arabic"
-                  onChange={(family) => {
-                    const meta = FONT_BY_FAMILY.get(family.toLowerCase());
-                    if (meta) ensureFontStylesheet([meta]);
-                    setTheme({ arabicFont: `'${family}'` });
-                  }}
-                  script="arabic"
-                  compact
-                />
-                <Field label="Theme presets" as="div">
-                  <div className="grid grid-cols-2 gap-2">
-                    {PRESETS.map((p) => (
-                      <button
-                        key={p.name}
-                        type="button"
-                        onClick={() => setTheme({ ...p.theme, banner: { ...T.banner, color: p.theme.titleBanner ?? T.banner.color } })}
-                        className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2 text-left text-xs text-slate-300 hover:border-amber-400/50"
-                      >
-                        <span className="flex">
-                          {p.swatch.map((c) => (
-                            <span key={c} className="-ml-1 h-4 w-4 rounded-full border border-black/50 first:ml-0" style={{ background: c }} />
-                          ))}
-                        </span>
-                        {p.name}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-                <div className="flex flex-wrap gap-1.5">
-                  {describeScripts(scripts).map((s) => (
-                    <span key={s.id} className="rounded-md border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[10px] text-emerald-300">
-                      {s.label}{s.rtl ? " · RTL" : ""}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <p className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 text-[10px] leading-relaxed text-slate-500">
+                Deck-wide theme presets, base colours and shared fonts moved to <b>Design</b> (the 🎨 tile) — this
+                panel styles only the question stem.
+              </p>
             </>
           ) : (
             <p className="text-sm text-slate-500">No slide selected. Paste some questions to begin.</p>
@@ -701,8 +679,6 @@ export default function Inspector({
             theme={T}
             setTheme={setTheme}
             updateSlide={updateSlide}
-            updateAll={updateAll}
-            onAnswerCopies={onAnswerCopies}
             onOpenBulletText={() => choose(NAV.find((n) => n.id === "optionBulletText")!)}
           />
         )}
@@ -742,6 +718,7 @@ export default function Inspector({
             onSet={background.onSet}
             onReset={background.onReset}
             onClearSlide={background.onClearSlide}
+            onBoardColor={(v) => setTheme({ board: v })}
             onRemoveShape={shapes.onRemove}
             onPlainPage={(plain) => slide && updateSlide(slide.id, { plainPage: plain })}
             managedScope
@@ -750,6 +727,24 @@ export default function Inspector({
 
         {/* ---------------------------- slide frame -------------------------- */}
         {tab === "frame" && <FramePanel theme={T} setTheme={setTheme} />}
+
+        {/* ----------------------------- slide layout ------------------------ */}
+        {tab === "layout" && (
+          <>
+            <PanelHead
+              title="Slide layout & position"
+              subtitle="Where every element sits on the board — position, size, rotation, alignment and snapping."
+            />
+            <LayoutPanel
+              theme={T}
+              setTheme={setTheme}
+              patchLayout={patchLayout}
+              transformLayout={transformLayout}
+              selected={selectedEl}
+              onSelect={onSelectEl}
+            />
+          </>
+        )}
 
         {/* --------------------------- insert images ------------------------- */}
         {tab === "images" && (
@@ -830,22 +825,11 @@ export default function Inspector({
               hideImageInsert
               layersPanel={layersList()}
             />
-
-            {/* the whole-board layout overview: every element at once, with the
-                position map. ShapesPanel above already carries the layer list. */}
-            <LayoutPanel
-              theme={T}
-              setTheme={setTheme}
-              patchLayout={patchLayout}
-              transformLayout={transformLayout}
-              selected={selectedEl}
-              onSelect={onSelectEl}
-            />
           </>
         )}
 
         {/* ------------------------- where am I hint ------------------------- */}
-        {activeNav && !activeNav.element && !activeNav.surface && !activeNav.keepSelection && (
+        {activeNav && (activeNav.id === "images" || activeNav.id === "shapes") && (
           <p className="border-t border-white/10 pt-3 text-[10px] leading-relaxed text-slate-500">
             Nothing is outlined on the slide for this panel — click a picture or shape on the canvas to edit it here.
           </p>
@@ -877,8 +861,8 @@ function ScopeBar({
   const [section, setSection] = useState<ApplySection>("all");
   const [toast, setToast] = useState<string | null>(null);
   /**
-   * The scope bar is collapsible: with 19 navigation destinations above it, the
-   * panel needs the vertical room. The choice is remembered between sessions.
+   * The scope bar is collapsible: with the full navigation above it, the panel
+   * needs the vertical room. The choice is remembered between sessions.
    */
   const [open, setOpen] = useState<boolean>(() => localStorage.getItem("inspector:scope") !== "0");
   useEffect(() => {

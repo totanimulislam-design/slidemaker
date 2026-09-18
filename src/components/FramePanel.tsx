@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FrameSettings, ThemeSettings } from "../lib/types";
-import { DEFAULT_BANNER, DEFAULT_FRAME } from "../lib/types";
+import { DEFAULT_FRAME } from "../lib/types";
 import { ALL_FRAME_STYLES, RICH_FRAME_PRESETS } from "../lib/frameDesigns";
 import { FRAME_IMAGES } from "../lib/frameImages";
 import { Btn, ColorInput, Field, PanelHead, Slider, Toggle } from "./ui";
@@ -258,17 +258,11 @@ export default function FramePanel({ theme, setTheme }: Props) {
             </span>
             <div className="grid grid-cols-2 gap-2">
               <ColorInput label="Frame Color" value={frame.color} onChange={(v) => setFrame({ color: v })} />
-              <ColorInput label="Board Base" value={theme.board} onChange={(v) => setTheme({ board: v })} />
               <ColorInput label="Outer Margin" value={theme.frameOuter} onChange={(v) => setTheme({ frameOuter: v })} />
-              {/* the board paints `banner.color` and only falls back to the
-                  legacy `titleBanner`, so a pick must write BOTH — writing the
-                  legacy field alone left this well doing nothing at all */}
-              <ColorInput
-                label="Title Banner"
-                value={theme.banner?.color ?? theme.titleBanner}
-                onChange={(v) => setTheme({ titleBanner: v, banner: { ...DEFAULT_BANNER, ...(theme.banner ?? {}), color: v } })}
-              />
             </div>
+            <p className="text-[10px] leading-relaxed text-slate-500">
+              Surface base colour lives under <b>Slide background</b>; banner colour under <b>Title background</b>.
+            </p>
 
             {/* Quick Palette Swatches */}
             <div className="space-y-1 pt-1">

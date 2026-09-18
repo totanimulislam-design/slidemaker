@@ -98,11 +98,6 @@ export default function OptionBulletTextPanel({ theme: T, slide, setTheme }: Pro
           Match marker fill
         </Btn>
       </div>
-      <Toggle
-        label="Keep the ink on the revealed correct answer"
-        checked={T.optionBulletCustomOnAnswer}
-        onChange={(v) => setTheme({ optionBulletCustomOnAnswer: v })}
-      />
 
       {/* ------------------------------ typography --------------------------- */}
       <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">

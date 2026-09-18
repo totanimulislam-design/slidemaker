@@ -1,7 +1,6 @@
 import type { OptionBulletBgScope, OptionBulletBgShape, ThemeSettings } from "../lib/types";
 import type { OptionStyle } from "../lib/optionStyles";
 import { readableOn, shade } from "../lib/color";
-import OptionStylePicker from "./OptionStylePicker";
 import OptionBulletShapePicker from "./OptionBulletShapePicker";
 import OptionBulletMarker from "./OptionBulletMarker";
 import { Btn, ColorField, ColorInput, Field, SegButtons, Slider, Toggle } from "./ui";
@@ -28,7 +27,7 @@ export default function OptionBulletPanel({ theme: T, setTheme }: { theme: Theme
     <div className="space-y-4">
       <div className="border-b border-white/10 pb-3">
         <h2 className="text-base font-semibold text-slate-100">Option Bullet</h2>
-        <p className="text-[11px] text-slate-500">Customize the marker shape (circle & alternatives) and row container.</p>
+        <p className="text-[11px] text-slate-500">The marker itself — its shape, colours and the plate behind it. The choices' rows live under Option text.</p>
       </div>
 
       {/* Bullet Marker Shape (Alternatives to Circle) */}
@@ -51,7 +50,9 @@ export default function OptionBulletPanel({ theme: T, setTheme }: { theme: Theme
 
         <div className="flex items-center gap-2">
           <ColorInput label="Marker colour (auto base)" value={T.optionAccent} onChange={(v) => setTheme({ optionAccent: v })} />
-          <ColorInput label="Theme accent" value={T.accent} onChange={(v) => setTheme({ accent: v })} />
+          <p className="flex-1 text-[10px] leading-snug text-slate-500">
+            Auto base falls back to the deck accent (set under <b>Design</b> or <b>Question bullet</b>).
+          </p>
         </div>
 
         <div className="space-y-1.5 pt-1">
@@ -221,27 +222,10 @@ export default function OptionBulletPanel({ theme: T, setTheme }: { theme: Theme
         )}
       </div>
 
-      {/* Row Container Style */}
-      <Field label="Option row container style" hint="24 styles">
-        <OptionStylePicker theme={T} setTheme={setTheme} />
-      </Field>
-
-      {/* Layout & Spacing */}
-      <Field label="Options layout">
-        <SegButtons
-          value={T.optionsLayout}
-          onChange={(v) => setTheme({ optionsLayout: v })}
-          options={[
-            { value: "right", label: "Right" },
-            { value: "left", label: "Left" },
-            { value: "two-col", label: "2 Col" },
-            { value: "grid", label: "Grid" },
-          ]}
-        />
-      </Field>
-      <Field label="Gap between rows" hint={T.optionGap ? `${T.optionGap}%` : "auto"}>
-        <Slider min={0} max={14} step={0.5} value={T.optionGap} onChange={(v) => setTheme({ optionGap: v })} />
-      </Field>
+      <p className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 text-[10px] leading-relaxed text-slate-500">
+        Row container style, options layout and the gap between rows moved to <b>Option text</b> — this panel styles
+        only the marker and its plate.
+      </p>
     </div>
   );
 }
