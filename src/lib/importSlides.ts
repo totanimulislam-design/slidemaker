@@ -53,7 +53,7 @@ export function buildImportedSlides(res: PdfImportResult, startIndex: number): S
     } else {
       // a picture on an otherwise empty slide — movable, croppable, resizable
       const img = makeImageShape(p.src, p.ratio, 60);
-      s.shapes = [{ ...img, name: importPageLabel(res.name, p.page) }];
+      s.shapes = [{ ...img, name: importPageLabel(res.name, p.page), importedPage: true }];
       s.themeOverride = { ...(s.themeOverride ?? {}), showBullet: false, showNumber: false };
     }
     return s;

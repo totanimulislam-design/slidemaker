@@ -24,7 +24,10 @@ import { cn } from "../utils/cn";
  *    free of this project's built-in design, so the user's material is merged in
  *    as a separate slide they can work on (see lib/importSlides).
  *  • Onto the current slide: the chosen pages are placed as picture layers.
- *  • Every rendered page is also saved to the Uploads library for reuse.
+ *
+ * The document behind the picker stays saved in the Uploads library as the file
+ * itself (see lib/uploadDocs) — the pages picked here go to the deck, and the
+ * library never holds a picture per page.
  */
 export type { PdfImportResult, PdfPlacement };
 
@@ -255,8 +258,9 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
           <p className="rounded-lg border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-[11px] text-sky-200">
             New slides come in <b>plain</b>: they are separate slides of your own, so this project's frame, logo, title
             and badges stay off them. Draw on them, merge them into your deck, and switch the design back on any time
-            with <b>Deck design</b> in the Slide background panel. Every imported {unit} is also saved to <b>Uploads</b>,
-            so you can drop it onto any slide later.
+            with <b>Deck design</b> in the Slide background panel. The document itself is saved in <b>Uploads</b> as one
+            file — not as a picture per page — so clicking it there reopens this preview whenever you want to add other
+            {` ${unit}s`}.
             {pptx && (
               <>
                 {" "}

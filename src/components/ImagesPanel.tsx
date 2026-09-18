@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { inlineRemoteImage, loadImageFile, shrinkDataUrl, type ShapeItem } from "../lib/shapes";
 import { canMove, Z_LABELS, type ZOp } from "../lib/zorder";
-import { addUpload, removeUpload, useUploads, type UploadedItem } from "../lib/uploads";
+import { addUpload, documentAsFile, removeUpload, useUploads, type UploadedItem } from "../lib/uploads";
 import { DECK_ACCEPT, isDeckFile, requestPdfImport } from "../lib/pdf";
+import { openDeckUpload } from "../lib/uploadDocs";
 import { Btn, Field, PanelHead, SegButtons, Slider, TextArea } from "./ui";
 import { cn } from "../utils/cn";
 
@@ -11,6 +12,10 @@ import { cn } from "../utils/cn";
  *
  * Canva-style uploads library: uploaded images, diagrams and media are saved here
  * and can be reused anytime across slides or removed like Canva.
+ *
+ * A PDF or PowerPoint is saved **as the document itself** — one entry holding
+ * the file, a cover picture and its page count, never one picture per page.
+ * Clicking that entry opens its page preview, where the pages to add are picked.
  *
  * When an image on the slide is selected, this panel also provides image-only
  * styling controls (fit, crop mask, corner radius, flips, opacity, shadow, caption)
@@ -71,9 +76,10 @@ export default function ImagesPanel({
   const importFiles = async (files: FileList | File[] | null | undefined, replaceId?: string) => {
     if (!files) return;
     const all = Array.from(files);
-    // a PDF / PPTX opens the page picker: whole document or chosen pages → slides / pictures
+    // a PDF / PPTX is saved to the library as the document itself and opens its
+    // page preview, where the pages to add are picked
     const pdf = all.find(isDeckFile);
-    if (pdf && !replaceId) requestPdfImport(pdf);
+    if (pdf && !replaceId) void openDeckUpload(pdf);
     const list = all.filter((f) => f.type.startsWith("image/"));
     if (!list.length) return;
     setBusy(`Loading ${list.length} file${list.length > 1 ? "s" : ""}…`);
@@ -115,6 +121,30 @@ export default function ImagesPanel({
     ? uploads.filter((u) => (u.name ?? "").toLowerCase().includes(search.toLowerCase()))
     : uploads;
 
+  /**
+   * Clicking a saved PDF / PowerPoint opens its page preview: the document's own
+   * bytes are read back out of the library and handed to the same picker a fresh
+   * upload gets, so the pages to add are chosen there.
+   */
+  const openDocPreview = async (item: UploadedItem) => {
+    if (busy) return;
+    setBusy(`Opening ${item.name || "document"}…`);
+    try {
+      const file = await documentAsFile(item);
+      if (!file) {
+        alert(
+          `“${item.name || "That document"}” is not available any more — this browser no longer holds its file` +
+            (item.doc?.persisted === false ? " (it was kept for that session only)" : "") +
+            ". Upload it again to keep it in your library.",
+        );
+        return;
+      }
+      requestPdfImport(file);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <PanelHead
@@ -128,7 +158,9 @@ export default function ImagesPanel({
       />
 
       <p className="rounded-lg border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-[11px] text-sky-200">
-        Uploaded elements are <b>saved here</b> and ready to use across your slides. Click any item to add it to the current slide.
+        Uploaded elements are <b>saved here</b> and ready to use across your slides. Click any picture to add it to the
+        current slide. A <b>PDF or PowerPoint stays one document</b> here — click it to open its preview and pick the
+        pages to add.
       </p>
 
       {/* --------------------------- upload section -------------------------- */}
@@ -167,7 +199,8 @@ export default function ImagesPanel({
 
         <p className="text-[10px] leading-relaxed text-slate-500">
           Or <b>paste</b> an image (Ctrl/⌘ + V) or <b>drag files</b> straight onto the slide.
-          <b> PDFs and PowerPoint (.pptx) files</b> open a page picker — add the whole file or specific pages as slides, or drop pages onto this slide.
+          <b> PDFs and PowerPoint (.pptx) files</b> are saved here <b>as the file itself</b> — not as separate page
+          pictures — and open their page preview, where you choose the pages to add as slides or pictures.
         </p>
       </div>
 
@@ -198,7 +231,8 @@ export default function ImagesPanel({
             <div className="text-2xl mb-1.5">📤</div>
             <div className="text-xs font-semibold text-slate-300">No uploaded elements yet</div>
             <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-              Upload photos, logos, or graphics from your device. They will be saved here so you can reuse them across all your slides.
+              Upload photos, logos, graphics — or a whole PDF / PowerPoint — from your device. They are saved here so you
+              can reuse them across all your slides; a PDF stays one document you can reopen any time.
             </p>
           </div>
         ) : (
@@ -206,41 +240,71 @@ export default function ImagesPanel({
             {filteredUploads.map((item: UploadedItem) => {
               const isConfirming = confirmDeleteId === item.id;
               const wasJustAdded = justAddedId === item.id;
+              const doc = item.doc;
+              const unit = doc?.kind === "pptx" ? "slide" : "page";
               return (
                 <div
                   key={item.id}
+                  data-upload-tile={item.id}
                   className="group relative aspect-square rounded-lg border border-white/10 bg-black/40 overflow-hidden hover:border-sky-400/70 transition-all select-none"
-                  title={`${item.name || "Uploaded image"} · Click to add to slide · Drag to position`}
+                  title={
+                    doc
+                      ? `${item.name || "Document"} · ${doc.kind.toUpperCase()} · ${doc.pages} ${unit}${
+                          doc.pages === 1 ? "" : "s"
+                        } · Click to open the preview and choose ${unit}s to add`
+                      : `${item.name || "Uploaded image"} · Click to add to slide · Drag to position`
+                  }
                 >
-                  {/* Thumbnail / click to insert */}
-                  <button
-                    type="button"
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData(
-                        "application/json",
-                        JSON.stringify({
-                          type: "slidemaker-upload",
-                          src: item.src,
-                          ratio: item.ratio,
-                          name: item.name,
-                        }),
-                      );
-                      e.dataTransfer.effectAllowed = "copy";
-                    }}
-                    onClick={() => {
-                      onAddImage(item.src, item.ratio);
-                      setJustAddedId(item.id);
-                      setTimeout(() => setJustAddedId(null), 1200);
-                    }}
-                    className="h-full w-full flex items-center justify-center p-1 cursor-pointer active:scale-95 transition-transform"
-                  >
-                    <img
-                      src={item.src}
-                      alt={item.name || "Uploaded image"}
-                      className="max-h-full max-w-full object-contain pointer-events-none"
-                    />
-                  </button>
+                  {doc ? (
+                    /* A saved PDF / PowerPoint: the document itself. Clicking it
+                       opens its page preview — nothing is inserted directly. */
+                    <button
+                      type="button"
+                      data-upload-doc={item.id}
+                      onClick={() => void openDocPreview(item)}
+                      className="h-full w-full flex items-center justify-center p-1 cursor-pointer active:scale-95 transition-transform"
+                    >
+                      <img src={item.src} alt="" className="max-h-full max-w-full object-contain pointer-events-none" />
+                      <span className="absolute bottom-1 left-1 rounded bg-rose-600 px-1 py-px text-[8px] font-extrabold leading-tight tracking-wide text-white shadow">
+                        {doc.kind === "pdf" ? "PDF" : "PPTX"}
+                      </span>
+                      {doc.pages > 0 && (
+                        <span className="absolute bottom-1 right-1 rounded bg-black/75 px-1 py-px text-[8px] font-semibold leading-tight text-slate-200">
+                          {doc.pages} {unit}
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    /* Thumbnail / click to insert */
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(
+                          "application/json",
+                          JSON.stringify({
+                            type: "slidemaker-upload",
+                            src: item.src,
+                            ratio: item.ratio,
+                            name: item.name,
+                          }),
+                        );
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      onClick={() => {
+                        onAddImage(item.src, item.ratio);
+                        setJustAddedId(item.id);
+                        setTimeout(() => setJustAddedId(null), 1200);
+                      }}
+                      className="h-full w-full flex items-center justify-center p-1 cursor-pointer active:scale-95 transition-transform"
+                    >
+                      <img
+                        src={item.src}
+                        alt={item.name || "Uploaded image"}
+                        className="max-h-full max-w-full object-contain pointer-events-none"
+                      />
+                    </button>
+                  )}
 
                   {/* Added feedback */}
                   {wasJustAdded && (
@@ -271,7 +335,7 @@ export default function ImagesPanel({
                         </button>
                       </div>
                       <span className="text-[9px] text-sky-300 text-center font-medium drop-shadow">
-                        + Add to slide
+                        {doc ? `📄 Open preview · pick ${unit}s` : "+ Add to slide"}
                       </span>
                     </div>
                   )}

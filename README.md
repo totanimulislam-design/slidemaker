@@ -61,14 +61,35 @@ gone (deleted, undone, replaced by another deck) drop out on their own.
 ## Importing a ready-made deck (PDF / PPTX)
 
 **📄 Import PDF / PPTX** in the toolbar — or dropping a file on the board, the
-Uploads panel, the Shapes panel or pasting it — opens a page picker:
+Uploads panel, the Shapes panel or pasting it — saves the file to **Uploads** and
+opens its page preview:
 
 - pick the **whole document** or **specific pages** (click thumbnails, or type
   `1-3, 7`);
 - add them as **new slides with the page as background**, **new slides with the
   page as a picture** (movable / croppable), or as **pictures on the current
   slide**;
-- every page also lands in **Uploads** for reuse.
+- the document stays in **Uploads** as **one entry — the file itself**, never as
+  a picture per page.
+
+### A PDF is kept as a PDF
+
+The Uploads library holds the `.pdf` / `.pptx` **whole**: one tile showing a
+cover picture of page 1, the file name and the page count. The file's own bytes
+live in IndexedDB (`src/lib/docStore.ts`) rather than in localStorage, which
+would blow its quota on the first real PDF — the library keeps only the
+metadata and the small cover next to the pictures. Where IndexedDB is not
+available the bytes are held for the session and the tile says so.
+
+**Clicking that tile opens the document's page preview again**, with every page
+as a thumbnail: tick the pages you want (Shift-click for a range, or type
+`1-3, 7`), choose where they go, and add them. So a document brought in once can
+be mined for pages at any time, and pages that were added earlier never pile up
+in the library as separate pictures — a page placed on a slide is tagged
+`importedPage` and is left out of the library's own image index for the same
+reason. Uploading the same file again refreshes the existing entry (matched by a
+content fingerprint) instead of adding a second one; deleting the tile drops the
+stored file with it.
 
 ### Imported pages are plain slides of your own
 

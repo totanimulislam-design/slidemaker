@@ -40,7 +40,7 @@ const suites = [
   ["inspector navigation (19 destinations, selection sync + merged toolbar stacks)", "nav.test.tsx", "runNavTests"],
   ["layers panel (drag to reorder the unified stack + selection sync)", "layers.test.tsx", "runLayersTests"],
   ["slide stack (drag to reorder + multi-select boxes + bulk ops + the open slide's border)", "slides.test.tsx", "runSlideStackTests"],
-  ["imported pages (a PDF / PowerPoint merged in as plain slides of the user's own)", "import.test.tsx", "runImportTests", [pdfStubPlugin]],
+  ["imported pages (a PDF / PowerPoint merged in as plain slides, the file kept whole in Uploads)", "import.test.tsx", "runImportTests", [pdfStubPlugin]],
 ];
 
 installDom();

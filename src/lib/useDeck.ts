@@ -662,8 +662,8 @@ export function useDeck() {
 
   /** inserts an already-loaded image (data URL / URL + ratio) and returns its id */
   const addImage = useCallback(
-    (src: string, ratio: number, target: ShapeTarget, at?: { x: number; y: number }): string => {
-      const item = makeImageShape(src, ratio);
+    (src: string, ratio: number, target: ShapeTarget, at?: { x: number; y: number }, extra?: Partial<ShapeItem>): string => {
+      const item = { ...makeImageShape(src, ratio), ...(extra ?? {}) };
       if (at) {
         item.x = Math.round((at.x - item.w / 2) * 10) / 10;
         item.y = Math.round((at.y - item.h / 2) * 10) / 10;
