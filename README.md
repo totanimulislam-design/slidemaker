@@ -58,6 +58,25 @@ reads, so ticking cards in the rail is enough to restyle those slides together;
 a multi-tick moves that scope onto “Selected” for you. Ticks whose slide is
 gone (deleted, undone, replaced by another deck) drop out on their own.
 
+## Importing a ready-made deck (PDF / PPTX)
+
+**📄 Import PDF / PPTX** in the toolbar — or dropping a file on the board, the
+Uploads panel, the Shapes panel or pasting it — opens a page picker:
+
+- pick the **whole document** or **specific pages** (click thumbnails, or type
+  `1-3, 7`);
+- add them as **new slides with the page as background**, **new slides with the
+  page as a picture** (movable / croppable), or as **pictures on the current
+  slide**;
+- every page also lands in **Uploads** for reuse.
+
+PDF pages are rasterised with pdf.js. PowerPoint `.pptx` files are parsed in
+the browser (`pptxtojson`), each slide is laid out in an off-screen DOM at its
+native size — background, shapes, pictures, text, tables — and rasterised with
+the same renderer the exporter uses (`src/lib/pptx.ts`). Slides therefore come
+in as **visual snapshots**: the text on them is not editable. Charts, video and
+audio have no renderer and are drawn as a labelled placeholder.
+
 ## Inspector navigation
 
 The right-hand inspector lists **one destination per restylable thing on a

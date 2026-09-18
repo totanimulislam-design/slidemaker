@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { formatPageRange, openPdf, parsePageRange, type OpenedPdf, type PdfPageRender } from "../lib/pdf";
+import { formatPageRange, isPptxFile, openDocument, parsePageRange, type OpenedPdf, type PdfPageRender } from "../lib/pdf";
 import { Btn, Field, SegButtons, Toggle } from "./ui";
 import ResizableDialog from "./ResizableDialog";
 import { cn } from "../utils/cn";
 
 /**
- * "Import PDF" — pick which pages of an uploaded PDF go where.
+ * "Import slides" — pick which pages of an uploaded PDF or PowerPoint go where.
+ * PPTX slides are rendered to pictures first (see lib/pptx.ts), after which a
+ * slide and a PDF page are handled identically.
  *
  *  • Whole document or specific pages (click thumbnails, or type "1-3, 7").
  *  • As new slides: each page becomes its own slide in the stack, either as a
@@ -48,7 +50,7 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
     setThumbs({});
     setSelected(new Set());
     setRangeText("");
-    openPdf(file)
+    openDocument(file)
       .then((d) => {
         if (!alive) return void d.destroy();
         setDoc(d);
@@ -56,7 +58,7 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
         setSelected(new Set(all));
         setRangeText(formatPageRange(all));
       })
-      .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not read that PDF."));
+      .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not read that file."));
     return () => {
       alive = false;
     };
@@ -110,7 +112,7 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
     const out: PdfImportResult["pages"] = [];
     try {
       for (let i = 0; i < pages.length; i++) {
-        setBusy(`Rendering page ${pages[i]} (${i + 1}/${pages.length})…`);
+        setBusy(`Rendering ${isPptxFile(file!) ? "slide" : "page"} ${pages[i]} (${i + 1}/${pages.length})…`);
         const r = await doc.render(pages[i], hiRes ? 2200 : 1400);
         out.push({ page: pages[i], src: r.src, ratio: r.ratio });
       }
@@ -126,10 +128,14 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
 
   if (!file) return null;
 
+  const pptx = isPptxFile(file);
+  const unit = pptx ? "slide" : "page";
+  const Unit = pptx ? "Slide" : "Page";
+
   const placementHint: Record<PdfPlacement, string> = {
-    "slides-background": "Each page becomes a new slide with the page as its background — a clean, full-bleed copy.",
-    "slides-image": "Each page becomes a new blank slide with the page placed as a picture you can move, crop and resize.",
-    "current-slide": "The chosen pages are placed as pictures on the slide you are editing now.",
+    "slides-background": `Each ${unit} becomes a new slide with the ${unit} as its background — a clean, full-bleed copy.`,
+    "slides-image": `Each ${unit} becomes a new blank slide with the ${unit} placed as a picture you can move, crop and resize.`,
+    "current-slide": `The chosen ${unit}s are placed as pictures on the slide you are editing now.`,
   };
 
   return (
@@ -137,8 +143,8 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
       storageKey="pdf-import"
       initial={{ w: 1040, h: 700 }}
       min={{ w: 640, h: 460 }}
-      title="Import PDF"
-      subtitle={`${file.name}${total ? ` · ${total} page${total === 1 ? "" : "s"}` : ""}`}
+      title={pptx ? "Import PowerPoint" : "Import PDF"}
+      subtitle={`${file.name}${total ? ` · ${total} ${unit}${total === 1 ? "" : "s"}` : ""}`}
       onClose={() => !busy && onClose()}
       footer={
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -147,7 +153,7 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
               <span className="animate-pulse text-sky-300">{busy}</span>
             ) : (
               <>
-                <b className="text-slate-200">{pages.length}</b> of {total} page{total === 1 ? "" : "s"} selected
+                <b className="text-slate-200">{pages.length}</b> of {total} {unit}{total === 1 ? "" : "s"} selected
               </>
             )}
           </span>
@@ -157,7 +163,7 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
             </Btn>
             <Btn variant="primary" disabled={!doc || !pages.length || !!busy} onClick={() => void run()}>
               {placement === "current-slide"
-                ? `Add ${pages.length} page${pages.length === 1 ? "" : "s"} to this slide`
+                ? `Add ${pages.length} ${unit}${pages.length === 1 ? "" : "s"} to this slide`
                 : `Add ${pages.length} slide${pages.length === 1 ? "" : "s"}`}
             </Btn>
           </div>
@@ -167,7 +173,7 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
       <div className="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
         {/* ------------------------------ options ----------------------------- */}
         <div className="w-full shrink-0 space-y-3 overflow-y-auto md:w-72">
-          <Field label="Which pages" as="div">
+          <Field label={`Which ${unit}s`} as="div">
             <SegButtons
               value={allSelected ? "all" : "some"}
               onChange={(v) => {
@@ -175,13 +181,13 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
                 else setPages([]);
               }}
               options={[
-                { value: "all", label: "Whole PDF" },
-                { value: "some", label: "Specific pages" },
+                { value: "all", label: pptx ? "Whole deck" : "Whole PDF" },
+                { value: "some", label: `Specific ${unit}s` },
               ]}
             />
           </Field>
 
-          <Field label="Page numbers" hint={`1 – ${total || "?"}`}>
+          <Field label={`${Unit} numbers`} hint={`1 – ${total || "?"}`}>
             <input
               value={rangeText}
               onChange={(e) => {
@@ -207,12 +213,12 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
             </Btn>
           </div>
 
-          <Field label="Add pages as" as="div">
+          <Field label={`Add ${unit}s as`} as="div">
             <div className="space-y-1">
               {(
                 [
-                  ["slides-background", "New slides · page as background"],
-                  ["slides-image", "New slides · page as picture"],
+                  ["slides-background", `New slides · ${unit} as background`],
+                  ["slides-image", `New slides · ${unit} as picture`],
                   ["current-slide", "Pictures on the current slide"],
                 ] as [PdfPlacement, string][]
               ).map(([v, label]) => (
@@ -240,10 +246,16 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
             <p className="text-[11px] leading-snug text-slate-500">{placementHint[placement]}</p>
           </Field>
 
-          <Toggle label="High-resolution pages (sharper, larger file)" checked={hiRes} onChange={setHiRes} />
+          <Toggle label={`High-resolution ${unit}s (sharper, larger file)`} checked={hiRes} onChange={setHiRes} />
 
           <p className="rounded-lg border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-[11px] text-sky-200">
-            Every imported page is also saved to <b>Uploads</b>, so you can drop it onto any slide later.
+            Every imported {unit} is also saved to <b>Uploads</b>, so you can drop it onto any slide later.
+            {pptx && (
+              <>
+                {" "}
+                PowerPoint slides come in as <b>pictures</b> (a visual snapshot) — text on them is not editable here.
+              </>
+            )}
           </p>
         </div>
 
@@ -252,7 +264,7 @@ export default function PdfImportModal({ file, onClose, onImport }: Props) {
           {error ? (
             <div className="flex h-full items-center justify-center text-sm text-rose-300">{error}</div>
           ) : !doc ? (
-            <div className="flex h-full items-center justify-center text-sm text-slate-400 animate-pulse">Opening PDF…</div>
+            <div className="flex h-full items-center justify-center text-sm text-slate-400 animate-pulse">Opening {pptx ? "PowerPoint" : "PDF"}…</div>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
               {Array.from({ length: total }, (_, i) => i + 1).map((n) => {

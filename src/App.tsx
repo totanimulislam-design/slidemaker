@@ -16,7 +16,7 @@ import SlideStack from "./components/SlideStack";
 import SlidePicker from "./components/SlidePicker";
 import PasteModal from "./components/PasteModal";
 import PdfImportModal, { type PdfImportResult } from "./components/PdfImportModal";
-import { isPdfFile, onPdfImportRequest } from "./lib/pdf";
+import { DECK_ACCEPT, isDeckFile, onPdfImportRequest } from "./lib/pdf";
 import { emptySlide } from "./lib/parse";
 import { cloneBackground, type SlideData as SlideDataT } from "./lib/types";
 import { makeImageShape } from "./lib/shapes";
@@ -460,8 +460,8 @@ function AppContent() {
   /** image files from clipboard / drag-drop → slide */
   const importImageFiles = useCallback(
     async (files: File[], at?: { x: number; y: number }) => {
-      // a PDF opens the page picker (whole document or chosen pages)
-      const pdf = files.find(isPdfFile);
+      // a PDF / PPTX opens the page picker (whole document or chosen pages)
+      const pdf = files.find(isDeckFile);
       if (pdf) setPdfFile(pdf);
       const imgs = files.filter((f) => f.type.startsWith("image/"));
       if (!imgs.length) return !!pdf;
@@ -488,7 +488,7 @@ function AppContent() {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       const files = Array.from(e.clipboardData?.files ?? []);
-      if (files.some((f) => f.type.startsWith("image/") || isPdfFile(f))) {
+      if (files.some((f) => f.type.startsWith("image/") || isDeckFile(f))) {
         e.preventDefault();
         void importImageFiles(files);
       }
@@ -498,12 +498,14 @@ function AppContent() {
   }, [importImageFiles, presenting, pasteOpen, exportOpen]);
 
   /**
-   * PDF pages picked in the import dialog → deck. Pages are already rendered
-   * to data-URLs; every one is also saved to Uploads for later reuse.
+   * PDF pages / PPTX slides picked in the import dialog → deck. Pages are
+   * already rendered to data-URLs; every one is also saved to Uploads.
    */
   const importPdfPages = useCallback(
     (res: PdfImportResult) => {
-      const base = res.name.replace(/\.pdf$/i, "");
+      const pptx = /\.pptx$/i.test(res.name);
+      const base = res.name.replace(/\.(pdf|pptx)$/i, "");
+      const unit = pptx ? "slide" : "page";
       res.pages.forEach((p) => addUpload(p.src, p.ratio, `${base} · p${p.page}`));
       if (res.placement === "current-slide") {
         const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
@@ -537,12 +539,12 @@ function AppContent() {
           };
         } else {
           const img = makeImageShape(p.src, p.ratio, 60);
-          s.shapes = [{ ...img, name: `${base} · page ${p.page}` }];
+          s.shapes = [{ ...img, name: `${base} · ${unit} ${p.page}` }];
         }
         return s;
       });
       const after = n0 ? Math.min(current, n0 - 1) : -1;
-      insertSlidesAfter(slides, after, `Import ${slides.length} PDF page${slides.length === 1 ? "" : "s"}`);
+      insertSlidesAfter(slides, after, `Import ${slides.length} ${pptx ? "PowerPoint slide" : "PDF page"}${slides.length === 1 ? "" : "s"}`);
     },
     [deck.slides, current, addImage, insertSlidesAfter, requestTab],
   );
@@ -1386,13 +1388,13 @@ function AppContent() {
           </Btn>
           <Btn onClick={insertBlank}>Blank slide</Btn>
           <label
-            title="Import a PDF — add the whole document or specific pages as slides, or drop pages onto the current slide"
+            title="Import a PDF or PowerPoint (.pptx) — add the whole document or specific pages as slides, or drop pages onto the current slide"
             className="inline-flex cursor-pointer items-center rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 hover:bg-white/10"
           >
-            📄 Import PDF
+            📄 Import PDF / PPTX
             <input
               type="file"
-              accept="application/pdf,.pdf"
+              accept={DECK_ACCEPT}
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
@@ -1566,7 +1568,7 @@ function AppContent() {
                 >
                   {dropHint && (
                     <div className="pointer-events-none absolute inset-3 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-sky-400 bg-sky-400/10 text-lg font-semibold text-sky-200">
-                      Drop images or a PDF to place them on the slide · hold Shift to set as background
+                      Drop images, a PDF or a PowerPoint to place them on the slide · hold Shift to set as background
                     </div>
                   )}
                 <Stage>
@@ -1607,13 +1609,13 @@ function AppContent() {
                 <div className="flex shrink-0 flex-wrap items-center justify-center gap-1 border-t border-white/10 bg-slate-950/50 px-4 py-1.5">
                   <span className="mr-1 text-[10px] font-medium tracking-wide text-slate-500 uppercase">Insert</span>
                   <label
-                    title="Upload image or PDF"
+                    title="Upload image, PDF or PowerPoint"
                     className="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-md border border-sky-400/40 bg-sky-400/10 px-2 text-sm text-sky-200 hover:bg-sky-400/20"
                   >
                     📤
                     <input
                       type="file"
-                      accept="image/*,application/pdf,.pdf"
+                      accept={`image/*,${DECK_ACCEPT}`}
                       multiple
                       className="hidden"
                       onChange={(e) => {
