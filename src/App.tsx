@@ -58,6 +58,8 @@ function AppContent() {
     insertBlank,
     removeSlide,
     duplicateSlide,
+    removeSlides,
+    duplicateSlides,
     moveSlide,
     moveSlideTo,
     addAnswerCopies,
@@ -158,6 +160,29 @@ function AppContent() {
 
   const [editScope, setEditScope] = useState<"slide" | "selected" | "all">("slide");
   const [scopeSlideIds, setScopeSlideIds] = useState<string[]>([]);
+
+  /**
+   * The slide rail's ticked slides. One list feeds every bulk action: the
+   * rail's own duplicate / delete bar and the inspector's “Selected slides”
+   * scope, so ticking cards in the rail is enough to restyle them together.
+   * A real multi-tick moves the scope onto “Selected” while it is still on the
+   * default “This slide”; a lone tick (what a plain card click leaves behind)
+   * and any explicit scope choice leave the scope where the user put it.
+   */
+  const handleSlideSelection = useCallback((ids: string[]) => {
+    setScopeSlideIds(ids);
+    if (ids.length > 1) setEditScope((s) => (s === "slide" ? "selected" : s));
+  }, []);
+
+  /** drop ticks whose slide is gone (deleted, replaced by a new deck, undone) */
+  useEffect(() => {
+    setScopeSlideIds((prev) => {
+      if (!prev.length) return prev;
+      const alive = new Set(deck.slides.map((s) => s.id));
+      const kept = prev.filter((id) => alive.has(id));
+      return kept.length === prev.length ? prev : kept;
+    });
+  }, [deck.slides]);
 
   /**
    * Which navigation entry edits a given board element. Selecting a layer (or an
@@ -593,6 +618,7 @@ function AppContent() {
         setSelectedEl(null);
         setActiveField(null);
         setActiveNav(null);
+        setScopeSlideIds([]);
         return;
       }
 
@@ -951,12 +977,19 @@ function AppContent() {
             deck={deck}
             current={index}
             revision={revision}
+            selected={scopeSlideIds}
+            onSelected={handleSlideSelection}
             onCurrent={setCurrent}
             onClearField={() => setActiveField(null)}
             onMoveTo={moveSlideTo}
             onStep={(id, dir) => moveSlide(id, dir)}
             onDuplicate={duplicateSlide}
             onRemove={removeSlide}
+            onDuplicateSelected={duplicateSlides}
+            onRemoveSelected={(ids) => {
+              removeSlides(ids);
+              setScopeSlideIds([]);
+            }}
           />
 
           <main className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(60%_60%_at_50%_0%,#141a2b_0%,#020617_70%)]">

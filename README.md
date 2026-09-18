@@ -27,6 +27,37 @@ There is also a **slide selector in the top-right corner** of the editor
 question and answer state — and jumps the editor to the picked slide.
 `Esc` or a click away closes it.
 
+The card the editor is showing wears a **moving gradient border**: the frame is
+painted by a colour ramp clipped to the border box under the card's own surface,
+and the ramp keeps sliding around it (`slideCardBorderFlow` in `src/index.css`),
+with a soft pulsing halo on top. `prefers-reduced-motion` freezes it on a static
+gradient, and the border drops back to a dashed amber outline while a card is
+being carried.
+
+### Selecting several slides
+
+Every card has a **selection box** in its top-left corner. Ticking boxes builds a
+multi-selection:
+
+- **tick a box** — adds that slide, and never opens it (a press on a box can't
+  start a reorder drag either);
+- **Ctrl / ⌘ + click a card** — toggles that card in and out of the selection;
+- **Shift + click a card** — selects the whole range from the last card clicked;
+- **the box next to `Slides`** — ticks the entire deck, and unticks it from a
+  full selection (it shows indeterminate while the selection is partial);
+- **a plain click** — opens the slide and leaves it as the only ticked one;
+- **`Esc`** — clears the selection.
+
+While anything is ticked, a **bulk bar** appears under the rail header with the
+count and two actions: ⧉ duplicate and ✕ delete. Both run over the whole ticked
+set as **one undo step** — a duplicate drops each copy directly after its
+original, and a delete keeps the editor on the open slide when it survived.
+
+The ticked set is the same list the inspector's **Target Scope → Selected**
+reads, so ticking cards in the rail is enough to restyle those slides together;
+a multi-tick moves that scope onto “Selected” for you. Ticks whose slide is
+gone (deleted, undone, replaced by another deck) drop out on their own.
+
 ## Inspector navigation
 
 The right-hand inspector lists **one destination per restylable thing on a

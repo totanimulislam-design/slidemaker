@@ -1,14 +1,20 @@
 /**
  * Slide-stack suite.
  *
- * Two features are pinned here:
+ * Four features are pinned here:
  *
  *   1. the slide rail (left) is a drag surface: dragging a card carries it to
  *      ANY slot in the stack, the cards in between open the landing gap while
  *      the drag is live, and a click, a sub-threshold press, a hover, a
  *      pointercancel and any movement after pointer-up move nothing;
  *   2. the slide selector in the top-right corner of the editor lists the whole
- *      deck and jumps the editor to the picked slide.
+ *      deck and jumps the editor to the picked slide;
+ *   3. every card carries a SELECTION BOX: ticking builds a multi-selection
+ *      (Ctrl/⌘-click toggles, Shift-click ranges, the header box takes the whole
+ *      deck) that the bulk bar duplicates or deletes in ONE undo step, feeds the
+ *      inspector's Selected-slides scope, and never opens a slide or arms a drag;
+ *   4. the slide the editor is showing is the only card wearing the animated
+ *      gradient border, and the border follows the editor as it moves.
  *
  * Like the layers panel, the reorder runs through the guarded pointer session,
  * so a press that never travels stays a click and a real release is the only
@@ -483,6 +489,221 @@ export async function runSlideStackTests(): Promise<CaseResult[]> {
       pass: cardOrder().join(",") === baseOrder.join(","),
       detail: cardOrder().join(","),
     });
+  }
+
+  /* ------------------------- the rail's selection boxes --------------------- */
+  {
+    const boxOfId = (id: string) => doc.querySelector<HTMLInputElement>(`[data-slide-select="${id}"]`);
+    const tick = (id: string) => {
+      act(() => {
+        boxOfId(id)?.click();
+      });
+    };
+    const selectAll = () => doc.querySelector<HTMLInputElement>("[data-slide-select-all]");
+    const bulk = () => doc.querySelector<HTMLElement>("[data-slide-bulk]");
+    const bulkCount = () => doc.querySelector<HTMLElement>("[data-slide-bulk-count]")?.textContent ?? "";
+    const bulkBtn = (k: "duplicate" | "delete" | "clear") => doc.querySelector<HTMLElement>(`[data-slide-bulk-${k}]`);
+    const tickedCards = () =>
+      Array.from(doc.querySelectorAll<HTMLElement>("[data-slide-selected]")).map(
+        (c) => c.getAttribute("data-slide-card") ?? "",
+      );
+    const currentCards = () =>
+      Array.from(doc.querySelectorAll<HTMLElement>("[data-slide-current]")).map(
+        (c) => c.getAttribute("data-slide-card") ?? "",
+      );
+    const scopeBtn = (label: RegExp) =>
+      Array.from(doc.querySelectorAll<HTMLElement>("button")).find((b) => label.test((b.textContent ?? "").trim())) ??
+      null;
+    const esc = () => {
+      act(() => {
+        doc.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      });
+    };
+    const clickCardWith = (id: string, init: { ctrlKey?: boolean; shiftKey?: boolean } = {}) => {
+      stubCardBoxes();
+      const b = boxOf(id);
+      down(cardOf(id)!, b.x, b.y);
+      up(cardOf(id)!, b.x, b.y);
+      act(() => {
+        cardOf(id)?.dispatchEvent(new win.MouseEvent("click", { bubbles: true, cancelable: true, ...init }));
+      });
+    };
+
+    esc(); // the rail above ends with a slide open, and an open slide is ticked
+    out.push({
+      name: "every card carries a selection box and the header offers select-all",
+      pass: base.every((id) => boxOfId(id)?.type === "checkbox") && selectAll()?.type === "checkbox" && !tickedCards().length,
+      detail: `boxes=${base.filter((id) => !!boxOfId(id)).length} all=${!!selectAll()} ticked=${tickedCards().join(",")}`,
+    });
+
+    // the editor is on slide two before any extra box is ticked
+    clickCard("sl2");
+    const beforeTick = shownQuestion();
+    tick("sl1");
+    out.push({
+      name: "ticking a box adds that slide without opening it",
+      pass:
+        tickedCards().join(",") === "sl1,sl2" &&
+        boxOfId("sl1")!.checked &&
+        shownQuestion() === beforeTick &&
+        (pickerTrigger()?.textContent ?? "").includes("2 / 3"),
+      detail: `ticked=${tickedCards().join(",")} shown=${shownQuestion().slice(0, 24)}`,
+    });
+
+    tick("sl3");
+    out.push({
+      name: "the bulk bar appears and counts the ticked slides",
+      pass: !!bulk() && bulkCount() === "3 selected" && tickedCards().join(",") === "sl1,sl2,sl3",
+      detail: `bulk=${!!bulk()} count=${bulkCount()} ticked=${tickedCards().join(",")}`,
+    });
+
+    out.push({
+      name: "the rail's ticks drive the inspector's Selected-slides scope",
+      pass:
+        (scopeBtn(/^Selected \(3\)$/)?.textContent ?? "").trim() === "Selected (3)" &&
+        /bg-amber-400/.test(scopeBtn(/^Selected \(3\)$/)?.className ?? ""),
+      detail: `label=${scopeBtn(/^Selected/)?.textContent?.trim()} cls=${(scopeBtn(/^Selected/)?.className ?? "").slice(0, 60)}`,
+    });
+
+    // a press on a box must never arm the reorder drag
+    baseOrder = cardOrder();
+    stubCardBoxes();
+    {
+      const label = boxOfId("sl2")!.parentElement as HTMLElement;
+      const b = boxOf("sl2");
+      down(label, b.x, b.y);
+      held(asWin, b.x, b.y + 60);
+      up(asWin, b.x, b.y + 60);
+    }
+    out.push({
+      name: "a press on a selection box never starts a drag",
+      pass: cardOrder().join(",") === baseOrder.join(",") && !stackEl()?.hasAttribute("data-dragging"),
+      detail: `${baseOrder.join(",")} → ${cardOrder().join(",")} dragging=${stackEl()?.getAttribute("data-dragging")}`,
+    });
+
+    act(() => {
+      selectAll()!.click();
+    });
+    out.push({
+      name: "the header box unticks a fully ticked deck",
+      pass: !selectAll()!.checked && !tickedCards().length && !bulk(),
+      detail: `checked=${selectAll()!.checked} ticked=${tickedCards().join(",")} bulk=${!!bulk()}`,
+    });
+    act(() => {
+      selectAll()!.click();
+    });
+    out.push({
+      name: "…and ticks the whole deck from an empty selection",
+      pass: selectAll()!.checked && selectAll()!.indeterminate === false && tickedCards().join(",") === "sl1,sl2,sl3",
+      detail: `checked=${selectAll()!.checked} ticked=${tickedCards().join(",")}`,
+    });
+    tick("sl2");
+    out.push({
+      name: "a partial selection leaves the header box indeterminate",
+      pass: selectAll()!.indeterminate === true && !selectAll()!.checked && tickedCards().join(",") === "sl1,sl3",
+      detail: `indeterminate=${selectAll()!.indeterminate} ticked=${tickedCards().join(",")}`,
+    });
+
+    esc();
+    clickCardWith("sl2", { ctrlKey: true });
+    clickCardWith("sl3", { ctrlKey: true });
+    out.push({
+      name: "Ctrl/⌘-click adds single cards to the selection",
+      pass: tickedCards().join(",") === "sl2,sl3",
+      detail: tickedCards().join(","),
+    });
+    clickCardWith("sl3", { ctrlKey: true });
+    out.push({
+      name: "…and unticks the card it is pressed on a second time",
+      pass: tickedCards().join(",") === "sl2",
+      detail: tickedCards().join(","),
+    });
+
+    clickCard("sl1");
+    out.push({
+      name: "opening a slide leaves that slide as the only ticked one",
+      pass: tickedCards().join(",") === "sl1" && shownQuestion().includes("Alpha question one"),
+      detail: `ticked=${tickedCards().join(",")} shown=${shownQuestion().slice(0, 24)}`,
+    });
+    clickCardWith("sl3", { shiftKey: true });
+    out.push({
+      name: "Shift-click selects the whole range between the anchor and the click",
+      pass: tickedCards().join(",") === "sl1,sl2,sl3",
+      detail: tickedCards().join(","),
+    });
+
+    esc();
+    out.push({
+      name: "Escape clears the selection and hides the bulk bar",
+      pass: !tickedCards().length && !bulk(),
+      detail: `ticked=${tickedCards().join(",")} bulk=${!!bulk()}`,
+    });
+
+    /* ---------------------- bulk duplicate / delete -------------------------- */
+    tick("sl1");
+    tick("sl2");
+    const beforeBulk = cardOrder();
+    click(bulkBtn("duplicate"));
+    out.push({
+      name: "the bulk bar duplicates every ticked slide, each copy after its original",
+      pass:
+        cardOrder().length === 5 &&
+        cardOrder()[0] === "sl1" &&
+        cardOrder()[2] === "sl2" &&
+        cardOrder()[4] === "sl3",
+      detail: `${beforeBulk.join(",")} → ${cardOrder().join(",")}`,
+    });
+    click(undoBtn());
+    out.push({
+      name: "one bulk duplicate is one undo step",
+      pass: cardOrder().join(",") === "sl1,sl2,sl3",
+      detail: cardOrder().join(","),
+    });
+
+    click(bulkBtn("delete"));
+    out.push({
+      name: "the bulk bar deletes every ticked slide in one step",
+      pass: cardOrder().join(",") === "sl3" && !bulk(),
+      detail: `${beforeBulk.join(",")} → ${cardOrder().join(",")}`,
+    });
+    click(undoBtn());
+    out.push({
+      name: "one bulk delete is one undo step",
+      pass: cardOrder().join(",") === "sl1,sl2,sl3",
+      detail: cardOrder().join(","),
+    });
+
+    /* ------------------- the open slide's animated border ------------------- */
+    clickCard("sl2");
+    out.push({
+      name: "only the open slide wears the animated gradient border",
+      pass:
+        currentCards().join(",") === "sl2" &&
+        cardOf("sl2")!.classList.contains("slide-card-current") &&
+        base.every((id) => (id === "sl2" ? true : !cardOf(id)!.classList.contains("slide-card-current"))),
+      detail: `current=${currentCards().join(",")} classes=${cardOf("sl2")!.className}`,
+    });
+    clickCard("sl3");
+    out.push({
+      name: "the border follows the editor from slide to slide",
+      pass:
+        currentCards().join(",") === "sl3" &&
+        cardOf("sl3")!.classList.contains("slide-card-current") &&
+        !cardOf("sl2")!.classList.contains("slide-card-current"),
+      detail: `current=${currentCards().join(",")} sl2=${cardOf("sl2")!.classList.contains("slide-card-current")}`,
+    });
+    tick("sl1"); // a box tick never opens, so sl3 stays the open slide
+    out.push({
+      name: "a ticked card that is not open keeps its own selection border",
+      pass:
+        tickedCards().join(",") === "sl1,sl3" &&
+        currentCards().join(",") === "sl3" &&
+        !cardOf("sl1")!.classList.contains("slide-card-current") &&
+        /border-sky-400/.test(cardOf("sl1")!.className),
+      detail: `ticked=${tickedCards().join(",")} current=${currentCards().join(",")} sl1=${cardOf("sl1")!.className}`,
+    });
+
+    esc(); // a clean deck and an empty selection for the rest of the suite
   }
 
   /* ------------------------ a single-slide deck ----------------------------- */

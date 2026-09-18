@@ -13,6 +13,13 @@ interface Props {
   current: number;
   /** font-coverage revision — re-keys the previews when extra fonts load */
   revision: number;
+  /** the slide ids ticked in the rail's selection boxes */
+  selected: string[];
+  /**
+   * Replace the ticked set. The inspector's “Selected slides” scope reads the
+   * same list, so one selection drives the rail's bulk bar AND a design apply.
+   */
+  onSelected: (ids: string[]) => void;
   /** select a slide (a plain click, never a drag) */
   onCurrent: (i: number) => void;
   /** a canvas click that armed an edit field must be dropped when switching slides */
@@ -26,6 +33,9 @@ interface Props {
   onStep: (id: string, dir: -1 | 1) => void;
   onDuplicate: (id: string) => void;
   onRemove: (id: string) => void;
+  /** bulk ops over the ticked set — each one is a single undo step */
+  onDuplicateSelected: (ids: string[]) => void;
+  onRemoveSelected: (ids: string[]) => void;
 }
 
 /** the live state of one card drag (mirrored into a ref for the gesture handlers) */
@@ -66,11 +76,65 @@ const slotFor = (n: number, from: number, p: number): number => {
  * preview follows the cursor. The reorder runs through the same guarded
  * pointer session as the board and the layer list, so a click can never move
  * a slide and a drag never leaks past pointer-up.
+ *
+ * Every card also carries a SELECTION BOX: ticking boxes builds a multi-
+ * selection (Ctrl/⌘-click toggles one card, Shift-click takes the whole range)
+ * that the header's select-all box and the bulk bar operate on. Ticking never
+ * opens a slide, so a press on a box can never start a drag either.
+ *
+ * The card the editor is showing wears a moving gradient border, so the open
+ * slide stays readable at a glance.
  */
-export default function SlideStack({ deck, current, revision, onCurrent, onClearField, onMoveTo, onStep, onDuplicate, onRemove }: Props) {
+export default function SlideStack({
+  deck,
+  current,
+  revision,
+  selected,
+  onSelected,
+  onCurrent,
+  onClearField,
+  onMoveTo,
+  onStep,
+  onDuplicate,
+  onRemove,
+  onDuplicateSelected,
+  onRemoveSelected,
+}: Props) {
   const slides = deck.slides;
   const n = slides.length;
   const draggable = !!onMoveTo && n > 1;
+
+  /* ---------------------------------------------------------------------- *
+   * Multi-selection
+   * ---------------------------------------------------------------------- */
+  const ticked = new Set(selected);
+  /** ticked slides in deck order — what the bulk bar acts on (stale ids drop out) */
+  const selIds = slides.filter((s) => ticked.has(s.id)).map((s) => s.id);
+  const selCount = selIds.length;
+  const allTicked = n > 0 && selCount === n;
+  /** the card the last click anchored a Shift-range from (defaults to the open one) */
+  const anchorRef = useRef(current);
+
+  /**
+   * One card's click: plain opens it, Ctrl/⌘ toggles its tick, Shift takes the
+   * range from the anchor. A plain open always leaves that slide as the only
+   * ticked one, the way a file list keeps a single selection on a plain click.
+   */
+  const openCard = (i: number, e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => {
+    const id = slides[i].id;
+    if (e.shiftKey) {
+      const a = Math.max(0, Math.min(n - 1, anchorRef.current));
+      const [lo, hi] = a <= i ? [a, i] : [i, a];
+      onSelected(slides.slice(lo, hi + 1).map((s) => s.id));
+    } else if (e.ctrlKey || e.metaKey) {
+      onSelected(ticked.has(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+    } else if (!(selCount === 1 && ticked.has(id))) {
+      onSelected([id]);
+    }
+    anchorRef.current = i;
+    onCurrent(i);
+    onClearField();
+  };
 
   /* ---------------------------------------------------------------------- *
    * Drag to reorder
@@ -235,20 +299,84 @@ export default function SlideStack({ deck, current, revision, onCurrent, onClear
 
   return (
     <aside className="flex w-[230px] shrink-0 flex-col border-r border-white/10 bg-slate-950/60">
-      <div className="flex items-center justify-between px-3 py-2 text-[11px] font-medium tracking-wide text-slate-500 uppercase">
-        Slides
-        <span className="text-slate-600">{n}</span>
+      <div className="flex items-center gap-2 px-3 py-2 text-[11px] font-medium tracking-wide text-slate-500 uppercase">
+        {/* one box to tick the whole deck at once (indeterminate while partial) */}
+        <label
+          data-slide-select-all-wrap
+          title={allTicked ? "Untick every slide" : "Tick every slide"}
+          className="flex cursor-pointer items-center gap-1.5"
+        >
+          <input
+            ref={(el) => {
+              if (el) el.indeterminate = selCount > 0 && !allTicked;
+            }}
+            type="checkbox"
+            data-slide-select-all
+            aria-label="Select all slides"
+            checked={allTicked}
+            onChange={() => onSelected(allTicked ? [] : slides.map((s) => s.id))}
+            className="h-3.5 w-3.5 cursor-pointer accent-amber-400"
+          />
+          Slides
+        </label>
+        <span className="ml-auto text-slate-600">{n}</span>
       </div>
+
+      {/* the bulk bar: what the ticked slides can be put through together */}
+      {selCount > 0 && (
+        <div
+          data-slide-bulk
+          className="flex items-center gap-1 border-b border-white/5 bg-sky-400/[0.08] px-3 py-1.5"
+        >
+          <span data-slide-bulk-count className="text-[10px] font-semibold text-sky-200">
+            {selCount} selected
+          </span>
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              data-slide-bulk-duplicate
+              title={`Duplicate the ${selCount} selected slide${selCount === 1 ? "" : "s"}`}
+              aria-label={`Duplicate the ${selCount} selected slides`}
+              onClick={() => onDuplicateSelected(selIds)}
+              className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-slate-200 hover:bg-amber-400 hover:text-slate-950"
+            >
+              ⧉
+            </button>
+            <button
+              type="button"
+              data-slide-bulk-delete
+              title={`Delete the ${selCount} selected slide${selCount === 1 ? "" : "s"}`}
+              aria-label={`Delete the ${selCount} selected slides`}
+              onClick={() => onRemoveSelected(selIds)}
+              className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-slate-200 hover:bg-rose-500 hover:text-white"
+            >
+              ✕
+            </button>
+            <button
+              type="button"
+              data-slide-bulk-clear
+              title="Clear the selection"
+              onClick={() => onSelected([])}
+              className="rounded px-1 py-0.5 text-[9px] text-slate-400 hover:text-slate-100"
+            >
+              clear
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         ref={listRef}
         data-slide-stack
         data-dragging={drag ? drag.id : undefined}
         data-drop-index={drag ? slotFor(n, drag.from, drag.p) : undefined}
-        className={cn("min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-4", drag && "select-none")}
+        className={cn("min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pt-1 pb-4", drag && "select-none")}
       >
         {slides.map((s, i) => {
           const isDragged = !!drag && drag.id === s.id;
           const shift = isDragged ? 0 : shiftFor(i);
+          const checked = ticked.has(s.id);
+          const isOpen = i === current;
           return (
             <div
               key={s.id}
@@ -258,10 +386,12 @@ export default function SlideStack({ deck, current, revision, onCurrent, onClear
               }}
               data-slide-card={s.id}
               data-slide-dragging={isDragged ? "true" : undefined}
+              data-slide-current={isOpen ? "true" : undefined}
+              data-slide-selected={checked ? "true" : undefined}
               title={
                 draggable
-                  ? "Click to open · drag anywhere in the stack to reorder"
-                  : "Click to open this slide"
+                  ? "Click to open · tick the box (or Ctrl/⌘-click) to select several · Shift-click selects a range · drag anywhere in the stack to reorder"
+                  : "Click to open this slide · tick the box (or Ctrl/⌘-click) to select several · Shift-click selects a range"
               }
               style={{
                 position: "relative",
@@ -272,19 +402,22 @@ export default function SlideStack({ deck, current, revision, onCurrent, onClear
                 touchAction: "pan-y",
               }}
               className={cn(
-                "group cursor-pointer rounded-lg border p-1 transition-colors",
-                i === current ? "border-amber-400 bg-amber-400/10" : "border-white/10 hover:border-white/25",
+                "group cursor-pointer rounded-lg border-2 p-1 transition-colors select-none",
+                /* the open slide's border is the animated gradient ring in index.css */
+                isDragged
+                  ? "border-dashed border-amber-400/60 bg-amber-400/10"
+                  : isOpen
+                    ? "slide-card-current"
+                    : checked
+                      ? "border-sky-400/70 bg-sky-400/[0.07] hover:border-sky-300"
+                      : "border-white/10 hover:border-white/25",
                 draggable && "cursor-grab active:cursor-grabbing",
-                isDragged && "border-dashed border-amber-400/60",
               )}
-              onClick={() => {
-                onCurrent(i);
-                onClearField();
-              }}
+              onClick={(e) => openCard(i, e)}
               onPointerDown={(e) => {
                 if (!draggable) return;
-                // the card's quick-op buttons keep their own presses
-                if ((e.target as HTMLElement | null)?.closest("button")) return;
+                // the card's quick-op buttons and its selection box keep their own presses
+                if ((e.target as HTMLElement | null)?.closest("button, input, label")) return;
                 armedId.current = s.id;
                 begin(e, { x: 0, y: 0 });
               }}
@@ -309,9 +442,35 @@ export default function SlideStack({ deck, current, revision, onCurrent, onClear
                   />
                 </Thumb>
               </div>
-              <span className="absolute top-2 left-2 rounded bg-black/70 px-1.5 text-[10px] font-semibold text-amber-300">
-                {i + 1}
-              </span>
+              {/* selection box + slide number: the box fades in on hover and stays
+                  put while ticked, so the number never jumps sideways */}
+              <div className="absolute top-1.5 left-1.5 z-[3] flex items-center gap-1">
+                <label
+                  data-slide-select-wrap={s.id}
+                  title={checked ? `Slide ${i + 1} selected — untick to drop it` : `Select slide ${i + 1}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    "grid h-[18px] w-[18px] cursor-pointer place-items-center rounded border bg-slate-950/80 transition-opacity",
+                    checked
+                      ? "border-amber-400/80 opacity-100"
+                      : "border-white/25 opacity-0 group-hover:opacity-100 focus-within:opacity-100",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    data-slide-select={s.id}
+                    aria-label={`Select slide ${i + 1}`}
+                    checked={checked}
+                    onChange={() =>
+                      onSelected(checked ? selected.filter((x) => x !== s.id) : [...selected, s.id])
+                    }
+                    className="h-3 w-3 cursor-pointer accent-amber-400"
+                  />
+                </label>
+                <span className="rounded bg-black/70 px-1.5 text-[10px] font-semibold text-amber-300">
+                  {i + 1}
+                </span>
+              </div>
               <div className="absolute right-1.5 bottom-1.5 hidden gap-1 group-hover:flex">
                 {[
                   { t: "↑", title: "Move up", fn: () => onStep(s.id, -1) },
