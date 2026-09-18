@@ -2,7 +2,7 @@ import { useState } from "react";
 import { inlineRemoteImage, loadImageFile, shrinkDataUrl, type ShapeItem } from "../lib/shapes";
 import { canMove, Z_LABELS, type ZOp } from "../lib/zorder";
 import { addUpload, removeUpload, useUploads, type UploadedItem } from "../lib/uploads";
-import { isPdfFile, requestPdfImport } from "../lib/pdf";
+import { DECK_ACCEPT, isDeckFile, requestPdfImport } from "../lib/pdf";
 import { Btn, Field, PanelHead, SegButtons, Slider, TextArea } from "./ui";
 import { cn } from "../utils/cn";
 
@@ -71,8 +71,8 @@ export default function ImagesPanel({
   const importFiles = async (files: FileList | File[] | null | undefined, replaceId?: string) => {
     if (!files) return;
     const all = Array.from(files);
-    // a PDF opens the page picker: whole document or chosen pages → slides / pictures
-    const pdf = all.find(isPdfFile);
+    // a PDF / PPTX opens the page picker: whole document or chosen pages → slides / pictures
+    const pdf = all.find(isDeckFile);
     if (pdf && !replaceId) requestPdfImport(pdf);
     const list = all.filter((f) => f.type.startsWith("image/"));
     if (!list.length) return;
@@ -119,7 +119,7 @@ export default function ImagesPanel({
     <div className="space-y-4">
       <PanelHead
         title="Uploads"
-        subtitle="Pictures, PDFs, diagrams and graphics saved to your library."
+        subtitle="Pictures, PDFs, PowerPoints, diagrams and graphics saved to your library."
         right={
           <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-300">
             {uploads.length} saved
@@ -142,7 +142,7 @@ export default function ImagesPanel({
           <span>⬆ Upload files</span>
           <input
             type="file"
-            accept="image/*,application/pdf,.pdf"
+            accept={`image/*,${DECK_ACCEPT}`}
             multiple
             className="hidden"
             onChange={(e) => {
@@ -167,7 +167,7 @@ export default function ImagesPanel({
 
         <p className="text-[10px] leading-relaxed text-slate-500">
           Or <b>paste</b> an image (Ctrl/⌘ + V) or <b>drag files</b> straight onto the slide.
-          <b> PDFs</b> open a page picker — add the whole file or specific pages as slides, or drop pages onto this slide.
+          <b> PDFs and PowerPoint (.pptx) files</b> open a page picker — add the whole file or specific pages as slides, or drop pages onto this slide.
         </p>
       </div>
 

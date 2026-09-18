@@ -11,6 +11,15 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 export const isPdfFile = (f: File): boolean =>
   f.type === "application/pdf" || /\.pdf$/i.test(f.name);
 
+const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+export const isPptxFile = (f: File): boolean => f.type === PPTX_MIME || /\.pptx$/i.test(f.name);
+
+/** PDF or PPTX — anything the "Import slides" picker can open. */
+export const isDeckFile = (f: File): boolean => isPdfFile(f) || isPptxFile(f);
+
+/** `accept` attribute for file inputs that take a ready-made deck. */
+export const DECK_ACCEPT = `application/pdf,.pdf,${PPTX_MIME},.pptx`;
+
 export interface PdfPageRender {
   src: string;
   /** width / height */
@@ -64,6 +73,15 @@ async function renderPage(doc: PDFDocumentProxy, pageNo: number, maxSide: number
   const src = canvas.toDataURL(mime, quality);
   page.cleanup();
   return { src, ratio: canvas.width / canvas.height, width: canvas.width, height: canvas.height };
+}
+
+/** Opens a PDF or a PPTX with the matching renderer. */
+export async function openDocument(file: File): Promise<OpenedPdf> {
+  if (isPptxFile(file)) {
+    const { openPptx } = await import("./pptx");
+    return openPptx(file);
+  }
+  return openPdf(file);
 }
 
 export async function openPdf(file: File): Promise<OpenedPdf> {
@@ -133,7 +151,7 @@ export function formatPageRange(pages: number[]): string {
 
 /* ------------------------------------------------------------------ bus --- */
 /**
- * Panels buried in the inspector can hand a PDF to the app-level page picker
+ * Panels buried in the inspector can hand a PDF / PPTX to the app-level page picker
  * without threading a prop through every layer.
  */
 const PDF_EVENT = "slidemaker:open-pdf";
