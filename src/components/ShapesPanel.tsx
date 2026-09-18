@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { SHAPE_ICONS, SHAPE_LABELS, inlineRemoteImage, loadImageFile, shrinkDataUrl, type ShapeItem, type ShapeKind } from "../lib/shapes";
+import { addUpload } from "../lib/uploads";
 import { handleSmartPaste } from "../lib/richPaste";
 import { alignShape, boundsOf, distributeShapes, type AlignOp } from "../lib/shapeAlign";
 import { canMove, Z_LABELS, type ZOp } from "../lib/zorder";
@@ -44,7 +45,7 @@ interface Props {
   /** unified layers list (elements + shapes) rendered inside the Layer section */
   layersPanel?: React.ReactNode;
   /**
-   * Pictures have their own navigation entry ("Insert images"), so the shapes
+   * Pictures have their own navigation entry ("Uploads"), so the shapes
    * panel can drop its image uploader and stay focused on shapes & text boxes.
    */
   hideImageInsert?: boolean;
@@ -113,6 +114,7 @@ export default function ShapesPanel({
       for (const f of list) {
         const { src, ratio } = await loadImageFile(f);
         const small = await shrinkDataUrl(src);
+        addUpload(small, ratio, f.name);
         if (replaceId) onChange(replaceId, { src: small, naturalRatio: ratio });
         else onAddImage(small, ratio, sc);
       }
@@ -130,6 +132,8 @@ export default function ShapesPanel({
     try {
       const { src, ratio } = await inlineRemoteImage(url);
       const small = await shrinkDataUrl(src);
+      const name = url.split("/").pop()?.split("?")[0] || "Web image";
+      addUpload(small, ratio, name);
       if (replaceId) onChange(replaceId, { src: small, naturalRatio: ratio });
       else onAddImage(small, ratio, scope);
       setUrlInput("");

@@ -35,6 +35,7 @@ import HistoryPanel from "./components/HistoryPanel";
 import AnswerKeyModal from "./components/AnswerKeyModal";
 import { Btn } from "./components/ui";
 import { normalizeDeckZ, useDeck } from "./lib/useDeck";
+import { addUpload, seedUploadsFromDeck } from "./lib/uploads";
 
 /** glyph / names for the right-click Layer submenu (mirrors lib/zorder) */
 const Z_LABEL_Glyph: Record<ZOp, string> = {
@@ -152,7 +153,7 @@ function AppContent() {
   /**
    * The navigation destination that is currently open. It drives the context
    * toolbar above the slide: the destinations that own no single board element
-   * (Answer key, Insert images, Insert shapes) get their related tools there.
+   * (Answer key, Uploads, Insert shapes) get their related tools there.
    * Mirrors `tabRequest`, so canvas clicks and navigation picks always agree.
    */
   const [activeNav, setActiveNav] = useState<InspectorTab | null>(null);
@@ -187,6 +188,11 @@ function AppContent() {
 
   const [editScope, setEditScope] = useState<"slide" | "selected" | "all">("slide");
   const [scopeSlideIds, setScopeSlideIds] = useState<string[]>([]);
+
+  // Seed user's Uploads library from any images on the deck
+  useEffect(() => {
+    seedUploadsFromDeck(deck);
+  }, [deck]);
 
   /**
    * The slide rail's ticked slides. One list feeds every bulk action: the
@@ -241,7 +247,8 @@ function AppContent() {
   );
 
   const insertImage = useCallback(
-    (src: string, ratio: number, scope: InsertScope | boolean, at?: { x: number; y: number }) => {
+    (src: string, ratio: number, scope: InsertScope | boolean, at?: { x: number; y: number }, name?: string) => {
+      addUpload(src, ratio, name);
       const id = addImage(src, ratio, resolveScope(scope), at);
       setSurface(null);
       setSelectedEl(null);
@@ -262,7 +269,7 @@ function AppContent() {
       // selecting a drawn shape clears any built-in element selection
       if (ids.length) {
         setSelectedEl(null);
-        // a lone picture opens "Insert images"; anything else opens "Insert shapes"
+        // a lone picture opens "Uploads"; anything else opens "Insert shapes"
         const cur = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
         const pool = [...(deck.globalShapes ?? []), ...(cur?.shapes ?? [])];
         const only = ids.length === 1 ? pool.find((x) => x.id === ids[0]) : undefined;
@@ -451,7 +458,9 @@ function AppContent() {
       try {
         for (const f of imgs) {
           const { src, ratio } = await loadImageFile(f);
-          insertImage(await shrinkDataUrl(src), ratio, false, at);
+          const small = await shrinkDataUrl(src);
+          addUpload(small, ratio, f.name);
+          insertImage(small, ratio, false, at, f.name);
         }
       } finally {
         setBusy(null);
@@ -1426,7 +1435,8 @@ function AppContent() {
                 <div
                   className="relative flex min-h-0 flex-1 flex-col"
                   onDragOver={(e) => {
-                    if (Array.from(e.dataTransfer.types).includes("Files")) {
+                    const types = Array.from(e.dataTransfer.types);
+                    if (types.includes("Files") || types.includes("application/json")) {
                       e.preventDefault();
                       setDropHint(true);
                     }
@@ -1435,16 +1445,6 @@ function AppContent() {
                   onDrop={(e) => {
                     e.preventDefault();
                     setDropHint(false);
-                    const files = Array.from(e.dataTransfer.files);
-                    if (e.shiftKey && files[0]?.type.startsWith("image/") && slide) {
-                      void (async () => {
-                        const { loadImageFile, shrinkDataUrl } = await import("./lib/shapes");
-                        const { src } = await loadImageFile(files[0]);
-                        setBackground({ src: await shrinkDataUrl(src, 2560, 0.85) }, "slide", slide.id);
-                        requestTab("background");
-                      })();
-                      return;
-                    }
                     const board = document.querySelector<HTMLElement>(".slide-editable [data-board]");
                     let at: { x: number; y: number } | undefined;
                     if (board) {
@@ -1453,6 +1453,33 @@ function AppContent() {
                         x: Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100)),
                         y: Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100)),
                       };
+                    }
+
+                    // Check if dragged from Uploads panel
+                    const json = e.dataTransfer.getData("application/json");
+                    if (json) {
+                      try {
+                        const parsed = JSON.parse(json);
+                        if (parsed?.type === "slidemaker-upload" && parsed.src) {
+                          insertImage(parsed.src, parsed.ratio || 1, false, at, parsed.name);
+                          return;
+                        }
+                      } catch {
+                        // ignore
+                      }
+                    }
+
+                    const files = Array.from(e.dataTransfer.files);
+                    if (e.shiftKey && files[0]?.type.startsWith("image/") && slide) {
+                      void (async () => {
+                        const { loadImageFile, shrinkDataUrl } = await import("./lib/shapes");
+                        const { src } = await loadImageFile(files[0]);
+                        const shrunk = await shrinkDataUrl(src, 2560, 0.85);
+                        addUpload(shrunk, 16 / 9, files[0].name);
+                        setBackground({ src: shrunk }, "slide", slide.id);
+                        requestTab("background");
+                      })();
+                      return;
                     }
                     void importImageFiles(files, at);
                   }}
@@ -1500,10 +1527,10 @@ function AppContent() {
                 <div className="flex shrink-0 flex-wrap items-center justify-center gap-1 border-t border-white/10 bg-slate-950/50 px-4 py-1.5">
                   <span className="mr-1 text-[10px] font-medium tracking-wide text-slate-500 uppercase">Insert</span>
                   <label
-                    title="Insert image"
+                    title="Upload image"
                     className="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-md border border-sky-400/40 bg-sky-400/10 px-2 text-sm text-sky-200 hover:bg-sky-400/20"
                   >
-                    🖼
+                    📤
                     <input
                       type="file"
                       accept="image/*"

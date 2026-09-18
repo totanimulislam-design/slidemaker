@@ -105,7 +105,7 @@ const NAV: NavItem[] = [
   { id: "footnote", label: "Footnote", icon: "¶", title: "Footnote — the bottom note line", element: "note" },
   { id: "background", label: "Slide background", icon: "▧", title: "Slide background", surface: "background" },
   { id: "frame", label: "Slide frame", icon: "▢", title: "Slide frame", surface: "frame" },
-  { id: "images", label: "Insert images", icon: "🖼", title: "Insert images" },
+  { id: "images", label: "Uploads", icon: "📤", title: "Uploads — pictures, diagrams and uploaded elements" },
   { id: "shapes", label: "Insert shapes", icon: "◇", title: "Insert shapes, text boxes and layers" },
   {
     id: "layers",
@@ -157,6 +157,7 @@ const LEGACY_TAB: Record<string, Tab> = {
   header: "badge1",
   design: "badge1",
   layout: "shapes",
+  uploads: "images",
 };
 
 interface Props {
