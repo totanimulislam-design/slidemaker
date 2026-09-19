@@ -386,8 +386,8 @@ export default function ContextToolbar(p: Props) {
 
   /**
    * A pop-up card docks to the right edge of the window, hanging from just
-   * under the top bar. The bar flex-wraps, so its height is measured rather
-   * than assumed — re-measured when a card opens and on window resizes.
+   * under the top bar. Its real height is measured rather than assumed, so the
+   * card stays correctly docked if the responsive chrome changes.
    */
   const [topBarH, setTopBarH] = useState(56);
   useEffect(() => {
@@ -471,18 +471,22 @@ export default function ContextToolbar(p: Props) {
       </button>
     );
   };
+  /**
+   * Icon-bearing toggles stay icon-only in the bar. Their complete name remains
+   * available to assistive technology and as a hover tooltip; this keeps every
+   * toolbar on one line without making repeated part names consume its width.
+   */
   const toggle = (name: string, icon?: ReactNode) => (
     <button
       type="button"
-      className={`ctx-btn ctx-toggle${panel === name ? " is-on" : ""}`}
+      className={cn("ctx-btn ctx-toggle", icon && "ctx-icon-toggle", panel === name && "is-on")}
       title={name}
       aria-label={name}
       aria-pressed={panel === name}
       aria-expanded={panel === name}
       onClick={() => setPanel(panel === name ? null : name)}
     >
-      {icon}
-      {name}
+      {icon ?? name}
       <span className="ctx-caret" aria-hidden="true">▾</span>
     </button>
   );
@@ -1093,14 +1097,14 @@ export default function ContextToolbar(p: Props) {
           <>
             {toggle("Banner shape", <span aria-hidden="true">▣</span>)}
             {swatch("Banner colour", banner.color, v => patchBanner({ color: v }), <span className="ctx-dot" style={{ background: banner.color }} />)}
-            {toggle("Banner fill")}
+            {toggle("Banner fill", <span aria-hidden="true">◩</span>)}
             {stepper("Banner opacity %", Math.round(banner.opacity * 100), v => patchBanner({ opacity: Math.max(0, Math.min(1, v / 100)) }), 0, 100, 5, { prefix: "◐" })}
             {stepper("Banner halo", banner.halo, v => patchBanner({ halo: v }), 0, 100, 5, { prefix: "☀" })}
-            {toggle("Banner padding")}
+            {toggle("Banner padding", <span aria-hidden="true">↔</span>)}
             {sep()}
-            {button("▣ Banner", () => p.patchHeader?.({ showBanner: !shown }), shown, "Show / hide the banner behind the title")}
+            {button(<span aria-hidden="true">▣</span>, () => p.patchHeader?.({ showBanner: !shown }), shown, "Show / hide the banner behind the title")}
             {sep()}
-            {toggle("Position")}
+            {toggle("Position", <span aria-hidden="true">✥</span>)}
           </>
         );
       }
@@ -1234,7 +1238,7 @@ export default function ContextToolbar(p: Props) {
             {swatch("Marker colour (auto base)", picked(theme.optionAccent), v => p.patchTheme({ optionAccent: v }), <span className="ctx-dot" style={{ background: picked(theme.optionAccent) }} />)}
             {swatch(`Marker fill${theme.optionBulletFill ? "" : " (auto until set)"}`, picked(theme.optionBulletFill || shade(optionBase, 0.2)), v => p.patchTheme({ optionBulletFill: v }), <span className="ctx-dot" style={{ background: picked(theme.optionBulletFill || shade(optionBase, 0.2)) }} />, "optionBulletFill")}
             {swatch(`Marker ring${theme.optionBulletBorder ? "" : " (auto until set)"}`, picked(theme.optionBulletBorder || shade(optionBase, 0.5)), v => p.patchTheme({ optionBulletBorder: v }), <span className="ctx-ring" style={{ borderColor: picked(theme.optionBulletBorder || shade(optionBase, 0.5)) }} />, "optionBulletBorder")}
-            {button("◐ Backplate", () => p.patchTheme({ optionBulletBgColor: theme.optionBulletBgColor ? "" : shade(optionBase, -0.35) }), !!theme.optionBulletBgColor, "Shape behind every marker (on / off)")}
+            {button(<span aria-hidden="true">◐</span>, () => p.patchTheme({ optionBulletBgColor: theme.optionBulletBgColor ? "" : shade(optionBase, -0.35) }), !!theme.optionBulletBgColor, "Shape behind every marker (on / off)")}
             {sep()}
             <select
               aria-label="Options layout"
@@ -1322,7 +1326,7 @@ export default function ContextToolbar(p: Props) {
         <span className="ctx-kind">{kindLabel}</span>
         {ak && <>
           {button(
-            <>{ak.showAnswer ? "👁 Revealed" : "👁 Hidden"}</>,
+            <span aria-hidden="true">{ak.showAnswer ? "✓" : "👁"}</span>,
             ak.onToggleReveal,
             ak.showAnswer,
             "Reveal / hide the answer on this slide",
@@ -1341,15 +1345,14 @@ export default function ContextToolbar(p: Props) {
               </option>
             ))}
           </select>
-          {toggle("Answer")}
-          {button(<>✓ Paste key</>, ak.onPaste, undefined, "Paste an answer key (1. ঘ 2. গ …) for the whole deck")}
+          {toggle("Answer", <span aria-hidden="true">✓</span>)}
+          {button(<span aria-hidden="true">📋</span>, ak.onPaste, undefined, "Paste an answer key (1. ঘ 2. গ …) for the whole deck")}
           {sep()}
         </>}
         {themePill && <>
           {swatch("Accent colour", theme.accent, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: theme.accent }} />)}
           {swatch("Board colour", theme.board, v => p.patchTheme({ board: v }), <span className="ctx-dot" style={{ background: theme.board }} />)}
           {swatch("Brand colour", theme.brandColor, v => p.patchTheme({ brandColor: v }), <span className="ctx-dot" style={{ background: theme.brandColor }} />)}
-          <span className="ctx-hint">theme presets & shared fonts are in the panel</span>
           {sep()}
         </>}
         {layoutPill && <>
@@ -1369,15 +1372,13 @@ export default function ContextToolbar(p: Props) {
             ))}
           </select>
           {sep()}
-          {button(<><span aria-hidden="true">🧲</span> Snap</>, () => p.patchTheme({ snapEnabled: !theme.snapEnabled }), theme.snapEnabled, "Magnetic snapping while dragging")}
-          {button(<><span aria-hidden="true">⌖</span> Guides</>, () => p.patchTheme({ smartGuides: !(theme.smartGuides ?? true) }), theme.smartGuides ?? true, "Smart guides while dragging")}
-          <span className="ctx-hint">X / Y / W / H, rotation and the position map are in the panel</span>
+          {button(<span aria-hidden="true">🧲</span>, () => p.patchTheme({ snapEnabled: !theme.snapEnabled }), theme.snapEnabled, "Magnetic snapping while dragging")}
+          {button(<span aria-hidden="true">⌖</span>, () => p.patchTheme({ smartGuides: !(theme.smartGuides ?? true) }), theme.smartGuides ?? true, "Smart guides while dragging")}
           {sep()}
         </>}
         {layering && <>
-          <span className="ctx-hint">
-            {p.layerTools?.total ?? 0} layers on this slide · drag a row in the panel to any slot in the stack · click
-            to select it on the slide · 👁 hide · 🔒 lock · ⧉ duplicate · 🗑 delete
+          <span className="ctx-hint" title="Drag rows in the Layers panel to reorder them">
+            {p.layerTools?.total ?? 0} layers
           </span>
         </>}
         {arrangeBar && <>
@@ -1386,7 +1387,8 @@ export default function ContextToolbar(p: Props) {
         </>}
         {inserting && p.nav === "images" && <>
           <label className="ctx-btn ctx-upload" title="Upload images (or a PDF) to this slide and library">
-            📤 Upload image / PDF
+            <span aria-hidden="true">📤</span>
+            <span className="sr-only">Upload image or PDF</span>
             <input
               aria-label="Add image or PDF files"
               type="file"
@@ -1400,7 +1402,6 @@ export default function ContextToolbar(p: Props) {
               }}
             />
           </label>
-          <span className="ctx-hint">or drop files on the slide · Shift+drop sets the background</span>
           {sep()}
         </>}
         {inserting && p.nav === "shapes" && <>
@@ -1462,15 +1463,15 @@ export default function ContextToolbar(p: Props) {
           {stepper("Border width", s.strokeWidth, strokeWidth => patch({ strokeWidth }), 0, 30, 1, { prefix: "Border" })}
         </>}
         {s?.kind === 'image' && !multi && <>
-          <label className="ctx-btn ctx-upload" title="Replace image">🖼 Replace<input aria-label="Replace image" type="file" accept="image/*" className="ctx-file" onChange={async e => { const file = e.target.files?.[0]; if (file) { try { const { src, ratio } = await loadImageFile(file); patch({ src, naturalRatio: ratio }); } catch { alert('Could not read this image.'); } } }} /></label>
+          <label className="ctx-btn ctx-upload" title="Replace image"><span aria-hidden="true">🖼</span><span className="sr-only">Replace image</span><input aria-label="Replace image" type="file" accept="image/*" className="ctx-file" onChange={async e => { const file = e.target.files?.[0]; if (file) { try { const { src, ratio } = await loadImageFile(file); patch({ src, naturalRatio: ratio }); } catch { alert('Could not read this image.'); } } }} /></label>
           <select aria-label="Image fit" title="Image fit" className="ctx-select" value={s.fit ?? 'contain'} onChange={e => patch({ fit: e.target.value as ShapeItem['fit'] })}><option value="contain">Fit</option><option value="cover">Fill / crop to box</option><option value="fill">Stretch</option></select>
-          {button(<>⇋ Flip</>, () => patch({ flipH: !s.flipH }), undefined, "Flip horizontal")}
+          {button(<span aria-hidden="true">⇋</span>, () => patch({ flipH: !s.flipH }), undefined, "Flip horizontal")}
         </>}
         {s && !multi && <>{sep()}{stepper("Item opacity %", opacityPercent(s.itemOpacity), v => patch({ itemOpacity: opacityAlpha(v) }), 0, 100, 5, { prefix: <span aria-hidden="true">◐</span> })}{toggle("Effects", <span aria-hidden="true">✨</span>)}</>}
         {surface === 'frame' && <>{swatch("Frame color", (theme.frame ?? DEFAULT_FRAME).color, color => p.patchTheme({ frame: { ...(theme.frame ?? DEFAULT_FRAME), color } }))}{toggle("Frame", <span aria-hidden="true">🖼</span>)}</>}
-        {surface === 'background' && <>{swatch("Color", theme.board, board => p.patchTheme({ board }))}{toggle("Gradient")}{toggle("Background effects")}</>}
-        {multi && (p.grouped ? button(<>▢ Ungroup</>, p.ungroup, undefined, "Ungroup") : button(<>▣ Group</>, p.group, undefined, "Group"))}
-        {!surface && <>{sep()}{toggle("Position")}</>}
+        {surface === 'background' && <>{swatch("Color", theme.board, board => p.patchTheme({ board }))}{toggle("Gradient", <span aria-hidden="true">◒</span>)}{toggle("Background effects", <span aria-hidden="true">✨</span>)}</>}
+        {multi && (p.grouped ? button(<span aria-hidden="true">▢</span>, p.ungroup, undefined, "Ungroup") : button(<span aria-hidden="true">▣</span>, p.group, undefined, "Group"))}
+        {!surface && <>{sep()}{toggle("Position", <span aria-hidden="true">✥</span>)}</>}
         {s && (
           <button
             type="button" className={`ctx-btn${panel === "More" ? " is-on" : ""}`}

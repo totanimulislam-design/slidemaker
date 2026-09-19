@@ -67,7 +67,7 @@ export default function SlidePicker({ deck, current, revision, onCurrent }: Prop
         title="Select a slide"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+          "flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2 text-sm transition-colors",
           open
             ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
             : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10",
