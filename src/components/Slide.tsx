@@ -30,6 +30,7 @@ import { HANDLES, applyMove, applyResize, applyRotate, type Gesture as FreeGestu
 import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
 import { measureElement } from "../lib/layoutMeasure";
 import MathText from "./MathText";
+import TextBgShapeBox, { textBgWrap } from "./TextBgShape";
 import ShapeLayer from "./ShapeLayer";
 import type { ShapeItem } from "../lib/shapes";
 
@@ -521,7 +522,11 @@ function SlideBase({
     const justify = tf.align === "left" ? "flex-start" : tf.align === "right" ? "flex-end" : tf.align === "center" ? "center" : undefined;
     return (
       <div style={justify ? { ...r.style, justifyContent: justify } : r.style}>
-        {r.content ? <span style={numberCss}>{inline ? <span style={inline}>{r.content}</span> : r.content}</span> : null}
+        {r.content ? (
+          <span style={numberCss}>
+            <TextBgShapeBox shape={tf.bgShape}>{inline ? <span style={inline}>{r.content}</span> : r.content}</TextBgShapeBox>
+          </span>
+        ) : null}
         {slash && (
           <span
             aria-hidden
@@ -851,7 +856,9 @@ function SlideBase({
             const lineText = (line: "top" | "bottom") => {
               const text = line === "top" ? header.brandTop : header.brandBottom;
               const inline = boxInlineCss(theme, line === "top" ? "brandTop" : "brandBottom") ?? boxInlineCss(theme, "brand");
-              return inline ? <span style={inline}>{text}</span> : text;
+              // the line's own background shape, else the block's shared one
+              const bg = brandLineTypeface(theme, line).bgShape;
+              return <TextBgShapeBox shape={bg}>{inline ? <span style={inline}>{text}</span> : text}</TextBgShapeBox>;
             };
             return (
               <div
@@ -903,7 +910,11 @@ function SlideBase({
                   >
                     {(() => {
                       const inline = boxInlineCss(theme, "title");
-                      return inline ? <span style={inline}>{header.title}</span> : header.title;
+                      return (
+                        <TextBgShapeBox shape={boxTypeface(theme, "title").bgShape}>
+                          {inline ? <span style={inline}>{header.title}</span> : header.title}
+                        </TextBgShapeBox>
+                      );
                     })()}
                   </div>
                 </div>
@@ -934,7 +945,7 @@ function SlideBase({
                   const plate = { ...DEFAULT_BADGE_PLATE, ...(theme.badgePlate ?? {}) };
                   const glyphs = (
                     <span style={{ display: "inline-block", opacity: badgeOpacity, ...offsetCss(badgeTf) }}>
-                      {badgeInline ? <span style={badgeInline}>{text}</span> : text}
+                      <TextBgShapeBox shape={badgeTf.bgShape}>{badgeInline ? <span style={badgeInline}>{text}</span> : text}</TextBgShapeBox>
                     </span>
                   );
                   if (!plate.enabled) return <span>{glyphs}</span>;
@@ -1007,6 +1018,7 @@ function SlideBase({
                 ...offsetCss(boxTypeface(theme, "question")),
               }}
               inlineStyle={boxInlineCss(theme, "question")}
+              wrap={textBgWrap(boxTypeface(theme, "question").bgShape)}
             />
             <Grip id="question" />
           </div>
@@ -1075,6 +1087,7 @@ function SlideBase({
                       ...offsetCss(boxTypeface(theme, "options")),
                     }}
                     inlineStyle={boxInlineCss(theme, "options")}
+                    wrap={textBgWrap(boxTypeface(theme, "options").bgShape)}
                   />
                   {correct && theme.answerStyle === "tick" && (
                     <span style={{ color: "#5cff9d", fontSize: optSize, fontWeight: 800, flexShrink: 0 }}>✓</span>
@@ -1098,6 +1111,7 @@ function SlideBase({
                 text={slide.note}
                 style={{ display: "block", ...offsetCss(boxTypeface(theme, "note")) }}
                 inlineStyle={boxInlineCss(theme, "note")}
+                wrap={textBgWrap(boxTypeface(theme, "note").bgShape)}
               />
               <Grip id="note" />
             </div>

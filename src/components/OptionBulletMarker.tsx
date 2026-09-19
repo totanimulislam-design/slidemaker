@@ -4,6 +4,7 @@ import { renderOptionBulletMarker, type OptionBulletShape } from "../lib/optionB
 import { optionBadgeStyle, type OptionStyle } from "../lib/optionStyles";
 import { universalStack } from "../lib/fonts";
 import { offsetCss, optionBulletTypeface, typefaceCss, typefaceInlineCss } from "../lib/boxFonts";
+import TextBgShapeBox from "./TextBgShape";
 
 /**
  * One option bullet: ink, fill, border and the background shape painted behind
@@ -66,7 +67,8 @@ export default function OptionBulletMarker({
   const nudge = offsetCss(tf, marker.innerStyle?.transform as string | undefined);
   const justify = tf.align === "left" ? "flex-start" : tf.align === "right" ? "flex-end" : tf.align === "center" ? "center" : undefined;
 
-  const letter = inline ? <span style={inline}>{marker.content}</span> : marker.content;
+  // the letter's own background shape sits between the glyph and the marker's fill
+  const letter = <TextBgShapeBox shape={tf.bgShape}>{inline ? <span style={inline}>{marker.content}</span> : marker.content}</TextBgShapeBox>;
 
   return (
     <span style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>

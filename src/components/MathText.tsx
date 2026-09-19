@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import katex from "katex";
 
 const TOKEN = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^$\n]*?\$|\\\([\s\S]+?\\\))/g;
@@ -28,10 +28,17 @@ interface Props {
    * wrapped fragment of it) instead of filling the whole box.
    */
   inlineStyle?: React.CSSProperties;
+  /**
+   * The part's background shape (components/TextBgShape `textBgWrap`): with
+   * scope "line" every line's glyphs are handed to `render` for a plate of
+   * their own; with scope "block" the whole text is, for one plate behind
+   * everything. Nothing is wrapped when it is absent.
+   */
+  wrap?: { scope: "line" | "block"; render: (children: ReactNode) => ReactNode };
 }
 
 /** Renders mixed Bangla/English text with inline $LaTeX$ / $$display$$ segments. */
-export default function MathText({ text, className, style, inlineStyle }: Props) {
+export default function MathText({ text, className, style, inlineStyle, wrap }: Props) {
   const lines = useMemo(() => {
     return (text ?? "").split("\n").map((line) => {
       const parts = line.split(TOKEN).filter((p) => p !== undefined && p !== "");
@@ -45,31 +52,35 @@ export default function MathText({ text, className, style, inlineStyle }: Props)
     });
   }, [text]);
 
+  const body = lines.map((parts, li) => (
+    // `plaintext` applies the Unicode bidi algorithm per line, so a Bangla,
+    // English or Arabic line each flows in its own natural direction.
+    <span key={li} style={{ display: "block", unicodeBidi: "plaintext" }}>
+      {(() => {
+        const nodes = parts.map((p, i) =>
+          p.type === "math" ? (
+            // equations are always left-to-right, even inside RTL sentences
+            <span
+              key={i}
+              className="math-seg"
+              dir="ltr"
+              style={{ unicodeBidi: "isolate", direction: "ltr" }}
+              dangerouslySetInnerHTML={{ __html: p.html }}
+            />
+          ) : (
+            <span key={i}>{p.value}</span>
+          ),
+        );
+        const glyphs = inlineStyle && parts.length ? <span style={inlineStyle}>{nodes}</span> : nodes;
+        // a plate per line hugs that line's glyphs; an empty line gets none
+        return wrap?.scope === "line" && parts.length ? wrap.render(glyphs) : glyphs;
+      })()}
+    </span>
+  ));
+
   return (
     <span className={className} style={style}>
-      {lines.map((parts, li) => (
-        // `plaintext` applies the Unicode bidi algorithm per line, so a Bangla,
-        // English or Arabic line each flows in its own natural direction.
-        <span key={li} style={{ display: "block", unicodeBidi: "plaintext" }}>
-          {(() => {
-            const nodes = parts.map((p, i) =>
-              p.type === "math" ? (
-                // equations are always left-to-right, even inside RTL sentences
-                <span
-                  key={i}
-                  className="math-seg"
-                  dir="ltr"
-                  style={{ unicodeBidi: "isolate", direction: "ltr" }}
-                  dangerouslySetInnerHTML={{ __html: p.html }}
-                />
-              ) : (
-                <span key={i}>{p.value}</span>
-              ),
-            );
-            return inlineStyle && parts.length ? <span style={inlineStyle}>{nodes}</span> : nodes;
-          })()}
-        </span>
-      ))}
+      {wrap?.scope === "block" ? wrap.render(body) : body}
     </span>
   );
 }

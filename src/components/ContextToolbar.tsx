@@ -27,6 +27,8 @@ import { shade } from "../lib/color";
 import { ensureFamily, faceStack, firstFamily, fontChoiceFor } from "../lib/fonts";
 import FontPicker from "./FontPicker";
 import TextEffectsEditor from "./TextEffectsEditor";
+import TextBgShapePanel from "./TextBgShapePanel";
+import { bgShapeIsOn, describeBgShape, type TextBgShape } from "../lib/textBgShape";
 import OptionBulletShapePicker from "./OptionBulletShapePicker";
 import OptionStylePicker from "./OptionStylePicker";
 import PlainNumberingPicker from "./PlainNumberingPicker";
@@ -502,6 +504,35 @@ export default function ContextToolbar(p: Props) {
     </button>
   );
   /**
+   * "Background shape" — the plate painted behind a text part. One button on
+   * every text toolbar, right before its Default, opening the pop-up with the
+   * presets, silhouettes, colours, border, transparency, effects and position.
+   * The icon fills in while the part has a plate on, so the state reads from
+   * the bar without opening the card.
+   */
+  const bgToggle = (name: string, shape: TextBgShape | undefined) => {
+    const on = bgShapeIsOn(shape);
+    const open = panel === name;
+    return (
+      <button
+        type="button"
+        className={cn("ctx-btn ctx-toggle ctx-icon-toggle", open && "is-on")}
+        title={`${name}: ${describeBgShape(shape)}`}
+        aria-label={name}
+        aria-pressed={open}
+        aria-expanded={open}
+        data-bg-shape={on ? "on" : "off"}
+        onClick={() => setPanel(open ? null : name)}
+      >
+        <svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true">
+          <rect x="1" y="1.5" width="16" height="13" rx="3.5" fill={on ? "currentColor" : "none"} fillOpacity={on ? 0.32 : 0} stroke="currentColor" strokeWidth="1.5" />
+          <text x="9" y="12" textAnchor="middle" fontSize="10.5" fontWeight="800" fill="currentColor" fontFamily="Inter, system-ui, sans-serif">A</text>
+        </svg>
+        <span className="ctx-caret" aria-hidden="true">▾</span>
+      </button>
+    );
+  };
+  /**
    * The font control reads the face the board really paints — "Kalpurush",
    * "Oswald" — drawn in that face, Canva-style, instead of naming the part it
    * belongs to ("Question text font"). The part stays in the accessible name
@@ -697,6 +728,20 @@ export default function ContextToolbar(p: Props) {
       content = effectsContent(el);
     }
   }
+  if (panel === "Background shape" && text) {
+    if (s && !multi) {
+      content = (
+        <TextBgShapePanel
+          value={s.textBgShape}
+          onChange={textBgShape => patch({ textBgShape })}
+          textColor={s.textColor || "#ffffff"}
+          accent={theme.accent}
+        />
+      );
+    } else if (el && el !== "logo") {
+      content = bgShapeContent(el);
+    }
+  }
   if (panel === "Frame") content = <FramePanel theme={theme} setTheme={p.patchTheme} />;
   if (panel === "Gradient") content = <GradientEditor label="Background gradient" value={p.background.gradient} fallback={theme.board} onChange={gradient => p.patchBackground({ gradient })} />;
   if (panel === "Background effects") content = (
@@ -806,6 +851,21 @@ export default function ContextToolbar(p: Props) {
       </div>
     );
   }
+  /** the Background shape card for one text part (title, badge, question, option, marker letter…) */
+  function bgShapeContent(part: BoxFontId): ReactNode {
+    const t = partTf(part);
+    return (
+      <div className="space-y-2">
+        <p className="ctx-menu-cap">{TEXT_PART_LABELS[part]} only — the plate behind its text</p>
+        <TextBgShapePanel
+          value={t.bgShape}
+          onChange={bgShape => setPart(part, { bgShape })}
+          textColor={partInk(part) || "#ffffff"}
+          accent={theme.accent}
+        />
+      </div>
+    );
+  }
   function fontContent(part: BoxFontId): ReactNode {
     return (
       <FontPicker
@@ -898,6 +958,7 @@ export default function ContextToolbar(p: Props) {
       );
     }
     if (panel === `${chip} position`) content = positionContent(part);
+    if (panel === `${chip} background shape`) content = bgShapeContent(part);
   }
 
   if (panel === "Banner shape" && optLine("titleBg")) content = (
@@ -1344,6 +1405,7 @@ export default function ContextToolbar(p: Props) {
             >
               <span className="ctx-kind">{MERGED_LINE[id].chip}</span>
               {lineControls(id)}
+              {LINE_PART[id] && bgToggle(`${MERGED_LINE[id].chip} background shape`, partTf(LINE_PART[id]!).bgShape)}
               {defaultBtn(MERGED_LINE[id].chip, () => applyReset(resetToolbarLine(id, theme)))}
             </div>
           ))}
@@ -1511,6 +1573,7 @@ export default function ContextToolbar(p: Props) {
         {surface === 'background' && <>{swatch("Color", theme.board, board => p.patchTheme({ board }))}{toggle("Gradient", <span aria-hidden="true">◒</span>)}{toggle("Background effects", <span aria-hidden="true">✨</span>)}</>}
         {multi && (p.grouped ? button(<span aria-hidden="true">▢</span>, p.ungroup, undefined, "Ungroup") : button(<span aria-hidden="true">▣</span>, p.group, undefined, "Group"))}
         {!surface && <>{sep()}{toggle("Position", <span aria-hidden="true">✥</span>)}</>}
+        {text && bgToggle("Background shape", s ? s.textBgShape : el && el !== "logo" ? partTf(el).bgShape : undefined)}
         {!inserting && !multi && (ak || themePill || layoutPill || surface || s || el) && defaultBtn(
           typeof kindLabel === "string" ? kindLabel : "toolbar",
           () => {
