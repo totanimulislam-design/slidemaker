@@ -384,6 +384,26 @@ export default function ContextToolbar(p: Props) {
   const popBox = useRef<{ x: number; y: number; w: number; h: number }>({ x: 0, y: 0, w: 480, h: 280 });
   const [popPos, setPopPos] = useState<{ x: number; y: number; w: number } | null>(null);
 
+  /**
+   * A pop-up card docks to the right edge of the window, hanging from just
+   * under the top bar. The bar flex-wraps, so its height is measured rather
+   * than assumed — re-measured when a card opens and on window resizes.
+   */
+  const [topBarH, setTopBarH] = useState(56);
+  useEffect(() => {
+    const measure = () => {
+      const bar = document.querySelector<HTMLElement>(".app-shell > header");
+      const bottom = Math.round(bar?.getBoundingClientRect().bottom ?? 0);
+      if (bottom > 0) setTopBarH(bottom);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [panel]);
+  /** right inset of the docked card, and the gap it hangs below the top bar */
+  const DOCK_INSET = 10;
+  const DOCK_GAP = 6;
+
   const measurePop = () => {
     const node = popRef.current;
     const r = node?.getBoundingClientRect();
@@ -911,19 +931,37 @@ export default function ContextToolbar(p: Props) {
             : surface || (multi ? `Group · ${p.count}` : text ? 'Text' : s?.kind || 'Image');
   const toolbarLabel = `${ak ? "answer" : themePill ? "theme" : layoutPill ? "layout" : layering ? "layers" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
 
+  const vhNow = () => (typeof window === "undefined" ? 800 : window.innerHeight);
   const popNode = content && (
     <div
       ref={popRef}
       role="dialog"
       aria-label={`${panel} settings`}
       data-pop-panel={panel}
-      className={cn("ctx-pop", popPos && "ctx-pop-floating", panel === "TextColor" && "ctx-pop-wide")}
-      style={popPos ? { left: popPos.x, top: popPos.y, width: panel === "TextColor" ? 380 : popPos.w } : panel === "TextColor" ? { width: 380 } : undefined}
+      className={cn("ctx-pop", popPos ? "ctx-pop-floating" : "ctx-pop-docked", panel === "TextColor" && "ctx-pop-wide")}
+      style={
+        popPos
+          ? // dragged free: follow the pointer, but never cross the viewport bottom
+            {
+              left: popPos.x,
+              top: popPos.y,
+              width: panel === "TextColor" ? 380 : popPos.w,
+              maxHeight: Math.max(140, vhNow() - popPos.y - 8),
+            }
+          : // docked: right edge of the window, just under the top bar, growing
+            // downward only as far as the content needs
+            {
+              top: topBarH + DOCK_GAP,
+              right: DOCK_INSET,
+              maxHeight: `calc(100vh - ${topBarH + DOCK_GAP + 10}px)`,
+              ...(panel === "TextColor" ? { width: 380 } : {}),
+            }
+      }
     >
       <div
         className="ctx-pop-head"
         data-pop-handle={panel}
-        title="Drag to move this panel · double-click to re-centre"
+        title="Drag to move this panel · double-click to re-dock it on the right"
         onPointerDown={startPopDrag}
         onPointerUp={endPop}
         onPointerCancel={endPop}
@@ -939,8 +977,8 @@ export default function ContextToolbar(p: Props) {
               type="button"
               className="ctx-btn"
               style={{ height: 24, minWidth: 24, padding: "0 6px" }}
-              title="Re-centre this panel under the toolbar"
-              aria-label="Re-centre panel"
+              title="Re-dock this panel on the right, under the top bar"
+              aria-label="Re-dock panel"
               onClick={() => movePop(null)}
             >
               ⌖

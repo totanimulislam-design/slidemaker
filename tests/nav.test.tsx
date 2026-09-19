@@ -449,9 +449,23 @@ export async function runNavTests(): Promise<CaseResult[]> {
   const pop = () => doc.querySelector<HTMLElement>(".context-toolbar .ctx-pop");
   const head = () => doc.querySelector<HTMLElement>(".context-toolbar .ctx-pop-head");
   out.push({
-    name: "the toolbar pop-up opens under the pill",
-    pass: pop()?.getAttribute("data-pop-panel") === "Answer",
-    detail: String(pop()?.getAttribute("data-pop-panel")),
+    name: "the toolbar pop-up opens docked on the right, under the top bar",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Answer" &&
+      !!pop()?.classList.contains("ctx-pop-docked") &&
+      !pop()?.classList.contains("ctx-pop-floating") &&
+      parseFloat(pop()?.style.top ?? "0") > 0 &&
+      parseFloat(pop()?.style.right ?? "0") > 0,
+    detail: `panel=${pop()?.getAttribute("data-pop-panel")} top=${pop()?.style.top} right=${pop()?.style.right}`,
+  });
+  out.push({
+    name: "the pop-up keeps its name and close mark in a pinned head above the body",
+    pass:
+      !!head()?.querySelector("[aria-label='Close toolbar panel']") &&
+      !!head()?.querySelector(".ctx-pop-title") &&
+      !!pop()?.querySelector(".ctx-pop-body") &&
+      head()?.nextElementSibling?.classList.contains("ctx-pop-body"),
+    detail: `head=${!!head()} body=${!!pop()?.querySelector(".ctx-pop-body")}`,
   });
 
   // a press that stays inside the 4px threshold is a click, never a drag
@@ -470,7 +484,7 @@ export async function runNavTests(): Promise<CaseResult[]> {
   out.push({
     name: "dragging the pop-up header moves the panel",
     pass:
-      // the floating class is what lifts the card out of its centred default
+      // the floating class is what lifts the card out of its docked default
       !!pop()?.classList.contains("ctx-pop-floating") &&
       parseFloat(pop()?.style.left ?? "0") === 80 &&
       parseFloat(pop()?.style.top ?? "0") === 80,
@@ -481,9 +495,12 @@ export async function runNavTests(): Promise<CaseResult[]> {
     head()?.dispatchEvent(new win.MouseEvent("dblclick", { bubbles: true, cancelable: true }));
   });
   out.push({
-    name: "double-clicking the header re-centres the pop-up",
-    pass: (pop()?.style.left ?? "x") === "",
-    detail: `left=${pop()?.style.left}`,
+    name: "double-clicking the header re-docks the pop-up on the right",
+    pass:
+      (pop()?.style.left ?? "x") === "" &&
+      !!pop()?.classList.contains("ctx-pop-docked") &&
+      parseFloat(pop()?.style.right ?? "0") > 0,
+    detail: `left=${pop()?.style.left} right=${pop()?.style.right}`,
   });
 
   /* ------------------ the insert destinations get tools too ---------------- */

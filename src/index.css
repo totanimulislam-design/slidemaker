@@ -202,15 +202,27 @@ input[type="text"] {
 .ctx-upload { position: relative; overflow: hidden; }
 .ctx-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .ctx-select { height: 30px; border-radius: 8px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); font-size: 12px; color: #e2e8f0; padding: 0 6px; cursor: pointer; max-width: 132px; }
-.ctx-pop { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); width: min(480px, 94vw); max-height: 400px; overflow: auto; border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(2,6,23,.98); box-shadow: 0 20px 50px rgba(0,0,0,.6); z-index: 40; padding: 10px 12px 12px; }
-/* after a real drag the card leaves the centred default and follows its own coords */
-.ctx-pop-floating { position: fixed; transform: none; margin: 0; z-index: 60; }
-.ctx-pop-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: grab; user-select: none; touch-action: none; }
+/* ---------------------------------------------------------------------- *
+ * Toolbar pop-up cards — docked on the right, under the top bar
+ * ---------------------------------------------------------------------- */
+/* The card a toolbar toggle opens docks to the right edge of the window: it
+   hangs from just under the top bar and stretches downward only as far as its
+   content needs (capped at the bottom of the viewport). The card is a column
+   whose head — the panel's name and its ✕ — sits OUTSIDE the scrolling body,
+   so both stay visible no matter how far the content is scrolled. The inline
+   `top` from ContextToolbar measures the real bar; 62px is only a fallback. */
+.ctx-pop { position: fixed; top: 62px; right: 10px; left: auto; transform: none; display: flex; flex-direction: column; width: min(480px, 94vw); max-height: calc(100vh - 74px); overflow: hidden; border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(2,6,23,.98); box-shadow: 0 20px 50px rgba(0,0,0,.6); z-index: 40; padding: 0; }
+/* after a real drag the card leaves the dock and follows its own coords */
+.ctx-pop-floating { right: auto; max-height: none; margin: 0; z-index: 60; }
+/* the head stays pinned above the body: the panel name + ✕ never scroll away */
+.ctx-pop-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 9px 12px 7px; border-bottom: 1px solid rgba(255,255,255,.08); cursor: grab; user-select: none; touch-action: none; }
 .ctx-pop-head:active { cursor: grabbing; }
 .ctx-pop-title { display: inline-flex; align-items: center; gap: 6px; }
 .ctx-grip { font-size: 12px; letter-spacing: -2px; opacity: .65; }
 .ctx-hint { font-size: 11px; color: #94a3b8; padding: 0 4px; white-space: nowrap; }
 .ctx-pop-head > span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #fcd34d; }
+/* only the body scrolls, under the pinned head */
+.ctx-pop-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 2px 12px 12px; }
 .ctx-field { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: #cbd5e1; padding: 6px 2px; }
 .ctx-menu-cap { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #64748b; margin: 8px 2px 4px; }
 .ctx-menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
@@ -280,11 +292,24 @@ input[type="text"] {
 }
 .ctx-pop-wide {
   width: min(380px, 96vw) !important;
-  max-height: 72vh;
 }
+/* the Canva colour card fills the docked card edge to edge: its own tab bar
+   and colour list scroll inside, under the pinned head (name + ✕) */
 .ctx-pop-wide .ctx-pop-body {
   padding: 0;
-  overflow: visible;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.ctx-pop-wide .font-color-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 /* FontColorPanel inner tweaks */
