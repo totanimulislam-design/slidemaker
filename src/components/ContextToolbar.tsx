@@ -13,7 +13,7 @@ import type { AlignOp } from "../lib/shapeAlign";
 import { usePointerDrag } from "../lib/dragSession";
 import { Z_LABELS, type ZOp } from "../lib/zorder";
 import { shade } from "../lib/color";
-import { ensureFamily } from "../lib/fonts";
+import { ensureFamily, faceStack, firstFamily, fontChoiceFor } from "../lib/fonts";
 import FontPicker from "./FontPicker";
 import TextEffectsEditor from "./TextEffectsEditor";
 import OptionBulletShapePicker from "./OptionBulletShapePicker";
@@ -466,6 +466,34 @@ export default function ContextToolbar(p: Props) {
       <span className="ctx-caret" aria-hidden="true">▾</span>
     </button>
   );
+  /**
+   * The font control reads the face the board really paints — "Kalpurush",
+   * "Oswald" — drawn in that face, Canva-style, instead of naming the part it
+   * belongs to ("Question text font"). The part stays in the accessible name
+   * and the tooltip, and `name` is still the key of the pop-up it opens.
+   * `inherited` marks a part with no face of its own (it follows the deck font).
+   */
+  const fontToggle = (name: string, family: string, inherited: boolean) => {
+    const shown = fontChoiceFor(family)?.label || family || "Default";
+    const on = panel === name;
+    const tag = inherited ? " (deck default)" : "";
+    return (
+      <button
+        type="button"
+        className={cn("ctx-btn ctx-toggle ctx-font-toggle", on && "is-on")}
+        title={`${name}: ${shown}${tag}`}
+        aria-label={`${name}: ${shown}${tag}`}
+        aria-pressed={on}
+        aria-expanded={on}
+        data-current-font={family || undefined}
+        data-inherited={inherited ? "true" : undefined}
+        onClick={() => setPanel(on ? null : name)}
+      >
+        <span className="ctx-font-name" style={family ? { fontFamily: faceStack(family) } : undefined}>{shown}</span>
+        <span className="ctx-caret" aria-hidden="true">▾</span>
+      </button>
+    );
+  };
   const sep = () => <span className="ctx-sep" aria-hidden="true" />;
   const stepper = (
     name: string, value: number, onChange: (v: number) => void,
@@ -544,6 +572,13 @@ export default function ContextToolbar(p: Props) {
     );
   };
 
+  // the face picked for this text itself, and what the board paints without
+  // one (a text box follows the question face): the toolbar's font button and
+  // the picker in its pop-up both name the current font from these two, never
+  // a bare "Default"
+  const textFontOwn = s ? (s.fontFamily ?? "") : el ? (tf.family ?? "") : "";
+  const textFontDeck = s ? boxFontLabel(theme, "question") : el ? textPartDeckFamily(theme, el) : "";
+
   let content: ReactNode = null;
   if (panel === "Font" && text) content = (
     <FontPicker
@@ -551,11 +586,8 @@ export default function ContextToolbar(p: Props) {
       script="all"
       compact
       previewTarget={s ? `shape:${s.id}` : el ? `box:${el}` : undefined}
-      // the face picked for this text itself; the fallback is what the board
-      // paints without one (a text box follows the question face), so the
-      // control always names the current font instead of a bare "Default"
-      value={s ? (s.fontFamily ?? "") : el ? (tf.family ?? "") : ""}
-      fallback={s ? boxFontLabel(theme, "question") : el ? textPartDeckFamily(theme, el) : ""}
+      value={textFontOwn}
+      fallback={textFontDeck}
       onChange={family => {
         ensureFamily(family);
         if (s) patch({ fontFamily: family });
@@ -967,10 +999,16 @@ export default function ContextToolbar(p: Props) {
         </span>
       ));
     };
-    const fontToggle = () => toggle(`${chip} font`, <span aria-hidden="true">A</span>);
+    // the line's font button names the face this part really paints with
+    // (its own, else the deck face it inherits); the pop-up stays keyed
+    // "<part> font" so the card's title still says which part it edits
+    const lineFontToggle = () => {
+      const own = firstFamily(t.family);
+      return fontToggle(`${chip} font`, own || (part ? textPartDeckFamily(theme, part) : ""), !own);
+    };
     const spacingToggle = () => toggle(`${chip} spacing`, <span aria-hidden="true">⇄</span>);
     const effectsToggle = () => toggle(`${chip} effects`, <span aria-hidden="true">✨</span>);
-    const positionToggle = () => toggle(`${chip} position`, <span aria-hidden="true\">✥</span>);
+    const positionToggle = () => toggle(`${chip} position`, <span aria-hidden="true">✥</span>);
     const textTail = () => (
       <>
         {sep()}
@@ -993,7 +1031,7 @@ export default function ContextToolbar(p: Props) {
       case "titleText":
         return (
           <>
-            {fontToggle()}
+            {lineFontToggle()}
             {stepper("Title size", theme.titleSize ?? 54, v => p.patchTheme({ titleSize: v }), 0, 99999, 1, { prefix: "Size" })}
             {fontColorBtn(
               `font:${id}`,
@@ -1015,7 +1053,7 @@ export default function ContextToolbar(p: Props) {
         const shown = p.header?.showBanner ?? true;
         return (
           <>
-            {toggle("Banner shape", <span aria-hidden="true\">▣</span>)}
+            {toggle("Banner shape", <span aria-hidden="true">▣</span>)}
             {swatch("Banner colour", banner.color, v => patchBanner({ color: v }), <span className="ctx-dot" style={{ background: banner.color }} />)}
             {toggle("Banner fill")}
             {stepper("Banner opacity %", Math.round(banner.opacity * 100), v => patchBanner({ opacity: Math.max(0, Math.min(1, v / 100)) }), 0, 100, 5, { prefix: "◐" })}
@@ -1039,7 +1077,7 @@ export default function ContextToolbar(p: Props) {
         const grad = partTf(partId).textGradient;
         return (
           <>
-            {fontToggle()}
+            {lineFontToggle()}
             {stepper(`Badge ${c.n} size`, theme[c.size] ?? c.fallback, v => patchLine({ [c.size]: v }), 0, 99999, 1, { prefix: "Size" })}
             {fontColorBtn(
               `font:${id}`,
@@ -1055,7 +1093,7 @@ export default function ContextToolbar(p: Props) {
             )}
             {button("auto", () => set({ color: "" }), !own, "Follow the shared brand colour")}
             {sep()}
-            {button(<span aria-hidden="true\">👁</span>, () => patchLine({ [c.show]: !shown }), shown, `Show / hide badge ${c.n}`)}
+            {button(<span aria-hidden="true">👁</span>, () => patchLine({ [c.show]: !shown }), shown, `Show / hide badge ${c.n}`)}
             {textTail()}
           </>
         );
@@ -1064,7 +1102,7 @@ export default function ContextToolbar(p: Props) {
       case "questionText":
         return (
           <>
-            {fontToggle()}
+            {lineFontToggle()}
             {stepper("Question size %", Math.round((lineFont.scale ?? 1) * 100), v => set({ scale: Math.max(0, v) / 100 }), 0, 99999, 5, { prefix: "Size" })}
             {fontColorBtn(
               `font:${id}`,
@@ -1085,11 +1123,11 @@ export default function ContextToolbar(p: Props) {
       case "questionBullet":
         return (
           <>
-            {toggle("Bullet design", <span aria-hidden="true\">⬤</span>)}
+            {toggle("Bullet design", <span aria-hidden="true">⬤</span>)}
             {stepper("Bullet size", theme.bulletSize ?? 54, v => p.patchTheme({ bulletSize: v }), 0, 99999, 1, { prefix: "Size" })}
             {swatch("Bullet colour", theme.accent, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: theme.accent }} />)}
             {sep()}
-            {button(<span aria-hidden="true\">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
+            {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
           </>
         );
 
@@ -1098,8 +1136,8 @@ export default function ContextToolbar(p: Props) {
         const grad = part ? partTf(part).textGradient : undefined;
         return (
           <>
-            {button(<span aria-hidden="true\">👁</span>, () => p.patchTheme({ showNumber: !theme.showNumber }), theme.showNumber, "Show / hide the number inside the bullet")}
-            {fontToggle()}
+            {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showNumber: !theme.showNumber }), theme.showNumber, "Show / hide the number inside the bullet")}
+            {lineFontToggle()}
             {stepper("Number size %", Math.round((lineFont.scale ?? 1) * 100), v => set({ scale: Math.max(0, v) / 100 }), 0, 99999, 5, { prefix: "Size" })}
             {fontColorBtn(
               `font:${id}`,
@@ -1130,7 +1168,7 @@ export default function ContextToolbar(p: Props) {
       case "optionText":
         return (
           <>
-            {fontToggle()}
+            {lineFontToggle()}
             {stepper("Option text size", theme.optionSize, optionSize => p.patchTheme({ optionSize }), 0, 99999, 1, { prefix: "Size" })}
             {fontColorBtn(
               `font:${id}`,
@@ -1152,8 +1190,8 @@ export default function ContextToolbar(p: Props) {
       case "optionBullet":
         return (
           <>
-            {toggle("Marker shape", <span aria-hidden="true\">⬤</span>)}
-            {toggle("Row style", <span aria-hidden="true\">▭</span>)}
+            {toggle("Marker shape", <span aria-hidden="true">⬤</span>)}
+            {toggle("Row style", <span aria-hidden="true">▭</span>)}
             {sep()}
             {swatch("Marker colour (auto base)", picked(theme.optionAccent), v => p.patchTheme({ optionAccent: v }), <span className="ctx-dot" style={{ background: picked(theme.optionAccent) }} />)}
             {swatch(`Marker fill${theme.optionBulletFill ? "" : " (auto until set)"}`, picked(theme.optionBulletFill || shade(optionBase, 0.2)), v => p.patchTheme({ optionBulletFill: v }), <span className="ctx-dot" style={{ background: picked(theme.optionBulletFill || shade(optionBase, 0.2)) }} />, "optionBulletFill")}
@@ -1181,8 +1219,8 @@ export default function ContextToolbar(p: Props) {
         const grad = part ? partTf(part).textGradient : undefined;
         return (
           <>
-            {toggle("Numbering", <span aria-hidden="true\">#</span>)}
-            {fontToggle()}
+            {toggle("Numbering", <span aria-hidden="true">#</span>)}
+            {lineFontToggle()}
             {sep()}
             {fontColorBtn(
               `font:${id}`,
@@ -1334,7 +1372,7 @@ export default function ContextToolbar(p: Props) {
           {sep()}
         </>}
         {text && <>
-          {toggle("Font")}
+          {fontToggle("Font", firstFamily(textFontOwn) || firstFamily(textFontDeck), !firstFamily(textFontOwn))}
           {stepper(s || sizeField ? "Font size" : "Size %", size, setSize, 0, 99999, 1, { dec: "Decrease font size", inc: "Increase font size", jump: 1 })}
           {sep()}
           {button(<span className="ctx-glyph-b">B</span>, () => s ? patch({ bold: !s.bold }) : fontPatch({ weight: (tf.weight ?? 400) >= 700 ? 400 : 700 }), s ? s.bold : (tf.weight ?? 400) >= 700, "Bold")}

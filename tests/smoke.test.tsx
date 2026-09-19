@@ -92,7 +92,8 @@ export async function runSmokeTests(): Promise<CaseResult[]> {
   // selection still works: clicking shows the selection frame (its edit options)
   fire(shape, "pointerdown", rect.left + rect.width * 0.3, rect.top + rect.height * 0.25, 1);
   fire(shape, "pointerup", rect.left + rect.width * 0.3, rect.top + rect.height * 0.25, 0);
-  out.push({ name: "shape selection shows contextual shape tools", pass: !!doc.querySelector('.context-toolbar [aria-label="Fill"]') && !doc.querySelector('.context-toolbar [aria-label="Font"]') });
+  // (the font button reads the face in use — "Font: Kalpurush" — so it is matched by prefix)
+  out.push({ name: "shape selection shows contextual shape tools", pass: !!doc.querySelector('.context-toolbar [aria-label="Fill"]') && !doc.querySelector('.context-toolbar .ctx-font-toggle, .context-toolbar [aria-label^="Font:"]') });
   const frame = doc.querySelector('.slide-editable [data-sel="g1"]');
   out.push({ name: "clicking a deck shape selects it and shows its handles", pass: !!frame && frame.querySelectorAll("[data-handle]").length === 8, detail: `frame=${!!frame} handles=${frame?.querySelectorAll("[data-handle]").length ?? 0}` });
   const still = `${shape.style.left},${shape.style.top}`;

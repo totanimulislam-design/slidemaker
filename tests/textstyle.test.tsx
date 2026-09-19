@@ -57,6 +57,17 @@ const barInput = (label: string, line?: string) =>
   doc.querySelector<HTMLInputElement>(`.context-toolbar ${line ? `[aria-label="${line}"] ` : ""}input[aria-label="${label}"]`);
 const barButton = (label: string, line?: string) =>
   doc.querySelector<HTMLElement>(`.context-toolbar ${line ? `[aria-label="${line}"] ` : ""}button[aria-label="${label}"]`);
+/**
+ * A toolbar line's font button. It reads the face in use ("Oswald"), not the
+ * part it belongs to ("Badge 1 font"), so it is found by what it is rather
+ * than by its label — the pop-up's own picker trigger carries the same
+ * attribute, which is why the lookup stays inside the line's toolbar.
+ */
+const barFontToggle = (line: string) =>
+  doc.querySelector<HTMLElement>(`.context-toolbar [role="toolbar"][aria-label="${line}"] button[data-current-font]`);
+/** what a toolbar font button shows, and the face it is drawn in */
+const fontToggleName = (b: HTMLElement | null) => b?.querySelector<HTMLElement>(".ctx-font-name")?.textContent?.trim() ?? "";
+const fontToggleFace = (b: HTMLElement | null) => b?.querySelector<HTMLElement>(".ctx-font-name")?.style.fontFamily ?? "";
 const pop = () => doc.querySelector<HTMLElement>(".context-toolbar .ctx-pop");
 const closePop = () => click(doc.querySelector(".context-toolbar .ctx-pop-head [aria-label='Close toolbar panel']"));
 /** the button of a SegButtons / toggle row by its visible text, inside the inspector */
@@ -127,6 +138,26 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
     name: "Badge 1 opens the full text toolkit for its own line",
     pass: !!aside().querySelector('[data-text-part="brandTop"]') && !!panelInput("Badge 1 size") && !!panelInput("Badge 1 opacity"),
     detail: Array.from(aside().querySelectorAll("input[aria-label]")).map((i) => i.getAttribute("aria-label")).join(", "),
+  });
+
+  // the toolbar's font button names the face the line really paints with —
+  // the deck's Latin face here, drawn in it — instead of reading "Badge 1 font";
+  // the part it edits stays in the accessible name
+  const badge1FontBtn = barFontToggle("Badge 1 tools");
+  out.push({
+    name: "the Badge 1 toolbar font button shows the current font (Oswald, deck default) instead of “Badge 1 font”",
+    pass:
+      fontToggleName(badge1FontBtn) === "Oswald" &&
+      fontToggleFace(badge1FontBtn).includes("Oswald") &&
+      badge1FontBtn?.getAttribute("data-inherited") === "true" &&
+      badge1FontBtn?.getAttribute("aria-label") === "Badge 1 font: Oswald (deck default)" &&
+      !barButton("Badge 1 font", "Badge 1 tools"),
+    detail: `${fontToggleName(badge1FontBtn) || "no button"} · ${fontToggleFace(badge1FontBtn)} · ${badge1FontBtn?.getAttribute("aria-label")}`,
+  });
+  out.push({
+    name: "…and so does every other line of the stack (Badge 2 reads Oswald too)",
+    pass: fontToggleName(barFontToggle("Badge 2 tools")) === "Oswald",
+    detail: fontToggleName(barFontToggle("Badge 2 tools")) || "no button",
   });
 
   type(panelInput("Badge 1 size"), "300");
@@ -257,6 +288,16 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
       !pickedTrigger?.hasAttribute("data-inherited"),
     detail: `${triggerName(pickedTrigger)} · ${triggerFace(pickedTrigger)} · ${pickedTrigger?.textContent}`,
   });
+  out.push({
+    name: "the toolbar's Badge 1 font button follows: it now reads Alkatra (drawn in Alkatra), Badge 2's still Oswald",
+    pass:
+      fontToggleName(barFontToggle("Badge 1 tools")) === "Alkatra" &&
+      fontToggleFace(barFontToggle("Badge 1 tools")).includes("Alkatra") &&
+      !barFontToggle("Badge 1 tools")?.hasAttribute("data-inherited") &&
+      barFontToggle("Badge 1 tools")?.getAttribute("aria-label") === "Badge 1 font: Alkatra" &&
+      fontToggleName(barFontToggle("Badge 2 tools")) === "Oswald",
+    detail: `${fontToggleName(barFontToggle("Badge 1 tools"))} / ${fontToggleName(barFontToggle("Badge 2 tools"))} · ${barFontToggle("Badge 1 tools")?.getAttribute("aria-label")}`,
+  });
   click(pickedTrigger);
   out.push({
     name: "…and the open list highlights Alkatra (pinned at the top of the catalogue) and offers “Back to deck default: Oswald”",
@@ -267,13 +308,17 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
   });
   click(pickedTrigger);
 
-  // the toolbar line's font pop-up reads the same face, and its "Back to deck
-  // default" row clears the override so Badge 1 paints with Oswald again
-  click(barButton("Badge 1 font"));
+  // the toolbar line's font button opens the same picker (the pop-up is still
+  // keyed "Badge 1 font", so its card says which part it edits), and its "Back
+  // to deck default" row clears the override so Badge 1 paints with Oswald again
+  click(barFontToggle("Badge 1 tools"));
   const barTrigger = pop()?.querySelector<HTMLElement>("button[data-current-font]") ?? undefined;
   out.push({
-    name: "the Badge 1 toolbar font pop-up names the picked face too (Alkatra)",
-    pass: pop()?.getAttribute("data-pop-panel") === "Badge 1 font" && barTrigger?.getAttribute("data-current-font") === "Alkatra",
+    name: "the Badge 1 toolbar font button opens the “Badge 1 font” pop-up, whose picker names the picked face too (Alkatra)",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Badge 1 font" &&
+      barFontToggle("Badge 1 tools")?.getAttribute("aria-expanded") === "true" &&
+      barTrigger?.getAttribute("data-current-font") === "Alkatra",
     detail: `${pop()?.getAttribute("data-pop-panel")} · ${barTrigger?.getAttribute("data-current-font")}`,
   });
   click(barTrigger);
@@ -286,6 +331,13 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
       backTrigger?.getAttribute("data-current-font") === "Oswald" &&
       backTrigger?.getAttribute("data-inherited") === "true",
     detail: `${brandLines()[0]?.style.fontFamily.split(",")[0]} · ${backTrigger?.getAttribute("data-current-font")} · inherited=${backTrigger?.getAttribute("data-inherited")}`,
+  });
+  out.push({
+    name: "…and the toolbar button reads Oswald (deck default) again",
+    pass:
+      fontToggleName(barFontToggle("Badge 1 tools")) === "Oswald" &&
+      barFontToggle("Badge 1 tools")?.getAttribute("data-inherited") === "true",
+    detail: `${fontToggleName(barFontToggle("Badge 1 tools"))} · inherited=${barFontToggle("Badge 1 tools")?.getAttribute("data-inherited")}`,
   });
   closePop();
 
@@ -348,6 +400,15 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
 
   /* ------------------------------ Question --------------------------------- */
   nav("questionText");
+  out.push({
+    name: "the question stack's font buttons read the deck's Bangla face (Kalpurush) — and the Latin one for the bullet's number",
+    pass:
+      fontToggleName(barFontToggle("Question text tools")) === "Kalpurush" &&
+      fontToggleName(barFontToggle("Text inside question bullet tools")) === "Oswald" &&
+      !barButton("Question text font", "Question text tools") &&
+      !barButton("Q bullet text font", "Text inside question bullet tools"),
+    detail: `${fontToggleName(barFontToggle("Question text tools"))} · ${fontToggleName(barFontToggle("Text inside question bullet tools"))}`,
+  });
   type(panelInput("Question text line spacing"), "2.5");
   out.push({
     name: "question line spacing lands on the stem's own node (bullet untouched)",
@@ -383,6 +444,15 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
 
   /* --------------------- letter inside the option markers ------------------ */
   nav("optionBulletText");
+  out.push({
+    name: "the options stack's font buttons read the current faces too (option text · marker letter: Kalpurush)",
+    pass:
+      fontToggleName(barFontToggle("Option text tools")) === "Kalpurush" &&
+      fontToggleName(barFontToggle("Text inside option bullet tools")) === "Kalpurush" &&
+      !barButton("Option text font", "Option text tools") &&
+      !barButton("Bullet text font", "Text inside option bullet tools"),
+    detail: `${fontToggleName(barFontToggle("Option text tools"))} · ${fontToggleName(barFontToggle("Text inside option bullet tools"))}`,
+  });
   const before = optionMarker();
   const boxSizeBefore = `${before.box?.style.width}×${before.box?.style.height}`;
   const letterSizeBefore = before.letter?.style.fontSize;
@@ -475,12 +545,35 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
     pass: noteBox()?.style.letterSpacing === "2px",
     detail: noteBox()?.style.letterSpacing,
   });
+  // the plain (single-line) toolbar's font button reads the face too, not "Font"
+  const noteFontBtn = barFontToggle("Text tools");
+  out.push({
+    name: "the footnote's plain toolbar shows its current font (Kalpurush, deck default) in place of a bare “Font” button",
+    pass:
+      fontToggleName(noteFontBtn) === "Kalpurush" &&
+      noteFontBtn?.getAttribute("aria-label") === "Font: Kalpurush (deck default)" &&
+      !barButton("Font"),
+    detail: `${fontToggleName(noteFontBtn) || "no button"} · ${noteFontBtn?.getAttribute("aria-label")}`,
+  });
 
   /* ------------------------------ Custom text box -------------------------- */
   nav("shapes");
   click(doc.querySelector('.context-toolbar [aria-label="Text box"]') ?? doc.querySelector('.context-toolbar [aria-label="Text"]'));
   const shapeText = () => doc.querySelector<HTMLElement>(".slide-editable [data-shape] span[style]");
   const hadShape = !!doc.querySelector(".slide-editable [data-shape]");
+  // a drawn text box follows the question face until it gets one of its own
+  out.push({
+    name: "a custom text box's toolbar names the face it inherits (the question's Kalpurush) and opens the Font pop-up from it",
+    pass: (() => {
+      const b = barFontToggle("Text tools");
+      if (fontToggleName(b) !== "Kalpurush" || b?.getAttribute("data-inherited") !== "true") return false;
+      click(b);
+      const ok = pop()?.getAttribute("data-pop-panel") === "Font" && pop()?.querySelector("button[data-current-font]")?.getAttribute("data-current-font") === "Kalpurush";
+      closePop();
+      return ok;
+    })(),
+    detail: `${fontToggleName(barFontToggle("Text tools")) || "no button"} · inherited=${barFontToggle("Text tools")?.getAttribute("data-inherited")}`,
+  });
   const textTab = Array.from(aside().querySelectorAll<HTMLElement>("button")).find((b) => b.textContent?.trim() === "Text");
   click(textTab);
   const effectBtn = panelButton("Text effect: Splice") ?? doc.querySelector<HTMLElement>('.context-toolbar button[aria-label="Text effect: Splice"]');
