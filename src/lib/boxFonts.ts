@@ -472,17 +472,21 @@ export function clearBoxFont(fonts: BoxFonts | undefined, id: BoxFontId): BoxFon
   return next;
 }
 
-export function boxFontLabel(theme: ThemeSettings, id: BoxFontId): string {
-  const tf =
-    id === "brandTop" || id === "brandBottom"
-      ? brandLineTypeface(theme, id === "brandTop" ? "top" : "bottom")
-      : id === "optionBullet"
-        ? optionBulletTypeface(theme)
-        : boxTypeface(theme, id);
-  if (tf.family) return tf.family;
-  const script = tf.script ?? BOX_DEFAULT_SCRIPT[id];
+/**
+ * The deck face a text part is painted with when it has no family of its own:
+ * the Bangla / English / Arabic default of the part's script. This is what the
+ * board really draws for an un-overridden part, so a font control shows it as
+ * the current face (tagged as the deck default) instead of a bare "Default".
+ */
+export function textPartDeckFamily(theme: ThemeSettings, id: BoxFontId): string {
+  const script = textPartTypeface(theme, id).script ?? BOX_DEFAULT_SCRIPT[id];
   const raw = script === "latin" ? theme.latinFont : script === "arabic" ? theme.arabicFont : theme.bengaliFont;
-  return toSingleFamily(raw) || "Default";
+  return toSingleFamily(raw);
+}
+
+/** the family a text part is really painted with — its own, else the deck face */
+export function boxFontLabel(theme: ThemeSettings, id: BoxFontId): string {
+  return textPartTypeface(theme, id).family || textPartDeckFamily(theme, id) || "Default";
 }
 
 export const WEIGHTS = [

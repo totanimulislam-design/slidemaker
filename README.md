@@ -228,7 +228,7 @@ controls — in their inspector destination **and** on their toolbar line:
 
 | Control | Where it lands |
 | --- | --- |
-| **Font** — the curated library plus **all 1,908 Google Fonts** (searchable, paged, hover to preview; a family is loaded with the weights it really ships) | `boxFonts[part].family` |
+| **Font** — the curated library plus **all 1,908 Google Fonts** (searchable, paged, hover to preview; a family is loaded with the weights it really ships). The control always **names the face the board really paints**, drawn in that face: a part with no font of its own reads the deck face it inherits (e.g. *Kalpurush · deck default*) rather than a bare "Default", the open list highlights it, and *Back to deck default* clears an override | `boxFonts[part].family` |
 | **Font size, 0 → ∞** — the number field has no upper clamp (the slider covers the practical range) | the part's deck size (`titleSize`, `badgeSize`, `brandTopSize`…) or its `%` scale |
 | **Font colour** (with *auto* back to the shared / design colour) | the part's own ink field (`brandTopColor`, `optionBulletInk`…) |
 | **Bold · Italic · Underline · Strikethrough**, **weight** | `weight`, `italic`, `underline`, `strikethrough` |

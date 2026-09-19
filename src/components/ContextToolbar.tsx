@@ -6,7 +6,7 @@ import type {
 import { DEFAULT_BANNER, DEFAULT_FRAME, ELEMENT_LABELS } from "../lib/types";
 import { TEXT_GRADIENT_PRESETS } from "../lib/banner";
 import {
-  TEXT_PART_LABELS, WEIGHTS, boxFontLabel, boxTypeface, elementInk, opacityAlpha, opacityPercent, patchTextPart, setBoxFont, setElementInk, textPartTypeface,
+  TEXT_PART_LABELS, WEIGHTS, boxFontLabel, boxTypeface, elementInk, opacityAlpha, opacityPercent, patchTextPart, setBoxFont, setElementInk, textPartDeckFamily, textPartTypeface,
 } from "../lib/boxFonts";
 import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, type ShapeItem, type ShapeKind } from "../lib/shapes";
 import type { AlignOp } from "../lib/shapeAlign";
@@ -551,7 +551,11 @@ export default function ContextToolbar(p: Props) {
       script="all"
       compact
       previewTarget={s ? `shape:${s.id}` : el ? `box:${el}` : undefined}
-      value={s?.fontFamily || (el ? boxFontLabel(theme, el) : "")}
+      // the face picked for this text itself; the fallback is what the board
+      // paints without one (a text box follows the question face), so the
+      // control always names the current font instead of a bare "Default"
+      value={s ? (s.fontFamily ?? "") : el ? (tf.family ?? "") : ""}
+      fallback={s ? boxFontLabel(theme, "question") : el ? textPartDeckFamily(theme, el) : ""}
       onChange={family => {
         ensureFamily(family);
         if (s) patch({ fontFamily: family });
@@ -594,7 +598,7 @@ export default function ContextToolbar(p: Props) {
   );
   if (panel === "Effects" && text) {
     if (s && !multi) {
-      content = <ShapeDesignPanel shape={s} onChange={patch} />;
+      content = <ShapeDesignPanel shape={s} onChange={patch} fallbackFamily={boxFontLabel(theme, "question")} />;
     } else if (el) {
       content = effectsContent(el);
     }
@@ -716,6 +720,7 @@ export default function ContextToolbar(p: Props) {
         compact
         previewTarget={partPreview(part)}
         value={partTf(part).family ?? ""}
+        fallback={textPartDeckFamily(theme, part)}
         onChange={family => {
           ensureFamily(family);
           setPart(part, { family: family || undefined });

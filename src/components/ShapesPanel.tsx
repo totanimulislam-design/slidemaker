@@ -53,6 +53,8 @@ interface Props {
   hideImageInsert?: boolean;
   /** Scope is controlled by the inspector's main Apply Changes bar. */
   managedScope?: boolean;
+  /** the face a text box without a font of its own is painted with (see ShapeDesignPanel) */
+  fallbackFamily?: string;
 }
 
 export type InsertScope = { mode: "this" } | { mode: "selected"; ids: string[] } | { mode: "all" };
@@ -85,6 +87,7 @@ export default function ShapesPanel({
   layersPanel,
   managedScope = false,
   hideImageInsert = false,
+  fallbackFamily,
 }: Props) {
   const [scopeMode, setScopeMode] = useState<"this" | "selected" | "all">("this");
   const [pickedIds, setPickedIds] = useState<string[]>([]);
@@ -812,6 +815,7 @@ export default function ShapesPanel({
             shape={sel}
             onChange={(p) => onChange(sel.id, p)}
             onApplyToAll={(style, sameKind) => onApplyDesign(style, sameKind ? sel.kind : null, sel.id)}
+            fallbackFamily={fallbackFamily}
           />
 
           {/* ------------------------------ geometry ---------------------------- */}

@@ -27,7 +27,7 @@ import AnswerKeyPanel from "./AnswerKeyPanel";
 import LayersPanel from "./LayersPanel";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
-import { elementInk, setElementInk } from "../lib/boxFonts";
+import { boxFontLabel, elementInk, setElementInk } from "../lib/boxFonts";
 import { MATH_SNIPPETS } from "../lib/presets";
 import { type ScriptId } from "../lib/fonts";
 import ThemePanel from "./ThemePanel";
@@ -816,6 +816,7 @@ export default function Inspector({
               managedScope
               hideImageInsert
               layersPanel={layersList()}
+              fallbackFamily={boxFontLabel(T, "question")}
             />
           </>
         )}
