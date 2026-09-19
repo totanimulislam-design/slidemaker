@@ -466,6 +466,20 @@ export function ensureFamily(family: string | undefined): void {
   ensureFontStylesheet([meta ?? { family, weights: "400;500;600;700" }]);
 }
 
+/** the first concrete family of a value that may still be a legacy CSS stack ("" when empty) */
+export const firstFamily = (value: string | undefined): string =>
+  (value ?? "").split(",")[0]?.trim().replace(/^['"]|['"]$/g, "") || "";
+
+/**
+ * The CSS stack a family's NAME is drawn in wherever a control shows it (the
+ * font picker's trigger, the toolbar's font button): the face itself, then a
+ * script-appropriate safety net (see previewStack) — or a plain best-effort
+ * chain for an uploaded / unknown face.
+ */
+export function faceStack(family: string, choice: FontChoice | undefined = fontChoiceFor(family)): string {
+  return choice ? previewStack(choice) : `'${family.replace(/'/g, "")}', 'Noto Sans Bengali', sans-serif`;
+}
+
 /** parses a CSS font-family value into concrete family names */
 export function cleanFamily(value: string): string[] {
   return value

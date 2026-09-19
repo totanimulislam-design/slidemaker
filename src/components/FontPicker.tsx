@@ -13,7 +13,7 @@ import {
 import { addCustomFontFile, customFontChoices, listCustomFonts, onCustomFontsChanged, removeCustomFont, type CustomFont } from "../lib/customFonts";
 import { cn } from "../utils/cn";
 import { useFontPreview } from "../lib/fontPreview";
-import { ensureFamily, ensureFontStylesheet, fontChoiceFor, preloadFontLibrary } from "../lib/fonts";
+import { ensureFamily, ensureFontStylesheet, faceStack, firstFamily, fontChoiceFor, preloadFontLibrary } from "../lib/fonts";
 import { googleFontChoices, googleFontCount } from "../lib/googleFonts";
 
 interface Props {
@@ -61,10 +61,6 @@ const KIND_LABEL: Record<FC["kind"], string> = {
   traditional: "Traditional",
 };
 
-/** the first concrete family of a value that may still be a legacy CSS stack */
-const firstFamily = (value: string | undefined): string =>
-  (value ?? "").split(",")[0]?.trim().replace(/^['"]|['"]$/g, "") || "";
-
 /** family names compare case-insensitively (a saved deck may differ in case) */
 const sameFamily = (a: string, b: string): boolean => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
@@ -76,10 +72,6 @@ function choiceFor(family: string): FontChoice | undefined {
   if (!family) return undefined;
   return customFontChoices().find((f) => sameFamily(f.family, family)) ?? fontChoiceFor(family);
 }
-
-/** the CSS stack a face is previewed in — the face itself, then a safety net */
-const faceStack = (family: string, choice: FontChoice | undefined): string =>
-  choice ? previewStack(choice) : `'${family.replace(/'/g, "")}', 'Noto Sans Bengali', sans-serif`;
 
 export default function FontPicker({ value, onChange, label, fallback, script, kinds, compact, grouped, previewTarget }: Props) {
   /** the face picked for this control itself ("" = none of its own) */
