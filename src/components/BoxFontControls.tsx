@@ -10,29 +10,6 @@ import {
 } from "../lib/boxFonts";
 import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
 import FontPicker from "./FontPicker";
-import { Field, SegButtons, Slider, Toggle } from "./ui";
-import { cn } from "../utils/cn";
-import { ELEMENT_LABELS } from "../lib/types";
-
-interface Props {
-  theme: ThemeSettings;
-  setTheme: (patch: Partial<ThemeSettings>) => void;
-  selected: ElementId;
-  compact?: boolean;
-}
-
-import type { ElementId, ThemeSettings } from "../lib/types";
-import {
-  BOX_DEFAULT_SCRIPT,
-  BOX_FONT_IDS,
-  WEIGHTS,
-  boxFontLabel,
-  boxTypeface,
-  clearBoxFont,
-  setBoxFont,
-} from "../lib/boxFonts";
-import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
-import FontPicker from "./FontPicker";
 import { ColorInput, Field, SegButtons, Slider, Toggle } from "./ui";
 import { cn } from "../utils/cn";
 import { ELEMENT_LABELS } from "../lib/types";
