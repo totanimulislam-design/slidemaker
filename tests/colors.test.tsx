@@ -365,6 +365,92 @@ export async function runColorTests(): Promise<CaseResult[]> {
     if (gradientTab) {
       click(gradientTab);
       await frame(); await frame();
+
+      /* -------------------------------------------------------------- *
+       * The custom builder is the FULL editor — linear · radial · mesh and
+       * as many colour stops as you like — and the preset swatches spend no
+       * room on colour names (the name is a tooltip).
+       * -------------------------------------------------------------- */
+      const byText = (t: string) =>
+        Array.from(doc.querySelectorAll<HTMLElement>('.font-color-panel button')).find(
+          b => b.textContent?.trim() === t
+        ) ?? null;
+
+      const swatches = Array.from(
+        doc.querySelectorAll<HTMLElement>('.font-color-panel [data-gradient-swatch]')
+      );
+      const stillNamed = swatches.filter(s => (s.textContent || '').trim() !== '');
+      out.push({
+        name: "default gradient swatches print no colour names (name is a tooltip)",
+        pass: swatches.length >= 20 && stillNamed.length === 0 && swatches.every(s => !!s.getAttribute('title')),
+        detail: `${swatches.length} swatches · ${stillNamed.length} still printing a name`,
+      });
+
+      const typeLabels = ["Linear", "Radial", "Mesh"];
+      const typeBtns = typeLabels.map(byText);
+      out.push({
+        name: "custom gradient builder offers linear, radial and mesh",
+        pass: typeBtns.every(Boolean),
+        detail: typeLabels.map((l, i) => `${l}=${!!typeBtns[i]}`).join(" · "),
+      });
+
+      const stopCount = () => doc.querySelectorAll('.font-color-panel [data-stop-knob]').length;
+      const stopsBefore = stopCount();
+      const addStop = byText("+ stop");
+      click(addStop);
+      await frame(); await frame();
+      const stopsAfter = stopCount();
+      out.push({
+        name: "custom gradient builder adds a colour stop",
+        pass: stopsBefore >= 2 && stopsAfter === stopsBefore + 1,
+        detail: `${stopsBefore} stops → ${stopsAfter} stops`,
+      });
+
+      /** the question's gradient-text node — the one clipped to the glyphs */
+      const questionGradientCss = () => {
+        const box = doc.querySelector<HTMLElement>('.slide-editable [data-el="question"]');
+        for (const node of Array.from(box?.querySelectorAll<HTMLElement>("*") ?? [])) {
+          const st = node.getAttribute("style") || "";
+          if (!st.includes("background-clip")) continue;
+          const m = /background-image:\s*([^;]+)/.exec(st);
+          if (m) return m[1];
+        }
+        return "";
+      };
+      /** pick a gradient type in the builder and read what it painted */
+      const paintType = async (type: string) => {
+        click(byText(type));
+        await frame(); await frame();
+        return questionGradientCss();
+      };
+
+      const meshCss = await paintType("Mesh");
+      out.push({
+        name: "mesh from the builder paints the text as layered colour blobs",
+        pass: meshCss.includes("radial-gradient") && !/at 50% 50%/.test(meshCss),
+        detail: meshCss.slice(0, 70) || "no gradient painted",
+      });
+
+      const radialCss = await paintType("Radial");
+      out.push({
+        name: "radial from the builder paints the text from its centre",
+        pass: /radial-gradient\([^)]*at 50% 50%/.test(radialCss),
+        detail: radialCss.slice(0, 70) || "no gradient painted",
+      });
+
+      const linearCss = await paintType("Linear");
+      out.push({
+        name: "linear from the builder paints the text along its angle",
+        pass: /^linear-gradient\(/.test(linearCss),
+        detail: linearCss.slice(0, 70) || "no gradient painted",
+      });
+
+      out.push({
+        name: "the builder accumulates edits — an added stop survives later ones",
+        pass: stopsAfter > stopsBefore && stopCount() === stopsAfter,
+        detail: `${stopsBefore} → ${stopsAfter} stops · still ${stopCount()} after three type changes`,
+      });
+
       const afterPanel = doc.querySelector<HTMLElement>('.font-color-panel');
       const seeAllBtn = afterPanel ? Array.from(afterPanel.querySelectorAll('button')).find(b => /See all.*gradients/i.test(b.textContent || '')) : null;
       const gradGrid = afterPanel?.querySelectorAll('button');
