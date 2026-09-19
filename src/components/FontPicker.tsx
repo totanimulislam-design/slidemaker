@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  FONT_BY_FAMILY,
   FONT_GROUPS,
   FONT_LIBRARY,
   type FontChoice,
@@ -14,7 +13,7 @@ import {
 import { addCustomFontFile, customFontChoices, listCustomFonts, onCustomFontsChanged, removeCustomFont, type CustomFont } from "../lib/customFonts";
 import { cn } from "../utils/cn";
 import { useFontPreview } from "../lib/fontPreview";
-import { ensureFamily, ensureFontStylesheet, preloadFontLibrary } from "../lib/fonts";
+import { ensureFamily, ensureFontStylesheet, fontChoiceFor, preloadFontLibrary } from "../lib/fonts";
 import { googleFontChoices, googleFontCount } from "../lib/googleFonts";
 
 interface Props {
@@ -22,6 +21,15 @@ interface Props {
   value: string;
   onChange: (family: string) => void;
   label: string;
+  /**
+   * The family painted when `value` is empty — a text part's deck face, the
+   * face a drawn text box inherits. The picker shows it as the current font
+   * (tagged “deck default”) and highlights it in the list, so the control
+   * never reads a bare “Default” while the board is really drawing Kalpurush.
+   * Picking a face writes an override; “Back to deck default” clears it
+   * (`onChange("")`).
+   */
+  fallback?: string;
   /** one script, or `"all"` for every script filed under language groups */
   script: FontScript | "all";
   /** restrict to a subset of kinds */
@@ -53,8 +61,35 @@ const KIND_LABEL: Record<FC["kind"], string> = {
   traditional: "Traditional",
 };
 
-export default function FontPicker({ value, onChange, label, script, kinds, compact, grouped, previewTarget }: Props) {
-  const current = value.split(",")[0]?.trim().replace(/^['"]|['"]$/g, "") || "";
+/** the first concrete family of a value that may still be a legacy CSS stack */
+const firstFamily = (value: string | undefined): string =>
+  (value ?? "").split(",")[0]?.trim().replace(/^['"]|['"]$/g, "") || "";
+
+/** family names compare case-insensitively (a saved deck may differ in case) */
+const sameFamily = (a: string, b: string): boolean => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+
+/**
+ * Everything the picker knows about a family: an uploaded face first (it may
+ * shadow a library name), then the curated library, then the Google catalogue.
+ */
+function choiceFor(family: string): FontChoice | undefined {
+  if (!family) return undefined;
+  return customFontChoices().find((f) => sameFamily(f.family, family)) ?? fontChoiceFor(family);
+}
+
+/** the CSS stack a face is previewed in — the face itself, then a safety net */
+const faceStack = (family: string, choice: FontChoice | undefined): string =>
+  choice ? previewStack(choice) : `'${family.replace(/'/g, "")}', 'Noto Sans Bengali', sans-serif`;
+
+export default function FontPicker({ value, onChange, label, fallback, script, kinds, compact, grouped, previewTarget }: Props) {
+  /** the face picked for this control itself ("" = none of its own) */
+  const explicit = firstFamily(value);
+  /** the face painted while nothing is picked (a deck default) */
+  const fallbackFamily = firstFamily(fallback);
+  /** true when the board draws the deck face because no override exists */
+  const inherited = !explicit && !!fallbackFamily;
+  /** the family really painted right now — what the control must show */
+  const current = explicit || fallbackFamily;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -66,9 +101,12 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
 
   const { setPreview, clearPreview } = useFontPreview();
 
-  // clear live preview when dropdown closes
+  // closing the dropdown clears the live preview and the search, so the next
+  // open starts from the whole list with the current face highlighted
   useEffect(() => {
-    if (!open) clearPreview();
+    if (open) return;
+    clearPreview();
+    setQuery("");
   }, [open, clearPreview]);
 
   /** every face the dropdown offers, in the order it will be shown */
@@ -88,20 +126,22 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
 
     const fonts = [...mine, ...builtIn];
     const out: Section[] = [];
-    // a face saved on an older deck stays reachable even if it left the library
-    const known = fonts.some((f) => f.family.toLowerCase() === current.toLowerCase());
+    // the face in use always heads the list when the curated library does not
+    // carry it — a Google family, or a face saved on an older deck that has
+    // since left the library — with the catalogue's real metadata when known
+    const known = fonts.some((f) => sameFamily(f.family, current));
     const saved: FontChoice | null =
       current && !known
-        ? {
+        ? (choiceFor(current) ?? {
             family: current,
             label: current,
-            script: FONT_BY_FAMILY.get(current.toLowerCase())?.script ?? "bangla",
+            script: "bangla",
             kind: "sans",
             sample: "Aa বাংলا العربية",
             weights: "400;500;600;700;800",
-          }
+          })
         : null;
-    if (saved && hit(saved)) out.push({ id: "saved", label: "Saved font", fonts: [saved] });
+    if (saved && hit(saved)) out.push({ id: "saved", label: "Current font", fonts: [saved] });
     for (const g of FONT_GROUPS) {
       const inGroup = fonts.filter((f) => fontGroupId(f) === g.id);
       if (inGroup.length) out.push({ id: g.id, label: g.label, fonts: sortGroupFonts(inGroup, g.id) });
@@ -122,18 +162,27 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
     const q = query.trim().toLowerCase();
     const listed = new Set(sections.flatMap((sec) => sec.fonts.map((f) => f.family.toLowerCase())));
     for (const f of FONT_LIBRARY) listed.add(f.family.toLowerCase());
-    return googleFontChoices().filter(
+    const rows = googleFontChoices().filter(
       (f) =>
         !listed.has(f.family.toLowerCase()) &&
         (all || f.script === script) &&
         (!kinds || kinds.includes(f.kind)) &&
         (!q || f.family.toLowerCase().includes(q)),
     );
-  }, [sections, all, script, kinds, query]);
+    // the face in use is pinned to the front of the catalogue, so it is
+    // painted (and highlighted) on the first page instead of hiding on page 9
+    const i = rows.findIndex((f) => sameFamily(f.family, current));
+    if (i > 0) rows.unshift(...rows.splice(i, 1));
+    return rows;
+  }, [sections, all, script, kinds, query, current]);
   const googleShown = google.slice(0, GOOGLE_PAGE * googlePage);
 
   const list = sections.flatMap((s) => s.fonts);
-  const chosen = FONT_LIBRARY.find((f) => f.family === current) ?? googleFontChoices().find((f) => f.family === current);
+  // (`custom` is a dependency so an upload / removal re-runs the lookup)
+  const chosen = useMemo(() => choiceFor(current), [current, custom]);
+  const fallbackChoice = useMemo(() => choiceFor(fallbackFamily), [fallbackFamily, custom]);
+  /** the trigger shows the face's own name, drawn in that face */
+  const shownName = chosen?.label || current || "Default";
 
   // the list is long once every script is included, so reveal the picked face
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -164,8 +213,13 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
         )}
       </span>
 
-      {/* trigger */}
+      {/* trigger — names the face in use, drawn in that face */}
       <button
+        type="button"
+        aria-label={`${label}: ${shownName}${inherited ? " (deck default)" : ""}`}
+        title={inherited ? `${shownName} — the deck default; pick a face to override it` : shownName}
+        data-current-font={current || undefined}
+        data-inherited={inherited ? "true" : undefined}
         onClick={() => {
           setOpen((v) => !v);
           if (!open) preloadFontLibrary();
@@ -177,15 +231,25 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
         )}
       >
         <span
-          className="min-w-0 flex-1 truncate text-slate-100"
+          className="min-w-0 flex-1 truncate"
           style={{
-            fontFamily: chosen ? previewStack(chosen) : `'${current}', sans-serif`,
+            fontFamily: current ? faceStack(current, chosen) : undefined,
             fontSize: compact ? 15 : 17,
             lineHeight: 1.2,
           }}
         >
-          {chosen ? chosen.sample : current || "Default"}
+          <span className="text-slate-100">{shownName}</span>
+          {chosen && (
+            <span className="ml-2 text-slate-500" style={{ fontSize: compact ? 12 : 13 }}>
+              {chosen.sample}
+            </span>
+          )}
         </span>
+        {inherited && (
+          <span className="shrink-0 rounded bg-white/10 px-1 py-0.5 text-[9px] text-slate-400" title="No font of its own — follows the deck font">
+            deck default
+          </span>
+        )}
         <span className="shrink-0 text-[10px] text-slate-500">{chosen ? KIND_LABEL[chosen.kind] : "—"}</span>
         <span className="shrink-0 text-[10px] text-slate-500">{open ? "▴" : "▾"}</span>
       </button>
@@ -203,6 +267,30 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
             className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-amber-400/60"
           />
           <div ref={scrollRef} className="max-h-64 space-y-0.5 overflow-y-auto rounded-lg border border-white/10 bg-slate-900/40 p-1">
+            {/* an override is set: one click returns the part to the deck face */}
+            {fallbackFamily && !inherited && !query.trim() && (
+              <button
+                type="button"
+                onMouseEnter={() => handleHover(fallbackFamily)}
+                onFocus={() => handleHover(fallbackFamily)}
+                onClick={() => {
+                  onChange("");
+                  setOpen(false);
+                  clearPreview();
+                }}
+                className="mb-1.5 flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-left transition-colors hover:bg-white/10"
+              >
+                <span className="text-sm text-slate-400">↺</span>
+                <span className="min-w-0 flex-1 truncate text-xs text-slate-300">
+                  Back to deck default:{" "}
+                  <b className="text-slate-100" style={{ fontFamily: faceStack(fallbackFamily, fallbackChoice), fontSize: 14 }}>
+                    {fallbackChoice?.label ?? fallbackFamily}
+                  </b>
+                </span>
+                <span className="shrink-0 text-[10px] text-slate-500">{fallbackChoice ? KIND_LABEL[fallbackChoice.kind] : ""}</span>
+              </button>
+            )}
+
             {query.trim().length > 0 &&
               !list.some((f) => f.family.toLowerCase() === query.trim().toLowerCase()) &&
               !google.some((f) => f.family.toLowerCase() === query.trim().toLowerCase()) && (
@@ -238,7 +326,7 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
                   <FontRow
                     key={f.family}
                     f={f}
-                    active={f.family === current}
+                    active={sameFamily(f.family, current)}
                     previewTarget={previewTarget}
                     onHover={handleHover}
                     onPick={() => {
@@ -250,7 +338,7 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
                       f.custom
                         ? () => {
                             removeCustomFont(f.family);
-                            if (current === f.family) onChange("");
+                            if (sameFamily(explicit, f.family)) onChange("");
                           }
                         : undefined
                     }
@@ -268,7 +356,7 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
                   <FontRow
                     key={f.family}
                     f={f}
-                    active={f.family === current}
+                    active={sameFamily(f.family, current)}
                     previewTarget={previewTarget}
                     onHover={handleHover}
                     onPick={() => {
@@ -295,7 +383,7 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
 
           {/* upload your own font file (Chhatrish July, SolaimanLipi, Charukola…) */}
           <UploadRow
-            script={script === "all" ? (FONT_BY_FAMILY.get(current.toLowerCase())?.script ?? "bangla") : script}
+            script={script === "all" ? (chosen?.script ?? "bangla") : script}
             onAdded={(family) => {
               onChange(family);
             }}

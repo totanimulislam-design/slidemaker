@@ -22,6 +22,12 @@ interface Props {
   onChange: (patch: Partial<ShapeItem>) => void;
   /** copy this item's design onto every other shape (optionally only same kind) */
   onApplyToAll?: (style: Partial<ShapeItem>, sameKindOnly: boolean) => void;
+  /**
+   * The face a text box without a font of its own is painted with (the deck's
+   * question face), so the font picker names the current font even when the
+   * box has never picked one.
+   */
+  fallbackFamily?: string;
 }
 
 const DESIGN_KEYS: (keyof ShapeItem)[] = [
@@ -34,7 +40,7 @@ const DESIGN_KEYS: (keyof ShapeItem)[] = [
 export const pickDesign = (s: ShapeItem): Partial<ShapeItem> =>
   Object.fromEntries(DESIGN_KEYS.filter((k) => s[k] !== undefined).map((k) => [k, s[k]])) as Partial<ShapeItem>;
 
-export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: Props) {
+export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll, fallbackFamily }: Props) {
   const [tab, setTab] = useState<"fill" | "line" | "effects" | "text">(s.kind === "text" ? "text" : "fill");
   const isLine = s.kind === "line" || s.kind === "arrow";
   const isImage = s.kind === "image";
@@ -255,6 +261,7 @@ export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: P
           <FontPicker
             label="Text font (All Google Fonts)"
             value={s.fontFamily ?? ""}
+            fallback={fallbackFamily}
             previewTarget={`shape:${s.id}`}
             onChange={(family) => {
               ensureFamily(family);

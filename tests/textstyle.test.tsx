@@ -208,7 +208,27 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
     pass: /Font \(1,9\d\d Google Fonts\)/.test(fontTrigger?.previousElementSibling?.textContent ?? ""),
     detail: fontTrigger?.previousElementSibling?.textContent ?? "no picker",
   });
+  /** the family the picker's trigger names, drawn in that face */
+  const triggerName = (t: HTMLElement | undefined) => t?.querySelector<HTMLElement>("span > span")?.textContent ?? "";
+  const triggerFace = (t: HTMLElement | undefined) => t?.querySelector<HTMLElement>("span")?.style.fontFamily ?? "";
+  // Badge 1 has no face of its own yet: the board paints it with the deck's
+  // Latin face (Oswald), so that — not a bare "Default" — is the current font
+  out.push({
+    name: "the picker names the font really painted (deck default Oswald), not “Default”",
+    pass:
+      triggerName(fontTrigger) === "Oswald" &&
+      triggerFace(fontTrigger).includes("Oswald") &&
+      fontTrigger?.getAttribute("data-inherited") === "true" &&
+      /deck default/i.test(fontTrigger?.textContent ?? ""),
+    detail: `${triggerName(fontTrigger)} · ${triggerFace(fontTrigger)} · ${fontTrigger?.textContent}`,
+  });
   click(fontTrigger);
+  const activeRow = aside().querySelector<HTMLElement>('[data-active="true"]');
+  out.push({
+    name: "…and the open list highlights that same face",
+    pass: !!activeRow && (activeRow.textContent ?? "").includes("Oswald"),
+    detail: activeRow?.textContent ?? "no highlighted row",
+  });
   type(aside().querySelector<HTMLInputElement>('input[placeholder^="Search"]'), "Alkatra");
   const row = Array.from(aside().querySelectorAll<HTMLElement>("button")).find((b) => b.textContent?.includes("Alkatra"));
   out.push({
@@ -226,6 +246,48 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
       links.some((h) => h.includes("family=Alkatra:wght@400;500;600;700")),
     detail: `${brandLines()[0]?.style.fontFamily} | ${links.filter((h) => h.includes("Alkatra")).join(" ")}`,
   });
+  const pickedTrigger = Array.from(aside().querySelectorAll<HTMLElement>('[data-text-part="brandTop"] span')).find((s) =>
+    s.textContent?.trim().startsWith("Font ("),
+  )?.nextElementSibling as HTMLElement | undefined;
+  out.push({
+    name: "the closed picker now names the picked face (Alkatra, drawn in Alkatra) and drops the deck-default tag",
+    pass:
+      triggerName(pickedTrigger) === "Alkatra" &&
+      triggerFace(pickedTrigger).includes("Alkatra") &&
+      !pickedTrigger?.hasAttribute("data-inherited"),
+    detail: `${triggerName(pickedTrigger)} · ${triggerFace(pickedTrigger)} · ${pickedTrigger?.textContent}`,
+  });
+  click(pickedTrigger);
+  out.push({
+    name: "…and the open list highlights Alkatra (pinned at the top of the catalogue) and offers “Back to deck default: Oswald”",
+    pass:
+      (aside().querySelector<HTMLElement>('[data-active="true"]')?.textContent ?? "").includes("Alkatra") &&
+      Array.from(aside().querySelectorAll<HTMLElement>("button")).some((b) => /Back to deck default/.test(b.textContent ?? "") && b.textContent!.includes("Oswald")),
+    detail: aside().querySelector<HTMLElement>('[data-active="true"]')?.textContent ?? "no highlighted row",
+  });
+  click(pickedTrigger);
+
+  // the toolbar line's font pop-up reads the same face, and its "Back to deck
+  // default" row clears the override so Badge 1 paints with Oswald again
+  click(barButton("Badge 1 font"));
+  const barTrigger = pop()?.querySelector<HTMLElement>("button[data-current-font]") ?? undefined;
+  out.push({
+    name: "the Badge 1 toolbar font pop-up names the picked face too (Alkatra)",
+    pass: pop()?.getAttribute("data-pop-panel") === "Badge 1 font" && barTrigger?.getAttribute("data-current-font") === "Alkatra",
+    detail: `${pop()?.getAttribute("data-pop-panel")} · ${barTrigger?.getAttribute("data-current-font")}`,
+  });
+  click(barTrigger);
+  click(Array.from(pop()?.querySelectorAll<HTMLElement>("button") ?? []).find((b) => /Back to deck default/.test(b.textContent ?? "")));
+  const backTrigger = pop()?.querySelector<HTMLElement>("button[data-current-font]") ?? undefined;
+  out.push({
+    name: "“Back to deck default” drops Badge 1's font override: the line paints with Oswald and the control says so",
+    pass:
+      (brandLines()[0]?.style.fontFamily ?? "").startsWith("Oswald") &&
+      backTrigger?.getAttribute("data-current-font") === "Oswald" &&
+      backTrigger?.getAttribute("data-inherited") === "true",
+    detail: `${brandLines()[0]?.style.fontFamily.split(",")[0]} · ${backTrigger?.getAttribute("data-current-font")} · inherited=${backTrigger?.getAttribute("data-inherited")}`,
+  });
+  closePop();
 
   /* ------------------------------ Badge 2 (toolbar) ------------------------ */
   nav("badge2");

@@ -13,6 +13,7 @@ import {
   opacityAlpha,
   patchTextPart,
   resetTextPart,
+  textPartDeckFamily,
   textPartHasOverride,
   textPartTypeface,
   typefaceOpacityPercent,
@@ -178,6 +179,9 @@ export default function BoxFontControls({ theme, setTheme, selected, compact, la
           <FontPicker
             label={`Font (${googleFontCount().toLocaleString()} Google Fonts)`}
             value={tf.family ?? ""}
+            // no face of its own → the picker still names the deck face the
+            // board paints this part with, instead of a bare "Default"
+            fallback={textPartDeckFamily(theme, selected)}
             previewTarget={previewTarget}
             onChange={(family) => {
               ensureFamily(family);
