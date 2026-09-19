@@ -342,20 +342,24 @@ on the board and puts the answer tools in the toolbar above it:
   and *save .txt*. The exported text round-trips: it can be pasted straight back
   into *Paste answers*.
 
-## Toolbar pop-ups are movable
+## Toolbar pop-ups: docked right, movable, always closable
 
-The card a toolbar toggle opens (Font, Spacing, Frame, Answer …) is dragged by
-its header, so it never has to sit on top of the part of the slide you are
-working on:
+The card a toolbar toggle opens (Font, Spacing, Frame, Answer …) docks to the
+**right edge of the window, hanging from just under the top bar**, and stretches
+downward only as far as its content needs — never past the bottom of the
+viewport. The card is still dragged by its header when you want it elsewhere:
 
-- it starts centred under the pill (the historical look) and only switches to
-  free positioning once a real drag begins — a press that stays inside the 4px
-  threshold is still a plain click on the header;
+- it starts docked (the right-side look) and only switches to free positioning
+  once a real drag begins — a press that stays inside the 4px threshold is
+  still a plain click on the header;
 - the ⠿ grip in the header advertises the drag, and the whole card stays
   reachable: the clamp keeps its header and a slice of the body on screen,
   including after a window resize;
-- the ⌖ button (or a double-click on the header) re-centres it under the
-  toolbar, and the ✕ button still just closes it.
+- the ⌖ button (or a double-click on the header) re-docks it under the top
+  bar on the right, and the ✕ button still just closes it;
+- **the panel's name and the ✕ never scroll away** — they live in a head that
+  sits above the scrolling body, so a long panel (fonts, numbering, answer
+  key …) scrolls underneath its pinned title and close mark.
 
 Like every other gesture in the editor, the drag runs through
 `src/lib/dragSession.ts`, so a missed pointer-up can never leave the card
