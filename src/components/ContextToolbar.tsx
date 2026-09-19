@@ -4,6 +4,17 @@ import type {
   BackgroundSettings, BannerSettings, BannerShape, Box, BoxFontId, BoxTypeface, DeckHeader, ElementId, OptionsLayout, QuizOption, ThemeSettings,
 } from "../lib/types";
 import { DEFAULT_BANNER, DEFAULT_FRAME, ELEMENT_LABELS } from "../lib/types";
+import {
+  resetAnswerToolbar,
+  resetBackgroundToolbar,
+  resetElementToolbar,
+  resetFrameToolbar,
+  resetLayoutToolbar,
+  resetShapeStyle,
+  resetThemeToolbar,
+  resetToolbarLine,
+  type ToolbarResetPatch,
+} from "../lib/toolbarReset";
 import { TEXT_GRADIENT_PRESETS } from "../lib/banner";
 import {
   TEXT_PART_LABELS, WEIGHTS, boxFontLabel, boxTypeface, elementInk, opacityAlpha, opacityPercent, patchTextPart, setBoxFont, setElementInk, textPartDeckFamily, textPartTypeface,
@@ -519,6 +530,33 @@ export default function ContextToolbar(p: Props) {
     );
   };
   const sep = () => <span className="ctx-sep" aria-hidden="true" />;
+  /**
+   * Apply a Default-button patch. Theme / header / background go through the
+   * same scoped setters the rest of the toolbar uses, so one click is one
+   * undo step on this slide.
+   */
+  const applyReset = (next: ToolbarResetPatch) => {
+    if (next.theme && Object.keys(next.theme).length) p.patchTheme(next.theme);
+    if (next.header && Object.keys(next.header).length) p.patchHeader?.(next.header);
+    if (next.background) p.patchBackground(next.background);
+    if (next.shape) patch(next.shape);
+  };
+  /** Default — restore this toolbar's factory look, without changing the wording on the slide. */
+  const defaultBtn = (what: string, action: () => void) => (
+    <>
+      {sep()}
+      <button
+        type="button"
+        className="ctx-btn ctx-default"
+        title={`Reset ${what} to default`}
+        aria-label={`Reset ${what} to default`}
+        data-toolbar-default=""
+        onClick={action}
+      >
+        Default
+      </button>
+    </>
+  );
   const stepper = (
     name: string, value: number, onChange: (v: number) => void,
     min = 0, max = 200, step = 1,
@@ -1306,6 +1344,7 @@ export default function ContextToolbar(p: Props) {
             >
               <span className="ctx-kind">{MERGED_LINE[id].chip}</span>
               {lineControls(id)}
+              {defaultBtn(MERGED_LINE[id].chip, () => applyReset(resetToolbarLine(id, theme)))}
             </div>
           ))}
           {arrangeBar && (
@@ -1472,6 +1511,18 @@ export default function ContextToolbar(p: Props) {
         {surface === 'background' && <>{swatch("Color", theme.board, board => p.patchTheme({ board }))}{toggle("Gradient", <span aria-hidden="true">◒</span>)}{toggle("Background effects", <span aria-hidden="true">✨</span>)}</>}
         {multi && (p.grouped ? button(<span aria-hidden="true">▢</span>, p.ungroup, undefined, "Ungroup") : button(<span aria-hidden="true">▣</span>, p.group, undefined, "Group"))}
         {!surface && <>{sep()}{toggle("Position", <span aria-hidden="true">✥</span>)}</>}
+        {!inserting && !multi && (ak || themePill || layoutPill || surface || s || el) && defaultBtn(
+          typeof kindLabel === "string" ? kindLabel : "toolbar",
+          () => {
+            if (ak) applyReset(resetAnswerToolbar());
+            else if (themePill) applyReset(resetThemeToolbar());
+            else if (layoutPill) applyReset(resetLayoutToolbar());
+            else if (surface === "frame") applyReset(resetFrameToolbar());
+            else if (surface === "background") applyReset(resetBackgroundToolbar());
+            else if (s) applyReset({ shape: resetShapeStyle(s, theme.accent) });
+            else if (el) applyReset(resetElementToolbar(el, theme));
+          },
+        )}
         {s && (
           <button
             type="button" className={`ctx-btn${panel === "More" ? " is-on" : ""}`}

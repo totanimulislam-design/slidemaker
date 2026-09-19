@@ -219,6 +219,14 @@ plain numbering, fonts) open from their line in the same movable pop-up card
 every other toolbar toggle uses. A multi-selection or a drawn shape always gets
 the plain toolbar, never a merged stack.
 
+**Default on every toolbar.** Each style toolbar — every merged line, the
+plain text / shape / image bar, Design, Layout, Answer key, the frame and the
+slide background — ends with a **Default** button that restores that bar's
+factory look (typeface, size, colour, effects, marker / banner / frame /
+background settings) without changing the wording on the slide. Geometry of a
+drawn shape and the image it holds stay put; only the look is unwound. One
+click is one undo step.
+
 ### Every text part has the full text toolkit
 
 Badge 1, Badge 2, Badge 3, the title, the question, the number inside the

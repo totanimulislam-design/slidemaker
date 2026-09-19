@@ -693,6 +693,98 @@ export async function runNavTests(): Promise<CaseResult[]> {
   });
   click(doc.querySelector(".context-toolbar .ctx-pop-head [aria-label='Close toolbar panel']"));
 
+  /* ---------------- Default restores each toolbar's factory look ------------ */
+  const defaultBtn = (line?: string) =>
+    doc.querySelector<HTMLElement>(
+      `.context-toolbar ${line ? `[aria-label="${line}"] ` : ""}[data-toolbar-default]`,
+    );
+  click(doc.querySelector('aside nav button[data-nav="titleText"]'));
+  const titleLines = Array.from(doc.querySelectorAll('.context-toolbar [role="toolbar"]')).map((t) =>
+    t.getAttribute("aria-label"),
+  );
+  out.push({
+    name: "every merged title line has a Default button",
+    pass:
+      titleLines.includes("Title text tools") &&
+      titleLines.includes("Title background tools") &&
+      !!defaultBtn("Title text tools") &&
+      !!defaultBtn("Title background tools"),
+    detail: titleLines.join(" | "),
+  });
+  click(defaultBtn("Title text tools"));
+  out.push({
+    name: "Default on Title text restores the factory title size (70 → 54)",
+    pass: fontSizeIn('[data-el="title"]') === "54px",
+    detail: fontSizeIn('[data-el="title"]'),
+  });
+  click(defaultBtn("Title background tools"));
+  out.push({
+    name: "Default on Title background restores the factory glow banner (clears the pill)",
+    pass: !bannerRadii().includes("999px"),
+    detail: bannerRadii().join(" / "),
+  });
+
+  click(doc.querySelector('aside nav button[data-nav="badge2"]'));
+  type(doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label="Badge 2 size"]'), "40");
+  click(defaultBtn("Badge 2 tools"));
+  const badgeSizesAfter = Array.from(doc.querySelectorAll<HTMLElement>('.slide-editable [data-el="brand"] > div')).map(
+    (d) => d.style.fontSize,
+  );
+  out.push({
+    name: "Default on Badge 2 restores its factory size and leaves Badge 1 alone",
+    pass: badgeSizesAfter[0] === "31px" && badgeSizesAfter[1] === "27px",
+    detail: badgeSizesAfter.join(" / "),
+  });
+
+  click(doc.querySelector('aside nav button[data-nav="theme"]'));
+  out.push({
+    name: "the Design toolbar has a Default button",
+    pass: toolbar() === "theme tools" && !!defaultBtn(),
+    detail: String(toolbar()),
+  });
+  click(doc.querySelector('aside nav button[data-nav="frame"]'));
+  out.push({
+    name: "the frame toolbar has a Default button",
+    pass: toolbar() === "frame tools" && !!defaultBtn(),
+    detail: String(toolbar()),
+  });
+  click(doc.querySelector('aside nav button[data-nav="background"]'));
+  out.push({
+    name: "the background toolbar has a Default button",
+    pass: toolbar() === "background tools" && !!defaultBtn(),
+    detail: String(toolbar()),
+  });
+  click(doc.querySelector('aside nav button[data-nav="layout"]'));
+  out.push({
+    name: "the Layout toolbar has a Default button",
+    pass: toolbar() === "layout tools" && !!defaultBtn(),
+    detail: String(toolbar()),
+  });
+  click(doc.querySelector('aside nav button[data-nav="answerKey"]'));
+  out.push({
+    name: "the Answer key toolbar has a Default button",
+    pass: toolbar() === "answer tools" && !!defaultBtn(),
+    detail: String(toolbar()),
+  });
+  click(doc.querySelector('aside nav button[data-nav="footnote"]'));
+  out.push({
+    name: "the footnote's plain toolbar has a Default button",
+    pass: toolbar() === "Text tools" && !!defaultBtn(),
+    detail: String(toolbar()),
+  });
+  click(doc.querySelector('aside nav button[data-nav="shapes"]'));
+  click(doc.querySelector('.context-toolbar [aria-label="Rectangle"]'));
+  out.push({
+    name: "a drawn shape's toolbar has a Default button",
+    pass: !!doc.querySelector('.context-toolbar [aria-label="Fill"]') && !!defaultBtn(),
+    detail: String(toolbar()),
+  });
+  // later assertions still read the fixture's titleSize / brandBottomSize
+  click(doc.querySelector('aside nav button[data-nav="titleText"]'));
+  type(doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label="Title size"]'), "70");
+  click(doc.querySelector('aside nav button[data-nav="badge2"]'));
+  type(doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label="Badge 2 size"]'), "19");
+
   /* …and the stem leaves the block again once the bullet detaches ----------- */
   click(doc.querySelector('aside nav button[data-nav="questionBullet"]'));
   click(bulletDetach());
