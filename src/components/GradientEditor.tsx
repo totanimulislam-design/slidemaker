@@ -35,6 +35,12 @@ interface Props {
    * (pastel, blue, purple, sunset, mesh…) is shown instead.
    */
   presets?: PresetInput[];
+  /**
+   * Skip the preset library entirely — for callers that already list their own
+   * swatches (the font colour panel), so the same rows are not shown twice.
+   * The builder itself (linear · radial · mesh, every colour stop) stays.
+   */
+  hideLibrary?: boolean;
 }
 
 const PALETTE = ["#1f5fd0", "#5b8cff", "#7c3aed", "#06b6d4", "#10b981", "#ffd633", "#f97316", "#ec4899", "#ef4444", "#ffffff", "#000000"];
@@ -45,7 +51,7 @@ const toHex6 = (c: string) => {
   return m[1].length === 3 ? `#${m[1].split("").map((x) => x + x).join("")}`.toLowerCase() : c.toLowerCase();
 };
 
-export default function GradientEditor({ value, onChange, fallback, label, presets }: Props) {
+export default function GradientEditor({ value, onChange, fallback, label, presets, hideLibrary }: Props) {
   const g = value;
   const [activeStop, setActiveStop] = useState<number>(0);
   const [showWheel, setShowWheel] = useState(true);
@@ -177,13 +183,14 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
       {g.enabled && (
         <>
           {/* ------------------------- preset library ------------------------- */}
-          {presets ? (
+          {hideLibrary ? null : presets && presets.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {presets.map((p) => (
                 <button
                   key={p.name}
                   onClick={() => applyPreset(p)}
                   title={p.name}
+                  aria-label={p.name}
                   className="h-7 w-12 rounded-md border border-white/15 hover:border-amber-400/70"
                   style={{
                     background: gradientCss(
@@ -212,25 +219,22 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
                   </button>
                 ))}
               </div>
-              <div className="grid max-h-56 grid-cols-3 gap-1.5 overflow-y-auto pr-0.5">
+              {/* swatches only — the name lives in the tooltip, room is tight */}
+              <div className="grid max-h-44 grid-cols-5 gap-1.5 overflow-y-auto pr-0.5">
                 {libPresets.map((p) => (
                   <button
                     key={p.name}
                     onClick={() => applyPreset(p)}
                     title={`${p.name} (${p.type})`}
-                    className="flex flex-col items-center gap-0.5 rounded-lg border border-white/10 bg-white/[0.03] p-1 text-[9px] text-slate-300 hover:border-amber-400/60"
-                  >
-                    <span
-                      className="h-7 w-full rounded border border-white/10"
-                      style={{
-                        background: gradientCss(
-                          { enabled: true, type: p.type, angle: p.angle, cx: p.cx ?? 50, cy: p.cy ?? 50, stops: p.stops },
-                          "#000",
-                        ),
-                      }}
-                    />
-                    <span className="w-full truncate text-center">{p.name}</span>
-                  </button>
+                    aria-label={p.name}
+                    className="h-8 rounded-lg border border-white/10 hover:border-amber-400/60"
+                    style={{
+                      background: gradientCss(
+                        { enabled: true, type: p.type, angle: p.angle, cx: p.cx ?? 50, cy: p.cy ?? 50, stops: p.stops },
+                        "#000",
+                      ),
+                    }}
+                  />
                 ))}
               </div>
             </div>

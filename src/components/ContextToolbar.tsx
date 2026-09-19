@@ -288,6 +288,14 @@ interface FontColorCtx {
 export default function ContextToolbar(p: Props) {
   const [panel, setPanel] = useState<string | null>(null);
   const [fontColorCtx, setFontColorCtx] = useState<FontColorCtx | null>(null);
+  /**
+   * The newest context for every font-colour button, rebuilt on each render.
+   * The open popover reads its entry from here instead of the snapshot taken
+   * when it was opened — the panel edits a live value, so a second edit in the
+   * custom gradient builder (a new colour stop, a switch to mesh) must build on
+   * the first one instead of silently starting over from the opened value.
+   */
+  const liveFontCtx = useRef<Map<string, FontColorCtx>>(new Map());
   const { shape: s, element: el, surface, theme, patchShape: patch } = p;
   const ak = p.answerKey;
   const multi = p.count > 1 || p.grouped;
@@ -346,6 +354,21 @@ export default function ContextToolbar(p: Props) {
   useEffect(() => {
     if (panel !== "TextColor") setFontColorCtx(null);
   }, [panel]);
+
+  /**
+   * An open popover follows the slide. Every font-colour button re-registers its
+   * context on each render (`liveFontCtx`), so as soon as the deck changes the
+   * open panel re-reads its own entry — otherwise it would keep editing the
+   * value it was opened with and each new edit would drop the one before it.
+   * Compared by value, so this settles after one extra render instead of looping.
+   */
+  useEffect(() => {
+    if (panel !== "TextColor" || !fontColorCtx) return;
+    const live = liveFontCtx.current.get(fontColorCtx.key);
+    if (!live) return;
+    if (live.solid === fontColorCtx.solid && live.gradient === fontColorCtx.gradient) return;
+    setFontColorCtx(live);
+  });
 
   const openFontColor = (ctx: FontColorCtx) => {
     // toggle if same key
@@ -485,6 +508,18 @@ export default function ContextToolbar(p: Props) {
     const isActive = panel === "TextColor" && fontColorCtx?.key === key;
     const gradCss = gradient?.enabled ? gradientCss(gradient, solid || "#ffffff") : undefined;
     const solidHex = normColor(solid) || "#ffffff";
+    const ctx: FontColorCtx = {
+      key,
+      label,
+      solid: solidHex,
+      gradient,
+      onSolid,
+      onGradient,
+      onClearGradient: onClear,
+      docColors,
+    };
+    // refreshed every render so an open popover always sees the current value
+    liveFontCtx.current.set(key, ctx);
     return (
       <button
         key={key}
@@ -493,18 +528,7 @@ export default function ContextToolbar(p: Props) {
         aria-label={label}
         aria-pressed={isActive}
         className={cn("ctx-btn ctx-font-color", isActive && "is-on")}
-        onClick={() =>
-          openFontColor({
-            key,
-            label,
-            solid: solidHex,
-            gradient,
-            onSolid,
-            onGradient,
-            onClearGradient: onClear,
-            docColors,
-          })
-        }
+        onClick={() => openFontColor(ctx)}
       >
         <span className="ctx-font-preview" aria-hidden="true">
           {gradCss ? (

@@ -363,8 +363,9 @@ following the cursor.
 
 ## The colour picker keeps up with the pointer
 
-Every gradient in the editor — slide background, title banner, shape fill — is
-set with the same picker (`ColorWheel` in `src/components/GradientWheel.tsx`),
+Every gradient in the editor — slide background, title banner, shape fill,
+gradient text — is set with the same picker
+(`ColorWheel` in `src/components/GradientWheel.tsx`),
 laid out and behaved like Canva's: a full-width saturation / lightness area
 with a ring indicator, a hue ramp under it, an eyedropper where the browser
 has one, and live swatch / hex / H·S·L readouts. The gradient editor's angle
