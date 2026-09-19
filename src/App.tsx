@@ -1324,16 +1324,12 @@ function AppContent() {
     <>
       <div className="app-shell relative flex h-full flex-col bg-slate-950 text-slate-200">
         <HistoryPanel open={historyOpen} history={history} onClose={() => setHistoryOpen(false)} />
-        <header
-          data-app-toolbar
-          aria-label="Deck toolbar"
-          className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1.5 border-b border-white/10 bg-slate-950/90 px-2.5 py-2"
-        >
-          <div className="mr-1 flex shrink-0 items-center gap-2">
+        <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-slate-950/90 px-4 py-2.5">
+          <div className="mr-2 flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-300 to-amber-600 text-lg font-black text-slate-950 shadow-[0_2px_14px_rgba(251,191,36,.35)]">
               ক
             </div>
-            <div className="app-toolbar-brand-copy whitespace-nowrap leading-tight">
+            <div className="leading-tight">
               <h1 className="text-sm font-semibold text-slate-100">MCQ Slide Studio</h1>
               <p className="text-[11px] text-slate-500">
                 {stats.total} slides · {stats.withAnswer} with answers
@@ -1341,69 +1337,52 @@ function AppContent() {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center rounded-lg border border-white/10 bg-white/5">
+          <div className="flex items-center rounded-lg border border-white/10 bg-white/5">
             <button
               onClick={undo}
               disabled={!canUndo}
               title={canUndo ? `Undo: ${history.undoLabel} (Ctrl+Z)` : "Nothing to undo"}
-              aria-label={canUndo ? `Undo: ${history.undoLabel}` : "Nothing to undo"}
-              className="flex h-9 w-9 items-center justify-center rounded-l-lg text-base text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+              className="rounded-l-lg px-2.5 py-2 text-sm text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              <span aria-hidden="true">↶</span>
+              ↶
             </button>
             <button
               onClick={redo}
               disabled={!canRedo}
               title={canRedo ? `Redo: ${history.redoLabel} (Ctrl+Y)` : "Nothing to redo"}
-              aria-label={canRedo ? `Redo: ${history.redoLabel}` : "Nothing to redo"}
-              className="flex h-9 w-9 items-center justify-center border-l border-white/10 text-base text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+              className="border-l border-white/10 px-2.5 py-2 text-sm text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              <span aria-hidden="true">↷</span>
+              ↷
             </button>
             <button
               onClick={() => setHistoryOpen((v) => !v)}
               title="History"
-              aria-label="History"
-              aria-pressed={historyOpen}
               className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-r-lg border-l border-white/10 text-sm hover:bg-white/10",
+                "rounded-r-lg border-l border-white/10 px-2.5 py-2 text-xs hover:bg-white/10",
                 historyOpen ? "bg-amber-400 text-slate-950" : "text-slate-300",
               )}
             >
-              <span aria-hidden="true">🕘</span>
+              🕘
             </button>
           </div>
 
-          <Btn
-            variant="primary"
-            onClick={() => setPasteOpen(true)}
-            title="Paste questions"
-            className="h-9 w-9 shrink-0 p-0"
-          >
-            <span aria-hidden="true" className="text-base">＋</span>
-            <span className="sr-only">Paste questions</span>
+          <Btn variant="primary" onClick={() => setPasteOpen(true)}>
+            ＋ Paste questions
           </Btn>
           <Btn
             variant="soft"
             onClick={() => setAnswersOpen(true)}
             disabled={!deck.slides.length}
             title="Paste an answer key (1. ঘ 2. গ …) and apply it to all slides"
-            className="h-9 w-9 shrink-0 p-0"
           >
-            <span aria-hidden="true" className="text-base">✓</span>
-            <span className="sr-only">Paste answers</span>
+            ✓ Paste answers
           </Btn>
-          <Btn onClick={insertBlank} title="Insert a blank slide" className="h-9 w-9 shrink-0 p-0">
-            <span aria-hidden="true" className="text-base">▱</span>
-            <span className="sr-only">Blank slide</span>
-          </Btn>
+          <Btn onClick={insertBlank}>Blank slide</Btn>
           <label
             title="Import a PDF or PowerPoint (.pptx) — add the whole document or specific pages as slides, or drop pages onto the current slide"
-            aria-label="Import PDF or PowerPoint"
-            className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/5 text-base text-slate-200 hover:bg-white/10"
+            className="inline-flex cursor-pointer items-center rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 hover:bg-white/10"
           >
-            <span aria-hidden="true">📄</span>
-            <span className="sr-only">Import PDF or PowerPoint</span>
+            📄 Import PDF / PPTX
             <input
               type="file"
               accept={DECK_ACCEPT}
@@ -1415,58 +1394,29 @@ function AppContent() {
               }}
             />
           </label>
-          <Btn onClick={renumber} title="Renumber all slides 1..n" className="h-9 w-9 shrink-0 p-0">
-            <span aria-hidden="true" className="font-mono text-sm font-bold">#</span>
-            <span className="sr-only">Renumber slides</span>
+          <Btn onClick={renumber} title="Renumber all slides 1..n">
+            Renumber
           </Btn>
 
-          <div className="mx-0.5 h-6 w-px shrink-0 bg-white/10" />
+          <div className="mx-1 h-6 w-px bg-white/10" />
 
-          <Btn
-            variant="success"
-            onClick={() => setExportOpen(true)}
-            disabled={!deck.slides.length || !!busy}
-            title="Export PDF or PNG"
-            className="h-9 w-9 shrink-0 p-0"
-          >
-            <span aria-hidden="true" className="text-base">⬇</span>
-            <span className="sr-only">Export PDF or PNG</span>
+          <Btn variant="success" onClick={() => setExportOpen(true)} disabled={!deck.slides.length || !!busy}>
+            ⬇ Export — PDF · PNG
           </Btn>
-          <Btn
-            variant="soft"
-            onClick={() => setPresenting(true)}
-            disabled={!slide}
-            title="Present slideshow"
-            className="h-9 w-9 shrink-0 p-0"
-          >
-            <span aria-hidden="true">▶</span>
-            <span className="sr-only">Present</span>
+          <Btn variant="soft" onClick={() => setPresenting(true)} disabled={!slide}>
+            ▶ Present
           </Btn>
 
-          <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-2">
             <SlidePicker deck={deck} current={index} revision={revision} onCurrent={setCurrent} />
             {busy && (
-              <span
-                role="status"
-                aria-label={busy}
-                title={busy}
-                className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-400/15 px-2 text-xs text-amber-200"
-              >
-                <span aria-hidden="true" className="animate-spin">◌</span>
-                <span aria-hidden="true" className="hidden max-w-40 truncate 2xl:inline">{busy}</span>
-              </span>
+              <span className="rounded-lg bg-amber-400/15 px-3 py-1.5 text-xs text-amber-200">{busy}</span>
             )}
-            <Btn onClick={saveJson} title="Download the deck as a .json project file" className="h-9 w-9 shrink-0 p-0">
-              <span aria-hidden="true" className="text-base">💾</span>
-              <span className="sr-only">Save project</span>
+            <Btn onClick={saveJson} title="Download the deck as a .json project file">
+              Save
             </Btn>
-            <label
-              title="Open a JSON project file"
-              aria-label="Open a JSON project file"
-              className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/5 text-base text-slate-200 hover:bg-white/10"
-            >
-              <span aria-hidden="true">📂</span>
-              <span className="sr-only">Open project</span>
+            <label className="cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/10">
+              Open
               <input
                 type="file"
                 accept="application/json,.json"
@@ -1476,14 +1426,11 @@ function AppContent() {
             </label>
             <Btn
               variant="danger"
-              title="Reset deck"
-              className="h-9 w-9 shrink-0 p-0"
               onClick={() => {
                 if (confirm("Reset deck to the sample questions and default theme?")) resetAll();
               }}
             >
-              <span aria-hidden="true" className="text-base">↺</span>
-              <span className="sr-only">Reset deck</span>
+              Reset
             </Btn>
           </div>
         </header>
