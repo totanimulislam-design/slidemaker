@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   BackgroundSettings, BannerSettings, BannerShape, Box, BoxFontId, BoxTypeface, DeckHeader, ElementId, OptionsLayout, QuizOption, ThemeSettings,
 } from "../lib/types";
@@ -23,9 +23,12 @@ import NumberStylePicker from "./NumberStylePicker";
 import ShapeDesignPanel from "./ShapeDesignPanel";
 import FramePanel from "./FramePanel";
 import GradientEditor from "./GradientEditor";
+import FontColorPanel from "./FontColorPanel";
 import { SegButtons, Toggle } from "./ui";
 import { useColorFrame } from "../lib/frameSend";
 import { cn } from "../utils/cn";
+import type { Gradient } from "../lib/types";
+import { gradientCss } from "../lib/banner";
 
 const normColor = (v: string): string => {
   const c = String(v ?? "").trim();
@@ -37,21 +40,6 @@ const normColor = (v: string): string => {
 /**
  * The toolbar's colour well as a component of its own, so it can own the
  * one-frame commit channel (see useColorFrame).
- *
- * ## the input must SURVIVE its own commit
- *
- * The OS colour dialog belongs to the `<input type="color">` DOM node that
- * opened it: unmount that node and the browser dismisses the dialog. This well
- * used to be keyed on its own value (`key={`${name}:${value}`}`), so the first
- * move of the cursor committed a new colour, the new key remounted the input,
- * and the picker vanished the instant a colour was touched — you could never
- * drag through a palette, only stab at it once.
- *
- * The key is now the control's IDENTITY (its name) alone, so the node is
- * stable across commits and the dialog stays open for the whole gesture. The
- * value is not fed back into the element while the dialog owns it either: the
- * echo of what we just sent would fight the user's cursor. Only an outside
- * change (a preset, an undo, switching slides) is written back to the input.
  */
 function Swatch({
   name,
@@ -66,14 +54,11 @@ function Swatch({
 }) {
   const dotRef = useRef<HTMLLabelElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  /** the colour this well last handed over, so its echo is not written back */
   const sentRef = useRef<string>(normColor(value));
   const channel = useColorFrame(onChange);
   const paint = (hex: string) => {
     const ink = dotRef.current?.querySelector<HTMLElement>(".ctx-dot, .ctx-a, .ctx-ring");
     if (!ink) return;
-    /* each glyph paints a different property: a dot is background, the letter
-       underline is border-bottom, the ring is border-colour */
     if (ink.classList.contains("ctx-a")) {
       if (ink.style.borderBottomColor !== hex) ink.style.borderBottomColor = hex;
     } else if (ink.classList.contains("ctx-ring")) {
@@ -83,8 +68,6 @@ function Swatch({
     }
   };
 
-  /* an outside change moves the well; the echo of our own pick never does —
-     writing it back mid-gesture is what makes a native dialog jump */
   useEffect(() => {
     const nv = normColor(value);
     if (!nv || nv === sentRef.current) return;
@@ -103,15 +86,11 @@ function Swatch({
 
   return (
     <label className="ctx-swatch" title={name} ref={dotRef}>
-      {/* uncontrolled on purpose: React must not re-write `value` under an
-          open OS dialog — `defaultValue` seeds it, the effect above syncs it */}
       <input
         ref={inputRef}
         aria-label={name} type="color"
         defaultValue={normColor(value) || "#ffffff"}
         onInput={e => took(e.currentTarget.value)}
-        /* React folds a color input's native `change` into onChange too; a
-           dialog close is the newest move, so offer it like any other step */
         onChange={e => took(e.currentTarget.value)}
       />
       {glyph ?? <span className="ctx-dot" style={{ background: value }} />}
@@ -119,10 +98,6 @@ function Swatch({
   );
 }
 
-/**
- * The answer-key half of the toolbar, handed over by App while the "Answer key"
- * navigation destination is open.
- */
 export interface AnswerKeyTools {
   answer: string | null;
   showAnswer: boolean;
@@ -132,62 +107,29 @@ export interface AnswerKeyTools {
   onRevealAll: () => void;
   onHideAll: () => void;
   onClearAll: () => void;
-  /** opens the paste-answers dialog */
   onPaste: () => void;
-  /** duplicate every slide with its answer revealed */
   onCopies: () => void;
 }
 
 interface Props {
   shape?: ShapeItem; element: ElementId | null; surface: "frame" | "background" | null;
   count: number; grouped: boolean; theme: ThemeSettings; background: BackgroundSettings;
-  /** the header the board is painting right now (badge text, banner on/off) */
   header?: DeckHeader;
   patchShape: (p: Partial<ShapeItem>) => void; patchTheme: (p: Partial<ThemeSettings>) => void;
   patchBox: (p: Partial<Box>) => void; patchBackground: (p: Partial<BackgroundSettings>) => void;
   patchHeader?: (p: Partial<DeckHeader>) => void;
   align: (op: AlignOp) => void; reorder: (op: ZOp) => void;
   group: () => void; ungroup: () => void; duplicate: () => void; remove: () => void;
-  /**
-   * Which inspector destination asked for this toolbar. The destinations that
-   * own no single board element (Answer key, Uploads, Insert shapes) bring
-   * their own related tools here instead of leaving the strip empty.
-   */
   nav?: string | null;
   answerKey?: AnswerKeyTools;
-  /**
-   * The Layers destination: how many layers the slide has. Present only while
-   * that destination is open, so the strip can introduce itself when nothing is
-   * selected yet and add the arrange buttons once a layer is.
-   */
   layerTools?: { total: number };
-  /** quick insert: a shape/text box on the current slide (Insert shapes) */
   insertShape?: (kind: ShapeKind) => void;
-  /** quick insert: image files on the current slide (Uploads) */
   onAddImages?: (files: File[]) => void;
-  /** pick a fixed element on the board (the Layout destination's element picker) */
   onPickElement?: (id: ElementId) => void;
 }
 
-/** the shapes offered by the Insert-shapes strip, in the same order as below the board */
 const INSERT_SHAPES: ShapeKind[] = ["text", "rect", "rounded", "ellipse", "triangle", "diamond", "star", "line", "arrow"];
 
-/* ------------------------------------------------------------------------- *
- * Merged contents — one toolbar line per related part
- *
- * Several navigation destinations style parts that are painted as ONE merged
- * thing on the board, so selecting any of them previews every related part's
- * tools — one line each, in board-reading order:
- *
- *   question · Question text  → Question bullet → Q bullet text
- *   title    · Title text     → Title background
- *   badges   · Badge 1        → Badge 2
- *   options  · Option text    → Option bullet → Bullet text
- *
- * The line that owns the open destination is highlighted; the deeper pickers
- * (bullet designs, marker shapes, numbering, fonts, banner shapes) open from
- * their line in the same movable pop-up card every other toolbar toggle uses.
- * ------------------------------------------------------------------------- */
 export type MergedLineId =
   | "titleText"
   | "titleBg"
@@ -201,11 +143,8 @@ export type MergedLineId =
   | "optionBulletText";
 
 interface MergedLineMeta {
-  /** the eyebrow chip at the head of the line */
   chip: string;
-  /** the line's accessible name (what the strip announces) */
   aria: string;
-  /** the board element this line's part is painted inside */
   element: ElementId;
 }
 
@@ -222,12 +161,6 @@ const MERGED_LINE: Record<MergedLineId, MergedLineMeta> = {
   optionBulletText: { chip: "Bullet text", aria: "Text inside option bullet tools", element: "options" },
 };
 
-/**
- * The text part each merged line styles — its OWN text box, never the merged
- * block it is painted inside: the Badge 1 line writes `brandTop`, the letter
- * line writes the option-marker letter, and so on. Lines without a part (the
- * banner plate, the bullet body, the marker body) carry no text tools.
- */
 const LINE_PART: Partial<Record<MergedLineId, BoxFontId>> = {
   titleText: "title",
   badge1: "brandTop",
@@ -238,10 +171,8 @@ const LINE_PART: Partial<Record<MergedLineId, BoxFontId>> = {
   optionBulletText: "optionBullet",
 };
 
-/** parts whose built-in weight is already bold (so "B" reads as on without an override) */
 const DEFAULT_BOLD = new Set<BoxFontId>(["title", "brand", "brandTop", "brandBottom", "badge", "bullet", "options", "optionBullet"]);
 
-/** the deck field that is a board element's primary font size, px */
 const ELEMENT_SIZE_FIELD: Partial<Record<ElementId, "titleSize" | "badgeSize" | "questionSize" | "optionSize" | "noteSize">> = {
   title: "titleSize",
   badge: "badgeSize",
@@ -250,31 +181,13 @@ const ELEMENT_SIZE_FIELD: Partial<Record<ElementId, "titleSize" | "badgeSize" | 
   note: "noteSize",
 };
 
-/**
- * 0–100 "how visible" of anything the strip can fade: 100 = fully visible,
- * 0 = invisible (see lib/boxFonts `opacityPercent` — one meaning for every
- * opacity control, the strip and the panel alike).
- */
 const opacityOf = (t: { opacity?: number }) => opacityPercent(t.opacity);
 
-/** the text-transform a typeface really applies */
 const caseOf = (t: Pick<BoxTypeface, "textTransform" | "uppercase">): "none" | "uppercase" | "lowercase" =>
   t.textTransform ?? (t.uppercase === true || t.uppercase === "uppercase" ? "uppercase" : t.uppercase === "lowercase" ? "lowercase" : "none");
 
-/**
- * Destinations that LIST the board instead of styling one part of it (the
- * Layers stack). App keeps such a destination open when a row is picked — the
- * list is *about* the selection, so it must not navigate away from it — which
- * leaves the destination unable to say which merged block is being edited. The
- * SELECTION answers that, through the line each element leads with.
- */
 const LISTING_NAV = new Set<string | undefined>(["layers", undefined]);
 
-/**
- * The merged line a board element leads with: the destination the editor opens
- * for it (App's `tabOfElement`), kept here as the line it owns. Must stay in
- * step with the element → destination map App and the Inspector use.
- */
 const ELEMENT_LEAD_LINE: Partial<Record<ElementId, MergedLineId>> = {
   title: "titleText",
   brand: "badge1",
@@ -283,7 +196,6 @@ const ELEMENT_LEAD_LINE: Partial<Record<ElementId, MergedLineId>> = {
   options: "optionText",
 };
 
-/** nav destination → the lines its merged block previews, in board-reading order */
 const MERGED_GROUP: Record<string, MergedLineId[]> = {
   titleText: ["titleText", "titleBg"],
   titleBg: ["titleText", "titleBg"],
@@ -297,25 +209,12 @@ const MERGED_GROUP: Record<string, MergedLineId[]> = {
   optionBulletText: ["optionText", "optionBullet", "optionBulletText"],
 };
 
-/**
- * The merged line-up a destination previews, or null when the ordinary single
- * toolbar should show instead.
- *
- * A listing destination (Layers) styles nothing itself, so the block comes from
- * the selection: picking the "Title" row there previews the same title stack the
- * Title text destination does. A detached number bullet (`bulletSeparate`) is
- * its own movable element, so the question stem is then no longer merged with it
- * and drops out of its stack. The selection must own one of the parts: a drawn
- * shape, another element or a multi-selection always keeps the plain toolbar.
- */
 export function mergedLinesFor(
   nav: string | null | undefined,
   element: ElementId | null,
   theme: ThemeSettings,
 ): MergedLineId[] | null {
   if (!element) return null;
-  /** the destination that decides the block: the open one when it owns a merged
-   *  block, otherwise — from a listing destination — the selection's own line */
   const open = nav ?? "";
   const dest = (MERGED_GROUP[open] ? open : undefined) ?? (LISTING_NAV.has(nav ?? undefined) ? ELEMENT_LEAD_LINE[element] : undefined);
   const group = dest ? MERGED_GROUP[dest] : undefined;
@@ -325,7 +224,6 @@ export function mergedLinesFor(
   return lines.some((id) => MERGED_LINE[id].element === element) ? lines : null;
 }
 
-/** banner silhouettes, in the same order as the Title background panel */
 const BANNER_SHAPES: { id: BannerShape; label: string; icon: string }[] = [
   { id: "glow", label: "Glow", icon: "◉" },
   { id: "pill", label: "Pill", icon: "⬭" },
@@ -336,16 +234,11 @@ const BANNER_SHAPES: { id: BannerShape; label: string; icon: string }[] = [
   { id: "none", label: "None", icon: "∅" },
 ];
 
-/**
- * Badge 1 and Badge 2 are the two lines of one brand block; each owns its own
- * size / colour / visibility keys (see the Brand line panel).
- */
 const BADGE_LINE = {
   badge1: { n: 1, size: "brandTopSize", color: "brandTopColor", show: "showBrandTop", fallback: 25 },
   badge2: { n: 2, size: "brandBottomSize", color: "brandBottomColor", show: "showBrandBottom", fallback: 27 },
 } as const;
 
-/** tiny Canva-style text-alignment glyphs */
 const ALIGN_GLYPH: Record<"left" | "center" | "right" | "justify", ReactNode> = {
   left: (
     <svg width="15" height="15" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
@@ -377,70 +270,94 @@ const ALIGN_GLYPH: Record<"left" | "center" | "right" | "justify", ReactNode> = 
   ),
 };
 
+/* ------------------------------------------------------------------ */
+/*  Font color editing context – Canva style                          */
+/* ------------------------------------------------------------------ */
+
+interface FontColorCtx {
+  key: string; // unique id for toggle behavior
+  label: string;
+  solid: string;
+  gradient?: Gradient;
+  onSolid: (hex: string) => void;
+  onGradient: (g: Gradient) => void;
+  onClearGradient: () => void;
+  docColors: string[];
+}
+
 export default function ContextToolbar(p: Props) {
   const [panel, setPanel] = useState<string | null>(null);
+  const [fontColorCtx, setFontColorCtx] = useState<FontColorCtx | null>(null);
   const { shape: s, element: el, surface, theme, patchShape: patch } = p;
-  /** the answer-key half of the toolbar (only present on the Answer key destination) */
   const ak = p.answerKey;
   const multi = p.count > 1 || p.grouped;
   const text = !surface && !multi && (s?.kind === "text" || (!!el && el !== "logo" && !s));
   const tf = el ? boxTypeface(theme, el) : {};
   const fontPatch = (v: Parameters<typeof setBoxFont>[2]) => el && p.patchTheme({ boxFonts: setBoxFont(theme.boxFonts, el, v) });
 
-  /**
-   * The merged line-up this selection previews — null means the ordinary single
-   * toolbar. Every destination that styles a part of a merged block lands here:
-   * question stem + bullet + number, title text + banner, badge 1 + badge 2,
-   * option text + marker + letter — and so does a row picked from the Layers
-   * list, which styles nothing itself and therefore follows the selection.
-   */
   const stack = !surface && !multi && !s ? mergedLinesFor(p.nav, el, theme) : null;
-  /**
-   * The line that owns the open destination — the one highlighted in the stack.
-   * A listing destination (Layers) owns no line, so the selected element's own
-   * line leads instead: picking the "Title" row there highlights "Title text",
-   * exactly where its one-click *Edit … →* jump lands.
-   */
   const activeLine = stack?.find((id) => id === p.nav) ?? (el ? ELEMENT_LEAD_LINE[el] : undefined);
-  /** the banner settings the Title background line and its pickers write */
   const banner: BannerSettings = {
     ...DEFAULT_BANNER,
     ...(theme.banner ?? {}),
     color: theme.banner?.color ?? theme.titleBanner,
   };
-  /** banner colour writes both the design and the legacy solid `titleBanner` */
   const patchBanner = (patch: Partial<BannerSettings>) =>
     p.patchTheme({ banner: { ...banner, ...patch }, ...(patch.color ? { titleBanner: patch.color } : {}) });
-  /** BADGE_LINE's per-line keys are a union, so those writes go through one cast */
   const patchLine = (patch: Record<string, unknown>) => p.patchTheme(patch as Partial<ThemeSettings>);
-  /**
-   * A text part's typeface as the board paints it, and the ONE write path
-   * every text control uses (lib/boxFonts `patchTextPart`): colour goes to the
-   * element's ink field, the marker letter's face / weight / size / case to
-   * the flat fields the markers read, everything else to `boxFonts[part]` — so
-   * the strip and the inspector panel can never shadow each other.
-   */
   const partTf = (part: BoxFontId): BoxTypeface => textPartTypeface(theme, part);
   const setPart = (part: BoxFontId, patch: Partial<BoxTypeface>) => p.patchTheme(patchTextPart(theme, part, patch));
   const partInk = (part: BoxFontId) => elementInk(theme, part);
   const partPreview = (part: BoxFontId) => (part === "optionBullet" ? "optionBullet" : `box:${part}`);
-  /** the options block derives every auto colour from this base */
   const optionBase = theme.optionAccent || theme.accent || "#2f4fff";
   const picked = (v: string) => (/^#[0-9a-f]{6}$/i.test(v) ? v : optionBase);
   const markerWeight = theme.optionBulletTextWeight ?? 0;
 
-  /* ---------------------------------------------------------------------- *
-   * Movable pop-up panel
-   *
-   * The card a toolbar toggle opens (Font, Spacing, Frame, Answer …) can be
-   * dragged anywhere by its header, so it never covers the slide area you are
-   * working on. It starts life centred under the pill — the historical look —
-   * and only switches to free (fixed) positioning once a real drag begins; a
-   * press that never travels past the 4px threshold stays a plain click, exactly
-   * like every other gesture in the editor (lib/dragSession owns the rules).
-   * ---------------------------------------------------------------------- */
+  // document colors – deduped theme colors
+  const docColors = useMemo(() => {
+    const raw = [
+      theme.accent,
+      theme.board,
+      theme.brandColor,
+      theme.titleColor,
+      theme.questionColor,
+      theme.optionTextColor,
+      theme.badgeColor,
+      theme.optionAccent,
+      theme.brandTopColor,
+      theme.brandBottomColor,
+      theme.noteColor,
+      theme.titleBanner,
+      banner.color,
+    ].filter(Boolean) as string[];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of raw) {
+      const n = normColor(c);
+      if (n && !seen.has(n)) {
+        seen.add(n);
+        out.push(n);
+      }
+    }
+    return out.slice(0, 12);
+  }, [theme, banner.color]);
+
+  // clear fontColorCtx when panel is not TextColor
+  useEffect(() => {
+    if (panel !== "TextColor") setFontColorCtx(null);
+  }, [panel]);
+
+  const openFontColor = (ctx: FontColorCtx) => {
+    // toggle if same key
+    if (panel === "TextColor" && fontColorCtx?.key === ctx.key) {
+      setPanel(null);
+      return;
+    }
+    setFontColorCtx(ctx);
+    setPanel("TextColor");
+  };
+
   const popRef = useRef<HTMLDivElement | null>(null);
-  /** the card's measured box at the moment a drag was armed */
   const popBox = useRef<{ x: number; y: number; w: number; h: number }>({ x: 0, y: 0, w: 480, h: 280 });
   const [popPos, setPopPos] = useState<{ x: number; y: number; w: number } | null>(null);
 
@@ -452,7 +369,6 @@ export default function ContextToolbar(p: Props) {
     return { x: Math.round(r?.left ?? 0), y: Math.round(r?.top ?? 0), w, h };
   };
 
-  /** keep the card reachable: the header (and a slice of the body) stays on screen */
   const clampPop = (x: number, y: number, w: number) => {
     const vw = typeof window === "undefined" ? 1280 : window.innerWidth;
     const vh = typeof window === "undefined" ? 800 : window.innerHeight;
@@ -462,7 +378,6 @@ export default function ContextToolbar(p: Props) {
     };
   };
 
-  /** the same position, readable from the window-resize listener without re-binding it */
   const popPosRef = useRef<{ x: number; y: number; w: number } | null>(null);
   const movePop = (next: { x: number; y: number; w: number } | null) => {
     popPosRef.current = next;
@@ -481,15 +396,12 @@ export default function ContextToolbar(p: Props) {
   });
 
   const startPopDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    // the close button keeps behaving like a button, not a drag handle
     if ((e.target as HTMLElement | null)?.closest("button, input, select, textarea, a")) return;
     const box = measurePop();
     popBox.current = box;
-    // the card keeps its centred default until a real drag moves it
     beginPop(e, { x: box.x, y: box.y });
   };
 
-  // a resized window must not strand a dragged card off screen
   useEffect(() => {
     const onResize = () => {
       const cur = popPosRef.current;
@@ -538,15 +450,6 @@ export default function ContextToolbar(p: Props) {
     opts: { prefix?: ReactNode; dec?: string; inc?: string; jump?: number } = {},
   ) => {
     const clamp = (v: number) => {
-      /**
-       * Round to the STEP's own precision — never to a fixed tenth.
-       *
-       * A 0.05 step used to be squeezed through `Math.round(v * 10) / 10`, so
-       * "line spacing +" turned 1.4 into 1.5 and then "−" asked for 1.45 and
-       * was rounded straight back to 1.5: the minus button was DEAD on every
-       * .05 step (line spacing, line height, option line height). Two decimals
-       * is the floor, so integer steps still land on whole numbers.
-       */
       const decimals = Math.max(2, (String(step).split(".")[1] ?? "").length);
       return Number(Math.max(min, Math.min(max, v)).toFixed(decimals));
     };
@@ -565,27 +468,57 @@ export default function ContextToolbar(p: Props) {
       </span>
     );
   };
-  /**
-   * colour well: the glyph previews the value, the native picker opens on
-   * click. The dialog's per-move `input` is committed once per frame through
-   * `useColorFrame` and only the glyph is painted inside the event, so the
-   * deck never spends a render on every step of the OS indicator.
-   */
-  /**
-   * A colour well on the strip.
-   *
-   * The key is the control's IDENTITY and nothing else. A key that carried the
-   * VALUE remounted the input on every commit, which closes the OS dialog the
-   * user is still dragging in — and so does a key built from a label that
-   * changes as the value does ("Marker fill (auto until set)" loses its suffix
-   * the moment a colour is picked). `id` keeps such a well stable while its
-   * visible name stays free to describe the current state.
-   */
   const swatch = (name: string, value: string, change: (v: string) => void, glyph?: ReactNode, id?: string) => (
     <Swatch key={id ?? name} name={name} value={value} onChange={change} glyph={glyph} />
   );
-  const textSwatch = (name: string, value: string, change: (v: string) => void, id?: string) =>
-    swatch(name, value, change, <span className="ctx-a" style={{ borderBottomColor: value }}>A</span>, id);
+
+  // Canva-style font color button – opens FontColorPanel
+  const fontColorBtn = (
+    key: string,
+    label: string,
+    solid: string,
+    gradient: Gradient | undefined,
+    onSolid: (hex: string) => void,
+    onGradient: (g: Gradient) => void,
+    onClear: () => void,
+  ) => {
+    const isActive = panel === "TextColor" && fontColorCtx?.key === key;
+    const gradCss = gradient?.enabled ? gradientCss(gradient, solid || "#ffffff") : undefined;
+    const solidHex = normColor(solid) || "#ffffff";
+    return (
+      <button
+        key={key}
+        type="button"
+        title={`${label} – ${gradCss ? "gradient" : solidHex}`}
+        aria-label={label}
+        aria-pressed={isActive}
+        className={cn("ctx-btn ctx-font-color", isActive && "is-on")}
+        onClick={() =>
+          openFontColor({
+            key,
+            label,
+            solid: solidHex,
+            gradient,
+            onSolid,
+            onGradient,
+            onClearGradient: onClear,
+            docColors,
+          })
+        }
+      >
+        <span className="ctx-font-preview" aria-hidden="true">
+          {gradCss ? (
+            <span className="ctx-font-grad" style={{ background: gradCss }} />
+          ) : (
+            <span className="ctx-font-solid" style={{ background: solidHex }} />
+          )}
+          <span className="ctx-a" style={{ borderBottomColor: gradCss ? "transparent" : solidHex }}>
+            A
+          </span>
+        </span>
+      </button>
+    );
+  };
 
   let content: ReactNode = null;
   if (panel === "Font" && text) content = (
@@ -602,6 +535,19 @@ export default function ContextToolbar(p: Props) {
       }}
     />
   );
+  if (panel === "TextColor" && fontColorCtx) {
+    content = (
+      <FontColorPanel
+        solid={fontColorCtx.solid}
+        gradient={fontColorCtx.gradient}
+        onSolid={fontColorCtx.onSolid}
+        onGradient={fontColorCtx.onGradient}
+        onClearGradient={fontColorCtx.onClearGradient}
+        documentColors={fontColorCtx.docColors}
+        title={fontColorCtx.label}
+      />
+    );
+  }
   if (panel === "Spacing" && text) content = (
     <div className="space-y-2">
       <div className="ctx-field">
@@ -610,8 +556,6 @@ export default function ContextToolbar(p: Props) {
       </div>
       <div className="ctx-field">
         <span>Line height</span>
-        {/* 0 → ∞: the − and + steps walk the whole range, and the .05 step is
-            kept exactly (see stepper's clamp) */}
         {stepper("Line height", s?.lineHeight ?? tf.lineHeight ?? 1.4, v => s ? patch({ lineHeight: v }) : fontPatch({ lineHeight: v }), 0, 99999, .05)}
       </div>
       <div className="ctx-field">
@@ -645,7 +589,6 @@ export default function ContextToolbar(p: Props) {
     const t = part ? partTf(part) : undefined;
     return (
       <div className="space-y-3">
-        {/* the glyphs' own nudge: the box (and whatever is painted with it) stays put */}
         {part && t && (
           <div className="space-y-1 text-xs">
             <p className="ctx-menu-cap">Text position — {TEXT_PART_LABELS[part]} only (px nudge inside its box)</p>
@@ -686,7 +629,6 @@ export default function ContextToolbar(p: Props) {
       </div>
     );
   }
-  /** letter spacing · line spacing · opacity of ONE text part */
   function spacingContent(part: BoxFontId): ReactNode {
     const t = partTf(part);
     return (
@@ -707,7 +649,6 @@ export default function ContextToolbar(p: Props) {
       </div>
     );
   }
-  /** Canva-style text effects (+ the legacy glow / shadow / stroke) of ONE text part */
   function effectsContent(part: BoxFontId, extra?: ReactNode): ReactNode {
     const t = partTf(part);
     const stroke = t.textStroke ?? { enabled: false, color: "#000000", width: 1 };
@@ -731,7 +672,7 @@ export default function ContextToolbar(p: Props) {
             />
             {stroke.enabled && (
               <div className="space-y-2 pt-1">
-                {textSwatch("Stroke colour", stroke.color, c => setPart(part, { textStroke: { ...stroke, color: c } }))}
+                {swatch("Stroke colour", stroke.color, c => setPart(part, { textStroke: { ...stroke, color: c } }))}
                 <div className="ctx-field">
                   <span>Stroke width</span>
                   {stepper("Stroke width", stroke.width, w => setPart(part, { textStroke: { ...stroke, width: w } }), 0.5, 8, 0.5)}
@@ -743,7 +684,6 @@ export default function ContextToolbar(p: Props) {
       </div>
     );
   }
-  /** the font picker of ONE text part — the whole Google Fonts catalogue */
   function fontContent(part: BoxFontId): ReactNode {
     return (
       <FontPicker
@@ -764,12 +704,9 @@ export default function ContextToolbar(p: Props) {
       {button(<>⧉ Duplicate</>, p.duplicate, undefined, "Duplicate")}
       {button(<>🗑 Delete</>, p.remove, undefined, "Delete", "danger")}
       {!multi && button(<>{s.locked ? "🔓 Unlock" : "🔒 Lock"}</>, () => patch({ locked: !s.locked }), undefined, s.locked ? "Unlock" : "Lock")}
-      {/* 👁 keeps the layer in the stack (and in the Layers list) but stops painting it */}
       {!multi && button(<>🙈 Hide layer</>, () => patch({ hidden: true }), undefined, "Hide this layer — show it again from the Layers panel")}
     </div>
   );
-  // the related panel of the "Answer key" destination: style, deck-wide actions,
-  // and the paste-key entry point — everything the answer key needs, on the board
   if (panel === "Answer" && ak) content = (
     <div className="space-y-2">
       <p className="ctx-menu-cap">How a revealed answer is painted</p>
@@ -803,20 +740,12 @@ export default function ContextToolbar(p: Props) {
     </div>
   );
 
-  /* ---------------------------------------------------------------------- *
-   * The deeper pickers of the merged lines
-   *
-   * Every line's toggles open here, in the same movable pop-up card as the
-   * single-destination toolbar's.
-   * ---------------------------------------------------------------------- */
   const optLine = (id: MergedLineId) => stack?.includes(id) ?? false;
 
-  /* ---- options: option bullet + bullet text ----------------------------- */
   if (panel === "Marker shape" && optLine("optionBullet")) content = <OptionBulletShapePicker theme={theme} setTheme={p.patchTheme} />;
   if (panel === "Row style" && optLine("optionBullet")) content = <OptionStylePicker theme={theme} setTheme={p.patchTheme} />;
   if (panel === "Numbering" && optLine("optionBulletText")) content = <PlainNumberingPicker theme={theme} setTheme={p.patchTheme} />;
 
-  /* ---- every text line: font · spacing · effects · position of ITS part -- */
   for (const id of stack ?? []) {
     const part = LINE_PART[id];
     if (!part) continue;
@@ -848,7 +777,6 @@ export default function ContextToolbar(p: Props) {
     if (panel === `${chip} position`) content = positionContent(part);
   }
 
-  /* ---- title background: banner plate ----------------------------------- */
   if (panel === "Banner shape" && optLine("titleBg")) content = (
     <div className="ctx-menu-grid">
       {BANNER_SHAPES.map(b => (
@@ -883,7 +811,6 @@ export default function ContextToolbar(p: Props) {
     <NumberStylePicker theme={theme} setTheme={p.patchTheme} />
   );
 
-  /** the element's primary size: its deck field (title 54px, badge 36px…) when it has one */
   const sizeField = el ? ELEMENT_SIZE_FIELD[el] : undefined;
   const size = s?.fontSize ?? (sizeField ? Number(theme[sizeField] ?? 0) : (tf.fontSize ?? Math.round((tf.scale ?? 1) * 100)));
   const setSize = (v: number) => {
@@ -900,25 +827,11 @@ export default function ContextToolbar(p: Props) {
       if (el && (a === "left" || a === "center" || a === "right")) p.patchBox({ align: a });
     }
   };
-  /** the Insert destinations show their quick-add tools when nothing else is selected */
   const inserting = !s && !surface && (p.nav === "images" || p.nav === "shapes");
-  /**
-   * The Design and Layout destinations own no board element, so with nothing
-   * selected the strip brings THEIR tools: the deck's base colours for Design,
-   * an element picker plus the snapping switches for Layout. As soon as a
-   * layer gets selected the ordinary tools take over, exactly like Layers.
-   */
   const themePill = p.nav === "theme" && !s && !surface && !el && !multi;
   const layoutPill = p.nav === "layout" && !s && !surface && !el && !multi;
-  /**
-   * The Layers destination with nothing selected yet: the strip explains the
-   * stack instead of staying empty. As soon as a row is picked, the ordinary
-   * tools for that layer take over and gain the arrange buttons below.
-   */
   const layering = !!p.layerTools && !s && !surface && !el && !multi;
-  /** arrange inline, one click away, while the Layers destination is open */
   const arrangeBar = !!p.layerTools && !layering && !surface;
-  /** the four Bring / Send steps, shared by the single strip and the stack */
   const arrangeButtons = (["front", "forward", "backward", "back"] as ZOp[]).map(op => (
     <span key={op}>
       {button(Z_LABELS[op].icon, () => p.reorder(op), undefined, `${Z_LABELS[op].label} — ${Z_LABELS[op].hint}`)}
@@ -937,17 +850,15 @@ export default function ContextToolbar(p: Props) {
             : surface || (multi ? `Group · ${p.count}` : text ? 'Text' : s?.kind || 'Image');
   const toolbarLabel = `${ak ? "answer" : themePill ? "theme" : layoutPill ? "layout" : layering ? "layers" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
 
-  /* the movable pop-up card every toolbar toggle shares (single or stacked) */
   const popNode = content && (
     <div
       ref={popRef}
       role="dialog"
       aria-label={`${panel} settings`}
       data-pop-panel={panel}
-      className={cn("ctx-pop", popPos && "ctx-pop-floating")}
-      style={popPos ? { left: popPos.x, top: popPos.y, width: popPos.w } : undefined}
+      className={cn("ctx-pop", popPos && "ctx-pop-floating", panel === "TextColor" && "ctx-pop-wide")}
+      style={popPos ? { left: popPos.x, top: popPos.y, width: panel === "TextColor" ? 380 : popPos.w } : panel === "TextColor" ? { width: 380 } : undefined}
     >
-      {/* the header is the drag handle: free positioning, double-click to re-centre */}
       <div
         className="ctx-pop-head"
         data-pop-handle={panel}
@@ -959,7 +870,7 @@ export default function ContextToolbar(p: Props) {
       >
         <span className="ctx-pop-title">
           <span className="ctx-grip" aria-hidden="true">⠿</span>
-          {panel}
+          {panel === "TextColor" ? fontColorCtx?.label ?? "Text color" : panel}
         </span>
         <span className="flex items-center gap-1">
           {popPos && (
@@ -981,32 +892,17 @@ export default function ContextToolbar(p: Props) {
     </div>
   );
 
-  /* ---------------------------------------------------------------------- *
-   * Merged contents — the stacked line-up
-   *
-   * One toolbar line per related part, in board-reading order, with the line
-   * that owns the open destination highlighted. Every line carries the compact
-   * slice of its inspector panel that fits a toolbar row, and every control
-   * writes through that line's OWN element — a control on the "Question
-   * bullet" row can never restyle the question stem, and vice versa.
-   * ---------------------------------------------------------------------- */
   const lineControls = (id: MergedLineId): ReactNode => {
     const target = MERGED_LINE[id].element;
     const chip = MERGED_LINE[id].chip;
     const lineFont = boxTypeface(theme, target);
-    /** the ink this line's text is actually painted with, and the one write
-     *  that changes it — see lib/boxFonts: a box with a deck colour field of
-     *  its own must not be restyled through a per-box override, or the two
-     *  surfaces shadow each other and one of them stops working */
     const lineInk = elementInk(theme, target);
     const setLineInk = (v: string) => p.patchTheme(setElementInk(theme, target, v));
 
-    /* ---- the text tools every text line shares, bound to ITS OWN part ---- */
     const part = LINE_PART[id];
     const t = part ? partTf(part) : {};
     const set = (patch: Partial<BoxTypeface>) => part && setPart(part, patch);
     const isBold = t.weight ? t.weight >= 700 : !!part && DEFAULT_BOLD.has(part);
-    /** B · I · U · S */
     const styleButtons = () => (
       <>
         {button(<span className="ctx-glyph-b">B</span>, () => set({ weight: isBold ? 400 : 700 }), isBold, "Bold")}
@@ -1015,7 +911,6 @@ export default function ContextToolbar(p: Props) {
         {button(<span className="ctx-glyph-s">S</span>, () => set({ strikethrough: !t.strikethrough }), !!t.strikethrough, "Strikethrough")}
       </>
     );
-    /** Aa — UPPERCASE → lowercase → Normal */
     const caseButton = () => {
       const cur = caseOf(t);
       const next = cur === "uppercase" ? "lowercase" : cur === "lowercase" ? "none" : "uppercase";
@@ -1026,12 +921,6 @@ export default function ContextToolbar(p: Props) {
         `Text case of ${chip} (UPPERCASE / lowercase / Normal)`,
       );
     };
-    /**
-     * Alignment of this line's text. A part that IS its board element (the
-     * stem, the option text, the title) also aligns its box, exactly as the
-     * single toolbar does; a line inside a shared block (a badge line, the
-     * number, the marker letter) aligns its own glyphs only.
-     */
     const alignButtons = () => {
       const ownsBox = part === target;
       const cur = t.align ?? (ownsBox ? theme.layout[target]?.align ?? "left" : "left");
@@ -1049,12 +938,10 @@ export default function ContextToolbar(p: Props) {
         </span>
       ));
     };
-    /** the deeper text pop-ups — one set per line, so two lines never share a card */
     const fontToggle = () => toggle(`${chip} font`, <span aria-hidden="true">A</span>);
     const spacingToggle = () => toggle(`${chip} spacing`, <span aria-hidden="true">⇄</span>);
     const effectsToggle = () => toggle(`${chip} effects`, <span aria-hidden="true">✨</span>);
-    const positionToggle = () => toggle(`${chip} position`, <span aria-hidden="true">✥</span>);
-    /** the shared tail of every text line: case · align · spacing · effects · position */
+    const positionToggle = () => toggle(`${chip} position`, <span aria-hidden="true\">✥</span>);
     const textTail = () => (
       <>
         {sep()}
@@ -1069,24 +956,37 @@ export default function ContextToolbar(p: Props) {
       </>
     );
 
+    // helpers for font color with gradient support
+    const solidForPart = part ? (partInk(part) || lineInk || (target === "title" ? theme.titleColor : target === "question" ? theme.questionColor : target === "options" ? theme.optionTextColor : "#ffffff")) : lineInk;
+    const gradForPart = part ? partTf(part).textGradient : undefined;
+
     switch (id) {
-      /* -------- title text: the heading glyphs (Title text panel) -------- */
       case "titleText":
         return (
           <>
             {fontToggle()}
             {stepper("Title size", theme.titleSize ?? 54, v => p.patchTheme({ titleSize: v }), 0, 99999, 1, { prefix: "Size" })}
-            {textSwatch("Title colour", lineInk || theme.titleColor, setLineInk)}
+            {fontColorBtn(
+              `font:${id}`,
+              "Title colour",
+              solidForPart || theme.titleColor,
+              gradForPart,
+              (hex) => {
+                setLineInk(hex);
+                if (gradForPart?.enabled) setPart(part!, { textGradient: { ...gradForPart, enabled: false } });
+              },
+              (g) => setPart(part!, { textGradient: g }),
+              () => setPart(part!, { textGradient: { ...(gradForPart ?? { enabled: false, type: "linear", angle: 90, stops: [{ color: solidForPart, at: 0 }, { color: "#ffffff", at: 100 }] }), enabled: false } }),
+            )}
             {textTail()}
           </>
         );
 
-      /* ----- the banner plate (Title background panel) ------------------- */
       case "titleBg": {
         const shown = p.header?.showBanner ?? true;
         return (
           <>
-            {toggle("Banner shape", <span aria-hidden="true">▣</span>)}
+            {toggle("Banner shape", <span aria-hidden="true\">▣</span>)}
             {swatch("Banner colour", banner.color, v => patchBanner({ color: v }), <span className="ctx-dot" style={{ background: banner.color }} />)}
             {toggle("Banner fill")}
             {stepper("Banner opacity %", Math.round(banner.opacity * 100), v => patchBanner({ opacity: Math.max(0, Math.min(1, v / 100)) }), 0, 100, 5, { prefix: "◐" })}
@@ -1100,56 +1000,87 @@ export default function ContextToolbar(p: Props) {
         );
       }
 
-      /* ----- badges 1 & 2: one brand block, a line each (Brand line panel) */
       case "badge1":
       case "badge2": {
         const c = BADGE_LINE[id];
         const own = theme[c.color] ?? "";
         const shown = theme[c.show] ?? true;
+        const partId = LINE_PART[id]!;
+        const solid = partInk(partId) || own || theme.brandColor;
+        const grad = partTf(partId).textGradient;
         return (
           <>
             {fontToggle()}
             {stepper(`Badge ${c.n} size`, theme[c.size] ?? c.fallback, v => patchLine({ [c.size]: v }), 0, 99999, 1, { prefix: "Size" })}
-            {textSwatch(`Badge ${c.n} colour`, own || theme.brandColor, v => set({ color: v }))}
+            {fontColorBtn(
+              `font:${id}`,
+              `Badge ${c.n} colour`,
+              solid,
+              grad,
+              (hex) => {
+                set({ color: hex });
+                if (grad?.enabled) set({ textGradient: { ...grad, enabled: false } });
+              },
+              (g) => set({ textGradient: g }),
+              () => set({ textGradient: { ...(grad ?? { enabled: false, type: "linear", angle: 90, stops: [{ color: solid, at: 0 }, { color: "#fff", at: 100 }] }), enabled: false } }),
+            )}
             {button("auto", () => set({ color: "" }), !own, "Follow the shared brand colour")}
             {sep()}
-            {button(<span aria-hidden="true">👁</span>, () => patchLine({ [c.show]: !shown }), shown, `Show / hide badge ${c.n}`)}
+            {button(<span aria-hidden="true\">👁</span>, () => patchLine({ [c.show]: !shown }), shown, `Show / hide badge ${c.n}`)}
             {textTail()}
           </>
         );
       }
 
-      /* -------- the stem (Question text panel) --------------------------- */
       case "questionText":
         return (
           <>
             {fontToggle()}
             {stepper("Question size %", Math.round((lineFont.scale ?? 1) * 100), v => set({ scale: Math.max(0, v) / 100 }), 0, 99999, 5, { prefix: "Size" })}
-            {textSwatch("Question colour", lineInk || theme.questionColor, setLineInk)}
+            {fontColorBtn(
+              `font:${id}`,
+              "Question colour",
+              solidForPart || theme.questionColor,
+              gradForPart,
+              (hex) => {
+                setLineInk(hex);
+                if (gradForPart?.enabled) setPart(part!, { textGradient: { ...gradForPart, enabled: false } });
+              },
+              (g) => setPart(part!, { textGradient: g }),
+              () => setPart(part!, { textGradient: { ...(gradForPart ?? { enabled: false, type: "linear", angle: 90, stops: [{ color: solidForPart, at: 0 }, { color: "#fff", at: 100 }] }), enabled: false } }),
+            )}
             {textTail()}
           </>
         );
 
-      /* ---- the marker body (Question bullet panel) ---------------------- */
       case "questionBullet":
         return (
           <>
-            {toggle("Bullet design", <span aria-hidden="true">⬤</span>)}
+            {toggle("Bullet design", <span aria-hidden="true\">⬤</span>)}
             {stepper("Bullet size", theme.bulletSize ?? 54, v => p.patchTheme({ bulletSize: v }), 0, 99999, 1, { prefix: "Size" })}
             {swatch("Bullet colour", theme.accent, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: theme.accent }} />)}
             {sep()}
-            {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
+            {button(<span aria-hidden="true\">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
           </>
         );
 
-      /* --- the number inside it (Text inside question bullet panel) ------ */
-      case "bulletText":
+      case "bulletText": {
+        const solid = lineFont.color || theme.accent;
+        const grad = part ? partTf(part).textGradient : undefined;
         return (
           <>
-            {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showNumber: !theme.showNumber }), theme.showNumber, "Show / hide the number inside the bullet")}
+            {button(<span aria-hidden="true\">👁</span>, () => p.patchTheme({ showNumber: !theme.showNumber }), theme.showNumber, "Show / hide the number inside the bullet")}
             {fontToggle()}
             {stepper("Number size %", Math.round((lineFont.scale ?? 1) * 100), v => set({ scale: Math.max(0, v) / 100 }), 0, 99999, 5, { prefix: "Size" })}
-            {swatch("Number ink", lineFont.color || theme.accent, v => set({ color: v }), <span className="ctx-a" style={{ borderBottomColor: lineFont.color || theme.accent }}>A</span>)}
+            {fontColorBtn(
+              `font:${id}`,
+              "Number ink",
+              solid,
+              grad,
+              (hex) => set({ color: hex }),
+              (g) => set({ textGradient: g }),
+              () => set({ textGradient: { ...(grad ?? { enabled: false, type: "linear", angle: 90, stops: [{ color: solid, at: 0 }, { color: "#fff", at: 100 }] }), enabled: false } }),
+            )}
             {button("auto", () => set({ color: "" }), !lineFont.color, "Let the bullet design pick its own ink")}
             {sep()}
             <select
@@ -1165,25 +1096,35 @@ export default function ContextToolbar(p: Props) {
             {textTail()}
           </>
         );
+      }
 
-      /* ------- option text: the choices (Option text panel) -------------- */
       case "optionText":
         return (
           <>
             {fontToggle()}
             {stepper("Option text size", theme.optionSize, optionSize => p.patchTheme({ optionSize }), 0, 99999, 1, { prefix: "Size" })}
-            {textSwatch("Option text colour", lineInk || theme.optionTextColor, setLineInk)}
+            {fontColorBtn(
+              `font:${id}`,
+              "Option text colour",
+              solidForPart || theme.optionTextColor,
+              gradForPart,
+              (hex) => {
+                setLineInk(hex);
+                if (gradForPart?.enabled) setPart(part!, { textGradient: { ...gradForPart, enabled: false } });
+              },
+              (g) => setPart(part!, { textGradient: g }),
+              () => setPart(part!, { textGradient: { ...(gradForPart ?? { enabled: false, type: "linear", angle: 90, stops: [{ color: solidForPart, at: 0 }, { color: "#fff", at: 100 }] }), enabled: false } }),
+            )}
             {stepper("Option line height", theme.optionLineHeight ?? 1.45, v => p.patchTheme({ optionLineHeight: Math.round(v * 20) / 20 }), 0, 99, .05, { prefix: "Line" })}
             {textTail()}
           </>
         );
 
-      /* ---- the markers (Option bullet panel) ---------------------------- */
       case "optionBullet":
         return (
           <>
-            {toggle("Marker shape", <span aria-hidden="true">⬤</span>)}
-            {toggle("Row style", <span aria-hidden="true">▭</span>)}
+            {toggle("Marker shape", <span aria-hidden="true\">⬤</span>)}
+            {toggle("Row style", <span aria-hidden="true\">▭</span>)}
             {sep()}
             {swatch("Marker colour (auto base)", picked(theme.optionAccent), v => p.patchTheme({ optionAccent: v }), <span className="ctx-dot" style={{ background: picked(theme.optionAccent) }} />)}
             {swatch(`Marker fill${theme.optionBulletFill ? "" : " (auto until set)"}`, picked(theme.optionBulletFill || shade(optionBase, 0.2)), v => p.patchTheme({ optionBulletFill: v }), <span className="ctx-dot" style={{ background: picked(theme.optionBulletFill || shade(optionBase, 0.2)) }} />, "optionBulletFill")}
@@ -1206,14 +1147,23 @@ export default function ContextToolbar(p: Props) {
           </>
         );
 
-      /* --- the letter inside the markers (Option bullet text panel) ------ */
-      case "optionBulletText":
+      case "optionBulletText": {
+        const solid = picked(theme.optionBulletInk || optionBase);
+        const grad = part ? partTf(part).textGradient : undefined;
         return (
           <>
-            {toggle("Numbering", <span aria-hidden="true">#</span>)}
+            {toggle("Numbering", <span aria-hidden="true\">#</span>)}
             {fontToggle()}
             {sep()}
-            {swatch(`Marker letter ink${theme.optionBulletInk ? "" : " (auto until set)"}`, picked(theme.optionBulletInk || optionBase), v => p.patchTheme({ optionBulletInk: v }), <span className="ctx-a" style={{ borderBottomColor: picked(theme.optionBulletInk || optionBase) }}>A</span>, "optionBulletInk")}
+            {fontColorBtn(
+              `font:${id}`,
+              "Marker letter ink",
+              solid,
+              grad,
+              (hex) => p.patchTheme({ optionBulletInk: hex }),
+              (g) => setPart(part!, { textGradient: g }),
+              () => setPart(part!, { textGradient: { ...(grad ?? { enabled: false, type: "linear", angle: 90, stops: [{ color: solid, at: 0 }, { color: "#fff", at: 100 }] }), enabled: false } }),
+            )}
             {button("auto", () => set({ color: "" }), !theme.optionBulletInk, "Let the marker palette pick the letter's ink")}
             {sep()}
             <select
@@ -1230,12 +1180,10 @@ export default function ContextToolbar(p: Props) {
             {textTail()}
           </>
         );
+      }
     }
   };
 
-  /* ---------------------------------------------------------------------- *
-   * The stacked render: every related part's line, the owner highlighted.
-   * ---------------------------------------------------------------------- */
   if (stack) {
     return (
       <section className="context-toolbar" aria-label="Contextual editing tools">
@@ -1251,8 +1199,6 @@ export default function ContextToolbar(p: Props) {
               {lineControls(id)}
             </div>
           ))}
-          {/* the Layers destination keeps its arrange tools: restyling a part
-              of a merged block is no reason to lose Bring / Send */}
           {arrangeBar && (
             <div role="toolbar" aria-label="Arrange tools" className="ctx-pill">
               <span className="ctx-kind">Arrange</span>
@@ -1269,7 +1215,6 @@ export default function ContextToolbar(p: Props) {
     <section className="context-toolbar" aria-label="Contextual editing tools">
       <div role="toolbar" aria-label={toolbarLabel} className="ctx-pill">
         <span className="ctx-kind">{kindLabel}</span>
-        {/* the answer-key destination: mark, reveal, style, paste — right on the board */}
         {ak && <>
           {button(
             <>{ak.showAnswer ? "👁 Revealed" : "👁 Hidden"}</>,
@@ -1295,7 +1240,6 @@ export default function ContextToolbar(p: Props) {
           {button(<>✓ Paste key</>, ak.onPaste, undefined, "Paste an answer key (1. ঘ 2. গ …) for the whole deck")}
           {sep()}
         </>}
-        {/* the Design destination: the deck's base colours, one well each */}
         {themePill && <>
           {swatch("Accent colour", theme.accent, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: theme.accent }} />)}
           {swatch("Board colour", theme.board, v => p.patchTheme({ board: v }), <span className="ctx-dot" style={{ background: theme.board }} />)}
@@ -1303,7 +1247,6 @@ export default function ContextToolbar(p: Props) {
           <span className="ctx-hint">theme presets & shared fonts are in the panel</span>
           {sep()}
         </>}
-        {/* the Layout destination: jump to an element, snapping switches */}
         {layoutPill && <>
           <select
             aria-label="Element to position"
@@ -1326,7 +1269,6 @@ export default function ContextToolbar(p: Props) {
           <span className="ctx-hint">X / Y / W / H, rotation and the position map are in the panel</span>
           {sep()}
         </>}
-        {/* the Layers destination: the stack, and how to move things in it */}
         {layering && <>
           <span className="ctx-hint">
             {p.layerTools?.total ?? 0} layers on this slide · drag a row in the panel to any slot in the stack · click
@@ -1337,7 +1279,6 @@ export default function ContextToolbar(p: Props) {
           {arrangeButtons}
           {sep()}
         </>}
-        {/* the insert destinations: quick-add tools above the board */}
         {inserting && p.nav === "images" && <>
           <label className="ctx-btn ctx-upload" title="Upload images (or a PDF) to this slide and library">
             📤 Upload image / PDF
@@ -1373,11 +1314,26 @@ export default function ContextToolbar(p: Props) {
           {button(<span className="ctx-glyph-s">S</span>, () => s ? patch({ strikethrough: !s.strikethrough }) : fontPatch({ strikethrough: !tf.strikethrough }), s ? !!s.strikethrough : !!tf.strikethrough, "Strikethrough")}
           {sep()}
           {s
-            ? textSwatch("Text color", s.textColor, textColor => patch({ textColor, textGradient: s.textGradient ? { ...s.textGradient, enabled: false } : undefined }))
-            /* an element's ink goes through the field that actually paints it:
-               `boxFonts.options.color` is never read by the option renderer, so
-               this swatch used to do nothing at all on the Answer key strip */
-            : textSwatch("Text color", (el && elementInk(theme, el)) || tf.color || "#ffffff", color => el && p.patchTheme(setElementInk(theme, el, color)))}
+            ? fontColorBtn(
+                "shapeText",
+                "Text color",
+                s.textColor || "#ffffff",
+                s.textGradient,
+                (hex) => patch({ textColor: hex, textGradient: s.textGradient ? { ...s.textGradient, enabled: false } : undefined }),
+                (g) => patch({ textGradient: g }),
+                () => patch({ textGradient: s.textGradient ? { ...s.textGradient, enabled: false } : { enabled: false, type: "linear", angle: 90, stops: [{ color: s.textColor, at: 0 }, { color: "#fff", at: 100 }] } }),
+              )
+            : el
+              ? fontColorBtn(
+                  `el:${el}`,
+                  "Text color",
+                  (el && elementInk(theme, el)) || tf.color || "#ffffff",
+                  (el && textPartTypeface(theme, el as any).textGradient) || undefined,
+                  (hex) => el && p.patchTheme(setElementInk(theme, el as any, hex)),
+                  (g) => el && p.patchTheme(patchTextPart(theme, el as any, { textGradient: g })),
+                  () => el && p.patchTheme(patchTextPart(theme, el as any, { textGradient: { enabled: false, type: "linear", angle: 90, stops: [{ color: (el && elementInk(theme, el)) || "#fff", at: 0 }, { color: "#fff", at: 100 }] } })),
+                )
+              : null}
           {button("Aa", () => {
             if (s) {
               const cur = s.textTransform ?? (s.uppercase ? "uppercase" : s.lowercase ? "lowercase" : "none");
