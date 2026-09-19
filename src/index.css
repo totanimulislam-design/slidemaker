@@ -240,3 +240,53 @@ input[type="text"] {
 .ctx-menu-parent:focus-within > .ctx-submenu {
   display: block;
 }
+
+/* ------------------------------------------------------------------ *
+ * Font color picker – Canva style
+ * ------------------------------------------------------------------ */
+.ctx-font-color {
+  position: relative;
+  min-width: 44px;
+  padding: 0 6px;
+}
+.ctx-font-preview {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  line-height: 1;
+}
+.ctx-font-solid, .ctx-font-grad {
+  width: 22px;
+  height: 10px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(255,255,255,.35);
+  box-shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+.ctx-font-grad {
+  background-size: 100% 100%;
+}
+.ctx-font-color .ctx-a {
+  font-size: 14px;
+  padding: 0 2px;
+  border-bottom-width: 3px;
+  line-height: 1;
+}
+.ctx-pop-wide {
+  width: min(380px, 96vw) !important;
+  max-height: 72vh;
+}
+.ctx-pop-wide .ctx-pop-body {
+  padding: 0;
+  overflow: visible;
+}
+
+/* FontColorPanel inner tweaks */
+.font-color-panel {
+  font-family: inherit;
+}
+.font-color-panel button:focus-visible,
+.font-color-panel input:focus-visible {
+  outline: 2px solid #fbbf24;
+  outline-offset: 1px;
+}

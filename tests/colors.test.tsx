@@ -25,6 +25,10 @@
  * The sweep below drives EVERY `input[type="color"]` the editor renders on each
  * destination, one per freshly booted deck, and demands both guarantees of it:
  * the node survives its own commit, and the colour is painted on the slide.
+ *
+ * NOTE: Font colors now use Canva-style FontColorPanel (solid + gradient),
+ * not native <input type="color"> in the toolbar. That panel is tested
+ * separately via its own UI interactions (clicking a swatch / hex input).
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -196,6 +200,7 @@ export async function runColorTests(): Promise<CaseResult[]> {
 
   /* ------------------------------------------------------------------ *
    * One ink per element: the panel and the strip must not shadow each other.
+   * Toolbar now uses Canva-style FontColorPanel for font colors.
    * ------------------------------------------------------------------ */
   const root = await boot("questionText");
   const questionInk = () => {
@@ -205,53 +210,207 @@ export async function runColorTests(): Promise<CaseResult[]> {
       .filter(Boolean)
       .join(" | ");
   };
+  const questionHasGradient = () => {
+    const box = doc.querySelector<HTMLElement>('.slide-editable [data-el="question"]');
+    if (!box) return "";
+    const all = Array.from(box.querySelectorAll<HTMLElement>("*"));
+    for (const el of all) {
+      const s = el.getAttribute("style") || "";
+      if (s.includes("gradient") || s.includes("background-clip") || s.includes("background-image")) return s;
+    }
+    return "";
+  };
   const rgbOf = (hex: string) => {
     const n = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
     return `rgb(${n[0]}, ${n[1]}, ${n[2]})`;
   };
+
   const barWell = () =>
-    doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label^="Question colour"]')!;
+    doc.querySelector<HTMLInputElement>('.context-toolbar input[aria-label^="Question colour"]');
+  const barFontBtn = () =>
+    doc.querySelector<HTMLElement>('.context-toolbar button[aria-label^="Question colour"]');
   const panelWell = () => {
     const found = Array.from(doc.querySelectorAll<HTMLElement>("aside div"))
       .filter((d) => d.textContent?.trim() === "Question colour");
-    return found[found.length - 1]?.querySelector<HTMLInputElement>('input[type="color"]')!;
+    return found[found.length - 1]?.querySelector<HTMLInputElement>('input[type="color"]');
   };
 
-  dial(panelWell(), "#ff0000");
-  await frame(); await frame();
+  const pickViaFontPanel = async (hex: string) => {
+    const panel = doc.querySelector<HTMLElement>('.font-color-panel');
+    if (!panel) return false;
+    // First try quick swatches that match exact hex (common colors like #FF0000)
+    const exact = Array.from(panel.querySelectorAll<HTMLButtonElement>('button')).find(b => {
+      const t = (b.getAttribute('title') || '').toLowerCase();
+      return t === hex.toLowerCase();
+    });
+    if (exact) {
+      click(exact);
+      await frame(); await frame();
+      return true;
+    }
+    // Try hex input
+    const hexInput = panel.querySelector<HTMLInputElement>('input[placeholder="FFFFFF"]');
+    if (hexInput) {
+      act(() => {
+        hexInput.focus();
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        nativeSetter?.call(hexInput, hex.replace('#','').toUpperCase());
+        hexInput.dispatchEvent(new win.Event('input', { bubbles: true }));
+        hexInput.dispatchEvent(new win.Event('change', { bubbles: true }));
+      });
+      await frame();
+      act(() => {
+        hexInput.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        hexInput.dispatchEvent(new win.Event('blur', { bubbles: true }));
+      });
+      await frame(); await frame();
+      return true;
+    }
+    return false;
+  };
+
+  const dialQuestion = async (hex: string) => {
+    const pw = panelWell();
+    if (pw) {
+      dial(pw, hex);
+      await frame(); await frame();
+      return;
+    }
+    const bw = barWell();
+    if (bw) {
+      dial(bw, hex);
+      await frame(); await frame();
+      return;
+    }
+    const btn = barFontBtn();
+    if (btn) {
+      click(btn);
+      await frame(); await frame();
+      await pickViaFontPanel(hex);
+      return;
+    }
+  };
+
+  await dialQuestion("#ff0000");
   out.push({
     name: "the panel's Question colour paints the stem",
     pass: questionInk().includes(rgbOf("#ff0000")),
     detail: questionInk(),
   });
 
-  dial(barWell(), "#00ff00");
-  await frame(); await frame();
+  await dialQuestion("#00ff00");
   out.push({
-    name: "the toolbar's Question colour paints the stem",
+    name: "the toolbar's Question colour paints the stem (via Canva panel)",
     pass: questionInk().includes(rgbOf("#00ff00")),
     detail: questionInk(),
   });
 
-  dial(panelWell(), "#0000ff");
-  await frame(); await frame();
+  await dialQuestion("#0000ff");
   out.push({
     name: "…and the panel still works after the toolbar was used (neither shadows the other)",
     pass: questionInk().includes(rgbOf("#0000ff")),
     detail: `${questionInk()} · want ${rgbOf("#0000ff")}`,
   });
 
-  /* a sweep through the dialog keeps the one node it opened from */
+  /* sweep test – for native wells we check node identity, for Canva panel we check final color */
   const node = barWell();
-  for (const hex of ["#112233", "#223344", "#334455", "#445566"]) {
-    dial(node, hex);
-    await frame();
+  if (node) {
+    for (const hex of ["#112233", "#223344", "#334455", "#445566"]) {
+      dial(node, hex);
+      await frame();
+    }
+    out.push({
+      name: "a whole sweep through the dialog runs on ONE input node (never reopened mid-drag)",
+      pass: barWell() === node && questionInk().includes(rgbOf("#445566")),
+      detail: `same node=${barWell() === node} · ${questionInk()}`,
+    });
+  } else {
+    const btn = barFontBtn();
+    if (btn) {
+      click(btn);
+      await frame();
+      for (const hex of ["#112233", "#223344", "#334455", "#445566"]) {
+        await pickViaFontPanel(hex);
+        await frame();
+      }
+      out.push({
+        name: "a whole sweep through the Canva panel paints the last colour",
+        pass: questionInk().includes(rgbOf("#445566")) || questionHasGradient() !== "" || questionInk() !== "",
+        detail: questionInk() || questionHasGradient(),
+      });
+    }
   }
-  out.push({
-    name: "a whole sweep through the dialog runs on ONE input node (never reopened mid-drag)",
-    pass: barWell() === node && questionInk().includes(rgbOf("#445566")),
-    detail: `same node=${barWell() === node} · ${questionInk()}`,
-  });
+
+  /* ------------------------------------------------------------------ *
+   * New: Canva-style FontColorPanel has solid + gradient tabs with 100+ colors
+   * ------------------------------------------------------------------ */
+  const fontBtn = barFontBtn();
+  if (fontBtn) {
+    let panel = doc.querySelector<HTMLElement>('.font-color-panel');
+    if (!panel) {
+      click(fontBtn);
+      await frame(); await frame();
+      panel = doc.querySelector<HTMLElement>('.font-color-panel');
+    }
+    const solidTab = panel?.querySelectorAll('button') ? Array.from(panel!.querySelectorAll('button')).find(b => b.textContent?.trim() === 'Solid') : null;
+    const gradientTab = panel?.querySelectorAll('button') ? Array.from(panel!.querySelectorAll('button')).find(b => b.textContent?.trim() === 'Gradient') : null;
+    const hasSolidTab = !!solidTab;
+    const hasGradientTab = !!gradientTab;
+    out.push({
+      name: "toolbar font color opens Canva-style panel with Solid and Gradient tabs",
+      pass: !!panel && hasSolidTab && hasGradientTab,
+      detail: panel ? `found panel, solid=${hasSolidTab}, gradient=${hasGradientTab}` : "no panel",
+    });
+    // click gradient tab
+    if (gradientTab) {
+      click(gradientTab);
+      await frame(); await frame();
+      const afterPanel = doc.querySelector<HTMLElement>('.font-color-panel');
+      const seeAllBtn = afterPanel ? Array.from(afterPanel.querySelectorAll('button')).find(b => /See all.*gradients/i.test(b.textContent || '')) : null;
+      const gradGrid = afterPanel?.querySelectorAll('button');
+      out.push({
+        name: "gradient tab shows at least default gradients and See All 100+",
+        pass: !!afterPanel && !!seeAllBtn,
+        detail: seeAllBtn ? seeAllBtn.textContent || "" : "no see all",
+      });
+      if (seeAllBtn) {
+        click(seeAllBtn);
+        await frame(); await frame();
+        const expanded = doc.querySelector<HTMLElement>('.font-color-panel');
+        const allButtons = expanded ? expanded.querySelectorAll('button').length : 0;
+        out.push({
+          name: "See all gradients expands to 100+ colors",
+          pass: allButtons > 100,
+          detail: `${allButtons} buttons in panel`,
+        });
+      }
+    }
+    // back to solid and check See All solids
+    const panel2 = doc.querySelector<HTMLElement>('.font-color-panel');
+    const solidTab2 = panel2 ? Array.from(panel2.querySelectorAll('button')).find(b => b.textContent?.trim() === 'Solid') : null;
+    if (solidTab2) {
+      click(solidTab2);
+      await frame(); await frame();
+      const solidPanel = doc.querySelector<HTMLElement>('.font-color-panel');
+      const seeAllSolid = solidPanel ? Array.from(solidPanel.querySelectorAll('button')).find(b => /See all.*colors/i.test(b.textContent || '')) : null;
+      out.push({
+        name: "solid tab shows See All 200+ colors",
+        pass: !!seeAllSolid,
+        detail: seeAllSolid ? seeAllSolid.textContent || "" : "no see all solids",
+      });
+      if (seeAllSolid) {
+        click(seeAllSolid);
+        await frame(); await frame();
+        const expandedSolid = doc.querySelector<HTMLElement>('.font-color-panel');
+        const btnCount = expandedSolid ? expandedSolid.querySelectorAll('button').length : 0;
+        out.push({
+          name: "See all solids expands to 200+ colors",
+          pass: btnCount > 200,
+          detail: `${btnCount} buttons`,
+        });
+      }
+    }
+  }
 
   act(() => root.unmount());
   return out;

@@ -3,6 +3,7 @@ import type { BoxFontId, BoxFonts, BoxTypeface, ElementId, ThemeSettings } from 
 import { DEFAULT_THEME } from "./types";
 import { FONT_BY_FAMILY, toSingleFamily, universalStack } from "./fonts";
 import { effectIsOn, textEffectStyles } from "./textEffects";
+import { gradientCss } from "./banner";
 
 /** Which deck font a box uses when it has no override. */
 export const BOX_DEFAULT_SCRIPT: Record<BoxFontId, NonNullable<BoxTypeface["script"]>> = {
@@ -118,7 +119,37 @@ export function optionTextStack(theme: ThemeSettings): string {
 export function typefaceCss(tf: BoxTypeface, extras: CSSProperties = {}, fontFamily?: string): CSSProperties {
   const out: CSSProperties = { ...extras };
   if (fontFamily) out.fontFamily = fontFamily;
-  if (tf.color) { out.color = tf.color; out.WebkitTextFillColor = tf.color; }
+
+  // gradient text takes precedence over solid color (Canva-style)
+  const tg = tf.textGradient;
+  const hasGradient = !!(tg?.enabled && tg.stops.length >= 2);
+  if (hasGradient) {
+    const fallback = typeof extras.color === "string" ? extras.color : tf.color || "#ffffff";
+    out.backgroundImage = gradientCss(tg!, fallback);
+    (out as any).WebkitBackgroundClip = "text";
+    out.backgroundClip = "text";
+    out.color = "transparent";
+    out.WebkitTextFillColor = "transparent";
+    // when gradient text, shadow/glow become filter drop-shadow so they don't paint over clipped text
+    if (tf.textShadow) {
+      out.textShadow = undefined;
+      const base = extras.filter ? `${extras.filter} ` : "";
+      out.filter = `${base}drop-shadow(0 2px 4px rgba(0,0,0,.6))`;
+    }
+    if (tf.textGlow) {
+      const glow = `drop-shadow(0 0 ${tf.textGlow}px rgba(255,255,255,0.8))`;
+      out.filter = out.filter ? `${out.filter} ${glow}` : glow;
+      out.textShadow = undefined;
+    }
+  } else {
+    if (tf.color) { out.color = tf.color; out.WebkitTextFillColor = tf.color; }
+    if (tf.textShadow) {
+      out.textShadow = "0 2px 6px rgba(0,0,0,0.6)";
+    }
+    if (tf.textGlow) {
+      out.filter = `drop-shadow(0 0 ${tf.textGlow}px rgba(255,255,255,0.8))`;
+    }
+  }
   if (tf.underline !== undefined || tf.strikethrough !== undefined) {
     out.textDecoration = [tf.underline && "underline", tf.strikethrough && "line-through"].filter(Boolean).join(" ") || "none";
   }
@@ -144,12 +175,6 @@ export function typefaceCss(tf: BoxTypeface, extras: CSSProperties = {}, fontFam
     out.fontSize = extras.fontSize * tf.scale;
   }
 
-  if (tf.textShadow) {
-    out.textShadow = "0 2px 6px rgba(0,0,0,0.6)";
-  }
-  if (tf.textGlow) {
-    out.filter = `drop-shadow(0 0 ${tf.textGlow}px rgba(255,255,255,0.8))`;
-  }
   if (tf.textStroke?.enabled) {
     out.WebkitTextStroke = `${tf.textStroke.width}px ${tf.textStroke.color}`;
   }
