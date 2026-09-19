@@ -996,17 +996,14 @@ function SlideBase({
                   />
                   <MathText
                     text={opt.text}
-                    style={{
+                    style={boxFontCss(theme, "options", {
                       color: correct ? "#5cff9d" : theme.optionTextColor,
-                      // the OPTION TEXT FONT lands here and nowhere else — this
-                      // element is the only consumer of `optionStack`
-                      fontFamily: optionStack,
                       fontSize: optSize,
                       fontWeight: 700,
                       lineHeight: optLineH,
                       textShadow: correct ? "0 0 18px rgba(92,255,157,.5)" : "0 2px 5px rgba(0,0,0,.6)",
-                      textAlign: rtl ? "right" : "left",
-                    }}
+                      textAlign: rtl ? "right" : (theme.boxFonts?.options?.align ?? "left"),
+                    })}
                   />
                   {correct && theme.answerStyle === "tick" && (
                     <span style={{ color: "#5cff9d", fontSize: optSize, fontWeight: 800 }}>✓</span>

@@ -21,6 +21,29 @@ interface Props {
   compact?: boolean;
 }
 
+import type { ElementId, ThemeSettings } from "../lib/types";
+import {
+  BOX_DEFAULT_SCRIPT,
+  BOX_FONT_IDS,
+  WEIGHTS,
+  boxFontLabel,
+  boxTypeface,
+  clearBoxFont,
+  setBoxFont,
+} from "../lib/boxFonts";
+import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
+import FontPicker from "./FontPicker";
+import { ColorInput, Field, SegButtons, Slider, Toggle } from "./ui";
+import { cn } from "../utils/cn";
+import { ELEMENT_LABELS } from "../lib/types";
+
+interface Props {
+  theme: ThemeSettings;
+  setTheme: (patch: Partial<ThemeSettings>) => void;
+  selected: ElementId;
+  compact?: boolean;
+}
+
 export default function BoxFontControls({ theme, setTheme, selected, compact }: Props) {
   if (selected === "logo") return null;
   const tf = boxTypeface(theme, selected);
@@ -28,11 +51,13 @@ export default function BoxFontControls({ theme, setTheme, selected, compact }: 
   const patch = (p: Parameters<typeof setBoxFont>[2]) =>
     setTheme({ boxFonts: setBoxFont(theme.boxFonts, selected, p) });
 
+  const stroke = tf.textStroke ?? { enabled: false, color: "#000000", width: 1 };
+
   return (
     <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
-          Font — {ELEMENT_LABELS[selected]}
+          Font & Typography — {ELEMENT_LABELS[selected]}
         </span>
         {theme.boxFonts?.[selected] && (
           <button
@@ -55,7 +80,7 @@ export default function BoxFontControls({ theme, setTheme, selected, compact }: 
       />
 
       <FontPicker
-        label={`${script === "bangla" ? "Bangla" : script === "arabic" ? "Arabic" : "English"} typeface`}
+        label="Font (All Google Fonts)"
         value={tf.family ?? ""}
         previewTarget={`box:${selected}`}
         onChange={(family) => {
@@ -63,11 +88,52 @@ export default function BoxFontControls({ theme, setTheme, selected, compact }: 
           if (meta) ensureFontStylesheet([meta]);
           patch({ family, script: meta?.script ?? script });
         }}
-        script={script}
+        script="all"
         compact
       />
 
-      <Field label="Weight">
+      <div className="space-y-2">
+        <Field label="Font size (0 to ∞ px)" hint={tf.fontSize !== undefined ? `${tf.fontSize}px` : "auto"}>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              placeholder="auto"
+              value={tf.fontSize !== undefined ? tf.fontSize : ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "") patch({ fontSize: undefined });
+                else {
+                  const num = parseFloat(val);
+                  if (!isNaN(num) && num >= 0) patch({ fontSize: num });
+                }
+              }}
+              className="w-24 rounded-lg border border-white/10 bg-slate-900/70 px-2.5 py-1.5 font-mono text-xs text-slate-100 outline-none focus:border-amber-400/60"
+            />
+            <div className="flex-1">
+              <Slider
+                min={0}
+                max={200}
+                step={1}
+                value={tf.fontSize ?? 32}
+                onChange={(v) => patch({ fontSize: v })}
+              />
+            </div>
+          </div>
+        </Field>
+
+        <Field label="Size scale multiplier" hint={`${Math.round((tf.scale ?? 1) * 100)}%`}>
+          <Slider min={0.1} max={5} step={0.05} value={tf.scale ?? 1} onChange={(v) => patch({ scale: v })} />
+        </Field>
+      </div>
+
+      <ColorInput
+        label="Font colour"
+        value={tf.color || "#ffffff"}
+        onChange={(v) => patch({ color: v })}
+      />
+
+      <Field label="Weight & Bold">
         <div className="flex flex-wrap gap-1">
           {WEIGHTS.map((w) => (
             <button
@@ -89,25 +155,72 @@ export default function BoxFontControls({ theme, setTheme, selected, compact }: 
 
       <div className="grid grid-cols-2 gap-2">
         <Toggle label="Italic" checked={!!tf.italic} onChange={(v) => patch({ italic: v })} />
-        <Toggle
-          label="UPPERCASE"
-          checked={tf.uppercase === true}
-          onChange={(v) => patch({ uppercase: v ? true : "inherit" })}
+        <Toggle label="Strikethrough" checked={!!tf.strikethrough} onChange={(v) => patch({ strikethrough: v })} />
+      </div>
+
+      <div className="space-y-1">
+        <span className="text-[10px] font-medium text-slate-400 uppercase">Text Case</span>
+        <SegButtons
+          value={tf.textTransform ?? (tf.uppercase === true ? "uppercase" : tf.uppercase === "lowercase" ? "lowercase" : "none")}
+          onChange={(v) => patch({ textTransform: v as any, uppercase: v === "uppercase" ? true : v === "lowercase" ? "lowercase" : false })}
+          options={[
+            { value: "none", label: "Normal" },
+            { value: "uppercase", label: "UPPERCASE" },
+            { value: "lowercase", label: "lowercase" },
+          ]}
+        />
+      </div>
+
+      <div className="space-y-1">
+        <span className="text-[10px] font-medium text-slate-400 uppercase">Text Alignment</span>
+        <SegButtons
+          value={tf.align ?? "left"}
+          onChange={(v) => patch({ align: v as any })}
+          options={[
+            { value: "left", label: "Left" },
+            { value: "center", label: "Center" },
+            { value: "right", label: "Right" },
+            { value: "justify", label: "Justify" },
+          ]}
         />
       </div>
 
       <Field label="Letter spacing" hint={`${tf.letterSpacing ?? 0}px`}>
-        <Slider min={-2} max={12} step={0.5} value={tf.letterSpacing ?? 0} onChange={(v) => patch({ letterSpacing: v })} />
+        <Slider min={-5} max={50} step={0.5} value={tf.letterSpacing ?? 0} onChange={(v) => patch({ letterSpacing: v })} />
       </Field>
 
-      <Field label="Size scale" hint={`${Math.round((tf.scale ?? 1) * 100)}%`}>
-        <Slider min={0.6} max={1.8} step={0.05} value={tf.scale ?? 1} onChange={(v) => patch({ scale: v })} />
+      <Field label="Line spacing (line height)" hint={`${tf.lineHeight ?? 1.4}`}>
+        <Slider min={0.5} max={4} step={0.05} value={tf.lineHeight ?? 1.4} onChange={(v) => patch({ lineHeight: v })} />
       </Field>
+
+      <Field label="Text transparency (opacity)" hint={`${Math.round((tf.opacity ?? 1) * 100)}%`}>
+        <Slider min={0} max={1} step={0.05} value={tf.opacity ?? 1} onChange={(v) => patch({ opacity: v })} />
+      </Field>
+
+      <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+        <span className="block text-[10px] font-semibold text-slate-300 uppercase">Text Effects</span>
+        <Toggle label="Text Drop Shadow" checked={!!tf.textShadow} onChange={(v) => patch({ textShadow: v })} />
+        <Field label="Text Glow" hint={tf.textGlow ? `${tf.textGlow}px` : "off"}>
+          <Slider min={0} max={50} value={tf.textGlow ?? 0} onChange={(v) => patch({ textGlow: v })} />
+        </Field>
+        <Toggle
+          label="Text Stroke / Outline"
+          checked={stroke.enabled}
+          onChange={(v) => patch({ textStroke: { ...stroke, enabled: v } })}
+        />
+        {stroke.enabled && (
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <ColorInput label="Outline colour" value={stroke.color} onChange={(v) => patch({ textStroke: { ...stroke, color: v } })} />
+            <Field label="Width" hint={`${stroke.width}px`}>
+              <Slider min={0.5} max={8} step={0.5} value={stroke.width} onChange={(v) => patch({ textStroke: { ...stroke, width: v } })} />
+            </Field>
+          </div>
+        )}
+      </div>
 
       {!compact && (
         <p className="text-[10px] leading-relaxed text-slate-500">
-          This font applies only to the <b>{ELEMENT_LABELS[selected]}</b> box. Mixed Bangla/Arabic/English still falls
-          back through the universal chain. Currently: {boxFontLabel(theme, selected)}.
+          These typography and text effect settings apply to the <b>{ELEMENT_LABELS[selected]}</b> text box.
         </p>
       )}
     </div>

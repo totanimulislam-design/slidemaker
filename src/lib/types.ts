@@ -68,10 +68,19 @@ export interface BoxTypeface {
   script?: "bangla" | "latin" | "arabic";
   weight?: number;
   italic?: boolean;
-  uppercase?: boolean | "inherit";
+  uppercase?: boolean | "inherit" | "lowercase" | "normal" | "uppercase";
+  textTransform?: "uppercase" | "lowercase" | "none";
+  align?: "left" | "center" | "right" | "justify";
   letterSpacing?: number;
+  lineHeight?: number;
+  opacity?: number;
+  fontSize?: number;
   /** size multiplier on top of the box's default (1 = unchanged) */
   scale?: number;
+  textGlow?: number;
+  textShadow?: boolean;
+  textStroke?: { enabled: boolean; color: string; width: number };
+  textGradient?: Gradient;
 }
 
 export type BoxFonts = Partial<Record<ElementId, BoxTypeface>>;

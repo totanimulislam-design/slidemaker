@@ -176,6 +176,26 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
             className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-amber-400/60"
           />
           <div ref={scrollRef} className="max-h-64 space-y-0.5 overflow-y-auto rounded-lg border border-white/10 bg-slate-900/40 p-1">
+            {query.trim().length > 0 && !list.some((f) => f.family.toLowerCase() === query.trim().toLowerCase()) && (
+              <button
+                type="button"
+                onClick={() => {
+                  const family = query.trim();
+                  ensureFontStylesheet([{ family, weights: "400;500;600;700;800" }]);
+                  onChange(family);
+                  setOpen(false);
+                  clearPreview();
+                }}
+                className="mb-1.5 flex w-full items-center gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-2.5 py-2 text-left text-xs text-amber-200 transition-colors hover:bg-amber-400/20"
+              >
+                <span className="text-base">✨</span>
+                <span className="min-w-0 flex-1 truncate">
+                  Use Google Font: <b>{query.trim()}</b>
+                </span>
+                <span className="shrink-0 text-[10px] text-amber-300/80">Google Fonts</span>
+              </button>
+            )}
+
             {sections.map((s) => (
               <div key={s.id} className="pt-1 first:pt-0">
                 {s.label && (

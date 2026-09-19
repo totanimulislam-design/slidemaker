@@ -252,9 +252,11 @@ export const FONT_LIBRARY: FontChoice[] = [
   bn("Kalam", "hand"),
   bn("Baloo Bhai 2", "display"),
   bn("Noto Sans Bengali UI", "sans"),
+  bn("Charukola Bengali", "display"),
+  bn("SolaimanLipi", "sans"),
 
   /* --------------------------- Latin / English -------------------------- */
-  // display / condensed — great for titles & badges
+  // display / condensed / decorative — great for titles & badges
   en("Oswald", "display"),
   en("Anton", "display"),
   en("Bebas Neue", "display"),
@@ -269,6 +271,32 @@ export const FONT_LIBRARY: FontChoice[] = [
   en("Orbitron", "display"),
   en("Bree Serif", "display"),
   en("Alfa Slab One", "display"),
+  en("Abril Fatface", "display"),
+  en("Cinzel", "display"),
+  en("Cinzel Decorative", "display"),
+  en("Righteous", "display"),
+  en("Fredoka", "display"),
+  en("Bungee", "display"),
+  en("Bangers", "display"),
+  en("Monoton", "display"),
+  en("Press Start 2P", "display"),
+  en("Silkscreen", "display"),
+  en("Special Elite", "display"),
+  en("Lobster", "display"),
+  en("Pacifico", "hand"),
+  en("Dancing Script", "hand"),
+  en("Caveat", "hand"),
+  en("Satisfy", "hand"),
+  en("Great Vibes", "hand"),
+  en("Sacramento", "hand"),
+  en("Shadows Into Light", "hand"),
+  en("Amatic SC", "hand"),
+  en("Permanent Marker", "hand"),
+  en("Tangerine", "hand"),
+  en("Courgette", "hand"),
+  en("Cookie", "hand"),
+  en("Kaushan Script", "hand"),
+
   // geometric / modern sans
   en("Poppins", "sans"),
   en("Montserrat", "sans"),
@@ -302,6 +330,11 @@ export const FONT_LIBRARY: FontChoice[] = [
   en("Jost", "sans"),
   en("Overpass", "sans"),
   en("Exo 2", "sans"),
+  en("Comfortaa", "sans"),
+  en("Red Hat Display", "sans"),
+  en("Albert Sans", "sans"),
+  en("Geist", "sans"),
+
   // neutral / UI
   en("Roboto", "sans"),
   en("Open Sans", "sans"),
@@ -314,6 +347,8 @@ export const FONT_LIBRARY: FontChoice[] = [
   en("Kanit", "sans"),
   en("Commissioner", "sans"),
   en("Chivo", "sans"),
+  en("Noto Sans", "sans"),
+
   // serif — questions & body text
   en("Merriweather", "serif"),
   en("Playfair Display", "serif"),
@@ -331,11 +366,23 @@ export const FONT_LIBRARY: FontChoice[] = [
   en("Merriweather Sans", "sans"),
   en("Bitter", "serif"),
   en("Frank Ruhl Libre", "serif"),
+  en("Cormorant Garamond", "serif"),
+  en("Bodoni Moda", "serif"),
+  en("EB Garamond", "serif"),
+  en("Cinzel", "serif"),
+  en("Josefin Slab", "serif"),
+  en("BioRhyme", "serif"),
+
+  // monospace
+  en("Fira Code", "mono"),
+  en("JetBrains Mono", "mono"),
+  en("Roboto Mono", "mono"),
+  en("Source Code Pro", "mono"),
+  en("Space Mono", "mono"),
+  en("Courier Prime", "mono"),
 
   /* ------------------------------- Arabic ------------------------------- */
   ar("Noto Naskh Arabic", "traditional"),
-  // Google ships no "Noto Serif Arabic" — its Arabic serif is Naskh, downloaded
-  // and re-registered under that name (see `aliasFor` / `loadAlias`).
   { family: "Noto Serif Arabic", label: "Noto Serif Arabic", script: "arabic", kind: "serif", sample: "العربية", weights: "400;500;600;700", aliasFor: "Noto Naskh Arabic" },
   ar("Amiri", "traditional"),
   ar("Scheherazade New", "traditional"),
@@ -360,9 +407,6 @@ export const FONT_LIBRARY: FontChoice[] = [
   ar("Alexandria", "sans"),
 
   /* ---------------------------- Multi-language --------------------------- */
-  // pan-Unicode Noto faces — Latin, Greek, Cyrillic, Vietnamese… in one file.
-  // They cover no Bengali/Arabic, so those scripts still fall through the
-  // universal chain to the Bengali / Naskh fallback faces.
   multi("Noto Sans", "sans"),
   multi("Noto Serif", "serif"),
   multi("Noto Sans Display", "sans"),
