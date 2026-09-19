@@ -304,20 +304,36 @@ const BADGE_LINE = {
 } as const;
 
 /** tiny Canva-style text-alignment glyphs */
-const ALIGN_GLYPH: Record<"left" | "center" | "right", ReactNode> = (["left", "center", "right"] as const).reduce(
-  (acc, a) => {
-    const x = (w: number) => (a === "left" ? 1 : a === "center" ? (14 - w) / 2 : 14 - 1 - w);
-    acc[a] = (
-      <svg width="15" height="15" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-        <rect x={x(12)} y="2" width="12" height="1.8" rx="0.9" />
-        <rect x={x(8)} y="6.1" width="8" height="1.8" rx="0.9" />
-        <rect x={x(10)} y="10.2" width="10" height="1.8" rx="0.9" />
-      </svg>
-    );
-    return acc;
-  },
-  {} as Record<"left" | "center" | "right", ReactNode>,
-);
+const ALIGN_GLYPH: Record<"left" | "center" | "right" | "justify", ReactNode> = {
+  left: (
+    <svg width="15" height="15" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+      <rect x="1" y="2" width="12" height="1.8" rx="0.9" />
+      <rect x="1" y="6.1" width="8" height="1.8" rx="0.9" />
+      <rect x="1" y="10.2" width="10" height="1.8" rx="0.9" />
+    </svg>
+  ),
+  center: (
+    <svg width="15" height="15" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+      <rect x="1" y="2" width="12" height="1.8" rx="0.9" />
+      <rect x="3" y="6.1" width="8" height="1.8" rx="0.9" />
+      <rect x="2" y="10.2" width="10" height="1.8" rx="0.9" />
+    </svg>
+  ),
+  right: (
+    <svg width="15" height="15" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+      <rect x="1" y="2" width="12" height="1.8" rx="0.9" />
+      <rect x="5" y="6.1" width="8" height="1.8" rx="0.9" />
+      <rect x="3" y="10.2" width="10" height="1.8" rx="0.9" />
+    </svg>
+  ),
+  justify: (
+    <svg width="15" height="15" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+      <rect x="1" y="2" width="12" height="1.8" rx="0.9" />
+      <rect x="1" y="6.1" width="12" height="1.8" rx="0.9" />
+      <rect x="1" y="10.2" width="12" height="1.8" rx="0.9" />
+    </svg>
+  ),
+};
 
 export default function ContextToolbar(p: Props) {
   const [panel, setPanel] = useState<string | null>(null);
@@ -512,12 +528,54 @@ export default function ContextToolbar(p: Props) {
   let content: ReactNode = null;
   if (panel === "Font" && text) content = <FontPicker label="Font family" script="all" compact previewTarget={s ? `shape:${s.id}` : el ? `box:${el}` : undefined} value={s?.fontFamily || (el ? boxFontLabel(theme, el) : "")} onChange={family => s ? patch({ fontFamily: family }) : fontPatch({ family })} />;
   if (panel === "Spacing" && text) content = (
-    <div>
-      <div className="ctx-field"><span>Letter spacing</span>{stepper("Letter spacing", s?.letterSpacing ?? tf.letterSpacing ?? 0, v => s ? patch({ letterSpacing: v }) : fontPatch({ letterSpacing: v }), -2, 20, .5)}</div>
-      {s && <div className="ctx-field"><span>Line height</span>{stepper("Line height", s.lineHeight ?? 1.2, v => patch({ lineHeight: v }), .5, 3, .1)}</div>}
+    <div className="space-y-2">
+      <div className="ctx-field">
+        <span>Letter spacing</span>
+        {stepper("Letter spacing", s?.letterSpacing ?? tf.letterSpacing ?? 0, v => s ? patch({ letterSpacing: v }) : fontPatch({ letterSpacing: v }), -10, 50, .5)}
+      </div>
+      <div className="ctx-field">
+        <span>Line height</span>
+        {stepper("Line height", s?.lineHeight ?? tf.lineHeight ?? 1.4, v => s ? patch({ lineHeight: v }) : fontPatch({ lineHeight: v }), .1, 5, .05)}
+      </div>
+      <div className="ctx-field">
+        <span>Text transparency %</span>
+        {stepper("Transparency %", Math.round((1 - (s?.textOpacity ?? tf.opacity ?? 1)) * 100), v => {
+          const op = Math.max(0, Math.min(1, 1 - (v / 100)));
+          if (s) patch({ textOpacity: op });
+          else fontPatch({ opacity: op });
+        }, 0, 100, 5)}
+      </div>
     </div>
   );
-  if (panel === "Effects" && s && !multi) content = <ShapeDesignPanel shape={s} onChange={patch} />;
+  if (panel === "Effects" && text) {
+    if (s && !multi) {
+      content = <ShapeDesignPanel shape={s} onChange={patch} />;
+    } else if (el) {
+      content = (
+        <div className="space-y-2">
+          <Toggle label="Text Drop Shadow" checked={!!tf.textShadow} onChange={v => fontPatch({ textShadow: v })} />
+          <div className="ctx-field">
+            <span>Text Glow</span>
+            {stepper("Text Glow", tf.textGlow ?? 0, v => fontPatch({ textGlow: v }), 0, 50, 1)}
+          </div>
+          <Toggle
+            label="Text Stroke / Outline"
+            checked={!!tf.textStroke?.enabled}
+            onChange={v => fontPatch({ textStroke: { ...(tf.textStroke ?? { color: "#000000", width: 1 }), enabled: v } })}
+          />
+          {tf.textStroke?.enabled && (
+            <div className="space-y-2 pt-1">
+              {textSwatch("Stroke colour", tf.textStroke.color, c => fontPatch({ textStroke: { ...tf.textStroke!, color: c } }))}
+              <div className="ctx-field">
+                <span>Stroke width</span>
+                {stepper("Stroke width", tf.textStroke.width, w => fontPatch({ textStroke: { ...tf.textStroke!, width: w } }), 0.5, 8, 0.5)}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+  }
   if (panel === "Frame") content = <FramePanel theme={theme} setTheme={p.patchTheme} />;
   if (panel === "Gradient") content = <GradientEditor label="Background gradient" value={p.background.gradient} fallback={theme.board} onChange={gradient => p.patchBackground({ gradient })} />;
   if (panel === "Background effects") content = (
@@ -526,14 +584,36 @@ export default function ContextToolbar(p: Props) {
       <div className="ctx-field"><span>Vignette</span>{stepper("Vignette", p.background.vignette, vignette => p.patchBackground({ vignette }), 0, 100)}</div>
     </div>
   );
-  if (panel === "Position") content = (
-    <div>
-      <p className="ctx-menu-cap">Arrange</p>
-      <div className="ctx-menu-grid">{(["front", "forward", "backward", "back"] as ZOp[]).map(op => <span key={op}>{button(<>{Z_LABELS[op].icon} {Z_LABELS[op].label}</>, () => p.reorder(op), undefined, `${Z_LABELS[op].label} — ${Z_LABELS[op].hint}`)}</span>)}</div>
-      <p className="ctx-menu-cap">Align to slide</p>
-      <div className="ctx-menu-grid">{([['left', 'Align left'], ['hcenter', 'Align center'], ['right', 'Align right'], ['top', 'Align top'], ['vcenter', 'Align middle'], ['bottom', 'Align bottom']] as [AlignOp, string][]).map(([op, label]) => <span key={op}>{button(label, () => p.align(op))}</span>)}</div>
-    </div>
-  );
+  if (panel === "Position") {
+    const curBox = el ? theme.layout[el] : undefined;
+    content = (
+      <div className="space-y-3">
+        {s && (
+          <div className="space-y-1 text-xs">
+            <p className="ctx-menu-cap">Coordinates & Size</p>
+            <div className="ctx-field"><span>Position X %</span>{stepper("Position X %", s.x, v => patch({ x: v }), -50, 150, 0.5)}</div>
+            <div className="ctx-field"><span>Position Y %</span>{stepper("Position Y %", s.y, v => patch({ y: v }), -50, 150, 0.5)}</div>
+            <div className="ctx-field"><span>Width %</span>{stepper("Width %", s.w, v => patch({ w: v }), 1, 150, 0.5)}</div>
+            <div className="ctx-field"><span>Height %</span>{stepper("Height %", s.h, v => patch({ h: v }), 1, 150, 0.5)}</div>
+            <div className="ctx-field"><span>Rotation °</span>{stepper("Rotation °", s.rot ?? 0, v => patch({ rot: v }), -180, 180, 1)}</div>
+          </div>
+        )}
+        {curBox && (
+          <div className="space-y-1 text-xs">
+            <p className="ctx-menu-cap">Coordinates & Size</p>
+            <div className="ctx-field"><span>Position X %</span>{stepper("Position X %", curBox.x, v => p.patchBox({ x: v }), -50, 150, 0.5)}</div>
+            <div className="ctx-field"><span>Position Y %</span>{stepper("Position Y %", curBox.y, v => p.patchBox({ y: v }), -50, 150, 0.5)}</div>
+            <div className="ctx-field"><span>Width %</span>{stepper("Width %", curBox.w, v => p.patchBox({ w: v }), 1, 150, 0.5)}</div>
+            <div className="ctx-field"><span>Rotation °</span>{stepper("Rotation °", curBox.rot ?? 0, v => p.patchBox({ rot: v }), -180, 180, 1)}</div>
+          </div>
+        )}
+        <p className="ctx-menu-cap">Arrange</p>
+        <div className="ctx-menu-grid">{(["front", "forward", "backward", "back"] as ZOp[]).map(op => <span key={op}>{button(<>{Z_LABELS[op].icon} {Z_LABELS[op].label}</>, () => p.reorder(op), undefined, `${Z_LABELS[op].label} — ${Z_LABELS[op].hint}`)}</span>)}</div>
+        <p className="ctx-menu-cap">Align to slide</p>
+        <div className="ctx-menu-grid">{([['left', 'Align left'], ['hcenter', 'Align center'], ['right', 'Align right'], ['top', 'Align top'], ['vcenter', 'Align middle'], ['bottom', 'Align bottom']] as [AlignOp, string][]).map(([op, label]) => <span key={op}>{button(label, () => p.align(op))}</span>)}</div>
+      </div>
+    );
+  }
   if (panel === "More" && s) content = (
     <div className="ctx-menu-col">
       {button(<>⧉ Duplicate</>, p.duplicate, undefined, "Duplicate")}
@@ -701,10 +781,20 @@ export default function ContextToolbar(p: Props) {
     />
   );
 
-  const size = s?.fontSize ?? Math.round((tf.scale ?? 1) * 100);
-  const setSize = (v: number) => s ? patch({ fontSize: Math.max(10, Math.min(120, v)) }) : fontPatch({ scale: Math.max(.6, Math.min(1.8, v / 100)) });
-  const alignVal = s?.align ?? (el ? theme.layout[el].align : "left");
-  const setAlign = (a: "left" | "center" | "right") => { const align = a as Box['align']; s ? patch({ align }) : p.patchBox({ align }); };
+  const size = s?.fontSize ?? (tf.fontSize ?? Math.round((tf.scale ?? 1) * 100));
+  const setSize = (v: number) => {
+    const val = Math.max(0, v);
+    if (s) patch({ fontSize: val });
+    else fontPatch({ fontSize: val, scale: val / 100 });
+  };
+  const alignVal = s?.align ?? (tf.align ?? (el ? theme.layout[el].align : "left"));
+  const setAlign = (a: "left" | "center" | "right" | "justify") => {
+    if (s) patch({ align: a });
+    else {
+      fontPatch({ align: a });
+      if (el && (a === "left" || a === "center" || a === "right")) p.patchBox({ align: a });
+    }
+  };
   /** the Insert destinations show their quick-add tools when nothing else is selected */
   const inserting = !s && !surface && (p.nav === "images" || p.nav === "shapes");
   /**
@@ -1120,7 +1210,7 @@ export default function ContextToolbar(p: Props) {
         </>}
         {text && <>
           {toggle("Font")}
-          {stepper(s ? "Font size" : "Size %", size, setSize, s ? 10 : 60, s ? 120 : 180, .1, { dec: "Decrease font size", inc: "Increase font size", jump: 1 })}
+          {stepper(s ? "Font size" : "Size %", size, setSize, 0, 99999, 1, { dec: "Decrease font size", inc: "Increase font size", jump: 1 })}
           {sep()}
           {button(<span className="ctx-glyph-b">B</span>, () => s ? patch({ bold: !s.bold }) : fontPatch({ weight: (tf.weight ?? 400) >= 700 ? 400 : 700 }), s ? s.bold : (tf.weight ?? 400) >= 700, "Bold")}
           {button(<span className="ctx-glyph-i">I</span>, () => s ? patch({ italic: !s.italic }) : fontPatch({ italic: !tf.italic }), s ? s.italic : !!tf.italic, "Italic")}
@@ -1133,11 +1223,22 @@ export default function ContextToolbar(p: Props) {
                `boxFonts.options.color` is never read by the option renderer, so
                this swatch used to do nothing at all on the Answer key strip */
             : textSwatch("Text color", (el && elementInk(theme, el)) || tf.color || "#ffffff", color => el && p.patchTheme(setElementInk(theme, el, color)))}
-          {button("Aa", () => s ? patch({ uppercase: !s.uppercase }) : fontPatch({ uppercase: tf.uppercase !== true }), s ? !!s.uppercase : tf.uppercase === true, "Text case")}
+          {button("Aa", () => {
+            if (s) {
+              const cur = s.textTransform ?? (s.uppercase ? "uppercase" : s.lowercase ? "lowercase" : "none");
+              const next = cur === "uppercase" ? "lowercase" : cur === "lowercase" ? "none" : "uppercase";
+              patch({ textTransform: next as any, uppercase: next === "uppercase", lowercase: next === "lowercase" });
+            } else {
+              const cur = tf.textTransform ?? (tf.uppercase === true ? "uppercase" : tf.uppercase === "lowercase" ? "lowercase" : "none");
+              const next = cur === "uppercase" ? "lowercase" : cur === "lowercase" ? "none" : "uppercase";
+              fontPatch({ textTransform: next as any, uppercase: next === "uppercase" ? true : next === "lowercase" ? "lowercase" : false });
+            }
+          }, s ? (s.uppercase || s.textTransform === "uppercase") : (tf.uppercase === true || tf.textTransform === "uppercase"), "Text case (UPPERCASE / lowercase / Normal)")}
           {sep()}
-          {(["left", "center", "right"] as const).map(a => <span key={a}>{button(ALIGN_GLYPH[a], () => setAlign(a), alignVal === a, `Align ${a}`)}</span>)}
+          {(["left", "center", "right", "justify"] as const).map(a => <span key={a}>{button(ALIGN_GLYPH[a], () => setAlign(a), alignVal === a, `Align ${a}`)}</span>)}
           {sep()}
           {toggle("Spacing", <span aria-hidden="true">⇄</span>)}
+          {toggle("Effects", <span aria-hidden="true">✨</span>)}
         </>}
         {s && !multi && s.kind !== 'text' && s.kind !== 'image' && <>
           {swatch("Fill", s.fill, fill => patch({ fill, gradient: s.gradient ? { ...s.gradient, enabled: false } : undefined }), <span className="ctx-dot" style={{ background: s.fill || "transparent" }} />)}

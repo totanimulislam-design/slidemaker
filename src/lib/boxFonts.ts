@@ -65,15 +65,41 @@ export function boxFontCss(theme: ThemeSettings, id: ElementId, extras: CSSPrope
   const tf = boxTypeface(theme, id);
   const out: CSSProperties = { ...extras, fontFamily: boxStack(theme, id) };
   if (tf.color) { out.color = tf.color; out.WebkitTextFillColor = tf.color; }
-  if (tf.underline !== undefined || tf.strikethrough !== undefined) out.textDecoration = [tf.underline && "underline", tf.strikethrough && "line-through"].filter(Boolean).join(" ") || "none";
+  if (tf.underline !== undefined || tf.strikethrough !== undefined) {
+    out.textDecoration = [tf.underline && "underline", tf.strikethrough && "line-through"].filter(Boolean).join(" ") || "none";
+  }
   if (tf.weight) out.fontWeight = tf.weight;
   if (tf.italic !== undefined) out.fontStyle = tf.italic ? "italic" : "normal";
+  if (tf.textTransform) {
+    out.textTransform = tf.textTransform;
+  } else if (tf.uppercase === true) {
+    out.textTransform = "uppercase";
+  } else if (tf.uppercase === "lowercase" || (tf.uppercase as any) === "lowercase") {
+    out.textTransform = "lowercase";
+  } else if (tf.uppercase === false || tf.uppercase === "normal") {
+    out.textTransform = "none";
+  }
+  if (tf.align) out.textAlign = tf.align;
   if (tf.letterSpacing !== undefined) out.letterSpacing = tf.letterSpacing;
-  if (tf.uppercase === true) out.textTransform = "uppercase";
-  if (tf.uppercase === false) out.textTransform = "none";
-  if (tf.scale && tf.scale !== 1 && typeof extras.fontSize === "number") {
+  if (tf.lineHeight !== undefined) out.lineHeight = tf.lineHeight;
+  if (tf.opacity !== undefined) out.opacity = tf.opacity > 1 ? tf.opacity / 100 : tf.opacity;
+  
+  if (tf.fontSize !== undefined) {
+    out.fontSize = tf.fontSize;
+  } else if (tf.scale && tf.scale !== 1 && typeof extras.fontSize === "number") {
     out.fontSize = extras.fontSize * tf.scale;
   }
+
+  if (tf.textShadow) {
+    out.textShadow = "0 2px 6px rgba(0,0,0,0.6)";
+  }
+  if (tf.textGlow) {
+    out.filter = `drop-shadow(0 0 ${tf.textGlow}px rgba(255,255,255,0.8))`;
+  }
+  if (tf.textStroke?.enabled) {
+    out.WebkitTextStroke = `${tf.textStroke.width}px ${tf.textStroke.color}`;
+  }
+
   return out;
 }
 

@@ -250,6 +250,43 @@ export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: P
       {/* -------------------------------- TEXT ------------------------------ */}
       {tab === "text" && hasText && (
         <div className="space-y-3">
+          <FontPicker
+            label="Text font (All Google Fonts)"
+            value={s.fontFamily ?? ""}
+            previewTarget={`shape:${s.id}`}
+            onChange={(family) => {
+              const f = FONT_BY_FAMILY.get(family.toLowerCase());
+              if (f) ensureFontStylesheet([f]);
+              onChange({ fontFamily: family });
+            }}
+            script="all"
+            compact
+          />
+
+          <Field label="Font size (0 to ∞ px)" hint={`${s.fontSize}px`}>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                value={s.fontSize}
+                onChange={(e) => {
+                  const num = parseFloat(e.target.value);
+                  if (!isNaN(num) && num >= 0) onChange({ fontSize: num });
+                }}
+                className="w-24 rounded-lg border border-white/10 bg-slate-900/70 px-2.5 py-1.5 font-mono text-xs text-slate-100 outline-none focus:border-amber-400/60"
+              />
+              <div className="flex-1">
+                <Slider
+                  min={0}
+                  max={200}
+                  step={1}
+                  value={s.fontSize}
+                  onChange={(v) => onChange({ fontSize: v })}
+                />
+              </div>
+            </div>
+          </Field>
+
           {!s.textGradient?.enabled && <ColorInput label="Text colour" value={s.textColor} onChange={(v) => onChange({ textColor: v })} />}
           <GradientEditor
             label="Gradient text"
@@ -258,43 +295,78 @@ export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: P
             onChange={(g) => onChange({ textGradient: g })}
             presets={TEXT_GRADIENT_PRESETS}
           />
-          <FontPicker
-            label="Text font (this item)"
-            value={s.fontFamily ?? ""}
-            previewTarget={`shape:${s.id}`}
-            onChange={(family) => {
-              const f = FONT_BY_FAMILY.get(family.toLowerCase());
-              if (f) ensureFontStylesheet([f]);
-              onChange({ fontFamily: family });
-            }}
-            script={script}
-            compact
-          />
-          <p className="text-[10px] text-slate-500">Default = the deck's Bangla font. Mixed-script text still falls back correctly.</p>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            <Toggle label="Bold" checked={s.bold} onChange={(v) => onChange({ bold: v })} />
+            <Toggle label="Italic" checked={s.italic} onChange={(v) => onChange({ italic: v })} />
+            <Toggle label="Underline" checked={!!s.underline} onChange={(v) => onChange({ underline: v })} />
+            <Toggle label="Strikethrough" checked={!!s.strikethrough} onChange={(v) => onChange({ strikethrough: v })} />
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[10px] font-medium text-slate-400 uppercase">Text Case</span>
+            <SegButtons
+              value={s.textTransform ?? (s.uppercase ? "uppercase" : s.lowercase ? "lowercase" : "none")}
+              onChange={(v) =>
+                onChange({
+                  textTransform: v as any,
+                  uppercase: v === "uppercase",
+                  lowercase: v === "lowercase",
+                })
+              }
+              options={[
+                { value: "none", label: "Normal" },
+                { value: "uppercase", label: "UPPERCASE" },
+                { value: "lowercase", label: "lowercase" },
+              ]}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[10px] font-medium text-slate-400 uppercase">Alignment</span>
+            <SegButtons
+              value={s.align}
+              onChange={(v) => onChange({ align: v as any })}
+              options={[
+                { value: "left", label: "Left" },
+                { value: "center", label: "Center" },
+                { value: "right", label: "Right" },
+                { value: "justify", label: "Justify" },
+              ]}
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <Field label="Letter spacing" hint={`${s.letterSpacing ?? 0}px`}>
-              <Slider min={-2} max={12} step={0.5} value={s.letterSpacing ?? 0} onChange={(v) => onChange({ letterSpacing: v })} />
+              <Slider min={-5} max={50} step={0.5} value={s.letterSpacing ?? 0} onChange={(v) => onChange({ letterSpacing: v })} />
             </Field>
             <Field label="Line height" hint={`${s.lineHeight ?? 1.4}`}>
-              <Slider min={0.9} max={2.4} step={0.05} value={s.lineHeight ?? 1.4} onChange={(v) => onChange({ lineHeight: v })} />
+              <Slider min={0.5} max={4} step={0.05} value={s.lineHeight ?? 1.4} onChange={(v) => onChange({ lineHeight: v })} />
             </Field>
           </div>
+
+          <Field label="Text transparency (opacity)" hint={`${Math.round((s.textOpacity ?? 1) * 100)}%`}>
+            <Slider min={0} max={1} step={0.05} value={s.textOpacity ?? 1} onChange={(v) => onChange({ textOpacity: v })} />
+          </Field>
+
           {s.kind === "text" && (
             <Field label="Inner padding" hint={`${s.padding ?? 6}px`}>
               <Slider min={0} max={40} value={s.padding ?? 6} onChange={(v) => onChange({ padding: v })} />
             </Field>
           )}
-          <div className="grid grid-cols-2 gap-1.5">
-            <Toggle label="UPPERCASE" checked={!!s.uppercase} onChange={(v) => onChange({ uppercase: v })} />
-            <Toggle label="Text shadow" checked={s.textShadow !== false} onChange={(v) => onChange({ textShadow: v })} />
-          </div>
+
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <span className="block text-[10px] font-semibold text-slate-300 uppercase">Text Effects</span>
+            <Toggle label="Text shadow" checked={s.textShadow !== false} onChange={(v) => onChange({ textShadow: v })} />
+            <Field label="Text glow" hint={s.textGlow ? `${s.textGlow}px` : "off"}>
+              <Slider min={0} max={50} value={s.textGlow ?? 0} onChange={(v) => onChange({ textGlow: v })} />
+            </Field>
             <Toggle label="Text outline" checked={tstroke.enabled} onChange={(v) => onChange({ textStroke: { ...tstroke, enabled: v } })} />
             {tstroke.enabled && (
               <div className="grid grid-cols-2 gap-2">
                 <ColorInput label="Outline colour" value={tstroke.color} onChange={(v) => onChange({ textStroke: { ...tstroke, color: v } })} />
                 <Field label="Width" hint={`${tstroke.width}px`}>
-                  <Slider min={0.5} max={4} step={0.5} value={tstroke.width} onChange={(v) => onChange({ textStroke: { ...tstroke, width: v } })} />
+                  <Slider min={0.5} max={8} step={0.5} value={tstroke.width} onChange={(v) => onChange({ textStroke: { ...tstroke, width: v } })} />
                 </Field>
               </div>
             )}

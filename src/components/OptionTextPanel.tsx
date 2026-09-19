@@ -12,6 +12,8 @@ import {
 import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
 import { boxFontLabel, elementInk, setBoxFont, setElementInk } from "../lib/boxFonts";
 import FontPicker from "./FontPicker";
+import BoxFontControls from "./BoxFontControls";
+import ElementPosition from "./ElementPosition";
 import OptionStylePicker from "./OptionStylePicker";
 import { Btn, ColorInput, Field, SegButtons, Slider, TextInput } from "./ui";
 import { cn } from "../utils/cn";
@@ -193,6 +195,8 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
       <div className="grid grid-cols-2 gap-2">
         <ColorInput label="Option text" value={elementInk(T, "options")} onChange={(v) => setTheme(setElementInk(T, "options", v))} />
       </div>
+      <BoxFontControls theme={T} setTheme={setTheme} selected="options" />
+
       {/* the label painted inside each marker is styled under "Opt bullet text" */}
       <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
         <span className="text-[11px] leading-snug text-slate-400">
@@ -209,6 +213,12 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
           </button>
         )}
       </div>
+      <ElementPosition
+        theme={T}
+        id="options"
+        patchLayout={(id, patch) => setTheme({ layout: { ...T.layout, [id]: { ...T.layout[id], ...patch } } })}
+      />
+
       <p className="text-[10px] leading-relaxed text-slate-500">
         Tick a row to mark the correct answer. Deck-wide answer actions — reveal all, hide all, answer copies — live
         under <b>Answer key</b>.

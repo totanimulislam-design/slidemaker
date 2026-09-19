@@ -44,7 +44,7 @@ export interface ShapeItem {
   fontSize: number;
   bold: boolean;
   italic: boolean;
-  align: "left" | "center" | "right";
+  align: "left" | "center" | "right" | "justify";
   valign: "top" | "middle" | "bottom";
   locked?: boolean;
   /**
@@ -87,8 +87,14 @@ export interface ShapeItem {
   textStroke?: { enabled: boolean; color: string; width: number };
   /** text shadow */
   textShadow?: boolean;
-  /** uppercase */
+  /** text glow */
+  textGlow?: number;
+  /** uppercase / lowercase / text transform */
   uppercase?: boolean;
+  lowercase?: boolean;
+  textTransform?: "uppercase" | "lowercase" | "none";
+  /** text opacity 0–1 */
+  textOpacity?: number;
   /** inner padding for text boxes, px */
   padding?: number;
   /** font family override for this item's text (single family name) */

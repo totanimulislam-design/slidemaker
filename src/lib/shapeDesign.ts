@@ -54,13 +54,20 @@ export function itemStyle(s: ShapeItem): CSSProperties {
 
 /** text styles derived from the design fields */
 export function textStyle(s: ShapeItem): CSSProperties {
+  const transform = s.textTransform ?? (s.uppercase ? "uppercase" : s.lowercase ? "lowercase" : undefined);
+  const glowShadow = s.textGlow ? `drop-shadow(0 0 ${s.textGlow}px rgba(255,255,255,.8))` : undefined;
+  const shadow = s.textShadow === false ? undefined : "0 2px 6px rgba(0,0,0,.55)";
+  const opacity = s.textOpacity !== undefined ? (s.textOpacity > 1 ? s.textOpacity / 100 : s.textOpacity) : undefined;
+
   const base: CSSProperties = {
     fontFamily: s.fontFamily ? `'${s.fontFamily}', sans-serif` : undefined,
     textDecoration: [s.underline && "underline", s.strikethrough && "line-through"].filter(Boolean).join(" ") || "none",
-    letterSpacing: s.letterSpacing ? `${s.letterSpacing}px` : undefined,
+    letterSpacing: s.letterSpacing !== undefined ? `${s.letterSpacing}px` : undefined,
     lineHeight: s.lineHeight ?? 1.4,
-    textTransform: s.uppercase ? "uppercase" : undefined,
-    textShadow: s.textShadow === false ? undefined : "0 2px 6px rgba(0,0,0,.55)",
+    textTransform: transform,
+    opacity,
+    textShadow: glowShadow ? undefined : shadow,
+    filter: glowShadow,
     WebkitTextStroke:
       s.textStroke?.enabled && s.textStroke.width > 0 ? `${s.textStroke.width}px ${s.textStroke.color}` : undefined,
   };
@@ -74,7 +81,7 @@ export function textStyle(s: ShapeItem): CSSProperties {
       color: "transparent",
       WebkitTextFillColor: "transparent",
       textShadow: undefined,
-      filter: s.textShadow === false ? undefined : "drop-shadow(0 2px 3px rgba(0,0,0,.55))",
+      filter: glowShadow || (s.textShadow === false ? undefined : "drop-shadow(0 2px 3px rgba(0,0,0,.55))"),
     };
   }
   return { ...base, color: s.textColor };

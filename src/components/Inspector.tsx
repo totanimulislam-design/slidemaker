@@ -26,6 +26,8 @@ import { layerKey, sortedLayers, type LayerPatch, type LayerRect, type LayerRef 
 import type { AlignOp } from "../lib/shapeAlign";
 import AnswerKeyPanel from "./AnswerKeyPanel";
 import LayersPanel from "./LayersPanel";
+import BoxFontControls from "./BoxFontControls";
+import ElementPosition from "./ElementPosition";
 import { boxFontLabel, elementInk, setBoxFont, setElementInk } from "../lib/boxFonts";
 import { MATH_SNIPPETS } from "../lib/presets";
 import { type ScriptId } from "../lib/fonts";
@@ -657,10 +659,9 @@ export default function Inspector({
                   reads, minus any per-box override that would shadow it */}
               <ColorInput label="Question colour" value={elementInk(T, "question")} onChange={(v) => setTheme(setElementInk(T, "question", v))} />
 
-              <p className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 text-[10px] leading-relaxed text-slate-500">
-                Deck-wide theme presets, base colours and shared fonts moved to <b>Design</b> (the 🎨 tile) — this
-                panel styles only the question stem.
-              </p>
+              <BoxFontControls theme={T} setTheme={setTheme} selected="question" />
+
+              <ElementPosition theme={T} id="question" patchLayout={patchLayout} />
             </>
           ) : (
             <p className="text-sm text-slate-500">No slide selected. Paste some questions to begin.</p>
