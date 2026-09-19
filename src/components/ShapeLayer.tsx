@@ -16,6 +16,7 @@ import {
   type MemberGeo,
 } from "../lib/groups";
 import MathText from "./MathText";
+import { textBgWrap } from "./TextBgShape";
 
 interface Props {
   shapes: ShapeItem[];
@@ -759,6 +760,7 @@ export default function ShapeLayer({
                     ...textStyle(s),
                   }}
                   inlineStyle={textInlineStyle(s)}
+                  wrap={textBgWrap(s.textBgShape)}
                 />
               </div>
             )}

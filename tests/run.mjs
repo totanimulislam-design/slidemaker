@@ -39,6 +39,7 @@ const suites = [
   ["app boot smoke test (full editor)", "smoke.test.tsx", "runSmokeTests"],
   ["inspector navigation (21 destinations, selection sync + merged toolbar stacks)", "nav.test.tsx", "runNavTests"],
   ["per-part text style (font · size · colour · case · spacing · opacity · effects · position — each on its own text node)", "textstyle.test.tsx", "runTextStyleTests"],
+  ["background shape (a plate behind every text part: presets · silhouettes · colour · border · transparency · effects · position)", "textbg.test.tsx", "runTextBgTests"],
   ["visibility & steppers (100 = fully visible · 0 = invisible · ± walks the range · sizes without a ceiling)", "visibility.test.tsx", "runVisibilityTests"],
   ["layers panel (drag to reorder the unified stack + selection sync)", "layers.test.tsx", "runLayersTests"],
   ["slide stack (drag to reorder + multi-select boxes + bulk ops + the open slide's border)", "slides.test.tsx", "runSlideStackTests"],

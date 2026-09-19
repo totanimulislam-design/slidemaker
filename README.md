@@ -246,6 +246,7 @@ controls — in their inspector destination **and** on their toolbar line:
 | **Opacity 0 – 100** — **100 = fully visible**, **0 = invisible**, and every step in between; an untouched part reads 100 | `opacity` |
 | **Text effects** — Canva-style *Shadow · Lift · Hollow · Splice · Outline · Echo · Glitch · Neon · Background*, each with its own offset / direction / blur / thickness / intensity / colour settings (`lib/textEffects.ts`) | `effect` |
 | **Position** — an X / Y nudge of the glyphs inside their box (the element's own box position stays under *Layout* / the Position pop-up) | `offsetX`, `offsetY` |
+| **Background shape** — the plate painted behind the part (see below) | `bgShape` |
 
 **One meaning for a visibility number.** Every control that fades something —
 a text part's opacity, a drawn shape's *Item opacity* and its text's opacity, the
@@ -280,6 +281,36 @@ element's ink field.
 Custom text boxes (Insert shapes ▸ Text) carry the same toolkit through their
 *Shape design ▸ Text* tab and the plain text toolbar (`textEffect`,
 `textOffsetX/Y` on `ShapeItem`).
+
+### Background shape — a plate behind any text part
+
+Every text toolbar — Title text, Badge 1 / 2, Question text, Q bullet text,
+Option text, Bullet text (the marker letter), the footnote's and a custom text
+box's plain text bar — carries a **Background shape** button (the boxed *A*)
+**right before its Default**. Its icon fills in while the part has a plate on,
+and its tooltip names the preset or silhouette in use. Clicking it opens the
+usual movable pop-up card, laid out top to bottom in the order a designer
+reaches for things:
+
+| Section | What it does |
+| --- | --- |
+| **Live preview** | the current plate under sample glyphs, drawn by the same renderer as the board |
+| **Shape presets** — 48 ready-made looks in five groups | **Bangladesh edu** (ACS Future School's electric-violet pill and white *SSC'27* capsule, the slanted white course plate, Udvash's steel-blue card and maroon ribbon, 10 Minute School's crimson chevron / sky tab / green slab, a bottle-green & flag-red plate, the navy-and-gold board-exam card, chalkboard, coaching orange slant, an option pill and an *Answer green* capsule), **Canva classics** (highlighter, sticky note, glass card, neon frame, gold plate, sunset pill, ocean card, dark & gold, dashed outline, speech bubble, blueprint, spotlight card), **Bold & broadcast** (pop art, material flat, red ribbon, arrow banner, TV lower third, hex tech, diamond, breadcrumb, fade bar, flag tag), **Soft & minimal** (silver emboss, paper stack, soft blob, leaf card, whisper, glossy pill) and **Marks & stickers** (red underline, quote bar, sticker, ring tag, offset sketch, dotted note). A tile is a live thumbnail of the plate it paints; the group last browsed stays open |
+| **Shape** — 30 silhouettes | box family (box, rounded, pill, ellipse, two leaves, four tabs, two speech bubbles), polygon family (slants, cuts, trapezoid, chevron, arrows, ribbon, flags, hexagon, octagon, diamond, cut corners) and marks (highlighter, underline, side bar). Pointed shapes bring the extra room their tips need |
+| **Shape colour** | a colour well, *None* (border / marks / effects only), the edu-brand swatches, and an optional **gradient fill** (linear / radial / mesh, the shared gradient editor) |
+| **Border colour · Border style · Border radius · Border weight** | *None / Solid / Dashed / Dotted / Double*, radius 0–60 (box and mark silhouettes; polygons keep straight corners), weight 0–12. Box shapes take a CSS border; a polygon's border is an SVG stroke that follows the silhouette, dashes included |
+| **Transparency** | 0–100, **100 = fully visible** — fades the plate only, never the glyphs |
+| **Effects** — 31 | shadow, pop, lift, float, long shadow, glow, halo, neon, inner shadow, inner glow, bevel, emboss, gloss, sheen, spotlight, stripes, dots, grid, checker, glass (backdrop blur), blur, fade →, fade edges, ring, offset outline, sticker, stack, top / bottom / left bar, corner fold — each with an **intensity** and, where it has one, its own **colour** (*Auto* follows the plate) |
+| **Position** | room left/right and top/bottom around the glyphs, a horizontal / vertical shift, skew and rotation of the plate, **Plate per** *Whole text* / *Each line* (a multi-line question gets one plate per line, each hugging its own line) and **Width** *Hug text* / *Fill box* |
+
+A plate is painted on its own layer under the glyphs (`components/TextBgShape`
+wraps the part; `lib/textBgShape.ts` turns the settings into CSS, the same
+numbers for the board, the thumbnails and the export). While the shape is
+off the part's DOM does not change at all. Like every other text control it
+styles exactly that part: Badge 1's plate never wraps Badge 2, the marker
+letter's plate sits inside the marker, and a line's **Default** clears its plate
+with the rest of its look. The settings live in `boxFonts[part].bgShape`
+(`TextBgShape` in `lib/types.ts`) and in `textBgShape` on a custom text box.
 
 ## Layers
 

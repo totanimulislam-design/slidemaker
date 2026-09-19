@@ -1,4 +1,4 @@
-import type { Gradient, TextEffect } from "./types";
+import type { Gradient, TextBgShape, TextEffect } from "./types";
 
 /**
  * User-drawn overlays: shapes and free text boxes.
@@ -100,6 +100,8 @@ export interface ShapeItem {
   /** nudge of the text inside the box, px (the box itself stays put) */
   textOffsetX?: number;
   textOffsetY?: number;
+  /** the shape painted behind the text (toolbar ▸ Background shape) — the item's own fill stays separate */
+  textBgShape?: TextBgShape;
   /** inner padding for text boxes, px */
   padding?: number;
   /** font family override for this item's text (single family name) */

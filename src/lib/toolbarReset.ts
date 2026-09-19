@@ -332,6 +332,7 @@ export function resetShapeStyle(s: ShapeItem, accent: string): Partial<ShapeItem
     textTransform: undefined,
     textOpacity: undefined,
     textEffect: undefined,
+    textBgShape: undefined,
     textOffsetX: undefined,
     textOffsetY: undefined,
     padding: undefined,

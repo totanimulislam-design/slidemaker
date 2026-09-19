@@ -34,7 +34,7 @@ const DESIGN_KEYS: (keyof ShapeItem)[] = [
   "fill", "fillOpacity", "gradient", "stroke", "strokeWidth", "dash", "lineStyle", "lineJoin", "cornerRadius",
   "shadow2", "glow", "itemOpacity", "blend", "textColor", "textGradient", "fontSize", "bold", "italic",
   "letterSpacing", "lineHeight", "textStroke", "textShadow", "uppercase", "padding", "textEffect", "textOpacity",
-  "textGlow", "lowercase", "textTransform", "underline", "strikethrough",
+  "textGlow", "lowercase", "textTransform", "underline", "strikethrough", "textBgShape",
 ];
 
 export const pickDesign = (s: ShapeItem): Partial<ShapeItem> =>

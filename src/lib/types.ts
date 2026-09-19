@@ -104,6 +104,138 @@ export interface TextEffect {
   spread?: number;
 }
 
+/* ------------------------------------------------- text background shape */
+
+/**
+ * The silhouette of a text part's background shape (see lib/textBgShape).
+ *
+ *   box family   — painted with CSS corners, so every border style, the
+ *                  corner radius and the border weight apply
+ *   poly family  — a polygon silhouette (slants, chevrons, ribbons…); the
+ *                  border is an SVG stroke, so radius does not apply
+ *   mark family  — highlighter / underline / side bar marks
+ */
+export type TextBgShapeKind =
+  | "rect"
+  | "rounded"
+  | "pill"
+  | "ellipse"
+  | "leaf"
+  | "leafAlt"
+  | "tabTop"
+  | "tabBottom"
+  | "tabLeft"
+  | "tabRight"
+  | "bubble"
+  | "bubbleRight"
+  | "parallelogram"
+  | "parallelogramLeft"
+  | "slantRight"
+  | "slantLeft"
+  | "trapezoid"
+  | "chevron"
+  | "arrow"
+  | "arrowLeft"
+  | "ribbon"
+  | "flag"
+  | "flagLeft"
+  | "hexagon"
+  | "octagon"
+  | "diamond"
+  | "cutCorners"
+  | "highlight"
+  | "underline"
+  | "sideBar";
+
+export type TextBgBorderStyle = "none" | "solid" | "dashed" | "dotted" | "double";
+
+/** the 30+ looks a background shape can wear (lib/textBgShape TEXT_BG_EFFECTS) */
+export type TextBgEffectKind =
+  | "none"
+  | "shadow"
+  | "pop"
+  | "lift"
+  | "float"
+  | "longShadow"
+  | "glow"
+  | "halo"
+  | "neon"
+  | "innerShadow"
+  | "innerGlow"
+  | "bevel"
+  | "emboss"
+  | "gloss"
+  | "sheen"
+  | "spotlight"
+  | "stripes"
+  | "dots"
+  | "grid"
+  | "checker"
+  | "glass"
+  | "blur"
+  | "fadeRight"
+  | "fadeEdges"
+  | "ring"
+  | "offsetOutline"
+  | "sticker"
+  | "stack"
+  | "topBar"
+  | "bottomBar"
+  | "leftBar"
+  | "cornerFold";
+
+/**
+ * A shape painted BEHIND a text part — the plate a title, a question, a
+ * badge line, the number in the bullet, an option's text or a custom text
+ * box sits on (Canva's "text background", the coloured capsules and slanted
+ * plates of the Bangladeshi edu-platform slide style).
+ *
+ * The plate is its own layer under the glyphs: nothing here ever touches the
+ * text's colour, opacity or effects, and the text's own nudge (`offsetX` /
+ * `offsetY` of the typeface) never moves the plate. Every length is in slide
+ * pixels, so the board, the thumbnails and the PNG / PDF export paint the
+ * same plate.
+ */
+export interface TextBgShape {
+  /** false parks the settings without painting the plate */
+  enabled: boolean;
+  kind: TextBgShapeKind;
+  /** the preset the settings were built from, for the picker highlight */
+  preset?: string;
+  /** solid fill; "" = no fill (border / effects only) */
+  color: string;
+  /** gradient fill — wins over `color` while enabled */
+  gradient?: Gradient;
+  /** "" = no border */
+  borderColor: string;
+  borderStyle: TextBgBorderStyle;
+  /** px */
+  borderWidth: number;
+  /** corner radius px (box family) */
+  radius: number;
+  /** how visible the plate is: 100 = fully visible, 0 = invisible */
+  opacity: number;
+  effect: TextBgEffectKind;
+  /** 0–100 strength of the effect */
+  effectIntensity: number;
+  /** the effect's own colour; undefined = derived from the plate */
+  effectColor?: string;
+  /** room between the glyphs and the plate's edge, px */
+  padX: number;
+  padY: number;
+  /** nudge of the plate only, px — the text stays where it is */
+  offsetX: number;
+  offsetY: number;
+  /** one plate hugging every line, or one plate behind the whole text */
+  scope: "line" | "block";
+  /** hug the text, or fill the box's whole width */
+  width: "hug" | "fill";
+  /** slant of the plate, degrees (−45 … 45) */
+  skew: number;
+  /** rotation of the plate, degrees (−180 … 180) */
+  rotate: number;
+}
+
 /** Per-box typeface override. Empty fields fall back to the deck fonts. */
 export interface BoxTypeface {
   color?: string;
@@ -135,6 +267,12 @@ export interface BoxTypeface {
    */
   offsetX?: number;
   offsetY?: number;
+  /**
+   * The shape painted behind this part's glyphs (toolbar ▸ Background shape).
+   * Its own layer under the text: the plate is never faded, stroked or moved
+   * by a text setting, and the text is never touched by the plate's.
+   */
+  bgShape?: TextBgShape;
 }
 
 /**
