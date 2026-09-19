@@ -1,18 +1,21 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type {
-  BackgroundSettings, BannerSettings, BannerShape, Box, DeckHeader, ElementId, OptionsLayout, QuizOption, ThemeSettings,
+  BackgroundSettings, BannerSettings, BannerShape, Box, BoxFontId, BoxTypeface, DeckHeader, ElementId, OptionsLayout, QuizOption, ThemeSettings,
 } from "../lib/types";
 import { DEFAULT_BANNER, DEFAULT_FRAME, ELEMENT_LABELS } from "../lib/types";
 import { TEXT_GRADIENT_PRESETS } from "../lib/banner";
-import { WEIGHTS, boxFontLabel, boxTypeface, elementInk, setBoxFont, setElementInk } from "../lib/boxFonts";
+import {
+  TEXT_PART_LABELS, WEIGHTS, boxFontLabel, boxTypeface, elementInk, patchTextPart, setBoxFont, setElementInk, textPartTypeface,
+} from "../lib/boxFonts";
 import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, type ShapeItem, type ShapeKind } from "../lib/shapes";
 import type { AlignOp } from "../lib/shapeAlign";
 import { usePointerDrag } from "../lib/dragSession";
 import { Z_LABELS, type ZOp } from "../lib/zorder";
 import { shade } from "../lib/color";
-import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
+import { ensureFamily } from "../lib/fonts";
 import FontPicker from "./FontPicker";
+import TextEffectsEditor from "./TextEffectsEditor";
 import OptionBulletShapePicker from "./OptionBulletShapePicker";
 import OptionStylePicker from "./OptionStylePicker";
 import PlainNumberingPicker from "./PlainNumberingPicker";
@@ -220,6 +223,42 @@ const MERGED_LINE: Record<MergedLineId, MergedLineMeta> = {
 };
 
 /**
+ * The text part each merged line styles — its OWN text box, never the merged
+ * block it is painted inside: the Badge 1 line writes `brandTop`, the letter
+ * line writes the option-marker letter, and so on. Lines without a part (the
+ * banner plate, the bullet body, the marker body) carry no text tools.
+ */
+const LINE_PART: Partial<Record<MergedLineId, BoxFontId>> = {
+  titleText: "title",
+  badge1: "brandTop",
+  badge2: "brandBottom",
+  questionText: "question",
+  bulletText: "bullet",
+  optionText: "options",
+  optionBulletText: "optionBullet",
+};
+
+/** parts whose built-in weight is already bold (so "B" reads as on without an override) */
+const DEFAULT_BOLD = new Set<BoxFontId>(["title", "brand", "brandTop", "brandBottom", "badge", "bullet", "options", "optionBullet"]);
+
+/** the deck field that is a board element's primary font size, px */
+const ELEMENT_SIZE_FIELD: Partial<Record<ElementId, "titleSize" | "badgeSize" | "questionSize" | "optionSize" | "noteSize">> = {
+  title: "titleSize",
+  badge: "badgeSize",
+  question: "questionSize",
+  options: "optionSize",
+  note: "noteSize",
+};
+
+/** 0–100 "how see-through" from a typeface's opacity (0–1, or a legacy 0–100) */
+const transparencyOf = (t: { opacity?: number }) =>
+  Math.round((1 - (t.opacity !== undefined ? (t.opacity > 1 ? t.opacity / 100 : t.opacity) : 1)) * 100);
+
+/** the text-transform a typeface really applies */
+const caseOf = (t: Pick<BoxTypeface, "textTransform" | "uppercase">): "none" | "uppercase" | "lowercase" =>
+  t.textTransform ?? (t.uppercase === true || t.uppercase === "uppercase" ? "uppercase" : t.uppercase === "lowercase" ? "lowercase" : "none");
+
+/**
  * Destinations that LIST the board instead of styling one part of it (the
  * Layers stack). App keeps such a destination open when a row is picked — the
  * list is *about* the selection, so it must not navigate away from it — which
@@ -369,11 +408,19 @@ export default function ContextToolbar(p: Props) {
   /** banner colour writes both the design and the legacy solid `titleBanner` */
   const patchBanner = (patch: Partial<BannerSettings>) =>
     p.patchTheme({ banner: { ...banner, ...patch }, ...(patch.color ? { titleBanner: patch.color } : {}) });
-  /** per-box typeface writes, for the font pickers of the merged lines */
-  const patchBoxFont = (id: ElementId, patch: Parameters<typeof setBoxFont>[2]) =>
-    p.patchTheme({ boxFonts: setBoxFont(theme.boxFonts, id, patch) });
   /** BADGE_LINE's per-line keys are a union, so those writes go through one cast */
   const patchLine = (patch: Record<string, unknown>) => p.patchTheme(patch as Partial<ThemeSettings>);
+  /**
+   * A text part's typeface as the board paints it, and the ONE write path
+   * every text control uses (lib/boxFonts `patchTextPart`): colour goes to the
+   * element's ink field, the marker letter's face / weight / size / case to
+   * the flat fields the markers read, everything else to `boxFonts[part]` — so
+   * the strip and the inspector panel can never shadow each other.
+   */
+  const partTf = (part: BoxFontId): BoxTypeface => textPartTypeface(theme, part);
+  const setPart = (part: BoxFontId, patch: Partial<BoxTypeface>) => p.patchTheme(patchTextPart(theme, part, patch));
+  const partInk = (part: BoxFontId) => elementInk(theme, part);
+  const partPreview = (part: BoxFontId) => (part === "optionBullet" ? "optionBullet" : `box:${part}`);
   /** the options block derives every auto colour from this base */
   const optionBase = theme.optionAccent || theme.accent || "#2f4fff";
   const picked = (v: string) => (/^#[0-9a-f]{6}$/i.test(v) ? v : optionBase);
@@ -526,7 +573,20 @@ export default function ContextToolbar(p: Props) {
     swatch(name, value, change, <span className="ctx-a" style={{ borderBottomColor: value }}>A</span>, id);
 
   let content: ReactNode = null;
-  if (panel === "Font" && text) content = <FontPicker label="Font family" script="all" compact previewTarget={s ? `shape:${s.id}` : el ? `box:${el}` : undefined} value={s?.fontFamily || (el ? boxFontLabel(theme, el) : "")} onChange={family => s ? patch({ fontFamily: family }) : fontPatch({ family })} />;
+  if (panel === "Font" && text) content = (
+    <FontPicker
+      label="Font family (all Google Fonts)"
+      script="all"
+      compact
+      previewTarget={s ? `shape:${s.id}` : el ? `box:${el}` : undefined}
+      value={s?.fontFamily || (el ? boxFontLabel(theme, el) : "")}
+      onChange={family => {
+        ensureFamily(family);
+        if (s) patch({ fontFamily: family });
+        else fontPatch({ family: family || undefined });
+      }}
+    />
+  );
   if (panel === "Spacing" && text) content = (
     <div className="space-y-2">
       <div className="ctx-field">
@@ -551,29 +611,7 @@ export default function ContextToolbar(p: Props) {
     if (s && !multi) {
       content = <ShapeDesignPanel shape={s} onChange={patch} />;
     } else if (el) {
-      content = (
-        <div className="space-y-2">
-          <Toggle label="Text Drop Shadow" checked={!!tf.textShadow} onChange={v => fontPatch({ textShadow: v })} />
-          <div className="ctx-field">
-            <span>Text Glow</span>
-            {stepper("Text Glow", tf.textGlow ?? 0, v => fontPatch({ textGlow: v }), 0, 50, 1)}
-          </div>
-          <Toggle
-            label="Text Stroke / Outline"
-            checked={!!tf.textStroke?.enabled}
-            onChange={v => fontPatch({ textStroke: { ...(tf.textStroke ?? { color: "#000000", width: 1 }), enabled: v } })}
-          />
-          {tf.textStroke?.enabled && (
-            <div className="space-y-2 pt-1">
-              {textSwatch("Stroke colour", tf.textStroke.color, c => fontPatch({ textStroke: { ...tf.textStroke!, color: c } }))}
-              <div className="ctx-field">
-                <span>Stroke width</span>
-                {stepper("Stroke width", tf.textStroke.width, w => fontPatch({ textStroke: { ...tf.textStroke!, width: w } }), 0.5, 8, 0.5)}
-              </div>
-            </div>
-          )}
-        </div>
-      );
+      content = effectsContent(el);
     }
   }
   if (panel === "Frame") content = <FramePanel theme={theme} setTheme={p.patchTheme} />;
@@ -584,10 +622,27 @@ export default function ContextToolbar(p: Props) {
       <div className="ctx-field"><span>Vignette</span>{stepper("Vignette", p.background.vignette, vignette => p.patchBackground({ vignette }), 0, 100)}</div>
     </div>
   );
-  if (panel === "Position") {
+  if (panel === "Position") content = positionContent(el && el !== "logo" ? el : undefined);
+  function positionContent(part?: BoxFontId): ReactNode {
     const curBox = el ? theme.layout[el] : undefined;
-    content = (
+    const t = part ? partTf(part) : undefined;
+    return (
       <div className="space-y-3">
+        {/* the glyphs' own nudge: the box (and whatever is painted with it) stays put */}
+        {part && t && (
+          <div className="space-y-1 text-xs">
+            <p className="ctx-menu-cap">Text position — {TEXT_PART_LABELS[part]} only (px nudge inside its box)</p>
+            <div className="ctx-field"><span>Text offset X</span>{stepper(`${TEXT_PART_LABELS[part]} offset X`, t.offsetX ?? 0, v => setPart(part, { offsetX: v || undefined }), -99999, 99999, 1)}</div>
+            <div className="ctx-field"><span>Text offset Y</span>{stepper(`${TEXT_PART_LABELS[part]} offset Y`, t.offsetY ?? 0, v => setPart(part, { offsetY: v || undefined }), -99999, 99999, 1)}</div>
+          </div>
+        )}
+        {s && (s.kind === "text" || s.text) && (
+          <div className="space-y-1 text-xs">
+            <p className="ctx-menu-cap">Text position — the text only (px nudge inside its box)</p>
+            <div className="ctx-field"><span>Text offset X</span>{stepper("Text offset X", s.textOffsetX ?? 0, v => patch({ textOffsetX: v || undefined }), -99999, 99999, 1)}</div>
+            <div className="ctx-field"><span>Text offset Y</span>{stepper("Text offset Y", s.textOffsetY ?? 0, v => patch({ textOffsetY: v || undefined }), -99999, 99999, 1)}</div>
+          </div>
+        )}
         {s && (
           <div className="space-y-1 text-xs">
             <p className="ctx-menu-cap">Coordinates & Size</p>
@@ -612,6 +667,79 @@ export default function ContextToolbar(p: Props) {
         <p className="ctx-menu-cap">Align to slide</p>
         <div className="ctx-menu-grid">{([['left', 'Align left'], ['hcenter', 'Align center'], ['right', 'Align right'], ['top', 'Align top'], ['vcenter', 'Align middle'], ['bottom', 'Align bottom']] as [AlignOp, string][]).map(([op, label]) => <span key={op}>{button(label, () => p.align(op))}</span>)}</div>
       </div>
+    );
+  }
+  /** letter spacing · line spacing · transparency of ONE text part */
+  function spacingContent(part: BoxFontId): ReactNode {
+    const t = partTf(part);
+    return (
+      <div className="space-y-2">
+        <p className="ctx-menu-cap">{TEXT_PART_LABELS[part]} only</p>
+        <div className="ctx-field">
+          <span>Letter spacing px</span>
+          {stepper("Letter spacing", t.letterSpacing ?? 0, v => setPart(part, { letterSpacing: v }), -50, 99999, .5)}
+        </div>
+        <div className="ctx-field">
+          <span>Line spacing</span>
+          {stepper("Line spacing", t.lineHeight ?? 1.4, v => setPart(part, { lineHeight: v }), 0, 99999, .05)}
+        </div>
+        <div className="ctx-field">
+          <span>Transparency % (0 – 100)</span>
+          {stepper("Transparency %", transparencyOf(t), v => setPart(part, { opacity: v <= 0 ? undefined : Math.round((1 - v / 100) * 100) / 100 }), 0, 100, 5)}
+        </div>
+      </div>
+    );
+  }
+  /** Canva-style text effects (+ the legacy glow / shadow / stroke) of ONE text part */
+  function effectsContent(part: BoxFontId, extra?: ReactNode): ReactNode {
+    const t = partTf(part);
+    const stroke = t.textStroke ?? { enabled: false, color: "#000000", width: 1 };
+    return (
+      <div className="space-y-2">
+        <p className="ctx-menu-cap">{TEXT_PART_LABELS[part]} only</p>
+        <TextEffectsEditor value={t.effect} onChange={effect => setPart(part, { effect })} textColor={partInk(part) || "#ffffff"} compact />
+        {extra}
+        <details>
+          <summary className="cursor-pointer text-[10px] text-slate-500 hover:text-slate-300">More: drop shadow · glow · stroke</summary>
+          <div className="space-y-2 pt-2">
+            <Toggle label="Text drop shadow" checked={!!t.textShadow} onChange={v => setPart(part, { textShadow: v })} />
+            <div className="ctx-field">
+              <span>Text glow</span>
+              {stepper("Text glow", t.textGlow ?? 0, v => setPart(part, { textGlow: v }), 0, 50, 1)}
+            </div>
+            <Toggle
+              label="Text stroke / outline"
+              checked={stroke.enabled}
+              onChange={v => setPart(part, { textStroke: { ...stroke, enabled: v } })}
+            />
+            {stroke.enabled && (
+              <div className="space-y-2 pt-1">
+                {textSwatch("Stroke colour", stroke.color, c => setPart(part, { textStroke: { ...stroke, color: c } }))}
+                <div className="ctx-field">
+                  <span>Stroke width</span>
+                  {stepper("Stroke width", stroke.width, w => setPart(part, { textStroke: { ...stroke, width: w } }), 0.5, 8, 0.5)}
+                </div>
+              </div>
+            )}
+          </div>
+        </details>
+      </div>
+    );
+  }
+  /** the font picker of ONE text part — the whole Google Fonts catalogue */
+  function fontContent(part: BoxFontId): ReactNode {
+    return (
+      <FontPicker
+        label={`${TEXT_PART_LABELS[part]} font`}
+        script="all"
+        compact
+        previewTarget={partPreview(part)}
+        value={partTf(part).family ?? ""}
+        onChange={family => {
+          ensureFamily(family);
+          setPart(part, { family: family || undefined });
+        }}
+      />
     );
   }
   if (panel === "More" && s) content = (
@@ -670,48 +798,38 @@ export default function ContextToolbar(p: Props) {
   if (panel === "Marker shape" && optLine("optionBullet")) content = <OptionBulletShapePicker theme={theme} setTheme={p.patchTheme} />;
   if (panel === "Row style" && optLine("optionBullet")) content = <OptionStylePicker theme={theme} setTheme={p.patchTheme} />;
   if (panel === "Numbering" && optLine("optionBulletText")) content = <PlainNumberingPicker theme={theme} setTheme={p.patchTheme} />;
-  if (panel === "Marker font" && optLine("optionBulletText")) content = (
-    <FontPicker
-      label="Marker typeface"
-      script="all"
-      compact
-      previewTarget="optionBullet"
-      value={theme.optionBulletFontFamily ?? ""}
-      onChange={family => {
-        const meta = FONT_BY_FAMILY.get(family.toLowerCase());
-        if (meta) ensureFontStylesheet([meta]);
-        p.patchTheme({ optionBulletFontFamily: family });
-      }}
-    />
-  );
 
-  /* ---- title text: typeface + glyph effects ----------------------------- */
-  if (panel === "Title font" && optLine("titleText")) content = (
-    <FontPicker
-      label="Title typeface"
-      script="all"
-      compact
-      previewTarget="box:title"
-      value={boxFontLabel(theme, "title")}
-      onChange={family => patchBoxFont("title", { family })}
-    />
-  );
-  if (panel === "Title effects" && optLine("titleText")) content = (
-    <div className="space-y-2">
-      <div className="ctx-field">
-        <span>Text glow</span>
-        {stepper("Text glow", banner.textGlow, v => patchBanner({ textGlow: v }), 0, 100, 5)}
-      </div>
-      <Toggle label="Drop shadow" checked={banner.textShadow} onChange={v => patchBanner({ textShadow: v })} />
-      <GradientEditor
-        label="Gradient text"
-        value={banner.textGradient}
-        fallback={theme.titleColor}
-        onChange={g => patchBanner({ textGradient: g })}
-        presets={TEXT_GRADIENT_PRESETS}
-      />
-    </div>
-  );
+  /* ---- every text line: font · spacing · effects · position of ITS part -- */
+  for (const id of stack ?? []) {
+    const part = LINE_PART[id];
+    if (!part) continue;
+    const chip = MERGED_LINE[id].chip;
+    if (panel === `${chip} font`) content = fontContent(part);
+    if (panel === `${chip} spacing`) content = spacingContent(part);
+    if (panel === `${chip} effects`) {
+      content = effectsContent(
+        part,
+        id === "titleText" ? (
+          <div className="space-y-2 rounded-lg border border-white/10 p-2">
+            <p className="ctx-menu-cap">Banner glyph effects (Title text panel)</p>
+            <div className="ctx-field">
+              <span>Text glow</span>
+              {stepper("Title glow", banner.textGlow, v => patchBanner({ textGlow: v }), 0, 100, 5)}
+            </div>
+            <Toggle label="Drop shadow" checked={banner.textShadow} onChange={v => patchBanner({ textShadow: v })} />
+            <GradientEditor
+              label="Gradient text"
+              value={banner.textGradient}
+              fallback={theme.titleColor}
+              onChange={g => patchBanner({ textGradient: g })}
+              presets={TEXT_GRADIENT_PRESETS}
+            />
+          </div>
+        ) : undefined,
+      );
+    }
+    if (panel === `${chip} position`) content = positionContent(part);
+  }
 
   /* ---- title background: banner plate ----------------------------------- */
   if (panel === "Banner shape" && optLine("titleBg")) content = (
@@ -744,47 +862,17 @@ export default function ContextToolbar(p: Props) {
     </div>
   );
 
-  /* ---- badges 1 & 2: the one typeface both lines share ------------------- */
-  if (panel === "Badge font" && (optLine("badge1") || optLine("badge2"))) content = (
-    <FontPicker
-      label="Badge typeface"
-      script="all"
-      compact
-      previewTarget="box:brand"
-      value={boxFontLabel(theme, "brand")}
-      onChange={family => patchBoxFont("brand", { family })}
-    />
-  );
-
-  /* ---- question: stem typeface, bullet design, number typeface ----------- */
-  if (panel === "Question font" && optLine("questionText")) content = (
-    <FontPicker
-      label="Question typeface"
-      script="all"
-      compact
-      previewTarget="box:question"
-      value={boxFontLabel(theme, "question")}
-      onChange={family => patchBoxFont("question", { family })}
-    />
-  );
   if (panel === "Bullet design" && optLine("questionBullet")) content = (
     <NumberStylePicker theme={theme} setTheme={p.patchTheme} />
   );
-  if (panel === "Bullet font" && optLine("bulletText")) content = (
-    <FontPicker
-      label="Number typeface"
-      script="all"
-      compact
-      previewTarget="box:bullet"
-      value={boxFontLabel(theme, "bullet")}
-      onChange={family => patchBoxFont("bullet", { family })}
-    />
-  );
 
-  const size = s?.fontSize ?? (tf.fontSize ?? Math.round((tf.scale ?? 1) * 100));
+  /** the element's primary size: its deck field (title 54px, badge 36px…) when it has one */
+  const sizeField = el ? ELEMENT_SIZE_FIELD[el] : undefined;
+  const size = s?.fontSize ?? (sizeField ? Number(theme[sizeField] ?? 0) : (tf.fontSize ?? Math.round((tf.scale ?? 1) * 100)));
   const setSize = (v: number) => {
     const val = Math.max(0, v);
     if (s) patch({ fontSize: val });
+    else if (sizeField) p.patchTheme({ [sizeField]: val } as Partial<ThemeSettings>);
     else fontPatch({ fontSize: val, scale: val / 100 });
   };
   const alignVal = s?.align ?? (tf.align ?? (el ? theme.layout[el].align : "left"));
@@ -887,35 +975,92 @@ export default function ContextToolbar(p: Props) {
    * ---------------------------------------------------------------------- */
   const lineControls = (id: MergedLineId): ReactNode => {
     const target = MERGED_LINE[id].element;
+    const chip = MERGED_LINE[id].chip;
     const lineFont = boxTypeface(theme, target);
-    const setLineFont = (patch: Parameters<typeof setBoxFont>[2]) => patchBoxFont(target, patch);
     /** the ink this line's text is actually painted with, and the one write
      *  that changes it — see lib/boxFonts: a box with a deck colour field of
      *  its own must not be restyled through a per-box override, or the two
      *  surfaces shadow each other and one of them stops working */
     const lineInk = elementInk(theme, target);
     const setLineInk = (v: string) => p.patchTheme(setElementInk(theme, target, v));
-    /** align this line's own box, whichever part happens to be selected */
-    const alignLine = (a: "left" | "center" | "right") =>
-      p.patchTheme({ layout: { ...theme.layout, [target]: { ...theme.layout[target], align: a } } });
-    const alignIs = (a: "left" | "center" | "right") => (theme.layout[target]?.align ?? "left") === a;
-    const aligns = () =>
-      (["left", "center", "right"] as const).map(a => (
-        <span key={a}>{button(ALIGN_GLYPH[a], () => alignLine(a), alignIs(a), `Align ${a}`)}</span>
+
+    /* ---- the text tools every text line shares, bound to ITS OWN part ---- */
+    const part = LINE_PART[id];
+    const t = part ? partTf(part) : {};
+    const set = (patch: Partial<BoxTypeface>) => part && setPart(part, patch);
+    const isBold = t.weight ? t.weight >= 700 : !!part && DEFAULT_BOLD.has(part);
+    /** B · I · U · S */
+    const styleButtons = () => (
+      <>
+        {button(<span className="ctx-glyph-b">B</span>, () => set({ weight: isBold ? 400 : 700 }), isBold, "Bold")}
+        {button(<span className="ctx-glyph-i">I</span>, () => set({ italic: !t.italic }), !!t.italic, "Italic")}
+        {button(<span className="ctx-glyph-u">U</span>, () => set({ underline: !t.underline }), !!t.underline, "Underline")}
+        {button(<span className="ctx-glyph-s">S</span>, () => set({ strikethrough: !t.strikethrough }), !!t.strikethrough, "Strikethrough")}
+      </>
+    );
+    /** Aa — UPPERCASE → lowercase → Normal */
+    const caseButton = () => {
+      const cur = caseOf(t);
+      const next = cur === "uppercase" ? "lowercase" : cur === "lowercase" ? "none" : "uppercase";
+      return button(
+        cur === "lowercase" ? "aa" : cur === "uppercase" ? "AA" : "Aa",
+        () => set({ textTransform: next, uppercase: next === "uppercase" ? true : next === "lowercase" ? "lowercase" : false }),
+        cur !== "none",
+        `Text case of ${chip} (UPPERCASE / lowercase / Normal)`,
+      );
+    };
+    /**
+     * Alignment of this line's text. A part that IS its board element (the
+     * stem, the option text, the title) also aligns its box, exactly as the
+     * single toolbar does; a line inside a shared block (a badge line, the
+     * number, the marker letter) aligns its own glyphs only.
+     */
+    const alignButtons = () => {
+      const ownsBox = part === target;
+      const cur = t.align ?? (ownsBox ? theme.layout[target]?.align ?? "left" : "left");
+      return (["left", "center", "right", "justify"] as const).map(a => (
+        <span key={a}>
+          {button(
+            ALIGN_GLYPH[a],
+            () => {
+              set({ align: a });
+              if (ownsBox && a !== "justify") p.patchTheme({ layout: { ...theme.layout, [target]: { ...theme.layout[target], align: a } } });
+            },
+            cur === a,
+            `Align ${a}`,
+          )}
+        </span>
       ));
+    };
+    /** the deeper text pop-ups — one set per line, so two lines never share a card */
+    const fontToggle = () => toggle(`${chip} font`, <span aria-hidden="true">A</span>);
+    const spacingToggle = () => toggle(`${chip} spacing`, <span aria-hidden="true">⇄</span>);
+    const effectsToggle = () => toggle(`${chip} effects`, <span aria-hidden="true">✨</span>);
+    const positionToggle = () => toggle(`${chip} position`, <span aria-hidden="true">✥</span>);
+    /** the shared tail of every text line: case · align · spacing · effects · position */
+    const textTail = () => (
+      <>
+        {sep()}
+        {styleButtons()}
+        {caseButton()}
+        {sep()}
+        {alignButtons()}
+        {sep()}
+        {spacingToggle()}
+        {effectsToggle()}
+        {positionToggle()}
+      </>
+    );
 
     switch (id) {
       /* -------- title text: the heading glyphs (Title text panel) -------- */
       case "titleText":
         return (
           <>
-            {toggle("Title font")}
-            {stepper("Title size", theme.titleSize ?? 54, v => p.patchTheme({ titleSize: v }), 20, 96, 1, { prefix: "Size" })}
+            {fontToggle()}
+            {stepper("Title size", theme.titleSize ?? 54, v => p.patchTheme({ titleSize: v }), 0, 99999, 1, { prefix: "Size" })}
             {textSwatch("Title colour", lineInk || theme.titleColor, setLineInk)}
-            {button("Aa", () => setLineFont({ uppercase: !(lineFont.uppercase ?? false) }), lineFont.uppercase === true, "UPPERCASE title")}
-            {toggle("Title effects", <span aria-hidden="true">☀</span>)}
-            {sep()}
-            {toggle("Position")}
+            {textTail()}
           </>
         );
 
@@ -932,6 +1077,8 @@ export default function ContextToolbar(p: Props) {
             {toggle("Banner padding")}
             {sep()}
             {button("▣ Banner", () => p.patchHeader?.({ showBanner: !shown }), shown, "Show / hide the banner behind the title")}
+            {sep()}
+            {toggle("Position")}
           </>
         );
       }
@@ -944,13 +1091,13 @@ export default function ContextToolbar(p: Props) {
         const shown = theme[c.show] ?? true;
         return (
           <>
-            {toggle("Badge font", <span aria-hidden="true">A</span>)}
-            {textSwatch(`Badge ${c.n} colour`, own || theme.brandColor, v => patchLine({ [c.color]: v }))}
-            {button("auto", () => patchLine({ [c.color]: "" }), !own, "Follow the shared brand colour")}
-            {stepper(`Badge ${c.n} size`, theme[c.size] ?? c.fallback, v => patchLine({ [c.size]: v }), 12, 64, 1, { prefix: "Size" })}
+            {fontToggle()}
+            {stepper(`Badge ${c.n} size`, theme[c.size] ?? c.fallback, v => patchLine({ [c.size]: v }), 0, 99999, 1, { prefix: "Size" })}
+            {textSwatch(`Badge ${c.n} colour`, own || theme.brandColor, v => set({ color: v }))}
+            {button("auto", () => set({ color: "" }), !own, "Follow the shared brand colour")}
             {sep()}
             {button(<span aria-hidden="true">👁</span>, () => patchLine({ [c.show]: !shown }), shown, `Show / hide badge ${c.n}`)}
-            {id === "badge1" && <>{sep()}{toggle("Position")}</>}
+            {textTail()}
           </>
         );
       }
@@ -959,17 +1106,10 @@ export default function ContextToolbar(p: Props) {
       case "questionText":
         return (
           <>
-            {toggle("Question font")}
-            {stepper("Question size %", Math.round((lineFont.scale ?? 1) * 100), v => setLineFont({ scale: Math.max(.6, Math.min(1.8, v / 100)) }), 60, 180, 5, { prefix: "Size" })}
+            {fontToggle()}
+            {stepper("Question size %", Math.round((lineFont.scale ?? 1) * 100), v => set({ scale: Math.max(0, v) / 100 }), 0, 99999, 5, { prefix: "Size" })}
             {textSwatch("Question colour", lineInk || theme.questionColor, setLineInk)}
-            {sep()}
-            {button(<span className="ctx-glyph-b">B</span>, () => setLineFont({ weight: (lineFont.weight ?? 600) >= 700 ? 600 : 700 }), (lineFont.weight ?? 600) >= 700, "Bold")}
-            {button(<span className="ctx-glyph-i">I</span>, () => setLineFont({ italic: !lineFont.italic }), !!lineFont.italic, "Italic")}
-            {button(<span className="ctx-glyph-u">U</span>, () => setLineFont({ underline: !lineFont.underline }), !!lineFont.underline, "Underline")}
-            {sep()}
-            {aligns()}
-            {sep()}
-            {toggle("Position")}
+            {textTail()}
           </>
         );
 
@@ -978,7 +1118,7 @@ export default function ContextToolbar(p: Props) {
         return (
           <>
             {toggle("Bullet design", <span aria-hidden="true">⬤</span>)}
-            {stepper("Bullet size", theme.bulletSize ?? 54, v => p.patchTheme({ bulletSize: v }), 28, 96, 1, { prefix: "Size" })}
+            {stepper("Bullet size", theme.bulletSize ?? 54, v => p.patchTheme({ bulletSize: v }), 0, 99999, 1, { prefix: "Size" })}
             {swatch("Bullet colour", theme.accent, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: theme.accent }} />)}
             {sep()}
             {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
@@ -990,21 +1130,22 @@ export default function ContextToolbar(p: Props) {
         return (
           <>
             {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showNumber: !theme.showNumber }), theme.showNumber, "Show / hide the number inside the bullet")}
-            {toggle("Bullet font", <span aria-hidden="true">A</span>)}
-            {swatch("Number ink", lineFont.color || theme.accent, v => setLineFont({ color: v }), <span className="ctx-a" style={{ borderBottomColor: lineFont.color || theme.accent }}>A</span>)}
-            {button("auto", () => setLineFont({ color: undefined }), !lineFont.color, "Let the bullet design pick its own ink")}
+            {fontToggle()}
+            {stepper("Number size %", Math.round((lineFont.scale ?? 1) * 100), v => set({ scale: Math.max(0, v) / 100 }), 0, 99999, 5, { prefix: "Size" })}
+            {swatch("Number ink", lineFont.color || theme.accent, v => set({ color: v }), <span className="ctx-a" style={{ borderBottomColor: lineFont.color || theme.accent }}>A</span>)}
+            {button("auto", () => set({ color: "" }), !lineFont.color, "Let the bullet design pick its own ink")}
             {sep()}
             <select
               aria-label="Number weight"
               title="Number weight"
               className="ctx-select"
               value={String(lineFont.weight ?? 0)}
-              onChange={e => setLineFont({ weight: Number(e.currentTarget.value) || undefined })}
+              onChange={e => set({ weight: Number(e.currentTarget.value) || undefined })}
             >
               <option value="0">Auto weight</option>
               {WEIGHTS.map(w => <option key={w.v} value={String(w.v)}>{w.l}</option>)}
             </select>
-            {stepper("Number size %", Math.round((lineFont.scale ?? 1) * 100), v => setLineFont({ scale: v / 100 }), 50, 170, 5, { prefix: "Size" })}
+            {textTail()}
           </>
         );
 
@@ -1012,15 +1153,11 @@ export default function ContextToolbar(p: Props) {
       case "optionText":
         return (
           <>
-            {toggle("Font")}
-            {stepper("Option text size", theme.optionSize, optionSize => p.patchTheme({ optionSize }), 16, 46, 1, { prefix: "Size" })}
-            {sep()}
+            {fontToggle()}
+            {stepper("Option text size", theme.optionSize, optionSize => p.patchTheme({ optionSize }), 0, 99999, 1, { prefix: "Size" })}
             {textSwatch("Option text colour", lineInk || theme.optionTextColor, setLineInk)}
-            {stepper("Option line height", theme.optionLineHeight ?? 1.45, v => p.patchTheme({ optionLineHeight: Math.round(v * 20) / 20 }), 1, 2.2, .05, { prefix: "Line" })}
-            {sep()}
-            {aligns()}
-            {sep()}
-            {toggle("Position")}
+            {stepper("Option line height", theme.optionLineHeight ?? 1.45, v => p.patchTheme({ optionLineHeight: Math.round(v * 20) / 20 }), 0, 99, .05, { prefix: "Line" })}
+            {textTail()}
           </>
         );
 
@@ -1057,10 +1194,10 @@ export default function ContextToolbar(p: Props) {
         return (
           <>
             {toggle("Numbering", <span aria-hidden="true">#</span>)}
-            {toggle("Marker font", <span aria-hidden="true">A</span>)}
+            {fontToggle()}
             {sep()}
             {swatch(`Marker letter ink${theme.optionBulletInk ? "" : " (auto until set)"}`, picked(theme.optionBulletInk || optionBase), v => p.patchTheme({ optionBulletInk: v }), <span className="ctx-a" style={{ borderBottomColor: picked(theme.optionBulletInk || optionBase) }}>A</span>, "optionBulletInk")}
-            {button("Aa", () => p.patchTheme({ optionBulletUppercase: !(theme.optionBulletUppercase ?? false) }), !!(theme.optionBulletUppercase ?? false), "UPPERCASE letters")}
+            {button("auto", () => set({ color: "" }), !theme.optionBulletInk, "Let the marker palette pick the letter's ink")}
             {sep()}
             <select
               aria-label="Letter weight"
@@ -1072,7 +1209,8 @@ export default function ContextToolbar(p: Props) {
               <option value="0">Auto weight</option>
               {WEIGHTS.map(w => <option key={w.v} value={String(w.v)}>{w.l}</option>)}
             </select>
-            {stepper("Letter size %", theme.optionBulletTextSize ?? 100, v => p.patchTheme({ optionBulletTextSize: v }), 50, 170, 5, { prefix: "Size" })}
+            {stepper("Letter size %", theme.optionBulletTextSize ?? 100, v => p.patchTheme({ optionBulletTextSize: Math.max(0, v) }), 0, 99999, 5, { prefix: "Size" })}
+            {textTail()}
           </>
         );
     }
@@ -1210,7 +1348,7 @@ export default function ContextToolbar(p: Props) {
         </>}
         {text && <>
           {toggle("Font")}
-          {stepper(s ? "Font size" : "Size %", size, setSize, 0, 99999, 1, { dec: "Decrease font size", inc: "Increase font size", jump: 1 })}
+          {stepper(s || sizeField ? "Font size" : "Size %", size, setSize, 0, 99999, 1, { dec: "Decrease font size", inc: "Increase font size", jump: 1 })}
           {sep()}
           {button(<span className="ctx-glyph-b">B</span>, () => s ? patch({ bold: !s.bold }) : fontPatch({ weight: (tf.weight ?? 400) >= 700 ? 400 : 700 }), s ? s.bold : (tf.weight ?? 400) >= 700, "Bold")}
           {button(<span className="ctx-glyph-i">I</span>, () => s ? patch({ italic: !s.italic }) : fontPatch({ italic: !tf.italic }), s ? s.italic : !!tf.italic, "Italic")}

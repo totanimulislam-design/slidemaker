@@ -9,6 +9,8 @@
  * Heavy scripts (CJK) are only fetched when the deck really uses them.
  */
 
+import { googleFontChoice, googleFontWeights } from "./googleFonts";
+
 export type ScriptId =
   | "latin"
   | "bengali"
@@ -369,7 +371,6 @@ export const FONT_LIBRARY: FontChoice[] = [
   en("Cormorant Garamond", "serif"),
   en("Bodoni Moda", "serif"),
   en("EB Garamond", "serif"),
-  en("Cinzel", "serif"),
   en("Josefin Slab", "serif"),
   en("BioRhyme", "serif"),
 
@@ -426,10 +427,43 @@ export interface LoadableFont {
   aliasFor?: string;
 }
 
+/**
+ * The weights to ask Google for: the family's REAL weight list when the
+ * catalogue knows it (a request that names a weight the family does not ship
+ * fails as a whole), else whatever the caller wanted. Every weight is listed;
+ * @font-face files only download once a weight is actually used.
+ */
+export function loadableWeights(family: string, requested: string): string {
+  return googleFontWeights(family) ?? requested;
+}
+
 /** Google Fonts <link> for the given families (deduplicated). */
 export function fontHref(families: { family: string; weights: string }[]): string {
-  const q = families.map((f) => `family=${f.family.replace(/ /g, "+")}:wght@${f.weights}`).join("&");
+  const q = families
+    .map((f) => `family=${f.family.replace(/ /g, "+")}:wght@${loadableWeights(f.family, f.weights)}`)
+    .join("&");
   return `https://fonts.googleapis.com/css2?${q}&display=swap`;
+}
+
+/**
+ * Everything known about a family: the curated library first, then the full
+ * Google Fonts catalogue. Undefined for uploaded / unknown faces.
+ */
+export function fontChoiceFor(family: string | undefined): FontChoice | undefined {
+  if (!family) return undefined;
+  return FONT_BY_FAMILY.get(family.toLowerCase()) ?? googleFontChoice(family);
+}
+
+/**
+ * Loads a family by name from wherever it lives — the curated library (with
+ * its alias rules), the Google catalogue (with its real weights) or, failing
+ * both, a plain best-effort request. Uploaded fonts are registered by
+ * lib/customFonts and need nothing here.
+ */
+export function ensureFamily(family: string | undefined): void {
+  if (!family) return;
+  const meta = fontChoiceFor(family);
+  ensureFontStylesheet([meta ?? { family, weights: "400;500;600;700" }]);
 }
 
 /** parses a CSS font-family value into concrete family names */

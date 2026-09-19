@@ -99,11 +99,13 @@ export default function FootnotePanel({ theme: T, slide, setTheme, updateSlide, 
         </Field>
       </div>
 
-      <Field label="Footnote size" hint={`${size}px`}>
-        <Slider min={10} max={44} value={size} onChange={(v) => setTheme({ noteSize: v })} />
-      </Field>
-
-      <BoxFontControls theme={T} setTheme={setTheme} selected="note" />
+      <BoxFontControls
+        theme={T}
+        setTheme={setTheme}
+        selected="note"
+        size={{ value: size, onChange: (v) => setTheme({ noteSize: v }), sliderMax: 100 }}
+        hide={["color"]}
+      />
 
       <ElementPosition theme={T} id="note" patchLayout={patchLayout} />
 

@@ -3,6 +3,7 @@ import type { ThemeSettings } from "../lib/types";
 import { renderOptionBulletMarker, type OptionBulletShape } from "../lib/optionBulletShapes";
 import { optionBadgeStyle, type OptionStyle } from "../lib/optionStyles";
 import { universalStack } from "../lib/fonts";
+import { offsetCss, optionBulletTypeface, typefaceCss, typefaceInlineCss } from "../lib/boxFonts";
 
 /**
  * One option bullet: ink, fill, border and the background shape painted behind
@@ -38,21 +39,34 @@ export default function OptionBulletMarker({
   const badge = optionStyle ? optionBadgeStyle(optionStyle, theme, color, size, highlight) : undefined;
 
   /**
-   * "Text inside option bullet" — the letter's own face, size, weight and case.
-   * Every field is optional and defaults to whatever the marker shape derives,
-   * so an untouched deck renders exactly as before. The caller's `style` still
-   * wins last: shape pickers use it to force a fixed preview size.
+   * "Text inside option bullet" — the letter is its own text box. Its typeface
+   * (the marker's flat theme fields folded under `boxFonts.optionBullet`, see
+   * lib/boxFonts) paints the LETTER NODE: face, size, weight, case, spacing,
+   * transparency, effect and nudge all land on the glyph and never on the
+   * marker's silhouette, fill or ring. Every field is optional and defaults to
+   * whatever the marker shape derives, so an untouched deck renders exactly as
+   * before. The caller's `style` still wins on the marker box: shape pickers
+   * use it to force a fixed preview size.
    */
-  const textCss: CSSProperties = {};
-  const pct = theme.optionBulletTextSize ?? 100;
-  if (pct !== 100 && typeof marker.style.fontSize === "number") {
-    textCss.fontSize = Math.max(6, Math.round((marker.style.fontSize as number) * (pct / 100)));
-  }
-  if (theme.optionBulletTextWeight) textCss.fontWeight = theme.optionBulletTextWeight;
-  if (theme.optionBulletUppercase) textCss.textTransform = "uppercase";
-  const face = theme.optionBulletFontFamily
-    ? universalStack(`'${theme.optionBulletFontFamily}'`, theme.arabicFont)
-    : fontFamily;
+  const tf = optionBulletTypeface(theme);
+  const face = tf.family ? universalStack(`'${tf.family}'`, theme.arabicFont) : fontFamily;
+  // a caller-forced size (the shape pickers' fixed previews) is the base the
+  // letter scales from; otherwise the shape's own derived size is
+  const forced = typeof style?.fontSize === "number" ? (style.fontSize as number) : undefined;
+  const baseSize = forced ?? (typeof marker.style.fontSize === "number" ? (marker.style.fontSize as number) : undefined);
+  // the letter's own ink (an explicit override) beats the marker palette;
+  // `typefaceCss` sets a colour only when the typeface carries one
+  const letterCss = typefaceCss(
+    tf,
+    { display: "inline-block", ...(baseSize !== undefined ? { fontSize: baseSize } : {}) },
+    face,
+  );
+  if (typeof letterCss.fontSize === "number") letterCss.fontSize = Math.max(0, Math.round(letterCss.fontSize));
+  const inline = typefaceInlineCss(tf);
+  const nudge = offsetCss(tf, marker.innerStyle?.transform as string | undefined);
+  const justify = tf.align === "left" ? "flex-start" : tf.align === "right" ? "flex-end" : tf.align === "center" ? "center" : undefined;
+
+  const letter = inline ? <span style={inline}>{marker.content}</span> : marker.content;
 
   return (
     <span style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
@@ -62,12 +76,12 @@ export default function OptionBulletMarker({
           ...badge,
           ...marker.style,
           position: "relative",
-          ...textCss,
+          ...(justify ? { justifyContent: justify } : {}),
           fontFamily: face,
           ...style,
         }}
       >
-        {marker.innerStyle ? <span style={marker.innerStyle}>{marker.content}</span> : marker.content}
+        <span style={{ ...(marker.innerStyle ?? {}), ...letterCss, ...nudge }}>{letter}</span>
       </span>
     </span>
   );

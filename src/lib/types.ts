@@ -59,6 +59,44 @@ export type OptionsLayout = "right" | "left" | "two-col" | "grid";
 export type ElementId =
   | "logo" | "brand" | "title" | "badge" | "bullet" | "question" | "options" | "note";
 
+/**
+ * Canva-style text effects. One effect at a time, each with the handful of
+ * settings Canva exposes for it; `lib/textEffects` turns it into CSS.
+ */
+export type TextEffectKind =
+  | "none"
+  | "shadow"
+  | "lift"
+  | "hollow"
+  | "splice"
+  | "outline"
+  | "echo"
+  | "glitch"
+  | "neon"
+  | "background";
+
+export interface TextEffect {
+  kind: TextEffectKind;
+  /** shadow · splice · echo · glitch — distance of the copy, 0–100 */
+  offset?: number;
+  /** shadow · splice · echo · glitch — direction in degrees, −180…180 (0 = right, 90 = down) */
+  direction?: number;
+  /** shadow — softness 0–100 */
+  blur?: number;
+  /** shadow · echo · background — transparency of the copy / plate 0–100 */
+  transparency?: number;
+  /** shadow · splice · outline · echo · glitch · background — the effect's own colour */
+  color?: string;
+  /** hollow · splice · outline — stroke thickness 1–100 */
+  thickness?: number;
+  /** lift · neon — intensity 0–100 */
+  intensity?: number;
+  /** background — corner roundness 0–100 */
+  roundness?: number;
+  /** background — how far the plate spreads past the glyphs 0–100 */
+  spread?: number;
+}
+
 /** Per-box typeface override. Empty fields fall back to the deck fonts. */
 export interface BoxTypeface {
   color?: string;
@@ -81,9 +119,25 @@ export interface BoxTypeface {
   textShadow?: boolean;
   textStroke?: { enabled: boolean; color: string; width: number };
   textGradient?: Gradient;
+  /** Canva-style text effect (shadow, lift, hollow, splice, outline, echo, glitch, neon, background) */
+  effect?: TextEffect;
+  /**
+   * Position of the TEXT inside its box, in slide pixels. A nudge of the glyphs
+   * only: the box (and anything painted with it — banner, marker, plate) stays
+   * where it is.
+   */
+  offsetX?: number;
+  offsetY?: number;
 }
 
-export type BoxFonts = Partial<Record<ElementId, BoxTypeface>>;
+/**
+ * Every text part that owns a typeface of its own. The board elements, plus
+ * the parts painted INSIDE a merged element: the two brand lines (Badge 1 /
+ * Badge 2) inside the brand block and the letter inside every option marker.
+ */
+export type BoxFontId = ElementId | "brandTop" | "brandBottom" | "optionBullet";
+
+export type BoxFonts = Partial<Record<BoxFontId, BoxTypeface>>;
 
 /**
  * Position is stored as an *alignment fraction* (like background-position):

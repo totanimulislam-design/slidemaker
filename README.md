@@ -219,6 +219,44 @@ plain numbering, fonts) open from their line in the same movable pop-up card
 every other toolbar toggle uses. A multi-selection or a drawn shape always gets
 the plain toolbar, never a merged stack.
 
+### Every text part has the full text toolkit
+
+Badge 1, Badge 2, Badge 3, the title, the question, the number inside the
+question bullet, the option text, the letter inside the option markers, the
+footnote and any custom text box each get the same complete set of text
+controls — in their inspector destination **and** on their toolbar line:
+
+| Control | Where it lands |
+| --- | --- |
+| **Font** — the curated library plus **all 1,908 Google Fonts** (searchable, paged, hover to preview; a family is loaded with the weights it really ships) | `boxFonts[part].family` |
+| **Font size, 0 → ∞** — the number field has no upper clamp (the slider covers the practical range) | the part's deck size (`titleSize`, `badgeSize`, `brandTopSize`…) or its `%` scale |
+| **Font colour** (with *auto* back to the shared / design colour) | the part's own ink field (`brandTopColor`, `optionBulletInk`…) |
+| **Bold · Italic · Underline · Strikethrough**, **weight** | `weight`, `italic`, `underline`, `strikethrough` |
+| **UPPERCASE / lowercase / Normal** | `textTransform` |
+| **Alignment** (left / centre / right / justify) | `align` (a part that *is* its board element also aligns its box) |
+| **Letter spacing · Line spacing** | `letterSpacing`, `lineHeight` |
+| **Transparency 0 – 100** | `opacity` |
+| **Text effects** — Canva-style *Shadow · Lift · Hollow · Splice · Outline · Echo · Glitch · Neon · Background*, each with its own offset / direction / blur / thickness / intensity / colour settings (`lib/textEffects.ts`) | `effect` |
+| **Position** — an X / Y nudge of the glyphs inside their box (the element's own box position stays under *Layout* / the Position pop-up) | `offsetX`, `offsetY` |
+
+The rule that makes those controls trustworthy: **each one styles the text node
+of exactly that part, never the merged block it is painted inside.** Badge 1 and
+Badge 2 are two typefaces (`boxFonts.brandTop` / `.brandBottom`) layered over
+the shared brand face; the number inside the question bullet is its own node in
+the painted shape, so fading, stroking or nudging it never touches the bullet's
+silhouette; the option-marker letter is its own node in the marker; the badge
+glyphs sit on their own node inside the plate; the title's nudge leaves the
+banner where it is. Every surface reads back the typeface the board really
+paints with (`textPartTypeface`) and writes through one path
+(`patchTextPart`), so a panel and its toolbar line can never shadow each other
+— the marker letter's family / weight / size / UPPERCASE keep living in the flat
+`optionBullet*` fields the markers always read, and a colour always goes to the
+element's ink field.
+
+Custom text boxes (Insert shapes ▸ Text) carry the same toolkit through their
+*Shape design ▸ Text* tab and the plain text toolbar (`textEffect`,
+`textOffsetX/Y` on `ShapeItem`).
+
 ## Layers
 
 The **Layers** destination (the ⧉ tile after *Insert shapes*) is one Canva-style

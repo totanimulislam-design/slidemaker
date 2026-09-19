@@ -1,4 +1,4 @@
-import type { Deck, ThemeSettings, DeckHeader, BackgroundSettings } from "./types";
+import type { BoxFonts, Deck, ThemeSettings, DeckHeader, BackgroundSettings } from "./types";
 import type { ShapeItem } from "./shapes";
 import { effectiveTheme, effectiveHeader, mergeThemeOverride } from "./overrides";
 import { effectiveBackground } from "./background";
@@ -11,6 +11,19 @@ const copyShapes = (items: ShapeItem[] = []): ShapeItem[] =>
     ...item,
     id: `${item.id}-ap${Date.now().toString(36)}${(copySeq++).toString(36)}`,
   }));
+
+/**
+ * The option block's typefaces (option text + the letter inside the marker)
+ * on top of whatever other boxes the target already styles.
+ */
+function optionBoxFonts(current: BoxFonts | undefined, source: BoxFonts | undefined): BoxFonts {
+  const next: BoxFonts = { ...(current ?? {}) };
+  for (const id of ["options", "optionBullet"] as const) {
+    if (source?.[id]) next[id] = { ...source[id] };
+    else delete next[id];
+  }
+  return next;
+}
 
 /**
  * Copies the design (theme, header, background, layout, bullets, options,
@@ -82,6 +95,8 @@ export function applySlideDesign(
         optionLineHeight: effTheme.optionLineHeight,
         plainNumbering: effTheme.plainNumbering,
         answerStyle: effTheme.answerStyle,
+        // the option text's and the marker letter's own typefaces
+        boxFonts: optionBoxFonts(nextTheme.boxFonts, effTheme.boxFonts),
       };
     }
     if (section === "all" || section === "header") {
@@ -180,6 +195,8 @@ export function applySlideDesign(
           optionLineHeight: effTheme.optionLineHeight,
           plainNumbering: effTheme.plainNumbering,
           answerStyle: effTheme.answerStyle,
+          // the option text's and the marker letter's own typefaces
+          boxFonts: optionBoxFonts(s.themeOverride?.boxFonts, effTheme.boxFonts),
         });
       } else if (section === "frame") {
         nextThemeOverride = mergeThemeOverride(s.themeOverride, {

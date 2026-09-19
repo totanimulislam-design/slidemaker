@@ -1,4 +1,4 @@
-import type { Gradient } from "./types";
+import type { Gradient, TextEffect } from "./types";
 
 /**
  * User-drawn overlays: shapes and free text boxes.
@@ -95,6 +95,11 @@ export interface ShapeItem {
   textTransform?: "uppercase" | "lowercase" | "none";
   /** text opacity 0–1 */
   textOpacity?: number;
+  /** Canva-style text effect (shadow, lift, hollow, splice, outline, echo, glitch, neon, background) */
+  textEffect?: TextEffect;
+  /** nudge of the text inside the box, px (the box itself stays put) */
+  textOffsetX?: number;
+  textOffsetY?: number;
   /** inner padding for text boxes, px */
   padding?: number;
   /** font family override for this item's text (single family name) */

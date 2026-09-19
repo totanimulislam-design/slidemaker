@@ -745,8 +745,23 @@ export default function ShapesPanel({
 
           {(sel.kind === "text" || sel.text) && (
             <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-              <Field label="Font size" hint={`${sel.fontSize}px`}>
-                <Slider min={10} max={120} value={sel.fontSize} onChange={(v) => set({ fontSize: v })} />
+              <Field label="Font size (0 to ∞ px)" hint={`${sel.fontSize}px`} as="div">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    aria-label="Text box font size"
+                    min={0}
+                    value={sel.fontSize}
+                    onChange={(e) => {
+                      const n = parseFloat(e.target.value);
+                      if (Number.isFinite(n) && n >= 0) set({ fontSize: n });
+                    }}
+                    className="w-24 rounded-lg border border-white/10 bg-slate-900/70 px-2.5 py-1.5 font-mono text-xs text-slate-100 outline-none focus:border-amber-400/60"
+                  />
+                  <div className="flex-1">
+                    <Slider min={0} max={Math.max(200, sel.fontSize)} value={sel.fontSize} onChange={(v) => set({ fontSize: v })} />
+                  </div>
+                </div>
               </Field>
               <div className="grid grid-cols-2 gap-2">
                 <p className="self-center text-[10px] text-slate-500">Colour, gradient &amp; outline → Shape design ▸ Text</p>

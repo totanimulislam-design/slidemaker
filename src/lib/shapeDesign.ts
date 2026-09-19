@@ -3,6 +3,7 @@ import type { ShapeItem } from "./shapes";
 import type { Gradient } from "./types";
 import { gradientCss } from "./banner";
 import { withAlpha } from "./color";
+import { effectIsOn, textEffectStyles } from "./textEffects";
 
 /* ----------------------------------------------------------- helpers */
 
@@ -72,19 +73,30 @@ export function textStyle(s: ShapeItem): CSSProperties {
       s.textStroke?.enabled && s.textStroke.width > 0 ? `${s.textStroke.width}px ${s.textStroke.color}` : undefined,
   };
   const tg = s.textGradient;
-  if (tg?.enabled && tg.stops.length >= 2) {
-    return {
-      ...base,
-      backgroundImage: gradientCss(tg, s.textColor),
-      WebkitBackgroundClip: "text",
-      backgroundClip: "text",
-      color: "transparent",
-      WebkitTextFillColor: "transparent",
-      textShadow: undefined,
-      filter: glowShadow || (s.textShadow === false ? undefined : "drop-shadow(0 2px 3px rgba(0,0,0,.55))"),
-    };
-  }
-  return { ...base, color: s.textColor };
+  const out: CSSProperties =
+    tg?.enabled && tg.stops.length >= 2
+      ? {
+          ...base,
+          backgroundImage: gradientCss(tg, s.textColor),
+          WebkitBackgroundClip: "text",
+          backgroundClip: "text",
+          color: "transparent",
+          WebkitTextFillColor: "transparent",
+          textShadow: undefined,
+          filter: glowShadow || (s.textShadow === false ? undefined : "drop-shadow(0 2px 3px rgba(0,0,0,.55))"),
+        }
+      : { ...base, color: s.textColor };
+  // the Canva-style effect paints last: it owns the shadow / stroke channels
+  if (effectIsOn(s.textEffect)) Object.assign(out, textEffectStyles(s.textEffect, s.textColor).css);
+  // the text's nudge inside its box
+  if (s.textOffsetX || s.textOffsetY) out.transform = `translate(${s.textOffsetX ?? 0}px, ${s.textOffsetY ?? 0}px)`;
+  return out;
+}
+
+/** the inline-wrapper CSS of a text box's effect (the background plate), if any */
+export function textInlineStyle(s: ShapeItem): CSSProperties | undefined {
+  if (!effectIsOn(s.textEffect)) return undefined;
+  return textEffectStyles(s.textEffect, s.textColor).inline;
 }
 
 /* ----------------------------------------------------------- presets */

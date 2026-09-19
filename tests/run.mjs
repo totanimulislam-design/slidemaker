@@ -38,6 +38,7 @@ const suites = [
   ["editor chrome resizers (SplitPane divider)", "chrome.test.tsx", "runChromeTests"],
   ["app boot smoke test (full editor)", "smoke.test.tsx", "runSmokeTests"],
   ["inspector navigation (21 destinations, selection sync + merged toolbar stacks)", "nav.test.tsx", "runNavTests"],
+  ["per-part text style (font · size · colour · case · spacing · transparency · effects · position — each on its own text node)", "textstyle.test.tsx", "runTextStyleTests"],
   ["layers panel (drag to reorder the unified stack + selection sync)", "layers.test.tsx", "runLayersTests"],
   ["slide stack (drag to reorder + multi-select boxes + bulk ops + the open slide's border)", "slides.test.tsx", "runSlideStackTests"],
   ["imported pages (a PDF / PowerPoint merged in as plain slides, the file kept whole in Uploads)", "import.test.tsx", "runImportTests", [pdfStubPlugin]],

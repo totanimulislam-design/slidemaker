@@ -1,6 +1,6 @@
 import type { Box, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { renderNumberStyle, showsNumber, type NumberStyle } from "../lib/numberStyles";
-import { boxFontCss, clearBoxFont, setBoxFont } from "../lib/boxFonts";
+import { boxFontCss, boxInlineCss, clearBoxFont, offsetCss, setBoxFont } from "../lib/boxFonts";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
 import { Btn, ColorInput, Field, PanelHead, TextInput, Toggle } from "./ui";
@@ -41,14 +41,11 @@ export default function BulletTextPanel({ theme: T, slide, setTheme, updateSlide
         className="flex items-center justify-center gap-5 overflow-hidden rounded-xl border border-white/10 px-4 py-6"
         style={{ background: T.board }}
       >
-        <div
-          style={boxFontCss(T, "bullet", {
-            ...r.style,
-            fontSize: PREVIEW_SIZE * r.fontScale,
-            color: r.color,
-          })}
-        >
-          {r.content}
+        <div style={r.style}>
+          {/* the number is its own node inside the shape, exactly as on the board */}
+          <span style={{ ...boxFontCss(T, "bullet", { fontSize: PREVIEW_SIZE * r.fontScale, color: r.color, display: "inline-block" }), ...offsetCss(bulletFont) }}>
+            {boxInlineCss(T, "bullet") ? <span style={boxInlineCss(T, "bullet")}>{r.content}</span> : r.content}
+          </span>
         </div>
         <span className="text-[11px] text-slate-400">
           {drawsNumber ? (
@@ -108,7 +105,21 @@ export default function BulletTextPanel({ theme: T, slide, setTheme, updateSlide
         </div>
       </div>
 
-      <BoxFontControls theme={T} setTheme={setTheme} selected="bullet" />
+      {/* the digits only: the bullet's silhouette, fill and ring live under
+          "Question bullet" and are never faded, stroked or moved from here */}
+      <BoxFontControls
+        theme={T}
+        setTheme={setTheme}
+        selected="bullet"
+        size={{
+          value: Math.round((bulletFont.scale ?? 1) * 100),
+          onChange: (v) => patchBullet({ scale: v / 100 }),
+          unit: "%",
+          sliderMax: 300,
+          label: "Number size (% of the bullet, 0 to ∞)",
+        }}
+        hide={["color"]}
+      />
 
       {T.bulletSeparate ? (
         <ElementPosition theme={T} id="bullet" patchLayout={patchLayout} hideAlign label="Question bullet" />

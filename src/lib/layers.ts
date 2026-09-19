@@ -509,7 +509,11 @@ export function alignLayer(
   }
   const b = deck.theme.layout[ref.id];
   if (!b || b.locked) return deck; // a locked layer never moves
-  const next: Box = { ...b, mode: "free", x: rect.x, y: rect.y, w: rect.w, h: b.h ?? rect.h, ...patch };
+  // alignShape works on shapes, whose `align` also knows "justify"; a board
+  // element's box never carries that value, so only the geometry is taken
+  const { align: _align, ...geometry } = patch;
+  void _align;
+  const next: Box = { ...b, mode: "free", x: rect.x, y: rect.y, w: rect.w, h: b.h ?? rect.h, ...geometry };
   return { ...deck, theme: { ...deck.theme, layout: { ...deck.theme.layout, [ref.id]: next } } };
 }
 

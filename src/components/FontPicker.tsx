@@ -14,7 +14,8 @@ import {
 import { addCustomFontFile, customFontChoices, listCustomFonts, onCustomFontsChanged, removeCustomFont, type CustomFont } from "../lib/customFonts";
 import { cn } from "../utils/cn";
 import { useFontPreview } from "../lib/fontPreview";
-import { ensureFontStylesheet, preloadFontLibrary } from "../lib/fonts";
+import { ensureFamily, ensureFontStylesheet, preloadFontLibrary } from "../lib/fonts";
+import { googleFontChoices, googleFontCount } from "../lib/googleFonts";
 
 interface Props {
   /** current value: a font-family stack (legacy) or a single family */
@@ -35,10 +36,13 @@ interface Props {
 
 /** one heading + its faces inside the dropdown (`flat` = the un-grouped list) */
 interface Section {
-  id: FontGroupId | "saved" | "flat";
+  id: FontGroupId | "saved" | "flat" | "google";
   label: string;
   fonts: FontChoice[];
 }
+
+/** how many catalogue rows are painted before "show more" (the list is ~1,900 long) */
+const GOOGLE_PAGE = 120;
 
 const KIND_LABEL: Record<FC["kind"], string> = {
   display: "Display",
@@ -105,8 +109,31 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
     return out;
   }, [all, script, kinds, query, custom, showGroups, current]);
 
+  /**
+   * The rest of Google Fonts — every family the catalogue knows that the
+   * curated library above does not already list, filtered to the picker's
+   * script (a Bangla picker shows the Bengali families; "all" shows the lot)
+   * and to the search. Painted in pages so a 1,900-row list stays light; each
+   * row loads its stylesheet on hover, like the curated rows.
+   */
+  const [googlePage, setGooglePage] = useState(1);
+  useEffect(() => setGooglePage(1), [query, open]);
+  const google = useMemo<FontChoice[]>(() => {
+    const q = query.trim().toLowerCase();
+    const listed = new Set(sections.flatMap((sec) => sec.fonts.map((f) => f.family.toLowerCase())));
+    for (const f of FONT_LIBRARY) listed.add(f.family.toLowerCase());
+    return googleFontChoices().filter(
+      (f) =>
+        !listed.has(f.family.toLowerCase()) &&
+        (all || f.script === script) &&
+        (!kinds || kinds.includes(f.kind)) &&
+        (!q || f.family.toLowerCase().includes(q)),
+    );
+  }, [sections, all, script, kinds, query]);
+  const googleShown = google.slice(0, GOOGLE_PAGE * googlePage);
+
   const list = sections.flatMap((s) => s.fonts);
-  const chosen = FONT_LIBRARY.find((f) => f.family === current);
+  const chosen = FONT_LIBRARY.find((f) => f.family === current) ?? googleFontChoices().find((f) => f.family === current);
 
   // the list is long once every script is included, so reveal the picked face
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -172,16 +199,20 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search ${list.length} fonts…`}
+            placeholder={`Search ${list.length + google.length} fonts (all ${googleFontCount().toLocaleString()} Google Fonts)…`}
             className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-amber-400/60"
           />
           <div ref={scrollRef} className="max-h-64 space-y-0.5 overflow-y-auto rounded-lg border border-white/10 bg-slate-900/40 p-1">
-            {query.trim().length > 0 && !list.some((f) => f.family.toLowerCase() === query.trim().toLowerCase()) && (
+            {query.trim().length > 0 &&
+              !list.some((f) => f.family.toLowerCase() === query.trim().toLowerCase()) &&
+              !google.some((f) => f.family.toLowerCase() === query.trim().toLowerCase()) && (
               <button
                 type="button"
                 onClick={() => {
                   const family = query.trim();
-                  ensureFontStylesheet([{ family, weights: "400;500;600;700;800" }]);
+                  // the catalogue's real weights when it knows the family, a
+                  // best-effort request otherwise
+                  ensureFamily(family);
                   onChange(family);
                   setOpen(false);
                   clearPreview();
@@ -227,7 +258,39 @@ export default function FontPicker({ value, onChange, label, script, kinds, comp
                 ))}
               </div>
             ))}
-            {!list.length && <p className="p-3 text-center text-xs text-slate-600">No fonts match “{query}”.</p>}
+            {google.length > 0 && (
+              <div className="pt-1">
+                <div className="sticky top-0 z-10 -mx-1 mb-0.5 flex items-baseline justify-between rounded bg-slate-900/95 px-2 py-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase backdrop-blur-sm">
+                  <span>All Google Fonts</span>
+                  <span className="normal-case tracking-normal text-slate-600">{google.length.toLocaleString()} more</span>
+                </div>
+                {googleShown.map((f) => (
+                  <FontRow
+                    key={f.family}
+                    f={f}
+                    active={f.family === current}
+                    previewTarget={previewTarget}
+                    onHover={handleHover}
+                    onPick={() => {
+                      ensureFamily(f.family);
+                      onChange(f.family);
+                      setOpen(false);
+                      clearPreview();
+                    }}
+                  />
+                ))}
+                {google.length > googleShown.length && (
+                  <button
+                    type="button"
+                    onClick={() => setGooglePage((n) => n + 1)}
+                    className="mt-1 w-full rounded-md border border-white/10 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-white/5"
+                  >
+                    Show {Math.min(GOOGLE_PAGE, google.length - googleShown.length)} more of {google.length.toLocaleString()} (or type to search)
+                  </button>
+                )}
+              </div>
+            )}
+            {!list.length && !google.length && <p className="p-3 text-center text-xs text-slate-600">No fonts match “{query}”.</p>}
           </div>
 
           {/* upload your own font file (Chhatrish July, SolaimanLipi, Charukola…) */}

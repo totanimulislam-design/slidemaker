@@ -1,8 +1,8 @@
 import type { Box, DeckHeader, ElementId, ThemeSettings } from "../lib/types";
-import { boxFontCss, elementInk, setElementInk } from "../lib/boxFonts";
+import { boxStack, brandLineStack, brandLineTypeface, elementInk, setElementInk, typefaceCss } from "../lib/boxFonts";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
-import { Btn, ColorField, ColorInput, Field, PanelHead, Slider, TextInput, Toggle } from "./ui";
+import { Btn, ColorField, ColorInput, Field, PanelHead, TextInput, Toggle } from "./ui";
 import { cn } from "../utils/cn";
 
 /**
@@ -10,9 +10,9 @@ import { cn } from "../utils/cn";
  *
  * The brand block beside the logo paints two independent lines — the academy
  * line ("LEARN WITH") and the teacher line ("FAYSAL SIR"). They share one
- * movable box and one typeface override, but each can be hidden, resized and
- * recoloured on its own, so both get their own navigation entry driven by this
- * same panel.
+ * movable box, but each line is a text box of its own: its text, visibility,
+ * size, colour, typeface, effects and nudge are all styled here without
+ * touching the other line.
  */
 interface Props {
   line: "top" | "bottom";
@@ -60,12 +60,24 @@ export default function BrandLinePanel({ line, theme, header, setTheme, setHeade
   const patchTheme = (patch: Record<string, unknown>) => setTheme(patch as Partial<ThemeSettings>);
   const patchHeader = (patch: Record<string, unknown>) => setHeader(patch as Partial<DeckHeader>);
 
-  const brandCss = boxFontCss(theme, "brand", {
-    textTransform: "uppercase",
-    lineHeight: 1.05,
-    fontWeight: 700,
-    letterSpacing: 0.4,
-  });
+  const part = line === "top" ? "brandTop" : "brandBottom";
+  /** the preview paints each line exactly as the board does */
+  const previewLineCss = (k: "top" | "bottom") => {
+    const cfg = COPY[k];
+    const tf = brandLineTypeface(theme, k);
+    return typefaceCss(
+      { ...tf, color: undefined },
+      {
+        fontSize: Math.round((theme[cfg.size] ?? cfg.fallbackSize) * 0.8),
+        color: theme.boxFonts?.[k === "top" ? "brandTop" : "brandBottom"]?.color || theme[cfg.color] || theme.boxFonts?.brand?.color || theme.brandColor,
+        textTransform: "uppercase",
+        lineHeight: 1.05,
+        fontWeight: 700,
+        letterSpacing: 0.4,
+      },
+      brandLineStack(theme, k),
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -73,7 +85,7 @@ export default function BrandLinePanel({ line, theme, header, setTheme, setHeade
 
       {/* ------------------------------ live preview ------------------------- */}
       <div className="overflow-hidden rounded-xl border border-white/10 px-4 py-4" style={{ background: theme.board }}>
-        <div style={{ ...brandCss, color: theme.brandColor, textAlign: "center" }}>
+        <div style={{ fontFamily: boxStack(theme, "brand"), color: theme.brandColor, textAlign: "center" }}>
           {(["top", "bottom"] as const).map((k) => {
             const cfg = COPY[k];
             const on = theme[cfg.show] ?? true;
@@ -83,10 +95,8 @@ export default function BrandLinePanel({ line, theme, header, setTheme, setHeade
                 key={k}
                 className={cn("rounded px-1 transition-opacity", k === line && "ring-1 ring-amber-400/70")}
                 style={{
-                  fontSize: Math.round((theme[cfg.size] ?? cfg.fallbackSize) * 0.8),
-                  color: theme[cfg.color] || undefined,
-                  opacity: on ? 1 : 0.22,
-                  textDecoration: on ? undefined : "line-through",
+                  ...previewLineCss(k),
+                  ...(on ? {} : { opacity: 0.22, textDecoration: "line-through" }),
                 }}
               >
                 {text || cfg.placeholder}
@@ -106,10 +116,6 @@ export default function BrandLinePanel({ line, theme, header, setTheme, setHeade
 
       <Toggle label={`Show badge ${c.n}`} checked={shown} onChange={(v) => patchTheme({ [c.show]: v })} />
 
-      <Field label="Text size" hint={`${size}px`}>
-        <Slider min={12} max={64} value={size} onChange={(v) => patchTheme({ [c.size]: v })} />
-      </Field>
-
       <ColorField
         label="Badge colour"
         hint={own ? "custom" : "follows the shared brand colour"}
@@ -128,12 +134,19 @@ export default function BrandLinePanel({ line, theme, header, setTheme, setHeade
         </p>
       </div>
 
-      <BoxFontControls theme={theme} setTheme={setTheme} selected="brand" />
-      <p className="text-[10px] leading-relaxed text-slate-500">
-        The typeface above is shared by both badge lines — they are one text block on the slide.
-      </p>
+      {/* every text control below styles THIS line only — font, size (0 → ∞),
+          bold / italic / strikethrough, case, alignment, spacing, transparency,
+          Canva-style effects and the glyphs' own nudge inside the block */}
+      <BoxFontControls
+        theme={theme}
+        setTheme={setTheme}
+        selected={part}
+        label={c.title}
+        size={{ value: size, onChange: (v) => patchTheme({ [c.size]: v }), sliderMax: 120 }}
+        hide={["color"]}
+      />
 
-      <ElementPosition theme={theme} id="brand" patchLayout={patchLayout} label="Badge block" />
+      <ElementPosition theme={theme} id="brand" patchLayout={patchLayout} label="Badge block (both lines)" />
 
       <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
         <Btn
