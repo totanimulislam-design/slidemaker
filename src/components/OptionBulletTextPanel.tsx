@@ -91,7 +91,7 @@ export default function OptionBulletTextPanel({ theme: T, slide, setTheme }: Pro
 
       {/* ------------------------------ typography --------------------------- */}
       {/* the LETTER only — face (whole Google catalogue), size % (0 → ∞),
-          weight, case, spacing, transparency, effects and nudge. The marker's
+          weight, case, spacing, opacity, effects and nudge. The marker's
           silhouette, fill and ring stay under "Option bullet". Family, weight,
           size and UPPERCASE keep living in the flat optionBullet* fields the
           toolbar and the markers always read (see lib/boxFonts patchTextPart). */}

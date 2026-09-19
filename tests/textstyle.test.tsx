@@ -5,7 +5,7 @@
  * question bullet, the option text, the letter inside the option markers, the
  * footnote and a custom text box each get the full text toolkit — font (the
  * whole Google catalogue), size (0 → ∞), colour, bold / italic /
- * strikethrough, case, alignment, letter & line spacing, transparency,
+ * strikethrough, case, alignment, letter & line spacing, opacity,
  * Canva-style effects and a position nudge — from the inspector destination
  * AND the toolbar line above the board.
  *
@@ -125,7 +125,7 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
   nav("badge1");
   out.push({
     name: "Badge 1 opens the full text toolkit for its own line",
-    pass: !!aside().querySelector('[data-text-part="brandTop"]') && !!panelInput("Badge 1 size") && !!panelInput("Badge 1 transparency"),
+    pass: !!aside().querySelector('[data-text-part="brandTop"]') && !!panelInput("Badge 1 size") && !!panelInput("Badge 1 opacity"),
     detail: Array.from(aside().querySelectorAll("input[aria-label]")).map((i) => i.getAttribute("aria-label")).join(", "),
   });
 
@@ -143,10 +143,10 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
   });
   type(panelInput("Badge 1 size"), "31");
 
-  type(panelInput("Badge 1 transparency"), "40");
+  type(panelInput("Badge 1 opacity"), "40");
   out.push({
-    name: "transparency 0–100 fades Badge 1's line only",
-    pass: brandLines()[0]?.style.opacity === "0.6" && !brandLines()[1]?.style.opacity,
+    name: "opacity 0–100 (100 = fully visible) fades Badge 1's line only",
+    pass: brandLines()[0]?.style.opacity === "0.4" && !brandLines()[1]?.style.opacity,
     detail: brandLines().map((d) => d.style.opacity || "—").join(" / "),
   });
 
@@ -242,9 +242,9 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
     detail: brandLines().map((d) => d.style.fontStyle || "—").join(" / "),
   });
   click(barButton("Badge 2 spacing"));
-  type(barInput("Transparency %"), "25");
+  type(barInput("Opacity %"), "75");
   out.push({
-    name: "the toolbar's spacing pop-up sets Badge 2's transparency (0–100)",
+    name: "the toolbar's spacing pop-up sets Badge 2's opacity (100 = fully visible)",
     pass: pop()?.getAttribute("data-pop-panel") === "Badge 2 spacing" && brandLines()[1]?.style.opacity === "0.75",
     detail: `${pop()?.getAttribute("data-pop-panel")} · ${brandLines()[1]?.style.opacity}`,
   });
@@ -277,9 +277,9 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
 
   /* ------------------------------ Badge 3 ---------------------------------- */
   nav("badge3");
-  type(panelInput("Badge 3 transparency"), "50");
+  type(panelInput("Badge 3 opacity"), "50");
   out.push({
-    name: "Badge 3's transparency fades its glyphs (not the badge box or plate)",
+    name: "Badge 3's opacity fades its glyphs (not the badge box or plate)",
     pass: badgeGlyphs()?.style.opacity === "0.5" && !el('[data-el="badge"]')?.style.opacity,
     detail: `${badgeGlyphs()?.style.opacity} | box ${el('[data-el="badge"]')?.style.opacity || "—"}`,
   });
@@ -306,9 +306,9 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
 
   /* ------------------------ number inside the bullet ----------------------- */
   nav("bulletText");
-  type(panelInput("Question bullet text transparency"), "30");
+  type(panelInput("Question bullet text opacity"), "70");
   out.push({
-    name: "the bullet number's transparency fades the digits, not the bullet shape",
+    name: "the bullet number's opacity fades the digits, not the bullet shape",
     pass: bulletNumber()?.style.opacity === "0.7" && !bulletBox()?.style.opacity && !stem()?.style.opacity,
     detail: `digits ${bulletNumber()?.style.opacity} | shape ${bulletBox()?.style.opacity || "—"} | stem ${stem()?.style.opacity || "—"}`,
   });

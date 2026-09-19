@@ -95,7 +95,8 @@ export default function FootnotePanel({ theme: T, slide, setTheme, updateSlide, 
       <div className="grid grid-cols-2 gap-2">
         <ColorInput label="Footnote colour" value={elementInk(T, "note") || color} onChange={(v) => setTheme(setElementInk(T, "note", v))} />
         <Field label="Opacity" hint={`${opacity}%`}>
-          <Slider min={5} max={100} value={opacity} onChange={(v) => setTheme({ noteOpacity: v })} />
+          {/* 0 → 100: the footnote fades out completely (and back) */}
+          <Slider min={0} max={100} value={opacity} onChange={(v) => setTheme({ noteOpacity: v })} />
         </Field>
       </div>
 

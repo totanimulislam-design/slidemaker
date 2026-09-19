@@ -10,10 +10,12 @@ import {
   boxTypeface,
   clearBoxFont,
   elementInk,
+  opacityAlpha,
   patchTextPart,
   resetTextPart,
   textPartHasOverride,
   textPartTypeface,
+  typefaceOpacityPercent,
 } from "../lib/boxFonts";
 import { ensureFamily } from "../lib/fonts";
 import { googleFontCount } from "../lib/googleFonts";
@@ -30,7 +32,7 @@ import { ELEMENT_LABELS } from "../lib/types";
  *
  * Font (the whole Google Fonts catalogue) · size (0 → ∞) · colour · bold ·
  * italic · underline · strikethrough · case · alignment · letter spacing ·
- * line spacing · transparency · Canva-style text effects · position (a nudge
+ * line spacing · opacity · Canva-style text effects · position (a nudge
  * of the glyphs inside their box). Every write goes through `patchTextPart`,
  * the one write path the toolbar uses too, so the two surfaces never shadow
  * each other, and every value is read back from the typeface the board really
@@ -143,7 +145,8 @@ export default function BoxFontControls({ theme, setTheme, selected, compact, la
   // is one, else the part's built-in weight
   const bold = tf.weight ? tf.weight >= 700 : DEFAULT_BOLD.has(selected);
   const caseValue = tf.textTransform ?? (tf.uppercase === true ? "uppercase" : tf.uppercase === "lowercase" ? "lowercase" : "none");
-  const transparency = Math.round((1 - (tf.opacity !== undefined ? (tf.opacity > 1 ? tf.opacity / 100 : tf.opacity) : 1)) * 100);
+  /** 0–100 how much of the glyphs is painted: 100 = fully visible, 0 = gone */
+  const opacity = typefaceOpacityPercent(tf);
 
   return (
     <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3" data-text-part={selected}>
@@ -328,17 +331,14 @@ export default function BoxFontControls({ theme, setTheme, selected, compact, la
         />
       </Field>
 
-      {/* --------------------------- transparency -------------------------- */}
-      <Field label="Transparency" hint={`${transparency}%`} as="div">
+      {/* ----------------------------- opacity ----------------------------- */}
+      <Field label="Opacity (100 = fully visible)" hint={`${opacity}%`} as="div">
         <NumberWithSlider
-          ariaLabel={`${title} transparency`}
-          value={transparency}
+          ariaLabel={`${title} opacity`}
+          value={opacity}
           min={0}
           sliderMax={100}
-          onChange={(v) => {
-            const t = Math.max(0, Math.min(100, v ?? 0));
-            patch({ opacity: t === 0 ? undefined : Math.round((1 - t / 100) * 100) / 100 });
-          }}
+          onChange={(v) => patch({ opacity: opacityAlpha(v ?? 100) })}
         />
       </Field>
 

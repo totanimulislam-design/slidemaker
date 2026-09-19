@@ -234,10 +234,26 @@ controls — in their inspector destination **and** on their toolbar line:
 | **Bold · Italic · Underline · Strikethrough**, **weight** | `weight`, `italic`, `underline`, `strikethrough` |
 | **UPPERCASE / lowercase / Normal** | `textTransform` |
 | **Alignment** (left / centre / right / justify) | `align` (a part that *is* its board element also aligns its box) |
-| **Letter spacing · Line spacing** | `letterSpacing`, `lineHeight` |
-| **Transparency 0 – 100** | `opacity` |
+| **Letter spacing · Line spacing** — the toolbar's `−` / `+` walk the whole range in both directions, a `.05` line-spacing step included | `letterSpacing`, `lineHeight` |
+| **Opacity 0 – 100** — **100 = fully visible**, **0 = invisible**, and every step in between; an untouched part reads 100 | `opacity` |
 | **Text effects** — Canva-style *Shadow · Lift · Hollow · Splice · Outline · Echo · Glitch · Neon · Background*, each with its own offset / direction / blur / thickness / intensity / colour settings (`lib/textEffects.ts`) | `effect` |
 | **Position** — an X / Y nudge of the glyphs inside their box (the element's own box position stays under *Layout* / the Position pop-up) | `offsetX`, `offsetY` |
+
+**One meaning for a visibility number.** Every control that fades something —
+a text part's opacity, a drawn shape's *Item opacity* and its text's opacity, the
+background picture, the design overlay, the badge plate, the banner, the
+footnote, and the shadow / background effects — reads and writes the same
+number: **100 = fully visible, 0 = invisible**, and every one of them reaches
+both ends. The stored field is still a 0–1 alpha, so what the board paints, the
+thumbnails and the PNG / PDF export never move; only the number on the control
+says what it means.
+
+**The `−` / `+` steppers walk the range.** Each click moves the value by the
+control's own step (a `.05` line-spacing step lands on `1.45`, not `1.5`), both
+buttons always move, and a **font size is unbounded** — `0` at the bottom, with
+no ceiling above it, on the toolbar line and in the panel's own number field
+alike. Style controls that used to stop short of the end (banner `10 %`,
+footnote `5 %`, plates and pictures `5 %`) now reach `0` as well.
 
 The rule that makes those controls trustworthy: **each one styles the text node
 of exactly that part, never the merged block it is painted inside.** Badge 1 and

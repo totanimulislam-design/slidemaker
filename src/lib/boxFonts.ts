@@ -189,6 +189,45 @@ export function boxInlineCss(theme: ThemeSettings, id: BoxFontId): CSSProperties
 }
 
 /* ------------------------------------------------------------------ *
+ * Visibility — ONE meaning for every opacity control
+ * ------------------------------------------------------------------ *
+ * Every control that fades something reads and writes a percentage of
+ * VISIBILITY: **100 = fully visible** (also the reading for an element that was
+ * never touched), **0 = invisible**. The stored field stays a 0–1 alpha (`opacity`,
+ * `textOpacity`, `itemOpacity`…), so the board, the thumbnails and the export
+ * are untouched by the numbering, and a control can never disagree with what
+ * is painted.
+ *
+ * The boards, the toolbar and the panels all read the number from here, so the
+ * two surfaces can never drift apart — and a legacy 0–100 percent written by an
+ * older deck still reads correctly.
+ */
+
+/** 0–100 visibility of a stored alpha (0–1, or a legacy 0–100 percent) */
+export function opacityPercent(value: number | undefined): number {
+  const a = value === undefined ? 1 : value > 1 ? value / 100 : value;
+  return Math.round(Math.max(0, Math.min(1, a)) * 100);
+}
+
+/** the visibility number of a typeface (100 = fully visible, 0 = invisible) */
+export const typefaceOpacityPercent = (tf: { opacity?: number }): number => opacityPercent(tf.opacity);
+
+/**
+ * The stored alpha for a 0–100 visibility number.
+ *
+ * It is written down EXACTLY as picked — 100 stores a real 1 — because a text
+ * part can be layered over a shared typeface (Badge 1 over the badge block's
+ * face): clearing the field at 100 would hand the part straight back to a faded
+ * parent and the control would jump back to the number the user just left. A
+ * part that was never touched keeps no field at all, and its panel still reads
+ * 100 (see `opacityPercent`).
+ */
+export function opacityAlpha(percent: number): number {
+  const v = Number.isFinite(percent) ? percent : 100;
+  return Math.round(Math.max(0, Math.min(100, v)) * 10) / 1000;
+}
+
+/* ------------------------------------------------------------------ *
  * Parts painted inside a merged element
  * ------------------------------------------------------------------ */
 
