@@ -63,10 +63,6 @@ export default function TitleTextPanel({ theme, header, setTheme, setHeader, pat
         <TextInput value={header.title} onChange={(e) => setHeader({ title: e.target.value })} />
       </Field>
 
-      <Field label="Title size" hint={`${size}px`}>
-        <Slider min={20} max={96} value={size} onChange={(v) => setTheme({ titleSize: v })} />
-      </Field>
-
       {!b.textGradient.enabled && (
         <ColorInput label="Title colour" value={elementInk(theme, "title")} onChange={(v) => setTheme(setElementInk(theme, "title", v))} />
       )}
@@ -86,7 +82,14 @@ export default function TitleTextPanel({ theme, header, setTheme, setHeader, pat
         <Toggle label="Drop shadow" checked={b.textShadow} onChange={(v) => setBanner({ textShadow: v })} />
       </div>
 
-      <BoxFontControls theme={theme} setTheme={setTheme} selected="title" />
+      {/* the heading glyphs only — the banner plate has its own destination */}
+      <BoxFontControls
+        theme={theme}
+        setTheme={setTheme}
+        selected="title"
+        size={{ value: size, onChange: (v) => setTheme({ titleSize: v }), sliderMax: 160 }}
+        hide={["color"]}
+      />
 
       <ElementPosition theme={theme} id="title" patchLayout={patchLayout} />
 

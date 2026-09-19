@@ -9,9 +9,8 @@ import {
   resetOptionLabels,
   hasManualOptionLabels,
 } from "../lib/plainNumbering";
-import { FONT_BY_FAMILY, ensureFontStylesheet } from "../lib/fonts";
-import { boxFontLabel, elementInk, setBoxFont, setElementInk } from "../lib/boxFonts";
-import FontPicker from "./FontPicker";
+import { boxFontLabel, elementInk, setElementInk } from "../lib/boxFonts";
+import { ensureFamily } from "../lib/fonts";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
 import OptionStylePicker from "./OptionStylePicker";
@@ -58,8 +57,7 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
   // a deck can be saved with any face from the library — make sure the one it
   // uses is actually downloaded, not just listed in the picker
   useEffect(() => {
-    const meta = FONT_BY_FAMILY.get(optionFont.toLowerCase());
-    if (meta) ensureFontStylesheet([meta]);
+    ensureFamily(optionFont);
   }, [optionFont]);
 
   if (!slide) return <p className="text-sm text-slate-500">No slide selected.</p>;
@@ -172,30 +170,21 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
       </div>
 
       {/* ------------------------- option text typography ------------------- */}
-      <Field label="Option font size" hint={`${T.optionSize}px`}>
-        <Slider min={16} max={46} value={T.optionSize} onChange={(v) => setTheme({ optionSize: v })} />
-      </Field>
       <Field label="Wrapped text line height" hint={`${T.optionLineHeight}`}>
         <Slider min={1} max={2.2} step={0.05} value={T.optionLineHeight} onChange={(v) => setTheme({ optionLineHeight: v })} />
       </Field>
-      <FontPicker
-        label="Option text font"
-        value={optionFont}
-        previewTarget="box:options"
-        onChange={(family) => {
-          const meta = FONT_BY_FAMILY.get(family.toLowerCase());
-          if (meta) ensureFontStylesheet([meta]);
-          // patch the options box only (family, nothing else) — the deck's
-          // Bengali/Latin/Arabic fonts and every other box stay untouched
-          setTheme({ boxFonts: setBoxFont(T.boxFonts, "options", { family }) });
-        }}
-        script="all"
-        compact
-      />
       <div className="grid grid-cols-2 gap-2">
         <ColorInput label="Option text" value={elementInk(T, "options")} onChange={(v) => setTheme(setElementInk(T, "options", v))} />
       </div>
-      <BoxFontControls theme={T} setTheme={setTheme} selected="options" />
+      {/* the option TEXT only (boxFonts.options): the row containers above
+          and the markers ("Option bullet") keep their own styling */}
+      <BoxFontControls
+        theme={T}
+        setTheme={setTheme}
+        selected="options"
+        size={{ value: T.optionSize, onChange: (v) => setTheme({ optionSize: v }), sliderMax: 120 }}
+        hide={["color"]}
+      />
 
       {/* the label painted inside each marker is styled under "Opt bullet text" */}
       <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">

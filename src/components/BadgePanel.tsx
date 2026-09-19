@@ -99,10 +99,6 @@ export default function BadgePanel({ theme, header, slide, setTheme, setHeader, 
 
       <ColorInput label="Badge colour" value={elementInk(theme, "badge")} onChange={(v) => setTheme(setElementInk(theme, "badge", v))} />
 
-      <Field label="Badge size" hint={`${size}px`}>
-        <Slider min={14} max={72} value={size} onChange={(v) => setTheme({ badgeSize: v })} />
-      </Field>
-
       {/* --------------------------------- plate ----------------------------- */}
       <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
         <Toggle label="Plate behind the badge" checked={plate.enabled} onChange={(v) => setPlate({ enabled: v })} />
@@ -152,7 +148,14 @@ export default function BadgePanel({ theme, header, slide, setTheme, setHeader, 
         )}
       </div>
 
-      <BoxFontControls theme={theme} setTheme={setTheme} selected="badge" />
+      {/* the badge glyphs only — the plate above is styled separately */}
+      <BoxFontControls
+        theme={theme}
+        setTheme={setTheme}
+        selected="badge"
+        size={{ value: size, onChange: (v) => setTheme({ badgeSize: v }), sliderMax: 120 }}
+        hide={["color"]}
+      />
 
       <ElementPosition theme={theme} id="badge" patchLayout={patchLayout} />
 

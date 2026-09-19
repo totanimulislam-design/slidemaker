@@ -3,7 +3,6 @@ import { DRAG_THRESHOLD_PX, usePointerDrag } from "../lib/dragSession";
 import type { Box, Deck, DeckHeader, ElementId, LayoutMap, SlideData, ThemeSettings } from "../lib/types";
 import { ELEMENT_LABELS } from "../lib/types";
 import LayoutPanel from "./LayoutPanel";
-import { ensureFontStylesheet, FONT_BY_FAMILY } from "../lib/fonts";
 import QuestionBulletPanel from "./QuestionBulletPanel";
 import OptionBulletPanel from "./OptionBulletPanel";
 import OptionBulletTextPanel from "./OptionBulletTextPanel";
@@ -28,14 +27,13 @@ import AnswerKeyPanel from "./AnswerKeyPanel";
 import LayersPanel from "./LayersPanel";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
-import { boxFontLabel, elementInk, setBoxFont, setElementInk } from "../lib/boxFonts";
+import { elementInk, setElementInk } from "../lib/boxFonts";
 import { MATH_SNIPPETS } from "../lib/presets";
 import { type ScriptId } from "../lib/fonts";
 import ThemePanel from "./ThemePanel";
 import { handleSmartPaste } from "../lib/richPaste";
 import type { ApplySection } from "../lib/applyDesign";
 import type { SlideField } from "./Slide";
-import FontPicker from "./FontPicker";
 import { Btn, ColorInput, Field, PanelHead, Slider, TextArea } from "./ui";
 import { cn } from "../utils/cn";
 
@@ -638,28 +636,21 @@ export default function Inspector({
               <Field label="Text size on this slide" hint={`${Math.round(slide.scale * 100)}%`}>
                 <Slider min={0.6} max={1.5} step={0.05} value={slide.scale} onChange={(v) => updateSlide(slide.id, { scale: v })} />
               </Field>
-              <Field label="Question font size" hint={`${T.questionSize}px`}>
-                <Slider min={20} max={52} value={T.questionSize} onChange={(v) => setTheme({ questionSize: v })} />
-              </Field>
-              {/* the stem's own typeface (this box only) — the deck-wide default
-                  faces live under "Design & defaults" */}
-              <FontPicker
-                label="Question font"
-                value={boxFontLabel(T, "question")}
-                previewTarget="box:question"
-                onChange={(family) => {
-                  const meta = FONT_BY_FAMILY.get(family.toLowerCase());
-                  if (meta) ensureFontStylesheet([meta]);
-                  setTheme({ boxFonts: setBoxFont(T.boxFonts, "question", { family }) });
-                }}
-                script="bangla"
-                compact
-              />
               {/* one write for the stem's ink: the deck field the renderer
                   reads, minus any per-box override that would shadow it */}
               <ColorInput label="Question colour" value={elementInk(T, "question")} onChange={(v) => setTheme(setElementInk(T, "question", v))} />
 
-              <BoxFontControls theme={T} setTheme={setTheme} selected="question" />
+              {/* the stem's own text style (this box only): font from the whole
+                  Google catalogue, size 0 → ∞, weight, case, spacing,
+                  transparency, effects and nudge — the bullet beside it and the
+                  deck-wide default faces ("Design & defaults") are untouched */}
+              <BoxFontControls
+                theme={T}
+                setTheme={setTheme}
+                selected="question"
+                size={{ value: T.questionSize, onChange: (v) => setTheme({ questionSize: v }), sliderMax: 120 }}
+                hide={["color"]}
+              />
 
               <ElementPosition theme={T} id="question" patchLayout={patchLayout} />
             </>

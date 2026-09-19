@@ -1,13 +1,13 @@
 import type { SlideData, ThemeSettings } from "../lib/types";
 import type { OptionStyle } from "../lib/optionStyles";
 import { readableOn, shade } from "../lib/color";
-import { FONT_BY_FAMILY, ensureFontStylesheet, universalStack } from "../lib/fonts";
+import { universalStack } from "../lib/fonts";
+import { resetTextPart } from "../lib/boxFonts";
 import { plainNumberingDef, DEFAULT_PLAIN_NUMBERING, effectiveOptionLabel } from "../lib/plainNumbering";
 import OptionBulletMarker from "./OptionBulletMarker";
-import FontPicker from "./FontPicker";
+import BoxFontControls from "./BoxFontControls";
 import PlainNumberingPicker from "./PlainNumberingPicker";
-import { Btn, ColorField, Field, PanelHead, Slider, Toggle } from "./ui";
-import { cn } from "../utils/cn";
+import { Btn, ColorField, Field, PanelHead } from "./ui";
 
 /**
  * Navigation ▸ "Text inside option bullet".
@@ -22,21 +22,11 @@ interface Props {
   setTheme: (patch: Partial<ThemeSettings>) => void;
 }
 
-const WEIGHTS = [
-  { v: 0, l: "Auto" },
-  { v: 400, l: "Regular" },
-  { v: 500, l: "Medium" },
-  { v: 600, l: "Semi" },
-  { v: 700, l: "Bold" },
-  { v: 800, l: "Extra" },
-];
-
 export default function OptionBulletTextPanel({ theme: T, slide, setTheme }: Props) {
   const base = T.optionAccent || T.accent || "#2f4fff";
   const picked = (v: string) => (/^#[0-9a-f]{6}$/i.test(v) ? v : base);
   const numberingDef = plainNumberingDef(T.plainNumbering ?? DEFAULT_PLAIN_NUMBERING);
   const sizePct = T.optionBulletTextSize ?? 100;
-  const weight = T.optionBulletTextWeight ?? 0;
   const family = T.optionBulletFontFamily ?? "";
   const keys = slide?.options.length
     ? slide.options.map((o, i) => effectiveOptionLabel(o.labelMode, o.key, T.plainNumbering, i))
@@ -100,65 +90,30 @@ export default function OptionBulletTextPanel({ theme: T, slide, setTheme }: Pro
       </div>
 
       {/* ------------------------------ typography --------------------------- */}
-      <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-        <FontPicker
-          label="Marker typeface"
-          value={family}
-          previewTarget="optionBullet"
-          onChange={(f) => {
-            const meta = FONT_BY_FAMILY.get(f.toLowerCase());
-            if (meta) ensureFontStylesheet([meta]);
-            setTheme({ optionBulletFontFamily: f });
-          }}
-          script="all"
-          compact
-        />
-
-        <Field label="Weight">
-          <div className="flex flex-wrap gap-1">
-            {WEIGHTS.map((w) => (
-              <button
-                key={w.v}
-                type="button"
-                onClick={() => setTheme({ optionBulletTextWeight: w.v })}
-                className={cn(
-                  "rounded-md border px-2 py-1 text-[10px]",
-                  weight === w.v
-                    ? "border-amber-400 bg-amber-400/15 text-amber-200"
-                    : "border-white/10 text-slate-400 hover:border-white/25",
-                )}
-                style={{ fontWeight: w.v || 700 }}
-              >
-                {w.l}
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        <Field label="Letter size" hint={`${sizePct}% of the marker`}>
-          <Slider min={50} max={170} step={5} value={sizePct} onChange={(v) => setTheme({ optionBulletTextSize: v })} />
-        </Field>
-
-        <Toggle
-          label="Force UPPERCASE letters"
-          checked={T.optionBulletUppercase ?? false}
-          onChange={(v) => setTheme({ optionBulletUppercase: v })}
-        />
-      </div>
+      {/* the LETTER only — face (whole Google catalogue), size % (0 → ∞),
+          weight, case, spacing, transparency, effects and nudge. The marker's
+          silhouette, fill and ring stay under "Option bullet". Family, weight,
+          size and UPPERCASE keep living in the flat optionBullet* fields the
+          toolbar and the markers always read (see lib/boxFonts patchTextPart). */}
+      <BoxFontControls
+        theme={T}
+        setTheme={setTheme}
+        selected="optionBullet"
+        size={{
+          value: sizePct,
+          onChange: (v) => setTheme({ optionBulletTextSize: Math.max(0, Math.round(v)) }),
+          unit: "%",
+          sliderMax: 300,
+          label: "Letter size (% of the marker, 0 to ∞)",
+        }}
+        hide={["color"]}
+      />
 
       <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
         <Btn
           size="sm"
           variant="danger"
-          onClick={() =>
-            setTheme({
-              optionBulletInk: "",
-              optionBulletTextSize: 100,
-              optionBulletTextWeight: 0,
-              optionBulletFontFamily: "",
-              optionBulletUppercase: false,
-            })
-          }
+          onClick={() => setTheme({ optionBulletInk: "", ...resetTextPart(T, "optionBullet") })}
         >
           Reset marker text
         </Btn>

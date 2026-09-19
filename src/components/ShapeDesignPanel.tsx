@@ -9,12 +9,12 @@ import {
   shapeFill,
 } from "../lib/shapeDesign";
 import { TEXT_GRADIENT_PRESETS } from "../lib/banner";
-import { ensureFontStylesheet } from "../lib/fonts";
+import { ensureFamily } from "../lib/fonts";
 import GradientEditor from "./GradientEditor";
+import TextEffectsEditor from "./TextEffectsEditor";
 import { Btn, ColorInput, Field, SegButtons, Slider, Toggle } from "./ui";
 import { cn } from "../utils/cn";
 import FontPicker from "./FontPicker";
-import { FONT_BY_FAMILY } from "../lib/fonts";
 
 interface Props {
   shape: ShapeItem;
@@ -26,7 +26,8 @@ interface Props {
 const DESIGN_KEYS: (keyof ShapeItem)[] = [
   "fill", "fillOpacity", "gradient", "stroke", "strokeWidth", "dash", "lineStyle", "lineJoin", "cornerRadius",
   "shadow2", "glow", "itemOpacity", "blend", "textColor", "textGradient", "fontSize", "bold", "italic",
-  "letterSpacing", "lineHeight", "textStroke", "textShadow", "uppercase", "padding",
+  "letterSpacing", "lineHeight", "textStroke", "textShadow", "uppercase", "padding", "textEffect", "textOpacity",
+  "textGlow", "lowercase", "textTransform", "underline", "strikethrough",
 ];
 
 export const pickDesign = (s: ShapeItem): Partial<ShapeItem> =>
@@ -35,7 +36,6 @@ export const pickDesign = (s: ShapeItem): Partial<ShapeItem> =>
 export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: Props) {
   const [tab, setTab] = useState<"fill" | "line" | "effects" | "text">(s.kind === "text" ? "text" : "fill");
   const isLine = s.kind === "line" || s.kind === "arrow";
-  const script: "bangla" | "arabic" | "latin" = /[\u0980-\u09FF]/.test(s.text) ? "bangla" : /[\u0600-\u06FF]/.test(s.text) ? "arabic" : "latin";
   const isImage = s.kind === "image";
   const hasText = s.kind === "text" || !!s.text;
   const shadow = s.shadow2 ?? DEFAULT_SHADOW;
@@ -255,8 +255,7 @@ export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: P
             value={s.fontFamily ?? ""}
             previewTarget={`shape:${s.id}`}
             onChange={(family) => {
-              const f = FONT_BY_FAMILY.get(family.toLowerCase());
-              if (f) ensureFontStylesheet([f]);
+              ensureFamily(family);
               onChange({ fontFamily: family });
             }}
             script="all"
@@ -345,8 +344,35 @@ export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: P
             </Field>
           </div>
 
-          <Field label="Text transparency (opacity)" hint={`${Math.round((s.textOpacity ?? 1) * 100)}%`}>
-            <Slider min={0} max={1} step={0.05} value={s.textOpacity ?? 1} onChange={(v) => onChange({ textOpacity: v })} />
+          <Field label="Transparency (0 – 100)" hint={`${Math.round((1 - (s.textOpacity ?? 1)) * 100)}%`}>
+            <Slider
+              min={0}
+              max={100}
+              step={1}
+              value={Math.round((1 - (s.textOpacity ?? 1)) * 100)}
+              onChange={(v) => onChange({ textOpacity: Math.round((1 - v / 100) * 100) / 100 })}
+            />
+          </Field>
+
+          <Field label="Text position (nudge inside the box)" hint={`${s.textOffsetX ?? 0}, ${s.textOffsetY ?? 0} px`} as="div">
+            <div className="flex items-center gap-2">
+              {(["textOffsetX", "textOffsetY"] as const).map((k) => (
+                <label key={k} className="flex items-center gap-1 text-[10px] text-slate-400">
+                  {k === "textOffsetX" ? "X" : "Y"}
+                  <input
+                    type="number"
+                    aria-label={k === "textOffsetX" ? "Text position X" : "Text position Y"}
+                    step={1}
+                    value={s[k] ?? 0}
+                    onChange={(e) => {
+                      const n = e.currentTarget.valueAsNumber;
+                      if (Number.isFinite(n)) onChange({ [k]: n || undefined });
+                    }}
+                    className="w-20 rounded-lg border border-white/10 bg-slate-900/70 px-2 py-1.5 font-mono text-xs text-slate-100 outline-none focus:border-amber-400/60"
+                  />
+                </label>
+              ))}
+            </div>
           </Field>
 
           {s.kind === "text" && (
@@ -356,7 +382,8 @@ export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: P
           )}
 
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
-            <span className="block text-[10px] font-semibold text-slate-300 uppercase">Text Effects</span>
+            <TextEffectsEditor value={s.textEffect} onChange={(textEffect) => onChange({ textEffect })} textColor={s.textColor} compact />
+            <span className="block pt-1 text-[10px] font-semibold text-slate-300 uppercase">More</span>
             <Toggle label="Text shadow" checked={s.textShadow !== false} onChange={(v) => onChange({ textShadow: v })} />
             <Field label="Text glow" hint={s.textGlow ? `${s.textGlow}px` : "off"}>
               <Slider min={0} max={50} value={s.textGlow ?? 0} onChange={(v) => onChange({ textGlow: v })} />

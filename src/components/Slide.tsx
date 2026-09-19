@@ -6,7 +6,17 @@ import { effectiveOptionLabel } from "../lib/plainNumbering";
 import { optionRowStyle, type OptionStyle } from "../lib/optionStyles";
 import OptionBulletMarker from "./OptionBulletMarker";
 import { isRtlText } from "../lib/fonts";
-import { boxFontCss, boxStack, boxTypeface, deckStack, optionTextStack } from "../lib/boxFonts";
+import {
+  boxFontCss,
+  boxInlineCss,
+  boxStack,
+  boxTypeface,
+  brandLineStack,
+  brandLineTypeface,
+  deckStack,
+  offsetCss,
+  typefaceCss,
+} from "../lib/boxFonts";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
 import { ELEMENT_DEFAULT_Z } from "../lib/layers";
 import { bannerCss } from "../lib/banner";
@@ -495,14 +505,23 @@ function SlideBase({
     const id = (t.numberStyle ?? "circle") as NumberStyle;
     const r = renderNumberStyle(id, t, size, sl.number);
     const slash = id === "slash";
+    /**
+     * "Text inside question bullet" — the number is its own node inside the
+     * painted shape, so every typography control (family, colour, weight,
+     * case, tracking, transparency, effects, nudge) lands on the digits and
+     * only on them: the bullet's silhouette, fill and ring come from r.style
+     * and are never faded, stroked or moved by a text setting.
+     */
+    const tf = boxTypeface(t, "bullet");
+    const inline = boxInlineCss(t, "bullet");
+    const numberCss: CSSProperties = {
+      ...boxFontCss(t, "bullet", { fontSize: size * r.fontScale, color: r.color, display: "inline-block" }),
+      ...offsetCss(tf),
+    };
+    const justify = tf.align === "left" ? "flex-start" : tf.align === "right" ? "flex-end" : tf.align === "center" ? "center" : undefined;
     return (
-      <div
-        // boxFontCss makes the "text inside question bullet" panel live: family,
-        // colour, weight, case, tracking and size scale all land on the number
-        // (and only on it — the bullet's painted shape comes from r.style).
-        style={boxFontCss(t, "bullet", { ...r.style, fontSize: size * r.fontScale, color: r.color })}
-      >
-        {r.content}
+      <div style={justify ? { ...r.style, justifyContent: justify } : r.style}>
+        {r.content ? <span style={numberCss}>{inline ? <span style={inline}>{r.content}</span> : r.content}</span> : null}
         {slash && (
           <span
             aria-hidden
@@ -632,7 +651,6 @@ function SlideBase({
    * text, never to the options container or the slide, so the choice cannot
    * inherit into the question, header, title, note or any shape.
    */
-  const optionStack = optionTextStack(theme);
   /** The marker / plain numbering keep the deck face, independent of the option font. */
   const optionMarkerStack = deckStack(theme, "options");
   const qRtl = isRtlText(slide.question);
@@ -801,32 +819,58 @@ function SlideBase({
           )}
 
           {/* -------------------------------- brand --------------------------- */}
-          {chromePainted("brand") && (
-            <div
-              {...handlers("brand")}
-              style={boxStyle("brand", boxFontCss(theme, "brand", {
-                color: theme.brandColor,
-                textTransform: "uppercase",
-                lineHeight: 1.05,
-                fontWeight: 700,
-                letterSpacing: 0.4,
-              }))}
-            >
-              {/* Badge 1 / Badge 2 — each line can be hidden, resized and
-                  recoloured independently (see the Brand Line panels) */}
-              {(theme.showBrandTop ?? true) && (
-                <div style={{ fontSize: theme.brandTopSize ?? 25, color: theme.brandTopColor || undefined }}>
-                  {header.brandTop}
-                </div>
-              )}
-              {(theme.showBrandBottom ?? true) && (
-                <div style={{ fontSize: theme.brandBottomSize ?? 27, color: theme.brandBottomColor || undefined }}>
-                  {header.brandBottom}
-                </div>
-              )}
-              <Grip id="brand" />
-            </div>
-          )}
+          {chromePainted("brand") && (() => {
+            /**
+             * Badge 1 / Badge 2 — two lines, one movable block. Each line is
+             * its own text box: its typeface (`boxFonts.brandTop` /
+             * `.brandBottom`) sits on top of the block-wide one, and every
+             * control — size, colour, weight, case, spacing, transparency,
+             * effect, nudge — lands on that line's div and nowhere else. The
+             * block itself only positions the pair and sets the shared face.
+             */
+            const lineCss = (line: "top" | "bottom"): CSSProperties => {
+              const tf = brandLineTypeface(theme, line);
+              const own = line === "top" ? theme.brandTopColor : theme.brandBottomColor;
+              const size = line === "top" ? theme.brandTopSize ?? 25 : theme.brandBottomSize ?? 27;
+              // ink precedence: the line's typeface → the line's own colour →
+              // the block's typeface → the shared brand colour
+              const color =
+                boxTypeface(theme, line === "top" ? "brandTop" : "brandBottom").color ||
+                own ||
+                boxTypeface(theme, "brand").color ||
+                theme.brandColor;
+              return {
+                ...typefaceCss(
+                  { ...tf, color: undefined },
+                  { fontSize: size, color, textTransform: "uppercase", lineHeight: 1.05, fontWeight: 700, letterSpacing: 0.4 },
+                  brandLineStack(theme, line),
+                ),
+                ...offsetCss(tf),
+              };
+            };
+            const lineText = (line: "top" | "bottom") => {
+              const text = line === "top" ? header.brandTop : header.brandBottom;
+              const inline = boxInlineCss(theme, line === "top" ? "brandTop" : "brandBottom") ?? boxInlineCss(theme, "brand");
+              return inline ? <span style={inline}>{text}</span> : text;
+            };
+            return (
+              <div
+                {...handlers("brand")}
+                style={boxStyle("brand", {
+                  fontFamily: boxStack(theme, "brand"),
+                  color: theme.brandColor,
+                  textTransform: "uppercase",
+                  lineHeight: 1.05,
+                  fontWeight: 700,
+                  letterSpacing: 0.4,
+                })}
+              >
+                {(theme.showBrandTop ?? true) && <div style={lineCss("top")}>{lineText("top")}</div>}
+                {(theme.showBrandBottom ?? true) && <div style={lineCss("bottom")}>{lineText("bottom")}</div>}
+                <Grip id="brand" />
+              </div>
+            );
+          })()}
 
           {/* -------------------------------- title --------------------------- */}
           {(() => {
@@ -844,16 +888,23 @@ function SlideBase({
                   {header.showBanner && css.halo && <div style={css.halo} />}
                   {header.showBanner && <div className={bset.shimmer ? "banner-shimmer" : undefined} style={css.box} />}
                   <div
-                    style={boxFontCss(theme, "title", {
-                      position: "relative",
-                      fontSize: theme.titleSize ?? 54,
-                      fontWeight: 800,
-                      lineHeight: 1.25,
-                      whiteSpace: "nowrap",
-                      ...css.text,
-                    })}
+                    style={{
+                      ...boxFontCss(theme, "title", {
+                        position: "relative",
+                        fontSize: theme.titleSize ?? 54,
+                        fontWeight: 800,
+                        lineHeight: 1.25,
+                        whiteSpace: "nowrap",
+                        ...css.text,
+                      }),
+                      // the text's own nudge: the banner behind it stays put
+                      ...offsetCss(boxTypeface(theme, "title")),
+                    }}
                   >
-                    {header.title}
+                    {(() => {
+                      const inline = boxInlineCss(theme, "title");
+                      return inline ? <span style={inline}>{header.title}</span> : header.title;
+                    })()}
                   </div>
                 </div>
                 <Grip id="title" />
@@ -862,41 +913,50 @@ function SlideBase({
           })()}
 
           {/* -------------------------------- badge --------------------------- */}
-          {chromePainted("badge") && (
-            <div
-              {...handlers("badge")}
-              style={boxStyle("badge", boxFontCss(theme, "badge", {
-                fontWeight: 700,
-                fontSize: theme.badgeSize ?? 36,
-                letterSpacing: 0.5,
-                color: theme.badgeColor,
-                textTransform: "uppercase",
-                textShadow: "0 2px 6px rgba(0,0,0,.6)",
-                lineHeight: 1.15,
-              }))}
-            >
-              {(() => {
-                const text = slide.badge?.trim() || header.badge;
-                const plate = { ...DEFAULT_BADGE_PLATE, ...(theme.badgePlate ?? {}) };
-                if (!plate.enabled) return <span>{text}</span>;
-                return (
-                  <span
-                    style={{
-                      display: "inline-block",
-                      background: withAlpha(plate.color, plate.opacity),
-                      borderRadius: plate.radius,
-                      padding: `${plate.padY}px ${plate.padX}px`,
-                      border: plate.border.enabled ? `${plate.border.width}px solid ${plate.border.color}` : undefined,
-                      boxShadow: `0 2px 10px ${withAlpha("#000000", 0.45)}`,
-                    }}
-                  >
-                    {text}
-                  </span>
-                );
-              })()}
-              <Grip id="badge" />
-            </div>
-          )}
+          {chromePainted("badge") && (() => {
+            // the text's transparency and nudge belong to the glyphs, not to
+            // the plate painted behind them
+            const { opacity: badgeOpacity, ...badgeCss } = boxFontCss(theme, "badge", {
+              fontWeight: 700,
+              fontSize: theme.badgeSize ?? 36,
+              letterSpacing: 0.5,
+              color: theme.badgeColor,
+              textTransform: "uppercase",
+              textShadow: "0 2px 6px rgba(0,0,0,.6)",
+              lineHeight: 1.15,
+            });
+            const badgeTf = boxTypeface(theme, "badge");
+            const badgeInline = boxInlineCss(theme, "badge");
+            return (
+              <div {...handlers("badge")} style={boxStyle("badge", badgeCss)}>
+                {(() => {
+                  const text = slide.badge?.trim() || header.badge;
+                  const plate = { ...DEFAULT_BADGE_PLATE, ...(theme.badgePlate ?? {}) };
+                  const glyphs = (
+                    <span style={{ display: "inline-block", opacity: badgeOpacity, ...offsetCss(badgeTf) }}>
+                      {badgeInline ? <span style={badgeInline}>{text}</span> : text}
+                    </span>
+                  );
+                  if (!plate.enabled) return <span>{glyphs}</span>;
+                  return (
+                    <span
+                      style={{
+                        display: "inline-block",
+                        background: withAlpha(plate.color, plate.opacity),
+                        borderRadius: plate.radius,
+                        padding: `${plate.padY}px ${plate.padX}px`,
+                        border: plate.border.enabled ? `${plate.border.width}px solid ${plate.border.color}` : undefined,
+                        boxShadow: `0 2px 10px ${withAlpha("#000000", 0.45)}`,
+                      }}
+                    >
+                      {glyphs}
+                    </span>
+                  );
+                })()}
+                <Grip id="badge" />
+              </div>
+            );
+          })()}
 
           {/* ------------------------ number bullet (own element) ------------- */}
           {theme.bulletSeparate && theme.showBullet && (() => {
@@ -933,16 +993,20 @@ function SlideBase({
             )}
             <MathText
               text={slide.question}
-              style={boxFontCss(theme, "question", {
-                color: theme.questionColor,
-                fontSize: qSize,
-                fontWeight: 600,
-                lineHeight: 1.6,
-                letterSpacing: 0.2,
-                textShadow: "0 2px 6px rgba(0,0,0,.6)",
-                flex: 1,
-                textAlign: qRtl ? "right" : L.question.align,
-              })}
+              style={{
+                ...boxFontCss(theme, "question", {
+                  color: theme.questionColor,
+                  fontSize: qSize,
+                  fontWeight: 600,
+                  lineHeight: 1.6,
+                  letterSpacing: 0.2,
+                  textShadow: "0 2px 6px rgba(0,0,0,.6)",
+                  flex: 1,
+                  textAlign: qRtl ? "right" : L.question.align,
+                }),
+                ...offsetCss(boxTypeface(theme, "question")),
+              }}
+              inlineStyle={boxInlineCss(theme, "question")}
             />
             <Grip id="question" />
           </div>
@@ -996,14 +1060,18 @@ function SlideBase({
                   />
                   <MathText
                     text={opt.text}
-                    style={boxFontCss(theme, "options", {
-                      color: correct ? "#5cff9d" : theme.optionTextColor,
-                      fontSize: optSize,
-                      fontWeight: 700,
-                      lineHeight: optLineH,
-                      textShadow: correct ? "0 0 18px rgba(92,255,157,.5)" : "0 2px 5px rgba(0,0,0,.6)",
-                      textAlign: rtl ? "right" : (theme.boxFonts?.options?.align ?? "left"),
-                    })}
+                    style={{
+                      ...boxFontCss(theme, "options", {
+                        color: correct ? "#5cff9d" : theme.optionTextColor,
+                        fontSize: optSize,
+                        fontWeight: 700,
+                        lineHeight: optLineH,
+                        textShadow: correct ? "0 0 18px rgba(92,255,157,.5)" : "0 2px 5px rgba(0,0,0,.6)",
+                        textAlign: rtl ? "right" : (theme.boxFonts?.options?.align ?? "left"),
+                      }),
+                      ...offsetCss(boxTypeface(theme, "options")),
+                    }}
+                    inlineStyle={boxInlineCss(theme, "options")}
                   />
                   {correct && theme.answerStyle === "tick" && (
                     <span style={{ color: "#5cff9d", fontSize: optSize, fontWeight: 800 }}>✓</span>
@@ -1023,7 +1091,11 @@ function SlideBase({
                 fontWeight: 500,
               }))}
             >
-              <MathText text={slide.note} />
+              <MathText
+                text={slide.note}
+                style={{ display: "block", ...offsetCss(boxTypeface(theme, "note")) }}
+                inlineStyle={boxInlineCss(theme, "note")}
+              />
               <Grip id="note" />
             </div>
           ) : null}

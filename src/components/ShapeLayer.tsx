@@ -1,7 +1,7 @@
 import { useRef, useState, type CSSProperties } from "react";
 import { polygonPoints, type ShapeItem } from "../lib/shapes";
 import { withAlpha } from "../lib/color";
-import { cssBorder, dashArray, hasGradientFill, itemStyle, shapeFill, textStyle } from "../lib/shapeDesign";
+import { cssBorder, dashArray, hasGradientFill, itemStyle, shapeFill, textInlineStyle, textStyle } from "../lib/shapeDesign";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
 import { applyResize } from "../lib/freeTransform";
 import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
@@ -758,6 +758,7 @@ export default function ShapeLayer({
                     ...(clickable && !solid ? { pointerEvents: "auto" as const } : { pointerEvents: "inherit" as const }),
                     ...textStyle(s),
                   }}
+                  inlineStyle={textInlineStyle(s)}
                 />
               </div>
             )}
