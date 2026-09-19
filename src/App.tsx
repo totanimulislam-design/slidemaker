@@ -1324,12 +1324,16 @@ function AppContent() {
     <>
       <div className="app-shell relative flex h-full flex-col bg-slate-950 text-slate-200">
         <HistoryPanel open={historyOpen} history={history} onClose={() => setHistoryOpen(false)} />
-        <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-slate-950/90 px-4 py-2.5">
-          <div className="mr-2 flex items-center gap-2.5">
+        <header
+          data-app-toolbar
+          aria-label="Deck toolbar"
+          className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1.5 border-b border-white/10 bg-slate-950/90 px-2.5 py-2"
+        >
+          <div className="mr-1 flex shrink-0 items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-300 to-amber-600 text-lg font-black text-slate-950 shadow-[0_2px_14px_rgba(251,191,36,.35)]">
               ক
             </div>
-            <div className="leading-tight">
+            <div className="app-toolbar-brand-copy whitespace-nowrap leading-tight">
               <h1 className="text-sm font-semibold text-slate-100">MCQ Slide Studio</h1>
               <p className="text-[11px] text-slate-500">
                 {stats.total} slides · {stats.withAnswer} with answers
@@ -1337,52 +1341,69 @@ function AppContent() {
             </div>
           </div>
 
-          <div className="flex items-center rounded-lg border border-white/10 bg-white/5">
+          <div className="flex shrink-0 items-center rounded-lg border border-white/10 bg-white/5">
             <button
               onClick={undo}
               disabled={!canUndo}
               title={canUndo ? `Undo: ${history.undoLabel} (Ctrl+Z)` : "Nothing to undo"}
-              className="rounded-l-lg px-2.5 py-2 text-sm text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label={canUndo ? `Undo: ${history.undoLabel}` : "Nothing to undo"}
+              className="flex h-9 w-9 items-center justify-center rounded-l-lg text-base text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              ↶
+              <span aria-hidden="true">↶</span>
             </button>
             <button
               onClick={redo}
               disabled={!canRedo}
               title={canRedo ? `Redo: ${history.redoLabel} (Ctrl+Y)` : "Nothing to redo"}
-              className="border-l border-white/10 px-2.5 py-2 text-sm text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label={canRedo ? `Redo: ${history.redoLabel}` : "Nothing to redo"}
+              className="flex h-9 w-9 items-center justify-center border-l border-white/10 text-base text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              ↷
+              <span aria-hidden="true">↷</span>
             </button>
             <button
               onClick={() => setHistoryOpen((v) => !v)}
               title="History"
+              aria-label="History"
+              aria-pressed={historyOpen}
               className={cn(
-                "rounded-r-lg border-l border-white/10 px-2.5 py-2 text-xs hover:bg-white/10",
+                "flex h-9 w-9 items-center justify-center rounded-r-lg border-l border-white/10 text-sm hover:bg-white/10",
                 historyOpen ? "bg-amber-400 text-slate-950" : "text-slate-300",
               )}
             >
-              🕘
+              <span aria-hidden="true">🕘</span>
             </button>
           </div>
 
-          <Btn variant="primary" onClick={() => setPasteOpen(true)}>
-            ＋ Paste questions
+          <Btn
+            variant="primary"
+            onClick={() => setPasteOpen(true)}
+            title="Paste questions"
+            className="h-9 w-9 shrink-0 p-0"
+          >
+            <span aria-hidden="true" className="text-base">＋</span>
+            <span className="sr-only">Paste questions</span>
           </Btn>
           <Btn
             variant="soft"
             onClick={() => setAnswersOpen(true)}
             disabled={!deck.slides.length}
             title="Paste an answer key (1. ঘ 2. গ …) and apply it to all slides"
+            className="h-9 w-9 shrink-0 p-0"
           >
-            ✓ Paste answers
+            <span aria-hidden="true" className="text-base">✓</span>
+            <span className="sr-only">Paste answers</span>
           </Btn>
-          <Btn onClick={insertBlank}>Blank slide</Btn>
+          <Btn onClick={insertBlank} title="Insert a blank slide" className="h-9 w-9 shrink-0 p-0">
+            <span aria-hidden="true" className="text-base">▱</span>
+            <span className="sr-only">Blank slide</span>
+          </Btn>
           <label
             title="Import a PDF or PowerPoint (.pptx) — add the whole document or specific pages as slides, or drop pages onto the current slide"
-            className="inline-flex cursor-pointer items-center rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 hover:bg-white/10"
+            aria-label="Import PDF or PowerPoint"
+            className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/5 text-base text-slate-200 hover:bg-white/10"
           >
-            📄 Import PDF / PPTX
+            <span aria-hidden="true">📄</span>
+            <span className="sr-only">Import PDF or PowerPoint</span>
             <input
               type="file"
               accept={DECK_ACCEPT}
@@ -1394,29 +1415,58 @@ function AppContent() {
               }}
             />
           </label>
-          <Btn onClick={renumber} title="Renumber all slides 1..n">
-            Renumber
+          <Btn onClick={renumber} title="Renumber all slides 1..n" className="h-9 w-9 shrink-0 p-0">
+            <span aria-hidden="true" className="font-mono text-sm font-bold">#</span>
+            <span className="sr-only">Renumber slides</span>
           </Btn>
 
-          <div className="mx-1 h-6 w-px bg-white/10" />
+          <div className="mx-0.5 h-6 w-px shrink-0 bg-white/10" />
 
-          <Btn variant="success" onClick={() => setExportOpen(true)} disabled={!deck.slides.length || !!busy}>
-            ⬇ Export — PDF · PNG
+          <Btn
+            variant="success"
+            onClick={() => setExportOpen(true)}
+            disabled={!deck.slides.length || !!busy}
+            title="Export PDF or PNG"
+            className="h-9 w-9 shrink-0 p-0"
+          >
+            <span aria-hidden="true" className="text-base">⬇</span>
+            <span className="sr-only">Export PDF or PNG</span>
           </Btn>
-          <Btn variant="soft" onClick={() => setPresenting(true)} disabled={!slide}>
-            ▶ Present
+          <Btn
+            variant="soft"
+            onClick={() => setPresenting(true)}
+            disabled={!slide}
+            title="Present slideshow"
+            className="h-9 w-9 shrink-0 p-0"
+          >
+            <span aria-hidden="true">▶</span>
+            <span className="sr-only">Present</span>
           </Btn>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5">
             <SlidePicker deck={deck} current={index} revision={revision} onCurrent={setCurrent} />
             {busy && (
-              <span className="rounded-lg bg-amber-400/15 px-3 py-1.5 text-xs text-amber-200">{busy}</span>
+              <span
+                role="status"
+                aria-label={busy}
+                title={busy}
+                className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-400/15 px-2 text-xs text-amber-200"
+              >
+                <span aria-hidden="true" className="animate-spin">◌</span>
+                <span aria-hidden="true" className="hidden max-w-40 truncate 2xl:inline">{busy}</span>
+              </span>
             )}
-            <Btn onClick={saveJson} title="Download the deck as a .json project file">
-              Save
+            <Btn onClick={saveJson} title="Download the deck as a .json project file" className="h-9 w-9 shrink-0 p-0">
+              <span aria-hidden="true" className="text-base">💾</span>
+              <span className="sr-only">Save project</span>
             </Btn>
-            <label className="cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/10">
-              Open
+            <label
+              title="Open a JSON project file"
+              aria-label="Open a JSON project file"
+              className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/5 text-base text-slate-200 hover:bg-white/10"
+            >
+              <span aria-hidden="true">📂</span>
+              <span className="sr-only">Open project</span>
               <input
                 type="file"
                 accept="application/json,.json"
@@ -1426,11 +1476,14 @@ function AppContent() {
             </label>
             <Btn
               variant="danger"
+              title="Reset deck"
+              className="h-9 w-9 shrink-0 p-0"
               onClick={() => {
                 if (confirm("Reset deck to the sample questions and default theme?")) resetAll();
               }}
             >
-              Reset
+              <span aria-hidden="true" className="text-base">↺</span>
+              <span className="sr-only">Reset deck</span>
             </Btn>
           </div>
         </header>
@@ -1598,11 +1651,16 @@ function AppContent() {
                   />
                 </Stage>
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center justify-center gap-1 border-t border-white/10 bg-slate-950/50 px-4 py-1.5">
-                  <span className="mr-1 text-[10px] font-medium tracking-wide text-slate-500 uppercase">Insert</span>
+                <div
+                  role="toolbar"
+                  aria-label="Insert objects"
+                  className="flex shrink-0 flex-nowrap items-center justify-start gap-1 overflow-x-auto border-t border-white/10 bg-slate-950/50 px-2 py-1.5"
+                >
+                  <span className="ml-auto mr-1 shrink-0 text-[10px] font-medium tracking-wide text-slate-500 uppercase">Insert</span>
                   <label
                     title="Upload image, PDF or PowerPoint"
-                    className="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-md border border-sky-400/40 bg-sky-400/10 px-2 text-sm text-sky-200 hover:bg-sky-400/20"
+                    aria-label="Upload image, PDF or PowerPoint"
+                    className="flex h-8 min-w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-sky-400/40 bg-sky-400/10 px-2 text-sm text-sky-200 hover:bg-sky-400/20"
                   >
                     📤
                     <input
@@ -1631,8 +1689,9 @@ function AppContent() {
                       key={k}
                       onClick={() => insertShape(k, false)}
                       title={SHAPE_LABELS[k]}
+                      aria-label={SHAPE_LABELS[k]}
                       className={cn(
-                        "h-8 min-w-8 rounded-md border border-white/10 bg-white/[0.04] px-2 text-sm text-slate-200 hover:border-amber-400/60 hover:bg-white/10",
+                        "h-8 min-w-8 shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-2 text-sm text-slate-200 last:mr-auto hover:border-amber-400/60 hover:bg-white/10",
                         k === "text" && "font-serif font-bold",
                       )}
                     >
@@ -1640,21 +1699,35 @@ function AppContent() {
                     </button>
                   ))}
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 bg-slate-950/70 px-4 py-2.5">
-                  <Btn size="sm" onClick={() => setCurrent(Math.max(0, index - 1))} disabled={index === 0}>
-                    ←
+                <div
+                  role="toolbar"
+                  aria-label="Slide controls"
+                  className="flex shrink-0 flex-nowrap items-center justify-center gap-1.5 border-t border-white/10 bg-slate-950/70 px-2 py-2"
+                >
+                  <Btn
+                    size="sm"
+                    title="Previous slide"
+                    className="h-8 w-8 shrink-0 p-0"
+                    onClick={() => setCurrent(Math.max(0, index - 1))}
+                    disabled={index === 0}
+                  >
+                    <span aria-hidden="true">←</span>
+                    <span className="sr-only">Previous slide</span>
                   </Btn>
-                  <span className="min-w-[74px] text-center text-xs text-slate-400 tabular-nums">
+                  <span className="min-w-[62px] shrink-0 text-center text-xs text-slate-400 tabular-nums">
                     {index + 1} / {deck.slides.length}
                   </span>
                   <Btn
                     size="sm"
+                    title="Next slide"
+                    className="h-8 w-8 shrink-0 p-0"
                     onClick={() => setCurrent(Math.min(deck.slides.length - 1, index + 1))}
                     disabled={index >= deck.slides.length - 1}
                   >
-                    →
+                    <span aria-hidden="true">→</span>
+                    <span className="sr-only">Next slide</span>
                   </Btn>
-                  <div className="mx-2 h-5 w-px bg-white/10" />
+                  <div className="mx-1 h-5 w-px shrink-0 bg-white/10" />
                   {(() => {
                     const ids = Object.keys(currentTheme.layout) as ElementId[];
                     const allFree = ids.every((id) => (currentTheme.layout[id].mode ?? "align") === "free");
@@ -1662,7 +1735,8 @@ function AppContent() {
                       <Btn
                         size="sm"
                         variant={allFree ? "primary" : "ghost"}
-                        title="Free align: drag anything anywhere, resize with the corner grip, rotate"
+                        title={`Free align ${allFree ? "on" : "off"}: drag anything anywhere, resize with the corner grip, rotate`}
+                        className="h-8 w-8 shrink-0 p-0"
                         onClick={() => {
                           const mode = allFree ? "align" : "free";
                           scopedTransformLayout((layout) => {
@@ -1674,24 +1748,41 @@ function AppContent() {
                           }, `Free align ${mode === "free" ? "on" : "off"}`);
                         }}
                       >
-                        ✥ Free align {allFree ? "on" : "off"}
+                        <span aria-hidden="true">✥</span>
+                        <span className="sr-only">Free align {allFree ? "on" : "off"}</span>
                       </Btn>
                     );
                   })()}
                   <Btn
                     size="sm"
                     variant={slide.showAnswer ? "primary" : "ghost"}
+                    title={slide.showAnswer ? "Hide answer" : "Show answer"}
+                    className="h-8 w-8 shrink-0 p-0"
                     onClick={() => updateSlide(slide.id, { showAnswer: !slide.showAnswer })}
                   >
-                    {slide.showAnswer ? "✓ Answer shown" : "Show answer"}
+                    <span aria-hidden="true">{slide.showAnswer ? "✓" : "👁"}</span>
+                    <span className="sr-only">{slide.showAnswer ? "Answer shown" : "Show answer"}</span>
                   </Btn>
-                  <Btn size="sm" onClick={() => duplicateSlide(slide.id)}>
-                    Duplicate
+                  <Btn
+                    size="sm"
+                    title="Duplicate slide"
+                    className="h-8 w-8 shrink-0 p-0"
+                    onClick={() => duplicateSlide(slide.id)}
+                  >
+                    <span aria-hidden="true">⧉</span>
+                    <span className="sr-only">Duplicate slide</span>
                   </Btn>
-                  <Btn size="sm" variant="danger" onClick={() => removeSlide(slide.id)}>
-                    Delete
+                  <Btn
+                    size="sm"
+                    variant="danger"
+                    title="Delete slide"
+                    className="h-8 w-8 shrink-0 p-0"
+                    onClick={() => removeSlide(slide.id)}
+                  >
+                    <span aria-hidden="true">🗑</span>
+                    <span className="sr-only">Delete slide</span>
                   </Btn>
-                  <span className="ml-2 hidden text-[11px] text-slate-500 lg:block">
+                  <span className="ml-2 hidden min-w-0 truncate whitespace-nowrap text-[11px] text-slate-500 2xl:block">
                     Drag to move · corner grip to resize · Shift+arrows to nudge · ← → change slides
                   </span>
                 </div>

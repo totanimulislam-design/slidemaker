@@ -159,25 +159,34 @@ input[type="text"] {
   [data-slide-select-wrap] { opacity: 1; }
 }
 
-/* Canva-style floating selection toolbar: a centered pill of icon groups plus a dropdown card. */
-.context-toolbar { position: relative; z-index: 30; flex-shrink: 0; display: flex; justify-content: center; padding: 10px 12px 2px; }
-/* merged contents (e.g. option text + option bullet + bullet text): the
-   toolbar stacks one pill line per related part, in board-reading order */
-.ctx-rows { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 100%; }
-/* controls wrap onto extra rows instead of scrolling, so the whole toolbar
-   always fits on screen; each wrapped row centers under the one above it */
-.ctx-pill { display: inline-flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 2px 6px; min-width: 0; max-width: 100%; overflow: visible; padding: 6px 8px; border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(15,23,42,.96); box-shadow: 0 12px 32px rgba(0,0,0,.5); backdrop-filter: blur(8px); }
+/* One-line editor toolbars. The global bar sheds its brand copy only at very
+   narrow desktop widths; controls themselves never fall onto a second row. */
+[data-app-toolbar] > * { flex-shrink: 0; }
+@media (max-width: 900px) {
+  .app-toolbar-brand-copy { display: none; }
+}
+
+/* Canva-style floating selection toolbar: a centered pill of icon groups plus
+   a dropdown card. A toolbar line never wraps; exceptionally narrow workspaces
+   can pan it horizontally instead of losing board height to a second row. */
+.context-toolbar { position: relative; z-index: 30; flex-shrink: 0; display: flex; min-width: 0; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; padding: 10px 12px 4px; }
+.context-toolbar > .ctx-pill { margin-inline: auto; }
+/* merged contents (e.g. option text + option bullet + bullet text): the stack
+   still has one intentional line per related part, in board-reading order */
+.ctx-rows { display: flex; width: max-content; min-width: 100%; flex: 0 0 auto; flex-direction: column; align-items: center; gap: 6px; }
+.ctx-pill { display: inline-flex; width: max-content; flex: 0 0 auto; align-items: center; flex-wrap: nowrap; justify-content: center; gap: 2px 3px; overflow: visible; padding: 5px 6px; border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(15,23,42,.96); box-shadow: 0 12px 32px rgba(0,0,0,.5); backdrop-filter: blur(8px); }
 /* the line whose part the active destination owns */
 .ctx-pill-active { border-color: rgba(251,191,36,.55); box-shadow: 0 12px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(251,191,36,.3); }
 .ctx-pill > * { flex-shrink: 0; }
-.ctx-kind { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #fcd34d; background: rgba(251,191,36,.12); border-radius: 7px; padding: 5px 8px; margin-right: 4px; }
-.ctx-sep { width: 1px; height: 22px; background: rgba(255,255,255,.12); margin: 0 5px; }
-.ctx-btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 30px; height: 30px; padding: 0 8px; border-radius: 8px; font-size: 13px; line-height: 1; color: #e2e8f0; white-space: nowrap; cursor: pointer; border: 1px solid transparent; background: transparent; }
+.ctx-kind { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #fcd34d; background: rgba(251,191,36,.12); border-radius: 7px; padding: 5px 6px; margin-right: 2px; white-space: nowrap; }
+.ctx-sep { width: 1px; height: 22px; background: rgba(255,255,255,.12); margin: 0 2px; }
+.ctx-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 28px; height: 30px; padding: 0 6px; border-radius: 8px; font-size: 13px; line-height: 1; color: #e2e8f0; white-space: nowrap; cursor: pointer; border: 1px solid transparent; background: transparent; }
 .ctx-btn:hover { background: rgba(255,255,255,.10); }
 .ctx-btn.is-on, .ctx-btn[aria-pressed="true"] { background: #fbbf24; color: #0f172a; font-weight: 700; }
 .ctx-btn:focus-visible, .ctx-step input:focus-visible, .ctx-select:focus-visible { outline: 2px solid #fbbf24; outline-offset: 1px; }
 .ctx-btn svg { display: block; }
 .ctx-toggle .ctx-caret { font-size: 9px; opacity: .7; }
+.ctx-icon-toggle { gap: 2px; padding-inline: 5px 4px; }
 /* the font control names the face in use, drawn in that face (Canva-style);
    long catalogue names are clipped with an ellipsis instead of widening the line */
 .ctx-font-toggle { padding: 0 6px 0 9px; }
@@ -188,12 +197,12 @@ input[type="text"] {
 .ctx-glyph-i { font-style: italic; font-family: Georgia, serif; }
 .ctx-glyph-u { text-decoration: underline; }
 .ctx-glyph-s { text-decoration: line-through; }
-.ctx-step { display: inline-flex; align-items: center; gap: 2px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 1px 2px; }
-.ctx-step button { width: 24px; height: 26px; border-radius: 6px; font-size: 14px; line-height: 1; color: #cbd5e1; cursor: pointer; }
+.ctx-step { display: inline-flex; align-items: center; gap: 1px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 1px; }
+.ctx-step button { width: 22px; height: 26px; border-radius: 6px; font-size: 14px; line-height: 1; color: #cbd5e1; cursor: pointer; }
 .ctx-step button:hover { background: rgba(255,255,255,.12); color: #fff; }
-.ctx-step input { width: 44px; text-align: center; background: transparent; border: none; font-size: 12.5px; color: #f1f5f9; padding: 4px 2px; -moz-appearance: textfield; appearance: textfield; }
+.ctx-step input { width: 40px; text-align: center; background: transparent; border: none; font-size: 12px; color: #f1f5f9; padding: 4px 1px; -moz-appearance: textfield; appearance: textfield; }
 .ctx-step input::-webkit-outer-spin-button, .ctx-step input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.ctx-step .ctx-prefix { font-size: 11px; color: #94a3b8; padding-left: 5px; white-space: nowrap; }
+.ctx-step .ctx-prefix { max-width: 34px; overflow: hidden; text-overflow: ellipsis; font-size: 10px; color: #94a3b8; padding-left: 4px; white-space: nowrap; }
 .ctx-swatch { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 30px; padding: 0 6px; border-radius: 8px; cursor: pointer; }
 .ctx-swatch:hover { background: rgba(255,255,255,.10); }
 .ctx-swatch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
