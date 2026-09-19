@@ -1031,6 +1031,9 @@ function SlideBase({
               const oStyle = (theme.optionStyle ?? "plain") as OptionStyle;
               const oColor = theme.optionAccent || theme.accent;
               const chrome = optionRowStyle(oStyle, theme, oColor, highlight);
+              const optAlign =
+                theme.boxFonts?.options?.align ??
+                (rtl ? (L.options.align === "left" ? "right" : L.options.align) : (L.options.align ?? "left"));
               return (
                 <div
                   key={`${opt.key}-${i}`}
@@ -1043,8 +1046,6 @@ function SlideBase({
                   style={{
                     ...chrome.row,
                     flexDirection: rtl ? "row-reverse" : "row",
-                    justifyContent:
-                      L.options.align === "center" ? "center" : L.options.align === "right" ? "flex-end" : chrome.row.justifyContent,
                   }}
                 >
                   <OptionBulletMarker
@@ -1061,20 +1062,22 @@ function SlideBase({
                   <MathText
                     text={opt.text}
                     style={{
+                      flex: 1,
+                      minWidth: 0,
                       ...boxFontCss(theme, "options", {
                         color: correct ? "#5cff9d" : theme.optionTextColor,
                         fontSize: optSize,
                         fontWeight: 700,
                         lineHeight: optLineH,
                         textShadow: correct ? "0 0 18px rgba(92,255,157,.5)" : "0 2px 5px rgba(0,0,0,.6)",
-                        textAlign: rtl ? "right" : (theme.boxFonts?.options?.align ?? "left"),
+                        textAlign: optAlign,
                       }),
                       ...offsetCss(boxTypeface(theme, "options")),
                     }}
                     inlineStyle={boxInlineCss(theme, "options")}
                   />
                   {correct && theme.answerStyle === "tick" && (
-                    <span style={{ color: "#5cff9d", fontSize: optSize, fontWeight: 800 }}>✓</span>
+                    <span style={{ color: "#5cff9d", fontSize: optSize, fontWeight: 800, flexShrink: 0 }}>✓</span>
                   )}
                 </div>
               );

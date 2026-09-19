@@ -205,7 +205,20 @@ export default function OptionTextPanel({ slide, theme: T, setTheme, updateSlide
       <ElementPosition
         theme={T}
         id="options"
-        patchLayout={(id, patch) => setTheme({ layout: { ...T.layout, [id]: { ...T.layout[id], ...patch } } })}
+        patchLayout={(id, patch) => {
+          const nextLayout = { ...T.layout, [id]: { ...T.layout[id], ...patch } };
+          if (patch.align) {
+            setTheme({
+              layout: nextLayout,
+              boxFonts: {
+                ...T.boxFonts,
+                options: { ...T.boxFonts?.options, align: patch.align },
+              },
+            });
+          } else {
+            setTheme({ layout: nextLayout });
+          }
+        }}
       />
 
       <p className="text-[10px] leading-relaxed text-slate-500">
