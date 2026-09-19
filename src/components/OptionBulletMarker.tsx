@@ -42,7 +42,7 @@ export default function OptionBulletMarker({
    * "Text inside option bullet" — the letter is its own text box. Its typeface
    * (the marker's flat theme fields folded under `boxFonts.optionBullet`, see
    * lib/boxFonts) paints the LETTER NODE: face, size, weight, case, spacing,
-   * transparency, effect and nudge all land on the glyph and never on the
+   * opacity, effect and nudge all land on the glyph and never on the
    * marker's silhouette, fill or ring. Every field is optional and defaults to
    * whatever the marker shape derives, so an untouched deck renders exactly as
    * before. The caller's `style` still wins on the marker box: shape pickers

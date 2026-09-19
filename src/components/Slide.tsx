@@ -508,7 +508,7 @@ function SlideBase({
     /**
      * "Text inside question bullet" — the number is its own node inside the
      * painted shape, so every typography control (family, colour, weight,
-     * case, tracking, transparency, effects, nudge) lands on the digits and
+     * case, tracking, opacity, effects, nudge) lands on the digits and
      * only on them: the bullet's silhouette, fill and ring come from r.style
      * and are never faded, stroked or moved by a text setting.
      */
@@ -824,7 +824,7 @@ function SlideBase({
              * Badge 1 / Badge 2 — two lines, one movable block. Each line is
              * its own text box: its typeface (`boxFonts.brandTop` /
              * `.brandBottom`) sits on top of the block-wide one, and every
-             * control — size, colour, weight, case, spacing, transparency,
+             * control — size, colour, weight, case, spacing, opacity,
              * effect, nudge — lands on that line's div and nowhere else. The
              * block itself only positions the pair and sets the shared face.
              */
@@ -914,7 +914,7 @@ function SlideBase({
 
           {/* -------------------------------- badge --------------------------- */}
           {chromePainted("badge") && (() => {
-            // the text's transparency and nudge belong to the glyphs, not to
+            // the text's opacity and nudge belong to the glyphs, not to
             // the plate painted behind them
             const { opacity: badgeOpacity, ...badgeCss } = boxFontCss(theme, "badge", {
               fontWeight: 700,

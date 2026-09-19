@@ -23,17 +23,20 @@ export type { TextEffect, TextEffectKind } from "./types";
  *   neon        a lighter tube of text with a glow of its own colour
  *   background  a rounded plate hugging every line
  */
+/** every setting an effect can expose (the deprecated `transparency` is not one) */
+export type TextEffectField = Exclude<keyof Omit<TextEffect, "kind">, "transparency">;
+
 export interface TextEffectDef {
   id: TextEffectKind;
   label: string;
   /** which settings the effect uses, in panel order */
-  fields: (keyof Omit<TextEffect, "kind">)[];
+  fields: TextEffectField[];
   hint: string;
 }
 
 export const TEXT_EFFECTS: TextEffectDef[] = [
   { id: "none", label: "None", fields: [], hint: "Plain text" },
-  { id: "shadow", label: "Shadow", fields: ["offset", "direction", "blur", "transparency", "color"], hint: "An offset, blurred copy behind the text" },
+  { id: "shadow", label: "Shadow", fields: ["offset", "direction", "blur", "opacity", "color"], hint: "An offset, blurred copy behind the text" },
   { id: "lift", label: "Lift", fields: ["intensity"], hint: "A soft shadow straight below — the text floats" },
   { id: "hollow", label: "Hollow", fields: ["thickness"], hint: "Only the outline of the glyphs" },
   { id: "splice", label: "Splice", fields: ["thickness", "offset", "direction", "color"], hint: "Hollow glyphs with a solid copy behind them" },
@@ -41,15 +44,15 @@ export const TEXT_EFFECTS: TextEffectDef[] = [
   { id: "echo", label: "Echo", fields: ["offset", "direction", "color"], hint: "Two fading copies trailing off" },
   { id: "glitch", label: "Glitch", fields: ["offset", "direction", "color"], hint: "The RGB split of a broken screen" },
   { id: "neon", label: "Neon", fields: ["intensity"], hint: "A glowing tube in the text's own colour" },
-  { id: "background", label: "Background", fields: ["roundness", "spread", "transparency", "color"], hint: "A plate hugging every line" },
+  { id: "background", label: "Background", fields: ["roundness", "spread", "opacity", "color"], hint: "A plate hugging every line" },
 ];
 
 export const TEXT_EFFECT_BY_ID = new Map(TEXT_EFFECTS.map((e) => [e.id, e]));
 
 /** the settings every effect starts from (Canva's own defaults) */
-export const EFFECT_DEFAULTS: Record<TextEffectKind, Omit<TextEffect, "kind">> = {
+export const EFFECT_DEFAULTS: Record<TextEffectKind, Partial<Omit<TextEffect, "kind">>> = {
   none: {},
-  shadow: { offset: 50, direction: 45, blur: 0, transparency: 40, color: "#000000" },
+  shadow: { offset: 50, direction: 45, blur: 0, opacity: 60, color: "#000000" },
   lift: { intensity: 50 },
   hollow: { thickness: 50 },
   splice: { thickness: 50, offset: 50, direction: 45, color: "#808080" },
@@ -57,15 +60,15 @@ export const EFFECT_DEFAULTS: Record<TextEffectKind, Omit<TextEffect, "kind">> =
   echo: { offset: 50, direction: 45, color: "#808080" },
   glitch: { offset: 50, direction: 0, color: "#00ffff" },
   neon: { intensity: 50 },
-  background: { roundness: 50, spread: 50, transparency: 0, color: "#ffd633" },
+  background: { roundness: 50, spread: 50, opacity: 100, color: "#ffd633" },
 };
 
 /** label · range · step for every effect setting */
-export const EFFECT_FIELD_META: Record<keyof Omit<TextEffect, "kind">, { label: string; min: number; max: number; step: number }> = {
+export const EFFECT_FIELD_META: Record<TextEffectField, { label: string; min: number; max: number; step: number }> = {
   offset: { label: "Offset", min: 0, max: 100, step: 1 },
   direction: { label: "Direction °", min: -180, max: 180, step: 1 },
   blur: { label: "Blur", min: 0, max: 100, step: 1 },
-  transparency: { label: "Transparency", min: 0, max: 100, step: 1 },
+  opacity: { label: "Opacity", min: 0, max: 100, step: 1 },
   thickness: { label: "Thickness", min: 1, max: 100, step: 1 },
   intensity: { label: "Intensity", min: 0, max: 100, step: 1 },
   roundness: { label: "Roundness", min: 0, max: 100, step: 1 },
@@ -73,10 +76,21 @@ export const EFFECT_FIELD_META: Record<keyof Omit<TextEffect, "kind">, { label: 
   color: { label: "Colour", min: 0, max: 0, step: 0 },
 };
 
-/** a full effect: the chosen kind with its defaults underneath whatever was set */
+/**
+ * A full effect: the chosen kind with its defaults underneath whatever was set.
+ *
+ * Decks written before the flip stored the copy's `transparency` (0 = solid,
+ * 100 = gone). That number is read once, here, as its visibility — so an old
+ * deck keeps painting exactly the shadow / plate it always did, with the
+ * control now reading 100 = fully visible like every other opacity in the app.
+ */
 export function effectWithDefaults(effect: TextEffect | undefined): TextEffect {
   const kind = effect?.kind ?? "none";
-  return { ...EFFECT_DEFAULTS[kind], ...(effect ?? {}), kind };
+  const full: TextEffect = { ...EFFECT_DEFAULTS[kind], ...(effect ?? {}), kind };
+  if (full.opacity === undefined && typeof effect?.transparency === "number") {
+    full.opacity = Math.max(0, Math.min(100, 100 - effect.transparency));
+  }
+  return full;
 }
 
 /** switching effects keeps the settings the new one shares with the old one */
@@ -194,7 +208,7 @@ export function textEffectStyles(effect: TextEffect | undefined, textColor?: str
   switch (e.kind) {
     case "shadow": {
       const blur = round(((e.blur ?? 0) / 100) * 0.5);
-      return { css: { textShadow: `${dx}em ${dy}em ${blur}em ${alpha(fx, 1 - (e.transparency ?? 40) / 100)}` } };
+      return { css: { textShadow: `${dx}em ${dy}em ${blur}em ${alpha(fx, (e.opacity ?? 60) / 100)}` } };
     }
     case "lift": {
       const i = (e.intensity ?? 50) / 100;
@@ -263,7 +277,7 @@ export function textEffectStyles(effect: TextEffect | undefined, textColor?: str
       return {
         css: {},
         inline: {
-          background: alpha(fx, 1 - (e.transparency ?? 0) / 100),
+          background: alpha(fx, (e.opacity ?? 100) / 100),
           borderRadius: `${round(0.05 + r * 0.55)}em`,
           padding: `${round(0.02 + s * 0.16)}em ${round(0.1 + s * 0.3)}em`,
           boxDecorationBreak: "clone",

@@ -83,7 +83,14 @@ export interface TextEffect {
   direction?: number;
   /** shadow — softness 0–100 */
   blur?: number;
-  /** shadow · echo · background — transparency of the copy / plate 0–100 */
+  /**
+   * shadow · background — how visible the copy / plate is: 100 = fully visible,
+   * 0 = invisible (the same reading as every other opacity control).
+   */
+  opacity?: number;
+  /** @deprecated the old 0–100 "transparency" (0 = solid, 100 = gone); read
+   *  once in `effectWithDefaults` so decks written before the flip still paint
+   *  the effect they were designed with */
   transparency?: number;
   /** shadow · splice · outline · echo · glitch · background — the effect's own colour */
   color?: string;

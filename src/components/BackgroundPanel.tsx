@@ -363,7 +363,7 @@ export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSl
             )}
             <Field label="Shape opacity" hint={`${Math.round((bg.designOpacity ?? 1) * 100)}%`}>
               <Slider
-                min={0.05}
+                min={0}
                 max={1}
                 step={0.05}
                 value={bg.designOpacity ?? 1}
@@ -526,7 +526,8 @@ export default function BackgroundPanel({ deck, slide, onSet, onReset, onClearSl
 
           <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
             <Field label="Image opacity" hint={`${Math.round(bg.opacity * 100)}%`}>
-              <Slider min={0.05} max={1} step={0.05} value={bg.opacity} onChange={(v) => set({ opacity: v })} />
+              {/* 0 → 100: the picture can be faded right out of the slide */}
+              <Slider min={0} max={1} step={0.05} value={bg.opacity} onChange={(v) => set({ opacity: v })} />
             </Field>
             <Field label="Blur" hint={bg.blur ? `${bg.blur}px` : "off"}>
               <Slider min={0} max={30} value={bg.blur} onChange={(v) => set({ blur: v })} />

@@ -172,7 +172,7 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
               <Slider min={0} max={100} value={b.halo} onChange={(v) => set({ halo: v })} />
             </Field>
             <Field label="Opacity" hint={`${Math.round(b.opacity * 100)}%`}>
-              <Slider min={0.1} max={1} step={0.05} value={b.opacity} onChange={(v) => set({ opacity: v })} />
+              <Slider min={0} max={1} step={0.05} value={b.opacity} onChange={(v) => set({ opacity: v })} />
             </Field>
           </div>
 

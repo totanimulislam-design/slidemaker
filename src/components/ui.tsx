@@ -345,17 +345,21 @@ export function Slider({
   max,
   step = 1,
   onChange,
+  ariaLabel,
 }: {
   value: number;
   min: number;
   max: number;
   step?: number;
   onChange: (v: number) => void;
+  /** accessible name — a bare range input has none of its own */
+  ariaLabel?: string;
 }) {
   return (
     <div className="flex items-center gap-3">
       <input
         type="range"
+        aria-label={ariaLabel}
         min={min}
         max={max}
         step={step}

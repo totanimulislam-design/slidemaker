@@ -642,7 +642,7 @@ export default function Inspector({
 
               {/* the stem's own text style (this box only): font from the whole
                   Google catalogue, size 0 → ∞, weight, case, spacing,
-                  transparency, effects and nudge — the bullet beside it and the
+                  opacity, effects and nudge — the bullet beside it and the
                   deck-wide default faces ("Design & defaults") are untouched */}
               <BoxFontControls
                 theme={T}

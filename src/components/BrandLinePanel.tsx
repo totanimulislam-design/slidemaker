@@ -135,7 +135,7 @@ export default function BrandLinePanel({ line, theme, header, setTheme, setHeade
       </div>
 
       {/* every text control below styles THIS line only — font, size (0 → ∞),
-          bold / italic / strikethrough, case, alignment, spacing, transparency,
+          bold / italic / strikethrough, case, alignment, spacing, opacity,
           Canva-style effects and the glyphs' own nudge inside the block */}
       <BoxFontControls
         theme={theme}

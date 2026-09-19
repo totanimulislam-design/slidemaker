@@ -9,6 +9,7 @@ import {
   shapeFill,
 } from "../lib/shapeDesign";
 import { TEXT_GRADIENT_PRESETS } from "../lib/banner";
+import { opacityAlpha, opacityPercent } from "../lib/boxFonts";
 import { ensureFamily } from "../lib/fonts";
 import GradientEditor from "./GradientEditor";
 import TextEffectsEditor from "./TextEffectsEditor";
@@ -179,8 +180,9 @@ export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: P
       {/* ------------------------------ EFFECTS ----------------------------- */}
       {tab === "effects" && (
         <div className="space-y-3">
-          <Field label="Item opacity" hint={`${Math.round((s.itemOpacity ?? 1) * 100)}%`}>
-            <Slider min={0.05} max={1} step={0.05} value={s.itemOpacity ?? 1} onChange={(v) => onChange({ itemOpacity: v })} />
+          <Field label="Item opacity" hint={`${opacityPercent(s.itemOpacity)}%`}>
+            {/* 0 → 100: an item can be faded all the way out (and back) */}
+            <Slider min={0} max={1} step={0.05} value={s.itemOpacity ?? 1} onChange={(v) => onChange({ itemOpacity: v })} />
           </Field>
 
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
@@ -344,13 +346,16 @@ export default function ShapeDesignPanel({ shape: s, onChange, onApplyToAll }: P
             </Field>
           </div>
 
-          <Field label="Transparency (0 – 100)" hint={`${Math.round((1 - (s.textOpacity ?? 1)) * 100)}%`}>
+          {/* 100 = fully visible · 0 = invisible — the same reading as every other
+              opacity control in the editor (see lib/boxFonts `opacityPercent`) */}
+          <Field label="Opacity (100 = fully visible)" hint={`${opacityPercent(s.textOpacity)}%`}>
             <Slider
+              ariaLabel="Text opacity (100 = fully visible)"
               min={0}
               max={100}
               step={1}
-              value={Math.round((1 - (s.textOpacity ?? 1)) * 100)}
-              onChange={(v) => onChange({ textOpacity: Math.round((1 - v / 100) * 100) / 100 })}
+              value={opacityPercent(s.textOpacity)}
+              onChange={(v) => onChange({ textOpacity: opacityAlpha(v) })}
             />
           </Field>
 

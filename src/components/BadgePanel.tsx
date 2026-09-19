@@ -107,7 +107,7 @@ export default function BadgePanel({ theme, header, slide, setTheme, setHeader, 
             <div className="grid grid-cols-2 gap-2">
               <ColorInput label="Plate colour" value={plate.color} onChange={(v) => setPlate({ color: v })} />
               <Field label="Opacity" hint={`${Math.round(plate.opacity * 100)}%`}>
-                <Slider min={0.05} max={1} step={0.05} value={plate.opacity} onChange={(v) => setPlate({ opacity: v })} />
+                <Slider min={0} max={1} step={0.05} value={plate.opacity} onChange={(v) => setPlate({ opacity: v })} />
               </Field>
             </div>
             <Field label="Corner radius" hint={plate.radius >= 999 ? "pill" : `${plate.radius}px`}>

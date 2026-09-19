@@ -455,7 +455,7 @@ export default function ImagesPanel({
           </Field>
 
           <Field label="Opacity" hint={`${Math.round((sel.opacity ?? 1) * 100)}%`}>
-            <Slider min={0.05} max={1} step={0.05} value={sel.opacity ?? 1} onChange={(v) => set({ opacity: v })} />
+            <Slider min={0} max={1} step={0.05} value={sel.opacity ?? 1} onChange={(v) => set({ opacity: v })} />
           </Field>
 
           <Field label="Crop to shape" as="div">

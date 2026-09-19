@@ -6,7 +6,7 @@ import type {
 import { DEFAULT_BANNER, DEFAULT_FRAME, ELEMENT_LABELS } from "../lib/types";
 import { TEXT_GRADIENT_PRESETS } from "../lib/banner";
 import {
-  TEXT_PART_LABELS, WEIGHTS, boxFontLabel, boxTypeface, elementInk, patchTextPart, setBoxFont, setElementInk, textPartTypeface,
+  TEXT_PART_LABELS, WEIGHTS, boxFontLabel, boxTypeface, elementInk, opacityAlpha, opacityPercent, patchTextPart, setBoxFont, setElementInk, textPartTypeface,
 } from "../lib/boxFonts";
 import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, type ShapeItem, type ShapeKind } from "../lib/shapes";
 import type { AlignOp } from "../lib/shapeAlign";
@@ -250,9 +250,12 @@ const ELEMENT_SIZE_FIELD: Partial<Record<ElementId, "titleSize" | "badgeSize" | 
   note: "noteSize",
 };
 
-/** 0–100 "how see-through" from a typeface's opacity (0–1, or a legacy 0–100) */
-const transparencyOf = (t: { opacity?: number }) =>
-  Math.round((1 - (t.opacity !== undefined ? (t.opacity > 1 ? t.opacity / 100 : t.opacity) : 1)) * 100);
+/**
+ * 0–100 "how visible" of anything the strip can fade: 100 = fully visible,
+ * 0 = invisible (see lib/boxFonts `opacityPercent` — one meaning for every
+ * opacity control, the strip and the panel alike).
+ */
+const opacityOf = (t: { opacity?: number }) => opacityPercent(t.opacity);
 
 /** the text-transform a typeface really applies */
 const caseOf = (t: Pick<BoxTypeface, "textTransform" | "uppercase">): "none" | "uppercase" | "lowercase" =>
@@ -534,7 +537,19 @@ export default function ContextToolbar(p: Props) {
     min = 0, max = 200, step = 1,
     opts: { prefix?: ReactNode; dec?: string; inc?: string; jump?: number } = {},
   ) => {
-    const clamp = (v: number) => Math.round(Math.max(min, Math.min(max, v)) * 10) / 10;
+    const clamp = (v: number) => {
+      /**
+       * Round to the STEP's own precision — never to a fixed tenth.
+       *
+       * A 0.05 step used to be squeezed through `Math.round(v * 10) / 10`, so
+       * "line spacing +" turned 1.4 into 1.5 and then "−" asked for 1.45 and
+       * was rounded straight back to 1.5: the minus button was DEAD on every
+       * .05 step (line spacing, line height, option line height). Two decimals
+       * is the floor, so integer steps still land on whole numbers.
+       */
+      const decimals = Math.max(2, (String(step).split(".")[1] ?? "").length);
+      return Number(Math.max(min, Math.min(max, v)).toFixed(decimals));
+    };
     const jump = opts.jump ?? step;
     const dec = opts.dec ?? `Decrease ${name}`;
     const inc = opts.inc ?? `Increase ${name}`;
@@ -595,12 +610,14 @@ export default function ContextToolbar(p: Props) {
       </div>
       <div className="ctx-field">
         <span>Line height</span>
-        {stepper("Line height", s?.lineHeight ?? tf.lineHeight ?? 1.4, v => s ? patch({ lineHeight: v }) : fontPatch({ lineHeight: v }), .1, 5, .05)}
+        {/* 0 → ∞: the − and + steps walk the whole range, and the .05 step is
+            kept exactly (see stepper's clamp) */}
+        {stepper("Line height", s?.lineHeight ?? tf.lineHeight ?? 1.4, v => s ? patch({ lineHeight: v }) : fontPatch({ lineHeight: v }), 0, 99999, .05)}
       </div>
       <div className="ctx-field">
-        <span>Text transparency %</span>
-        {stepper("Transparency %", Math.round((1 - (s?.textOpacity ?? tf.opacity ?? 1)) * 100), v => {
-          const op = Math.max(0, Math.min(1, 1 - (v / 100)));
+        <span>Opacity % (100 = fully visible)</span>
+        {stepper("Opacity %", s ? opacityPercent(s.textOpacity) : opacityOf(tf), v => {
+          const op = opacityAlpha(v);
           if (s) patch({ textOpacity: op });
           else fontPatch({ opacity: op });
         }, 0, 100, 5)}
@@ -669,7 +686,7 @@ export default function ContextToolbar(p: Props) {
       </div>
     );
   }
-  /** letter spacing · line spacing · transparency of ONE text part */
+  /** letter spacing · line spacing · opacity of ONE text part */
   function spacingContent(part: BoxFontId): ReactNode {
     const t = partTf(part);
     return (
@@ -684,8 +701,8 @@ export default function ContextToolbar(p: Props) {
           {stepper("Line spacing", t.lineHeight ?? 1.4, v => setPart(part, { lineHeight: v }), 0, 99999, .05)}
         </div>
         <div className="ctx-field">
-          <span>Transparency % (0 – 100)</span>
-          {stepper("Transparency %", transparencyOf(t), v => setPart(part, { opacity: v <= 0 ? undefined : Math.round((1 - v / 100) * 100) / 100 }), 0, 100, 5)}
+          <span>Opacity % (100 = fully visible)</span>
+          {stepper("Opacity %", opacityOf(t), v => setPart(part, { opacity: opacityAlpha(v) }), 0, 100, 5)}
         </div>
       </div>
     );
@@ -1072,7 +1089,7 @@ export default function ContextToolbar(p: Props) {
             {toggle("Banner shape", <span aria-hidden="true">▣</span>)}
             {swatch("Banner colour", banner.color, v => patchBanner({ color: v }), <span className="ctx-dot" style={{ background: banner.color }} />)}
             {toggle("Banner fill")}
-            {stepper("Banner opacity %", Math.round(banner.opacity * 100), v => patchBanner({ opacity: v / 100 }), 10, 100, 5, { prefix: "◐" })}
+            {stepper("Banner opacity %", Math.round(banner.opacity * 100), v => patchBanner({ opacity: Math.max(0, Math.min(1, v / 100)) }), 0, 100, 5, { prefix: "◐" })}
             {stepper("Banner halo", banner.halo, v => patchBanner({ halo: v }), 0, 100, 5, { prefix: "☀" })}
             {toggle("Banner padding")}
             {sep()}
@@ -1388,7 +1405,7 @@ export default function ContextToolbar(p: Props) {
           <select aria-label="Image fit" title="Image fit" className="ctx-select" value={s.fit ?? 'contain'} onChange={e => patch({ fit: e.target.value as ShapeItem['fit'] })}><option value="contain">Fit</option><option value="cover">Fill / crop to box</option><option value="fill">Stretch</option></select>
           {button(<>⇋ Flip</>, () => patch({ flipH: !s.flipH }), undefined, "Flip horizontal")}
         </>}
-        {s && !multi && <>{sep()}{stepper("Opacity %", Math.round((s.itemOpacity ?? 1) * 100), v => patch({ itemOpacity: v / 100 }), 0, 100, 1, { prefix: <span aria-hidden="true">◐</span> })}{toggle("Effects", <span aria-hidden="true">✨</span>)}</>}
+        {s && !multi && <>{sep()}{stepper("Item opacity %", opacityPercent(s.itemOpacity), v => patch({ itemOpacity: opacityAlpha(v) }), 0, 100, 5, { prefix: <span aria-hidden="true">◐</span> })}{toggle("Effects", <span aria-hidden="true">✨</span>)}</>}
         {surface === 'frame' && <>{swatch("Frame color", (theme.frame ?? DEFAULT_FRAME).color, color => p.patchTheme({ frame: { ...(theme.frame ?? DEFAULT_FRAME), color } }))}{toggle("Frame", <span aria-hidden="true">🖼</span>)}</>}
         {surface === 'background' && <>{swatch("Color", theme.board, board => p.patchTheme({ board }))}{toggle("Gradient")}{toggle("Background effects")}</>}
         {multi && (p.grouped ? button(<>▢ Ungroup</>, p.ungroup, undefined, "Ungroup") : button(<>▣ Group</>, p.group, undefined, "Group"))}
