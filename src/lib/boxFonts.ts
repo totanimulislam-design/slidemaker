@@ -295,6 +295,12 @@ export function patchTextPart(theme: ThemeSettings, id: BoxFontId, patch: Partia
     if (Object.keys(own).length) fonts = setBoxFont(fonts, id, own);
   } else if (Object.keys(rest).length) {
     fonts = setBoxFont(fonts, id, rest);
+    if (id === "options" && "align" in rest) {
+      const a = rest.align;
+      if (a && a !== "justify") {
+        out.layout = { ...theme.layout, options: { ...theme.layout.options, align: a } };
+      }
+    }
   }
   if (fonts !== theme.boxFonts) out.boxFonts = fonts;
   return out;

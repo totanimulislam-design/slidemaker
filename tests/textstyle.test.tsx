@@ -367,6 +367,37 @@ export async function runTextStyleTests(): Promise<CaseResult[]> {
   });
   type(panelInput("Option text size"), "30");
 
+  /* Option text alignment relative to its text box without moving option bullet */
+  click(barButton("Align center", "Option text tools"));
+  const centeredNodes = Array.from(doc.querySelectorAll<HTMLElement>('.slide-editable [data-el="options"] > div > span:not([style*="display: inline-flex"])'));
+  const rowElements = Array.from(doc.querySelectorAll<HTMLElement>('.slide-editable [data-el="options"] > div'));
+  out.push({
+    name: "option text aligns to center relative to its text box (flex: 1)",
+    pass: centeredNodes.length === 2 && centeredNodes.every((n) => n.style.textAlign === "center" && (n.style.flex === "1 1 0%" || n.style.flex === "1")),
+    detail: centeredNodes.map((n) => `${n.style.textAlign} flex=${n.style.flex}`).join(" / "),
+  });
+  out.push({
+    name: "option text center alignment leaves option bullet stationary (no row-level justify)",
+    pass: rowElements.length === 2 && rowElements.every((r) => r.style.justifyContent !== "center"),
+    detail: rowElements.map((r) => r.style.justifyContent || "flex-start").join(" / "),
+  });
+
+  click(barButton("Align right", "Option text tools"));
+  const rightNodes = Array.from(doc.querySelectorAll<HTMLElement>('.slide-editable [data-el="options"] > div > span:not([style*="display: inline-flex"])'));
+  out.push({
+    name: "option text aligns to right relative to its text box without moving bullet",
+    pass: rightNodes.length === 2 && rightNodes.every((n) => n.style.textAlign === "right") && rowElements.every((r) => r.style.justifyContent !== "flex-end"),
+    detail: rightNodes.map((n) => `${n.style.textAlign} rowJustify=${rowElements[0]?.style.justifyContent || "flex-start"}`).join(" / "),
+  });
+
+  click(barButton("Align left", "Option text tools"));
+  const leftNodes = Array.from(doc.querySelectorAll<HTMLElement>('.slide-editable [data-el="options"] > div > span:not([style*="display: inline-flex"])'));
+  out.push({
+    name: "option text aligns to left relative to its text box",
+    pass: leftNodes.length === 2 && leftNodes.every((n) => n.style.textAlign === "left"),
+    detail: leftNodes.map((n) => n.style.textAlign).join(" / "),
+  });
+
   /* ------------------------------ Footnote --------------------------------- */
   nav("footnote");
   click(panelTextButton("Strikethrough") ?? aside().querySelector('button[role="switch"][aria-label="Strikethrough"]'));
