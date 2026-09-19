@@ -159,13 +159,6 @@ input[type="text"] {
   [data-slide-select-wrap] { opacity: 1; }
 }
 
-/* One-line editor toolbars. The global bar sheds its brand copy only at very
-   narrow desktop widths; controls themselves never fall onto a second row. */
-[data-app-toolbar] > * { flex-shrink: 0; }
-@media (max-width: 900px) {
-  .app-toolbar-brand-copy { display: none; }
-}
-
 /* Canva-style floating selection toolbar: a centered pill of icon groups plus
    a dropdown card. A toolbar line never wraps; exceptionally narrow workspaces
    can pan it horizontally instead of losing board height to a second row. */
