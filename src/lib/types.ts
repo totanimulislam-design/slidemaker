@@ -143,6 +143,11 @@ export type TextBgShapeKind =
   | "octagon"
   | "diamond"
   | "cutCorners"
+  | "starburst"
+  | "starburst8"
+  | "tagRight"
+  | "tagLeft"
+  | "ticket"
   | "highlight"
   | "underline"
   | "sideBar";
