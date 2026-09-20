@@ -145,6 +145,14 @@ function resetQuestionBullet(): ToolbarResetPatch {
       bulletBorderWeight: undefined,
       bulletRadius: undefined,
       bulletOpacity: D.bulletOpacity,
+      // gradients, the shape effect and the one-click style unwind with them —
+      // an unset channel drops its key, so the design paints itself again
+      bulletFillGradient: undefined,
+      bulletBorderGradient: undefined,
+      bulletEffect: undefined,
+      bulletEffectIntensity: undefined,
+      bulletEffectColor: undefined,
+      bulletStylePreset: undefined,
       bulletNudgeX: D.bulletNudgeX,
       bulletNudgeY: D.bulletNudgeY,
     },

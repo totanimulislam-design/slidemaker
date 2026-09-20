@@ -2,18 +2,18 @@ import type { Box, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { numberStyleDef, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
 import { boxFontCss } from "../lib/boxFonts";
 import { BulletPositionControls, BulletShapeControls } from "./BulletShapePanel";
+import BulletDesignPanel from "./BulletDesignPanel";
 import NumberBullet from "./NumberBullet";
-import NumberStylePicker from "./NumberStylePicker";
-import { Btn, ColorInput, Field, PanelHead, Slider, Toggle } from "./ui";
+import { Btn, PanelHead, Toggle } from "./ui";
 
 /**
  * Navigation ▸ "Question bullet".
  *
- * The marker's own body: whether it is drawn, which design it wears, how big it
- * is, the accent colour every design derives from — and the shape channels the
- * toolbar reaches directly (fill, outline, corners, weight, transparency, and
- * where the marker sits). The number painted *inside* it has its own
- * destination ("Text inside question bullet").
+ * The marker's own body: whether it is drawn, the design card (silhouette ·
+ * one-click shape styles · shape effects, with its size and base colour) and
+ * the shape channels the toolbar reaches one button each — fill, outline, its
+ * style, corners, weight, transparency — plus where the marker sits. The number
+ * painted *inside* it has its own destination ("Text inside question bullet").
  */
 interface Props {
   theme: ThemeSettings;
@@ -54,16 +54,12 @@ export default function QuestionBulletPanel({ theme: T, slide, setTheme, patchLa
 
       <Toggle label="Show question bullet" checked={T.showBullet} onChange={(v) => setTheme({ showBullet: v })} />
 
-      <Field label="Numbering design" as="div">
-        <NumberStylePicker theme={T} setTheme={setTheme} />
-      </Field>
+      {/* the design card: silhouette, one-click styles and shape effects */}
+      <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <BulletDesignPanel theme={T} setTheme={setTheme} />
+      </div>
 
-      <Field label="Bullet size" hint={`${size}px`}>
-        <Slider min={28} max={96} value={size} onChange={(v) => setTheme({ bulletSize: v })} />
-      </Field>
-
-      <ColorInput label="Bullet / numbering colour" value={T.accent} onChange={(v) => setTheme({ accent: v })} />
-
+      {/* the channels, each with its own card — the toolbar opens them singly */}
       <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
         <BulletShapeControls theme={T} setTheme={setTheme} />
       </div>
@@ -84,9 +80,9 @@ export default function QuestionBulletPanel({ theme: T, slide, setTheme, patchLa
       </div>
 
       <p className="text-[10px] leading-relaxed text-slate-500">
-        “{numberStyleDef(id).label}” — {numberStyleDef(id).hint}. Every design derives from the accent colour above, and
-        the fill, outline, corners, weight and transparency you set here are the marker's body only. Wording, ink, face
-        and size of the number itself live under <b>Q bullet text</b>.
+        “{numberStyleDef(id).label}” — {numberStyleDef(id).hint}. Every design derives from the base colour on the
+        design card, and the fill, outline, corners, weight, transparency and effect you set here paint the marker's body
+        only. Wording, ink, face and size of the number itself live under <b>Q bullet text</b>.
       </p>
     </div>
   );

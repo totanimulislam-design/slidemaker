@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import type { Gradient, TextBgBorderStyle, TextBgEffectKind, TextBgShape, TextBgShapeKind } from "./types";
 import { gradientCss } from "./banner";
 import { parseColor } from "./textEffects";
+import { effectColorFor, shapeEffectPasses, bgAlpha } from "./shapeEffects";
 
 export type { TextBgBorderStyle, TextBgEffectKind, TextBgShape, TextBgShapeKind } from "./types";
 
@@ -195,12 +196,8 @@ export const freshBgShape = (accent = DEFAULT_TEXT_BG_SHAPE.color): TextBgShape 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 const round = (n: number) => Math.round(n * 100) / 100;
 
-/** rgba() of any colour we can parse (hex / rgb); the colour itself otherwise */
-export function bgAlpha(color: string, a: number): string {
-  const rgb = parseColor(color);
-  if (!rgb) return color;
-  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${round(clamp(a, 0, 1))})`;
-}
+/* rgba() of any colour we can parse — shared with every painted surface */
+export { bgAlpha };
 
 /** the plate's dominant colour — the first gradient stop, else the solid fill, else the border */
 export function bgPlateColor(s: TextBgShape): string {
@@ -222,16 +219,8 @@ export function bgPlateIsLight(s: TextBgShape): boolean {
 
 /** the colour an effect paints with — its own, else the plate's / a light / a dark tone */
 export function bgEffectColor(s: TextBgShape): string {
-  if (s.effectColor) return s.effectColor;
   const def = TEXT_BG_EFFECT_BY_ID.get(s.effect);
-  switch (def?.auto) {
-    case "plate":
-      return s.effect === "neon" && s.borderColor ? s.borderColor : bgPlateColor(s);
-    case "light":
-      return "#ffffff";
-    default:
-      return "#000000";
-  }
+  return effectColorFor(s.effect, def?.auto ?? "dark", s.effectColor, bgPlateColor(s), s.borderColor);
 }
 
 /** the CSS `background` of the plate ("" when it has no fill) */
@@ -301,7 +290,6 @@ export function textBgRender(input: TextBgShape | undefined): TextBgRender | nul
   const s = bgShapeWithDefaults(input);
   const kind = bgKindDef(s.kind);
   const clip = silhouetteCss(kind, s.radius);
-  const i = clamp(s.effectIntensity, 0, 100) / 100;
   const fx = bgEffectColor(s);
   const plate = bgPlateColor(s);
   const fillCss = bgFillCss(s);
@@ -352,153 +340,22 @@ export function textBgRender(input: TextBgShape | undefined): TextBgRender | nul
     };
   };
 
-  switch (s.effect) {
-    case "shadow":
-      filters.push(`drop-shadow(0 ${round(2 + 8 * i)}px ${round(4 + 16 * i)}px ${bgAlpha(fx, 0.25 + 0.45 * i)})`);
-      break;
-    case "pop": {
-      const d = round(3 + 9 * i);
-      filters.push(`drop-shadow(${d}px ${d}px 0 ${fx})`);
-      break;
-    }
-    case "lift":
-      filters.push(`drop-shadow(0 ${round(1 + 3 * i)}px ${round(2 + 6 * i)}px rgba(0, 0, 0, ${round(0.25 + 0.25 * i)}))`);
-      break;
-    case "float":
-      filters.push(`drop-shadow(0 ${round(10 + 20 * i)}px ${round(14 + 26 * i)}px rgba(0, 0, 0, ${round(0.3 + 0.3 * i)}))`);
-      break;
-    case "longShadow": {
-      const steps = 3 + Math.round(9 * i);
-      for (let k = 0; k < steps; k++) filters.push(`drop-shadow(2px 2px 0 ${fx})`);
-      break;
-    }
-    case "glow":
-      filters.push(`drop-shadow(0 0 ${round(4 + 10 * i)}px ${fx})`, `drop-shadow(0 0 ${round(2 + 4 * i)}px ${fx})`);
-      break;
-    case "halo":
-      filters.push(`drop-shadow(0 0 ${round(14 + 26 * i)}px ${bgAlpha(fx, 0.65)})`, `drop-shadow(0 0 ${round(30 + 40 * i)}px ${bgAlpha(fx, 0.4)})`);
-      break;
-    case "neon":
-      filters.push(
-        `drop-shadow(0 0 2px rgba(255, 255, 255, 0.85))`,
-        `drop-shadow(0 0 ${round(6 + 10 * i)}px ${fx})`,
-        `drop-shadow(0 0 ${round(16 + 24 * i)}px ${bgAlpha(fx, 0.8)})`,
-      );
-      setOverlay({ boxShadow: `inset 0 0 ${round(8 + 12 * i)}px ${bgAlpha(fx, 0.6)}` });
-      break;
-    case "innerShadow":
-      setOverlay({ boxShadow: `inset 0 ${round(2 + 6 * i)}px ${round(6 + 14 * i)}px rgba(0, 0, 0, ${round(0.3 + 0.4 * i)})` });
-      break;
-    case "innerGlow":
-      setOverlay({ boxShadow: `inset 0 0 ${round(8 + 24 * i)}px ${bgAlpha(fx, 0.5 + 0.4 * i)}` });
-      break;
-    case "bevel": {
-      const d = round(1 + 3 * i);
-      const b = round(2 + 4 * i);
-      setOverlay({ boxShadow: `inset ${d}px ${d}px ${b}px rgba(255, 255, 255, 0.45), inset -${d}px -${d}px ${b}px rgba(0, 0, 0, 0.45)` });
-      break;
-    }
-    case "emboss": {
-      const d = round(2 + 4 * i);
-      setOverlay({ boxShadow: `inset 0 ${d}px 0 rgba(255, 255, 255, 0.35), inset 0 -${d}px 0 rgba(0, 0, 0, 0.35)` });
-      filters.push(`drop-shadow(0 ${round(1 + 2 * i)}px ${round(2 + 3 * i)}px rgba(0, 0, 0, 0.35))`);
-      break;
-    }
-    case "gloss":
-      setOverlay({ background: `linear-gradient(180deg, rgba(255, 255, 255, ${round(0.3 + 0.35 * i)}) 0%, rgba(255, 255, 255, 0.08) 48%, transparent 52%)` });
-      break;
-    case "sheen":
-      setOverlay({
-        background: `linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, ${round(0.18 + 0.35 * i)}) 45%, rgba(255, 255, 255, ${round(0.22 + 0.4 * i)}) 50%, transparent 65%)`,
-      });
-      break;
-    case "spotlight":
-      setOverlay({ background: `radial-gradient(ellipse at 50% 35%, rgba(255, 255, 255, ${round(0.22 + 0.38 * i)}), transparent 65%)` });
-      break;
-    case "stripes":
-      setOverlay({ background: `repeating-linear-gradient(135deg, ${bgAlpha(fx, 0.16 + 0.28 * i)} 0 6px, transparent 6px 14px)` });
-      break;
-    case "dots":
-      setOverlay({ backgroundImage: `radial-gradient(${bgAlpha(fx, 0.25 + 0.4 * i)} 1.4px, transparent 1.7px)`, backgroundSize: "9px 9px" });
-      break;
-    case "grid":
-      setOverlay({
-        backgroundImage: `linear-gradient(${bgAlpha(fx, 0.16 + 0.24 * i)} 1px, transparent 1px), linear-gradient(90deg, ${bgAlpha(fx, 0.16 + 0.24 * i)} 1px, transparent 1px)`,
-        backgroundSize: "12px 12px",
-      });
-      break;
-    case "checker":
-      setOverlay({ background: `repeating-conic-gradient(${bgAlpha(fx, 0.14 + 0.24 * i)} 0% 25%, transparent 0% 50%) 50% / 14px 14px` });
-      break;
-    case "glass":
-      fill.backdropFilter = `blur(${round(4 + 10 * i)}px)`;
-      (fill as Record<string, unknown>).WebkitBackdropFilter = fill.backdropFilter;
-      setOverlay({
-        background: "linear-gradient(135deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.06))",
-        boxShadow: `inset 0 0 0 1px rgba(255, 255, 255, ${round(0.25 + 0.3 * i)})`,
-      });
-      break;
-    case "blur":
-      filters.push(`blur(${round(2 + 10 * i)}px)`);
-      break;
-    case "fadeRight": {
-      const mask = `linear-gradient(90deg, #000 ${round(70 - 55 * i)}%, transparent 100%)`;
-      layer.maskImage = mask;
-      (layer as Record<string, unknown>).WebkitMaskImage = mask;
-      break;
-    }
-    case "fadeEdges": {
-      const a = round(4 + 26 * i);
-      const mask = `linear-gradient(90deg, transparent, #000 ${a}%, #000 ${100 - a}%, transparent)`;
-      layer.maskImage = mask;
-      (layer as Record<string, unknown>).WebkitMaskImage = mask;
-      break;
-    }
-    case "ring": {
-      const gap = round(2 + 6 * i);
-      behind.push({ css: { position: "absolute", inset: -gap }, fill: "", stroke: fx, strokeWidth: 2 });
-      break;
-    }
-    case "offsetOutline": {
-      const d = round(3 + 9 * i);
-      behind.push({ css: { position: "absolute", inset: 0, transform: `translate(${d}px, ${d}px)` }, fill: "", stroke: fx, strokeWidth: 2 });
-      break;
-    }
-    case "sticker": {
-      const w = round(2 + 4 * i);
-      filters.push(
-        `drop-shadow(${w}px 0 0 ${fx})`,
-        `drop-shadow(-${w}px 0 0 ${fx})`,
-        `drop-shadow(0 ${w}px 0 ${fx})`,
-        `drop-shadow(0 -${w}px 0 ${fx})`,
-      );
-      break;
-    }
-    case "stack": {
-      const d = round(3 + 5 * i);
-      behind.push({ css: { position: "absolute", inset: 0, transform: `translate(${d * 2}px, ${d * 2}px)`, opacity: 0.3 }, fill: fx || plate, stroke: "", strokeWidth: 0 });
-      behind.push({ css: { position: "absolute", inset: 0, transform: `translate(${d}px, ${d}px)`, opacity: 0.55 }, fill: fx || plate, stroke: "", strokeWidth: 0 });
-      break;
-    }
-    case "topBar":
-      setOverlay({ borderTop: `${round(3 + 7 * i)}px solid ${fx}` });
-      break;
-    case "bottomBar":
-      setOverlay({ borderBottom: `${round(3 + 7 * i)}px solid ${fx}` });
-      break;
-    case "leftBar":
-      setOverlay({ borderLeft: `${round(3 + 7 * i)}px solid ${fx}` });
-      break;
-    case "cornerFold": {
-      const size = round(10 + 12 * i);
-      setOverlay({
-        background: `linear-gradient(225deg, rgba(0, 0, 0, 0.5) 0 ${size}px, rgba(255, 255, 255, 0.28) ${size}px ${round(size * 1.45)}px, transparent ${round(size * 1.45)}px)`,
-      });
-      break;
-    }
-    default:
-      break;
+  /* every effect the shape tools ship, resolved once — see lib/shapeEffects */
+  const passes = shapeEffectPasses(s.effect, s.effectIntensity, fx, plate);
+  if (passes.overlay) setOverlay(passes.overlay);
+  for (const b of passes.behind) behind.push({ css: b.css, fill: b.fill, stroke: b.stroke, strokeWidth: b.strokeWidth });
+  if (passes.backdrop) {
+    fill.backdropFilter = passes.backdrop;
+    (fill as Record<string, unknown>).WebkitBackdropFilter = passes.backdrop;
   }
+  if (passes.mask) {
+    layer.maskImage = passes.mask;
+    (layer as Record<string, unknown>).WebkitMaskImage = passes.mask;
+  }
+  if (passes.transform) {
+    layer.transform = [typeof layer.transform === "string" ? layer.transform : "", passes.transform].filter(Boolean).join(" ");
+  }
+  filters.push(...passes.filters);
   if (filters.length) layer.filter = filters.join(" ");
 
   const border: TextBgBorderSpec | undefined =

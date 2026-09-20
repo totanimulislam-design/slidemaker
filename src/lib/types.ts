@@ -196,6 +196,22 @@ export type TextBgEffectKind =
   | "cornerFold";
 
 /**
+ * Every effect a painted surface can wear — the plate behind a text part AND
+ * the question marker's body. It is the text-plate set plus the five the shape
+ * tools ship for objects: a perspective shadow, a reflection, soft edges, a
+ * 3-D rotation and a material / layered look. `lib/shapeEffects` turns one of
+ * them into CSS passes, so both surfaces paint the same "Pop" or the same
+ * "Neon" (see `TEXT_BG_EFFECTS` and `BULLET_EFFECTS`).
+ */
+export type ShapeEffectKind =
+  | TextBgEffectKind
+  | "perspective"
+  | "reflection"
+  | "softEdges"
+  | "threeD"
+  | "material";
+
+/**
  * A shape painted BEHIND a text part — the plate a title, a question, a
  * badge line, the number in the bullet, an option's text or a custom text
  * box sits on (Canva's "text background", the coloured capsules and slanted
@@ -847,7 +863,15 @@ export interface ThemeSettings {
    * body only — the number keeps its own ink.
    */
   bulletFill?: string;
+  /**
+   * The fill's gradient — the same solid / gradient pair the text colour
+   * picker offers. An enabled gradient paints the body instead of the solid;
+   * clearing it hands the body back to `bulletFill` (or the design's own paint).
+   */
+  bulletFillGradient?: Gradient;
   bulletBorder?: string;
+  /** the outline's gradient (an enabled one paints the line instead of the solid) */
+  bulletBorderGradient?: Gradient;
   bulletBorderStyle?: NumberBorderStyle;
   /** outline weight in px (undefined = the design's own line) */
   bulletBorderWeight?: number;
@@ -855,6 +879,14 @@ export interface ThemeSettings {
   bulletRadius?: number;
   /** 0–100: the marker's body, never the number */
   bulletOpacity?: number;
+  /** the marker's shape effect (lib/shapeEffects) — undefined / "none" = the design's own */
+  bulletEffect?: ShapeEffectKind;
+  /** 0–100 strength of the marker's effect */
+  bulletEffectIntensity?: number;
+  /** the effect's own colour; undefined = derived from the marker's paint */
+  bulletEffectColor?: string;
+  /** the shape-style preset last picked (lib/bulletStyles) — "" once hand-tuned */
+  bulletStylePreset?: string;
   /** nudge of the whole marker in px — works attached to the question or on its own */
   bulletNudgeX?: number;
   bulletNudgeY?: number;
