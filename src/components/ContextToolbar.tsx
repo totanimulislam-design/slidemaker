@@ -998,7 +998,15 @@ export default function ContextToolbar(p: Props) {
   if (panel === "Bullet design" && optLine("questionBullet")) content = (
     <NumberStylePicker theme={theme} setTheme={p.patchTheme} />
   );
-  if (panel === "Bullet shape" && optLine("questionBullet")) content = (
+  // Keep the complete shape editor available from one compact card, while also
+  // exposing the individual controls in the toolbar. This makes the common
+  // Canva-style workflow (pick a border style, then tune its radius/weight or
+  // transparency) one click away instead of hiding those controls behind a
+  // generic "shape" label.
+  if (
+    ["Bullet shape", "Border style", "Border radius", "Border weight", "Transparency"].includes(panel ?? "") &&
+    optLine("questionBullet")
+  ) content = (
     <BulletShapeControls theme={theme} setTheme={p.patchTheme} />
   );
   if (panel === "Bullet position" && optLine("questionBullet")) content = (
@@ -1315,6 +1323,10 @@ export default function ContextToolbar(p: Props) {
               "bulletBorder",
             )}
             {toggle("Bullet shape", <span aria-hidden="true">▭</span>)}
+            {toggle("Border style", <span aria-hidden="true">╍</span>)}
+            {toggle("Border radius", <span aria-hidden="true">◰</span>)}
+            {toggle("Border weight", <span aria-hidden="true">▤</span>)}
+            {toggle("Transparency", <span aria-hidden="true">◌</span>)}
             {toggle("Bullet position", <span aria-hidden="true">✥</span>)}
             {sep()}
             {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
