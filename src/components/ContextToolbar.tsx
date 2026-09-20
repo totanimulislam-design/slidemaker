@@ -32,9 +32,19 @@ import TextBgShapePanel from "./TextBgShapePanel";
 import { bgShapeIsOn, describeBgShape, type TextBgShape } from "../lib/textBgShape";
 import OptionBulletShapePicker from "./OptionBulletShapePicker";
 import OptionStylePicker from "./OptionStylePicker";
-import { BulletPositionControls, BulletShapeControls } from "./BulletShapePanel";
+import {
+  BorderStyleIcon,
+  BulletBorderStylePicker,
+  BulletPositionControls,
+  BulletRadiusPanel,
+  BulletTransparencyPanel,
+  BulletWeightPanel,
+  TransparencyIcon,
+  WeightIcon,
+} from "./BulletShapePanel";
+import BulletDesignPanel from "./BulletDesignPanel";
+import PaintColorPanel from "./PaintColorPanel";
 import PlainNumberingPicker from "./PlainNumberingPicker";
-import NumberStylePicker from "./NumberStylePicker";
 import ShapeDesignPanel from "./ShapeDesignPanel";
 import FramePanel from "./FramePanel";
 import GradientEditor from "./GradientEditor";
@@ -302,9 +312,67 @@ interface FontColorCtx {
   docColors: string[];
 }
 
+/**
+ * A shape's paint channel (the question marker's Fill and Border): the same
+ * solid + gradient card the text colour opens, with the two extra states a
+ * shape has — Auto (the design paints its own body / line) and None.
+ */
+interface PaintCtx {
+  key: string; // unique id for toggle behavior
+  label: string;
+  /** "" = auto · "transparent" = none · "#rrggbb" = the picked colour */
+  value: string;
+  gradient?: Gradient;
+  /** the colour Auto resolves to right now */
+  fallback: string;
+  docColors: string[];
+  onSolid: (hex: string) => void;
+  onGradient: (g: Gradient) => void;
+  onClearGradient: () => void;
+  onAuto: () => void;
+  onNone?: () => void;
+}
+
+/** the pop-ups that need the wide card (a colour grid, a design gallery) */
+const WIDE_PANELS = new Set(["TextColor", "Paint", "Bullet design"]);
+const widePanel = (panel: string | null) => !!panel && WIDE_PANELS.has(panel);
+
+/** the droplet a paint button wears over its current colour */
+const PAINT_GLYPH = (
+  <svg width="11" height="11" viewBox="0 0 14 14" aria-hidden="true">
+    <path
+      d="M7 1.4 11.2 6a4.6 4.6 0 0 1-3.2 7.8A4.6 4.6 0 0 1 4.8 6L7 1.4Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinejoin="round"
+    />
+    <path d="M7 1.4 11.2 6a4.6 4.6 0 0 1-1 6.5L7 1.4Z" fill="currentColor" opacity=".55" />
+  </svg>
+);
+
+/** Canva's corner-radius icon: one corner pulled round */
+const RADIUS_GLYPH = (
+  <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true">
+    <rect x="2.6" y="2.6" width="14.8" height="14.8" rx="6" fill="none" stroke="currentColor" strokeWidth="1.3" opacity=".5" />
+    <path d="M3.4 13.2A9.8 9.8 0 0 1 13.2 3.4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <circle cx="13.4" cy="13.4" r="1.7" fill="currentColor" />
+  </svg>
+);
+
+/** the bullet-design icon: a numbered disc with a sparkle */
+const DESIGN_GLYPH = (
+  <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true">
+    <circle cx="8.6" cy="11.4" r="5.9" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M8.6 8.4v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="m16.6 1.6.75 2 2 .75-2 .75-.75 2-.75-2-2-.75 2-.75z" fill="currentColor" />
+  </svg>
+);
+
 export default function ContextToolbar(p: Props) {
   const [panel, setPanel] = useState<string | null>(null);
   const [fontColorCtx, setFontColorCtx] = useState<FontColorCtx | null>(null);
+  const [paintCtx, setPaintCtx] = useState<PaintCtx | null>(null);
   /**
    * The newest context for every font-colour button, rebuilt on each render.
    * The open popover reads its entry from here instead of the snapshot taken
@@ -313,6 +381,8 @@ export default function ContextToolbar(p: Props) {
    * the first one instead of silently starting over from the opened value.
    */
   const liveFontCtx = useRef<Map<string, FontColorCtx>>(new Map());
+  /** the same live re-registration for a paint channel (Fill · Border) */
+  const livePaintCtx = useRef<Map<string, PaintCtx>>(new Map());
   const { shape: s, element: el, surface, theme, patchShape: patch } = p;
   const ak = p.answerKey;
   const multi = p.count > 1 || p.grouped;
@@ -395,6 +465,30 @@ export default function ContextToolbar(p: Props) {
     }
     setFontColorCtx(ctx);
     setPanel("TextColor");
+  };
+
+  // clear paintCtx when the panel is not a paint card
+  useEffect(() => {
+    if (panel !== "Paint") setPaintCtx(null);
+  }, [panel]);
+
+  /** an open paint card follows the deck, exactly like the colour card does */
+  useEffect(() => {
+    if (panel !== "Paint" || !paintCtx) return;
+    const live = livePaintCtx.current.get(paintCtx.key);
+    if (!live) return;
+    if (live.value === paintCtx.value && live.gradient === paintCtx.gradient) return;
+    setPaintCtx(live);
+  });
+
+  const openPaint = (ctx: PaintCtx) => {
+    // toggle if same key
+    if (panel === "Paint" && paintCtx?.key === ctx.key) {
+      setPanel(null);
+      return;
+    }
+    setPaintCtx(ctx);
+    setPanel("Paint");
   };
 
   const popRef = useRef<HTMLDivElement | null>(null);
@@ -669,6 +763,47 @@ export default function ContextToolbar(p: Props) {
     );
   };
 
+  /**
+   * A **paint** button — a shape channel's colour. Its name is spelled out
+   * ("Fill", "Border") and the picker icon wears the paint that is on right now:
+   * the solid colour, the gradient, the checker of "none", or a hollow droplet
+   * while the design paints its own. Clicking opens the same solid + gradient
+   * card the text colour opens, with Auto and None on top of it.
+   */
+  const paintColorBtn = (ctx: PaintCtx) => {
+    livePaintCtx.current.set(ctx.key, ctx);
+    const isActive = panel === "Paint" && paintCtx?.key === ctx.key;
+    const gradCss = ctx.gradient?.enabled ? gradientCss(ctx.gradient, ctx.value || ctx.fallback) : undefined;
+    const none = ctx.value === "transparent";
+    const auto = !ctx.value;
+    const paintCss = none
+      ? "repeating-conic-gradient(#3a3a44 0% 25%, #16181f 0% 50%) 50% / 6px 6px"
+      : gradCss || (/^#[0-9a-f]{3,8}$/i.test(ctx.value) ? ctx.value : undefined);
+    const state = none ? "none" : gradCss ? "gradient" : auto ? `auto · ${ctx.fallback}` : String(ctx.value).toUpperCase();
+    return (
+      <button
+        key={ctx.key}
+        type="button"
+        className={cn("ctx-btn ctx-paint", isActive && "is-on")}
+        title={`${ctx.label} — ${state}`}
+        aria-label={ctx.label}
+        aria-pressed={isActive}
+        aria-expanded={isActive}
+        onClick={() => openPaint(ctx)}
+      >
+        <span className="ctx-paint-name">{ctx.label}</span>
+        <span className="ctx-paint-icon" aria-hidden="true">
+          <span
+            className={cn("ctx-paint-bar", (auto || none) && "is-plain")}
+            style={paintCss ? { background: paintCss } : undefined}
+          />
+          <span className={cn("ctx-paint-drop", auto && "is-auto", none && "is-none")}>{PAINT_GLYPH}</span>
+        </span>
+        <span className="ctx-caret" aria-hidden="true">▾</span>
+      </button>
+    );
+  };
+
   // the face picked for this text itself, and what the board paints without
   // one (a text box follows the question face): the toolbar's font button and
   // the picker in its pop-up both name the current font from these two, never
@@ -702,6 +837,23 @@ export default function ContextToolbar(p: Props) {
         onClearGradient={fontColorCtx.onClearGradient}
         documentColors={fontColorCtx.docColors}
         title={fontColorCtx.label}
+      />
+    );
+  }
+  if (panel === "Paint" && paintCtx) {
+    const live = livePaintCtx.current.get(paintCtx.key) ?? paintCtx;
+    content = (
+      <PaintColorPanel
+        label={live.label}
+        value={live.value}
+        gradient={live.gradient}
+        fallback={live.fallback}
+        documentColors={live.docColors}
+        onSolid={live.onSolid}
+        onGradient={live.onGradient}
+        onClearGradient={live.onClearGradient}
+        onAuto={live.onAuto}
+        onNone={live.onNone}
       />
     );
   }
@@ -995,19 +1147,32 @@ export default function ContextToolbar(p: Props) {
     </div>
   );
 
+  /**
+   * Bullet design — the one card that decides how the marker looks: its
+   * silhouette (markers & stickers), a one-click shape style, and the shape
+   * effects, each previewed with the deck's own theme.
+   */
   if (panel === "Bullet design" && optLine("questionBullet")) content = (
-    <NumberStylePicker theme={theme} setTheme={p.patchTheme} />
+    <BulletDesignPanel theme={theme} setTheme={p.patchTheme} />
   );
-  // Keep the complete shape editor available from one compact card, while also
-  // exposing the individual controls in the toolbar. This makes the common
-  // Canva-style workflow (pick a border style, then tune its radius/weight or
-  // transparency) one click away instead of hiding those controls behind a
-  // generic "shape" label.
-  if (
-    ["Bullet shape", "Border style", "Border radius", "Border weight", "Transparency"].includes(panel ?? "") &&
-    optLine("questionBullet")
-  ) content = (
-    <BulletShapeControls theme={theme} setTheme={p.patchTheme} />
+  /**
+   * Every other button on the line opens the card that holds *its own* channel
+   * and nothing else — Border style is six line styles, Border radius a corner
+   * and one slider, Border weight one slider, Transparency one slider — so the
+   * pop-up never makes the teacher hunt for their control among someone else's.
+   * The whole set still sits together in the inspector's Question bullet card.
+   */
+  if (panel === "Border style" && optLine("questionBullet")) content = (
+    <BulletBorderStylePicker theme={theme} setTheme={p.patchTheme} />
+  );
+  if (panel === "Border radius" && optLine("questionBullet")) content = (
+    <BulletRadiusPanel theme={theme} setTheme={p.patchTheme} />
+  );
+  if (panel === "Border weight" && optLine("questionBullet")) content = (
+    <BulletWeightPanel theme={theme} setTheme={p.patchTheme} />
+  );
+  if (panel === "Transparency" && optLine("questionBullet")) content = (
+    <BulletTransparencyPanel theme={theme} setTheme={p.patchTheme} />
   );
   if (panel === "Bullet position" && optLine("questionBullet")) content = (
     <BulletPositionControls
@@ -1064,14 +1229,20 @@ export default function ContextToolbar(p: Props) {
       role="dialog"
       aria-label={`${panel} settings`}
       data-pop-panel={panel}
-      className={cn("ctx-pop", popPos ? "ctx-pop-floating" : "ctx-pop-docked", panel === "TextColor" && "ctx-pop-wide")}
+      className={cn(
+        "ctx-pop",
+        popPos ? "ctx-pop-floating" : "ctx-pop-docked",
+        widePanel(panel) && "ctx-pop-wide",
+        panel === "Bullet design" && "ctx-pop-xl",
+        (panel === "TextColor" || panel === "Paint") && "ctx-pop-color",
+      )}
       style={
         popPos
           ? // dragged free: follow the pointer, but never cross the viewport bottom
             {
               left: popPos.x,
               top: popPos.y,
-              width: panel === "TextColor" ? 380 : popPos.w,
+              width: panel === "Bullet design" ? 430 : widePanel(panel) ? 380 : popPos.w,
               maxHeight: Math.max(140, vhNow() - popPos.y - 8),
             }
           : // docked: right edge of the window, just under the top bar, growing
@@ -1080,7 +1251,7 @@ export default function ContextToolbar(p: Props) {
               top: topBarH + DOCK_GAP,
               right: DOCK_INSET,
               maxHeight: `calc(100vh - ${topBarH + DOCK_GAP + 10}px)`,
-              ...(panel === "TextColor" ? { width: 380 } : {}),
+              ...(panel === "Bullet design" ? { width: 430 } : widePanel(panel) ? { width: 380 } : {}),
             }
       }
     >
@@ -1095,7 +1266,11 @@ export default function ContextToolbar(p: Props) {
       >
         <span className="ctx-pop-title">
           <span className="ctx-grip" aria-hidden="true">⠿</span>
-          {panel === "TextColor" ? fontColorCtx?.label ?? "Text color" : panel}
+          {panel === "TextColor"
+            ? fontColorCtx?.label ?? "Text color"
+            : panel === "Paint"
+              ? paintCtx?.label ?? "Colour"
+              : panel}
         </span>
         <span className="flex items-center gap-1">
           {popPos && (
@@ -1286,48 +1461,80 @@ export default function ContextToolbar(p: Props) {
 
       case "questionBullet": {
         /**
-         * The marker's body, the way a teacher reaches for it: its design, its
-         * size, the accent every design derives from, and then the three shape
-         * channels the option marker already exposes — fill, outline, and the
-         * card that holds the outline's style, corners, weight and the body's
-         * transparency. The marker's place on the board is the ✥ toggle.
+         * The marker's line — one button per channel, in the order a marker is
+         * dressed:
+         *
+         *   Fill            the body's paint: solid, gradient, Auto or None
+         *   Border          the outline's paint: solid, gradient, Auto or None
+         *   Border style    solid · dashed · dotted · double, as pictures
+         *   Border radius   the corners — one slider, with no px ceiling
+         *   Border weight   the outline's thickness
+         *   Transparency    the body only; the number keeps its own opacity
+         *   Bullet position where the marker sits on the board
+         *   Bullet design   the silhouette, the one-click styles, the effects
+         *
+         * Fill and Border spell their name out and wear the colour-picker icon:
+         * a shape's paint has four states to show (auto · solid · gradient ·
+         * none) and a bare colour dot cannot carry them.
          */
         const bulletBase = theme.accent || "#2f4fff";
-        const bulletFill = /^#[0-9a-f]{6}$/i.test(theme.bulletFill ?? "") ? (theme.bulletFill as string) : shade(bulletBase, 0.2);
-        const bulletRing = /^#[0-9a-f]{6}$/i.test(theme.bulletBorder ?? "") ? (theme.bulletBorder as string) : shade(bulletBase, 0.5);
-        const fillOff = theme.bulletFill === BULLET_COLOR_NONE;
-        const ringOff = theme.bulletBorder === BULLET_COLOR_NONE || theme.bulletBorderStyle === "none";
+        const fillAuto = shade(bulletBase, 0.2);
+        const borderAuto = shade(bulletBase, 0.5);
+        const fillVal = theme.bulletFill ?? "";
+        const borderVal = theme.bulletBorder ?? "";
+        const fillGrad = theme.bulletFillGradient;
+        const borderGrad = theme.bulletBorderGradient;
+        /** turning a gradient off keeps its stops, so it can be switched back */
+        const gradOff = (g?: Gradient) => (g ? { ...g, enabled: false } : undefined);
+        const lineOn = (theme.bulletBorderStyle ?? "auto") !== "none";
         return (
           <>
-            {toggle("Bullet design", <span aria-hidden="true">⬤</span>)}
-            {stepper("Bullet size", theme.bulletSize ?? 54, v => p.patchTheme({ bulletSize: v }), 0, 99999, 1, { prefix: "Size" })}
-            {swatch("Bullet colour", bulletBase, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: bulletBase }} />)}
-            {swatch(
-              `Shape fill${theme.bulletFill && !fillOff ? "" : fillOff ? " (none)" : " (auto until set)"}`,
-              fillOff ? "transparent" : bulletFill,
-              v => p.patchTheme({ bulletFill: v }),
-              <span
-                className="ctx-dot"
-                style={fillOff ? { background: "repeating-linear-gradient(45deg, #334155 0 3px, #0f172a 3px 6px)" } : { background: bulletFill }}
-              />,
-              "bulletFill",
-            )}
-            {swatch(
-              `Border colour${theme.bulletBorder && !ringOff ? "" : ringOff ? " (none)" : " (auto until set)"}`,
-              ringOff ? "transparent" : bulletRing,
-              v => p.patchTheme({ bulletBorder: v, ...(theme.bulletBorderStyle === "none" ? { bulletBorderStyle: "auto" as const } : {}) }),
-              <span
-                className="ctx-ring"
-                style={ringOff ? { borderColor: "#334155", borderStyle: "dashed" } : { borderColor: bulletRing }}
-              />,
-              "bulletBorder",
-            )}
-            {toggle("Bullet shape", <span aria-hidden="true">▭</span>)}
-            {toggle("Border style", <span aria-hidden="true">╍</span>)}
-            {toggle("Border radius", <span aria-hidden="true">◰</span>)}
-            {toggle("Border weight", <span aria-hidden="true">▤</span>)}
-            {toggle("Transparency", <span aria-hidden="true">◌</span>)}
+            {paintColorBtn({
+              key: "bulletFill",
+              label: "Fill",
+              value: fillVal,
+              gradient: fillGrad,
+              fallback: fillAuto,
+              docColors,
+              onSolid: hex => p.patchTheme({ bulletFill: hex, bulletFillGradient: undefined }),
+              onGradient: g =>
+                p.patchTheme({
+                  bulletFillGradient: g,
+                  ...(g.enabled && !/^#[0-9a-f]{3,8}$/i.test(fillVal) ? { bulletFill: fillAuto } : {}),
+                }),
+              onClearGradient: () => p.patchTheme({ bulletFillGradient: gradOff(fillGrad) }),
+              onAuto: () => p.patchTheme({ bulletFill: "", bulletFillGradient: undefined }),
+              onNone: () => p.patchTheme({ bulletFill: BULLET_COLOR_NONE, bulletFillGradient: undefined }),
+            })}
+            {paintColorBtn({
+              key: "bulletBorder",
+              label: "Border",
+              value: borderVal,
+              gradient: borderGrad,
+              fallback: borderAuto,
+              docColors,
+              onSolid: hex =>
+                p.patchTheme({
+                  bulletBorder: hex,
+                  bulletBorderGradient: undefined,
+                  ...(lineOn ? {} : { bulletBorderStyle: "auto" as const }),
+                }),
+              onGradient: g =>
+                p.patchTheme({
+                  bulletBorderGradient: g,
+                  ...(g.enabled && !/^#[0-9a-f]{3,8}$/i.test(borderVal) ? { bulletBorder: borderAuto } : {}),
+                  ...(g.enabled && lineOn ? {} : { bulletBorderStyle: "solid" as const }),
+                }),
+              onClearGradient: () => p.patchTheme({ bulletBorderGradient: gradOff(borderGrad) }),
+              onAuto: () => p.patchTheme({ bulletBorder: "", bulletBorderGradient: undefined }),
+              onNone: () => p.patchTheme({ bulletBorder: BULLET_COLOR_NONE, bulletBorderGradient: undefined }),
+            })}
+            {toggle("Border style", <BorderStyleIcon style={theme.bulletBorderStyle ?? "auto"} size={16} />)}
+            {toggle("Border radius", RADIUS_GLYPH)}
+            {toggle("Border weight", <WeightIcon size={16} />)}
+            {toggle("Transparency", <TransparencyIcon size={16} />)}
             {toggle("Bullet position", <span aria-hidden="true">✥</span>)}
+            {toggle("Bullet design", DESIGN_GLYPH)}
             {sep()}
             {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
           </>

@@ -10,6 +10,7 @@ import {
 } from "../lib/numberStyles";
 import { cn } from "../utils/cn";
 import NumberBullet from "./NumberBullet";
+import { ColorField, Field, Slider } from "./ui";
 
 /**
  * A live-rendered numbering design, drawn from the deck's own theme — so the
@@ -43,16 +44,33 @@ export function NumberStylePreview({
 interface Props {
   theme: ThemeSettings;
   setTheme: (patch: Partial<ThemeSettings>) => void;
+  /** the card's own title */
+  title?: string;
+  /**
+   * "full" adds the marker's size and base colour above the gallery — the
+   * Bullet design pop-up's own tab. "designs" is the gallery alone, for a card
+   * that already offers both (the inspector's Question bullet destination).
+   */
+  controls?: "full" | "designs";
+  /** how tall the scrolling gallery is */
+  maxHeight?: string;
 }
 
 const ALL: NumberStyleCategory | "all" = "all";
 
 /**
  * The bullet-design gallery: every silhouette the question marker can wear,
- * grouped the way a picker is browsed (round, cards, polygons, seals, marks)
- * and previewed with the deck's own colours. Picking one writes `numberStyle`.
+ * grouped the way a picker is browsed (round, cards, polygons, seals, marks,
+ * stickers) and previewed with the deck's own colours. Picking one writes
+ * `numberStyle`.
  */
-export default function NumberStylePicker({ theme, setTheme }: Props) {
+export default function NumberStylePicker({
+  theme,
+  setTheme,
+  title = "Bullet design",
+  controls = "designs",
+  maxHeight = "max-h-64",
+}: Props) {
   const current = (theme.numberStyle ?? "circle") as NumberStyle;
   const [group, setGroup] = useState<NumberStyleCategory | "all">(ALL);
   const designs = group === ALL ? NUMBER_STYLES : NUMBER_STYLES.filter((d) => d.category === group);
@@ -60,11 +78,34 @@ export default function NumberStylePicker({ theme, setTheme }: Props) {
   return (
     <div className="space-y-3" data-bullet-design-picker="">
       <div className="flex items-baseline justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Bullet design</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">{title}</span>
         <span className="text-[10px] text-slate-500">
           {NUMBER_STYLES.length} designs · now {numberStyleDef(current).label}
         </span>
       </div>
+
+      {controls === "full" && (
+        <>
+          <Field label="Bullet size" hint={`${theme.bulletSize ?? 54} px`}>
+            <Slider
+              min={20}
+              max={160}
+              value={theme.bulletSize ?? 54}
+              onChange={(v) => setTheme({ bulletSize: v })}
+              ariaLabel="Bullet size"
+            />
+          </Field>
+          <ColorField
+            label="Bullet colour"
+            value={theme.accent || "#2f4fff"}
+            fallback={theme.accent || "#2f4fff"}
+            onChange={(v) => setTheme({ accent: v })}
+            allowNone={false}
+            autoLabel="Accent"
+            presets={[theme.accent || "#2f4fff", "#0f2a5f", "#e30613", "#0b0b0f", "#ffd633", "#ffffff"]}
+          />
+        </>
+      )}
 
       <div className="flex flex-wrap gap-1" role="group" aria-label="Bullet design group">
         {[{ id: ALL, label: "All" }, ...NUMBER_STYLE_CATEGORIES].map((c) => (
@@ -85,7 +126,11 @@ export default function NumberStylePicker({ theme, setTheme }: Props) {
         ))}
       </div>
 
-      <div className="grid max-h-64 grid-cols-4 gap-1.5 overflow-y-auto p-0.5" role="listbox" aria-label="Bullet design">
+      <div
+        className={cn("grid grid-cols-4 gap-1.5 overflow-y-auto p-0.5", maxHeight)}
+        role="listbox"
+        aria-label="Bullet design"
+      >
         {designs.map((d) => {
           const chosen = current === d.id;
           return (

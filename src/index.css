@@ -302,13 +302,18 @@ input[type="text"] {
 }
 /* the Canva colour card fills the docked card edge to edge: its own tab bar
    and colour list scroll inside, under the pinned head (name + ✕) */
-.ctx-pop-wide .ctx-pop-body {
+.ctx-pop-xl {
+  width: min(430px, 96vw) !important;
+}
+/* only the colour cards run edge to edge: a gallery keeps the body's own padding
+   and scrolls inside the card */
+.ctx-pop-color .ctx-pop-body {
   padding: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
-.ctx-pop-wide .font-color-panel {
+.ctx-pop-color .font-color-panel {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
@@ -318,6 +323,35 @@ input[type="text"] {
   background: transparent;
   box-shadow: none;
 }
+
+/* a paint channel's card: its Auto / None row on top of the colour card */
+.ctx-pop-color .paint-color-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+.ctx-pop-color .paint-color-panel .font-color-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* the paint button — a shape channel's colour, named in words (Canva-style).
+   The droplet wears the paint that is on: solid, gradient, the checker of
+   "none", or hollow while the marker design paints its own. */
+.ctx-paint { gap: 5px; padding: 0 6px 0 8px; }
+.ctx-paint-name { font-size: 12px; font-weight: 600; letter-spacing: .01em; }
+.ctx-paint-icon { position: relative; display: inline-flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1; }
+.ctx-paint-bar { width: 20px; height: 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,.45); box-shadow: 0 1px 2px rgba(0,0,0,.45); background: #64748b; }
+/* auto and none are not a colour of their own, so the well reads as a well */
+.ctx-paint-bar.is-plain { border-style: dashed; border-color: rgba(255,255,255,.6); }
+.ctx-paint-drop { display: inline-flex; color: #cbd5e1; }
+.ctx-paint-drop.is-auto { opacity: .7; }
+.ctx-paint.is-on .ctx-paint-name, .ctx-paint.is-on .ctx-paint-drop { color: #0f172a; }
+.ctx-paint.is-on .ctx-paint-drop.is-auto { opacity: .85; }
+.ctx-paint .ctx-caret { font-size: 9px; opacity: .7; }
+
+/* the slider inside a bullet card (radius · weight · transparency · intensity) */
+.ctx-pop-body input[type="range"] { width: 100%; accent-color: #fbbf24; }
 
 /* FontColorPanel inner tweaks */
 .font-color-panel {

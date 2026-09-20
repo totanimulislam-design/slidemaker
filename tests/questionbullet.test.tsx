@@ -31,6 +31,8 @@ import {
   showsNumber,
   type NumberStyle,
 } from "../src/lib/numberStyles";
+import { BULLET_EFFECTS, BULLET_EFFECT_GROUPS } from "../src/lib/bulletEffects";
+import { BULLET_STYLES, BULLET_STYLE_GROUPS, bulletStyleOf, bulletStylePatch } from "../src/lib/bulletStyles";
 
 type Win = Window & typeof globalThis;
 const win = window as unknown as Win;
@@ -104,6 +106,27 @@ const BASE: ThemeSettings = {
 } as ThemeSettings;
 
 const designBtn = (label: string) => pop()?.querySelector(`[aria-label="Bullet design: ${label}"]`) ?? null;
+/** the bullet design card's three tabs */
+const tabBtn = (label: string) => pop()?.querySelector(`[aria-label="Bullet design tab: ${label}"]`) ?? null;
+const styleBtn = (label: string) => pop()?.querySelector(`[aria-label="Shape style: ${label}"]`) ?? null;
+const effectBtn = (label: string) => pop()?.querySelector(`[aria-label="Shape effect: ${label}"]`) ?? null;
+/** a card's own tile (a border style, an option in a listbox) */
+const tile = (label: string) => pop()?.querySelector(`[aria-label="${label}"]`) ?? null;
+/** the marker's body wrapper — where an effect's own passes ride */
+const body = () => marker()?.querySelector<HTMLElement>("[data-bullet-body]");
+const popAll = (text: string) => Array.from(pop()?.querySelectorAll<HTMLElement>("button") ?? []).filter((b) => b.textContent?.trim() === text);
+const swatchIn = (hex: string) => pop()?.querySelector<HTMLElement>(`button[title="${hex}"]`) ?? null;
+/**
+ * leave the shape-style tab the way the channel tests need it: no effect of its
+ * own, and a box silhouette again (a cut one keeps its corners as a clip)
+ */
+const effectBtnTab = () => {
+  click(tabBtn("Shape effects"));
+  click(effectBtn("None"));
+  click(tabBtn("Markers & stickers"));
+  click(designBtn("Rounded"));
+  return null;
+};
 
 export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   const out: CaseResult[] = [];
@@ -249,33 +272,168 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     detail: String(nudged.style.transform ?? "—"),
   });
 
+  /* ---------------- gradients, effects and one-click styles ---------------- */
+  const LINEAR = { enabled: true, type: "linear", angle: 135, stops: [{ color: "#ff0000", at: 0 }, { color: "#0000ff", at: 100 }] } as const;
+  const gFill = renderNumberStyle("circle", { ...BASE, bulletFillGradient: { ...LINEAR } }, 54, "৭");
+  out.push({
+    name: "a gradient fill paints the body as a gradient (and the number keeps its own ink)",
+    pass:
+      String(gFill.surface.background).includes("linear-gradient") &&
+      String(gFill.surface.background).includes("#ff0000") &&
+      gFill.color === "#ffffff",
+    detail: String(gFill.surface.background ?? "—").slice(0, 90),
+  });
+
+  const gBorder = renderNumberStyle("square", { ...BASE, bulletBorderGradient: { ...LINEAR }, bulletBorderWeight: 3 }, 54, "৭");
+  out.push({
+    name: "a gradient border on a box rides the background-clip trick (a CSS border cannot take a gradient)",
+    pass:
+      String(gBorder.surface.backgroundImage).includes("linear-gradient") &&
+      String(gBorder.surface.border).includes("3px") &&
+      String(gBorder.surface.border).includes("transparent"),
+    detail: `${String(gBorder.surface.border ?? "—")} · ${String(gBorder.surface.backgroundImage ?? "—").slice(0, 60)}`,
+  });
+
+  const gCut = renderNumberStyle("star", { ...BASE, bulletBorderGradient: { ...LINEAR }, bulletBorderWeight: 2.5 }, 54, "৭");
+  out.push({
+    name: "…and on a cut silhouette the gradient travels with the SVG stroke",
+    pass: !!gCut.outline?.gradient?.enabled && gCut.outline.width === 2.5 && !gCut.surface.border,
+    detail: gCut.outline ? `${gCut.outline.style} ${gCut.outline.width}px gradient=${gCut.outline.gradient?.type ?? "—"}` : "no outline",
+  });
+
+  const neon = renderNumberStyle("circle", { ...BASE, bulletEffect: "neon", bulletEffectIntensity: 70 }, 54, "৭");
+  out.push({
+    name: "a shape effect paints passes of its own (neon → a glow on the body, never on the digits)",
+    pass: String(neon.effect?.layer?.filter ?? neon.effect?.surface?.filter ?? "").includes("drop-shadow") && neon.color === "#ffffff",
+    detail: String(neon.effect?.layer?.filter ?? neon.effect?.surface?.filter ?? "—").slice(0, 90),
+  });
+
+  const stacked = renderNumberStyle("star", { ...BASE, bulletEffect: "stack", bulletEffectIntensity: 60 }, 54, "৭");
+  const mirror = renderNumberStyle("circle", { ...BASE, bulletEffect: "reflection", bulletEffectIntensity: 50 }, 54, "৭");
+  const sticker = renderNumberStyle("circle", { ...BASE, bulletEffect: "sticker", bulletEffectIntensity: 60 }, 54, "৭");
+  out.push({
+    name: "effects that need their own silhouettes carry them (a stack behind, a reflection below, a sticker's outline)",
+    pass:
+      (stacked.effect?.behind.length ?? 0) >= 2 &&
+      !!mirror.effect?.reflection &&
+      !!stacked.clip?.points &&
+      `${sticker.effect?.layer?.filter ?? ""} ${sticker.effect?.surface?.filter ?? ""}`.includes("drop-shadow"),
+    detail: `behind ${stacked.effect?.behind.length ?? 0} · reflection ${mirror.effect?.reflection ? "yes" : "no"} · clip ${stacked.clip?.points ? "star" : "—"}`,
+  });
+
+  const stylePatch = bulletStylePatch(BULLET_STYLES.find((x) => x.id === "goldSeal")!);
+  const styled = renderNumberStyle("scallop", { ...BASE, ...stylePatch } as ThemeSettings, 54, "৭");
+  out.push({
+    name: "a one-click shape style writes the whole marker at once (fill · line · effect)",
+    pass:
+      String(styled.surface.background).includes("gradient") &&
+      !!styled.effect &&
+      bulletStyleOf({ ...BASE, ...stylePatch } as ThemeSettings) === "goldSeal",
+    detail: `${BULLET_STYLES.length} styles · ${String(styled.surface.background ?? "—").slice(0, 46)}…`,
+  });
+
+  const drifted = bulletStyleOf({ ...BASE, ...stylePatch, bulletFill: "#123456" } as ThemeSettings);
+  out.push({
+    name: "…and stops claiming the look as soon as one of its channels is hand-tuned",
+    pass: drifted === "",
+    detail: drifted ? `still ${drifted}` : "custom",
+  });
+
+  const brokenFx: string[] = [];
+  for (const e of BULLET_EFFECTS) {
+    for (const d of ["circle", "star", "pill"] as NumberStyle[]) {
+      try {
+        renderNumberStyle(d, { ...BASE, bulletEffect: e.id, bulletEffectIntensity: 60 }, 54, "৭");
+      } catch (err) {
+        brokenFx.push(`${e.id}/${d}:${String(err)}`);
+      }
+    }
+  }
+  out.push({
+    name: "every shape effect renders on a box and on a cut silhouette (none throws)",
+    pass: brokenFx.length === 0 && BULLET_EFFECTS.length >= 30 && BULLET_EFFECT_GROUPS.length >= 5,
+    detail: brokenFx.join(" · ") || `${BULLET_EFFECTS.length} effects · ${BULLET_EFFECT_GROUPS.length} groups`,
+  });
+
+  const brokenStyle: string[] = [];
+  for (const st of BULLET_STYLES) {
+    try {
+      const r = renderNumberStyle((st.patch.numberStyle ?? "circle") as NumberStyle, { ...BASE, ...st.patch } as ThemeSettings, 54, "৭");
+      if (!r.surface) brokenStyle.push(`${st.id}:empty`);
+    } catch (err) {
+      brokenStyle.push(`${st.id}:${String(err)}`);
+    }
+  }
+  out.push({
+    name: "every shape style renders (none throws, none comes out empty)",
+    pass: brokenStyle.length === 0 && BULLET_STYLE_GROUPS.length >= 6,
+    detail: brokenStyle.join(" · ") || `${BULLET_STYLES.length} styles · ${BULLET_STYLE_GROUPS.length} groups`,
+  });
+
   /* ---------------------------- the toolbar line --------------------------- */
   nav("questionBullet");
   const labels = Array.from(line("Question bullet tools")?.querySelectorAll<HTMLElement>("button, input") ?? []).map(
     (el) => el.getAttribute("aria-label") ?? "",
   );
   out.push({
-    name: "the Question bullet line carries design · size · colour · fill · border · shape · position · show/hide",
-    pass: ["Bullet design", "Bullet size", "Bullet colour", "Shape fill", "Border colour", "Bullet shape", "Bullet position"].every((l) =>
-      labels.some((x) => x.startsWith(l)),
+    name: "the Question bullet line carries one button per channel — fill · border · style · radius · weight · transparency · position · design",
+    pass: ["Fill", "Border", "Border style", "Border radius", "Border weight", "Transparency", "Bullet position", "Bullet design"].every((l) =>
+      labels.includes(l),
     ),
     detail: labels.filter(Boolean).join(" · "),
   });
 
   out.push({
-    name: "the marker paints its body on a layer of its own, with the number as the box's own node",
-    pass: !!marker() && !!surface() && !!digits() && digits()?.textContent === "১" && !digits()?.hasAttribute("data-bullet-surface"),
-    detail: `${marker()?.tagName ?? "no marker"} · surface ${surface() ? "yes" : "no"} · digits ${digits()?.textContent ?? "—"}`,
+    name: "Fill and Border spell their name out and wear the colour-picker icon — never a bare colour dot",
+    pass: ["Fill", "Border"].every((l) => {
+      const b = barButton(l);
+      return (
+        b?.textContent?.trim().startsWith(l) === true &&
+        !!b.querySelector(".ctx-paint-name") &&
+        !!b.querySelector(".ctx-paint-bar") &&
+        !!b.querySelector(".ctx-paint-drop svg")
+      );
+    }),
+    detail: ["Fill", "Border"].map((l) => `${l}: ${barButton(l)?.textContent?.trim() ?? "missing"}`).join(" · "),
   });
 
-  /* ------------------------- the design gallery card ----------------------- */
-  click(barButton("Bullet design"));
-  const listed = pop()?.querySelectorAll('[aria-label^="Bullet design:"]').length ?? 0;
   out.push({
-    name: "the design card lists the whole gallery",
-    pass: pop()?.getAttribute("data-pop-panel") === "Bullet design" && listed >= 30,
-    detail: `${listed} designs · panel ${pop()?.getAttribute("data-pop-panel")}`,
+    name: "the marker paints its body on a layer of its own, with the number as the box's own node",
+    pass:
+      !!marker() &&
+      !!surface() &&
+      !!digits() &&
+      digits()?.textContent === "১" &&
+      !digits()?.hasAttribute("data-bullet-surface") &&
+      Number(body()?.style.zIndex ?? 0) === -1 &&
+      marker()?.style.isolation === "isolate",
+    detail: `${marker()?.tagName ?? "no marker"} · body z=${body()?.style.zIndex ?? "—"} · surface ${surface() ? "yes" : "no"} · digits ${digits()?.textContent ?? "—"}`,
   });
+
+  /* ----------------------- the bullet design card ------------------------- */
+  click(barButton("Bullet design"));
+  out.push({
+    name: "Bullet design opens one card with three tabs: markers & stickers · shape style · shape effects",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Bullet design" &&
+      ["Markers & stickers", "Shape style", "Shape effects"].every((t) => !!tabBtn(t)),
+    detail: `panel ${pop()?.getAttribute("data-pop-panel")} · tabs ${Array.from(pop()?.querySelectorAll('[role="tab"]') ?? []).map((t) => t.textContent?.trim()).join("/")}`,
+  });
+
+  const listed = pop()?.querySelectorAll('[aria-label^="Bullet design:"]').length ?? 0;
+  const groups = pop()?.querySelectorAll('[aria-label="Bullet design group"] button').length ?? 0;
+  const markersCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
+  out.push({
+    name: "the markers tab lists the whole gallery — the sticker family included — with its size and base colour",
+    pass:
+      listed >= 60 &&
+      groups >= 6 &&
+      !!popInput("Bullet size") &&
+      markersCard.includes("Bullet colour") &&
+      markersCard.includes("Stickers"),
+    detail: `${listed} designs · ${groups} groups · size ${popInput("Bullet size") ? "yes" : "no"}`,
+  });
+
   click(designBtn("Scallop"));
   out.push({
     name: "picking a design repaints the marker with that silhouette",
@@ -283,60 +441,153 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     detail: `clip ${surface()?.style.clipPath ? "seal" : "—"}`,
   });
   click(designBtn("Circle"));
-  closePop();
-  out.push({
-    name: "…and picking a round design again drops the polygon",
-    pass: !surface()?.style.clipPath && String(surface()?.style.borderRadius) === "50%",
-    detail: `radius ${surface()?.style.borderRadius} · clip ${surface()?.style.clipPath ? "yes" : "—"}`,
-  });
 
-  /* --------------------------- the shape card ------------------------------ */
-  click(barButton("Bullet shape"));
-  const shapeCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
+  /* the marker grows, and the corner slider's ceiling grows with it */
+  type(popInput("Bullet size"), "120");
+
+  click(tabBtn("Shape style"));
+  const styleTiles = pop()?.querySelectorAll('[aria-label^="Shape style:"]').length ?? 0;
+  click(styleBtn("Gold seal"));
   out.push({
-    name: "the shape card holds fill · border colour · border style · radius · weight · transparency",
+    name: "a shape style is one click: the tile writes the marker's fill, line and effect together",
     pass:
-      pop()?.getAttribute("data-pop-panel") === "Bullet shape" &&
-      ["Shape fill colour", "Border colour", "Border style", "Border radius", "Border weight", "Transparency"].every((t) => shapeCard.includes(t)),
-    detail: shapeCard.slice(0, 130),
+      styleTiles >= 24 &&
+      css(surface()).includes("gradient") &&
+      !!body() &&
+      css(marker()).includes("120px"),
+    detail: `${styleTiles} styles · ${css(surface()).slice(0, 86)}`,
   });
+  /* back to a box silhouette, so the corners and the line read as plain CSS */
+  click(effectBtnTab());
+  closePop();
 
-  click(popText("Dash"));
-  type(popInput("Border radius (px)"), "14");
+  /* ------------------------- the focused cards ----------------------------- */
+  click(barButton("Border style"));
+  const styleCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
+  out.push({
+    name: "Border style opens the six line styles as pictures — and nothing else",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Border style" &&
+      ["Auto", "None", "Solid", "Dashed", "Dotted", "Double"].every((t) => !!tile(`Border style: ${t}`)) &&
+      !styleCard.includes("Border radius") &&
+      !styleCard.includes("Border weight") &&
+      !styleCard.includes("Shape fill"),
+    detail: styleCard.slice(0, 120),
+  });
+  click(tile("Border style: Dashed"));
+
+  click(barButton("Border radius"));
+  const radiusInput = popInput("Border radius (px)");
+  const radiusCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
+  out.push({
+    name: "Border radius is one slider whose ceiling follows the marker — no fixed px cap",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Border radius" &&
+      radiusInput?.getAttribute("max") === "120" &&
+      !radiusCard.includes("Border weight") &&
+      !radiusCard.includes("Transparency"),
+    detail: `slider 0…${radiusInput?.getAttribute("max") ?? "—"} · ${radiusCard.slice(0, 80)}`,
+  });
+  type(radiusInput, "18");
+
+  click(barButton("Border weight"));
+  const weightCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
+  out.push({
+    name: "Border weight is one slider — and only the weight",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Border weight" &&
+      !!popInput("Border weight (px)") &&
+      !weightCard.includes("Border radius") &&
+      !weightCard.includes("Transparency"),
+    detail: weightCard.slice(0, 90),
+  });
   type(popInput("Border weight (px)"), "4");
+
+  click(barButton("Transparency"));
+  const transCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
+  out.push({
+    name: "Transparency is one slider over the body — and only transparency",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Transparency" &&
+      !!popInput("Marker transparency (100 = fully visible)") &&
+      !transCard.includes("Border radius") &&
+      !transCard.includes("Border weight"),
+    detail: transCard.slice(0, 90),
+  });
   type(popInput("Marker transparency (100 = fully visible)"), "50");
   out.push({
-    name: "dashed · radius 14 · weight 4 · 50 % transparency all land on the marker's body",
+    name: "dashed · radius 18 · weight 4 · 50 % transparency all land on the marker's body",
     pass:
       css(surface()).includes("dashed") &&
       css(surface()).includes("4px") &&
-      css(surface()).includes("border-radius: 14px") &&
+      css(surface()).includes("border-radius: 18px") &&
       css(surface()).includes("opacity: 0.5"),
     detail: css(surface()),
   });
   out.push({
     name: "…and the number inside keeps its own ink and its own opacity",
     pass: !!digits() && !css(digits()).includes("opacity: 0.5"),
-    detail: `digits ${css(digits()) || "(no inline style)"}`,
+    detail: `digits ${css(digits()) || "(no inline style)"}`.slice(0, 150),
   });
   closePop();
 
-  /* -------------------------- colours from the line ------------------------ */
-  dial(barColor("Shape fill"), "#3366cc");
-  dial(barColor("Border colour"), "#ffcc00");
+  /* -------------------------- the paint cards ------------------------------ */
+  click(barButton("Fill"));
+  const openedOn = popAll("Gradient").length >= 1 && (pop()?.textContent ?? "").includes("Default gradients") ? "gradient" : "solid";
+  click(popAll("Solid")[0]);
+  const fillCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
+  out.push({
+    name: "Fill opens the colour card: Auto · None on top, then the same solid + gradient picker the text colour uses",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Paint" &&
+      !!doc.querySelector('[data-paint-panel="Fill"]') &&
+      popAll("Auto").length >= 1 &&
+      popAll("None").length >= 1 &&
+      popAll("Solid").length >= 1 &&
+      popAll("Gradient").length >= 1 &&
+      fillCard.includes("Custom color"),
+    detail: `opened on ${openedOn} · ${fillCard.slice(0, 96)}`,
+  });
+  click(popAll("None")[0]);
+  const noFill = !surface()?.style.background && !surface()?.style.backgroundImage;
+  click(popAll("Auto")[0]);
+  const autoFill = !!surface()?.style.background;
+  click(swatchIn("#FF0000"));
+  await frame();
+  const solidFill = String(surface()?.style.background ?? "");
+  click(popAll("Gradient")[0]);
+  click(pop()?.querySelector("[data-gradient-swatch]") ?? null);
   await frame();
   out.push({
-    name: "the line's fill and border wells paint the marker straight away",
-    pass: css(surface()).includes("51, 102, 204") && css(surface()).includes("255, 204, 0"),
-    detail: css(surface()),
+    name: "the Fill card's four states all reach the body — none · auto · a solid · a gradient",
+    pass: noFill && autoFill && solidFill.includes("255, 0, 0") && String(surface()?.style.background).includes("gradient"),
+    detail: `none=${noFill} auto=${autoFill} solid=${solidFill} gradient=${String(surface()?.style.background ?? "—").slice(0, 40)}`,
   });
+  closePop();
+
+  click(barButton("Border"));
+  click(swatchIn("#00FF00"));
+  await frame();
+  const solidBorder = String(surface()?.style.border ?? "");
+  click(popAll("Gradient")[0]);
+  click(pop()?.querySelector("[data-gradient-swatch]") ?? null);
+  await frame();
+  out.push({
+    name: "the Border card paints the line solid or as a gradient (a box takes the background-clip trick)",
+    pass:
+      solidBorder.includes("0, 255, 0") &&
+      String(surface()?.style.backgroundImage ?? "").includes("gradient") &&
+      String(surface()?.style.border ?? "").includes("transparent"),
+    detail: `${solidBorder} → ${String(surface()?.style.border ?? "—")} · ${String(surface()?.style.backgroundImage ?? "—").slice(0, 40)}`,
+  });
+  closePop();
 
   /* ---------------------- outline on a cut silhouette ---------------------- */
   click(barButton("Bullet design"));
   click(designBtn("Star"));
   closePop();
-  click(barButton("Bullet shape"));
-  click(popText("Double"));
+  click(barButton("Border style"));
+  click(tile("Border style: Double"));
   closePop();
   const svg = outline();
   out.push({
@@ -344,6 +595,60 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     pass: svg?.getAttribute("data-bullet-outline") === "double" && svg.querySelectorAll("polygon").length === 2,
     detail: `${svg?.getAttribute("data-bullet-outline")} · ${svg?.querySelectorAll("polygon").length ?? 0} polygons`,
   });
+
+  const svgGrad = svg?.querySelector("linearGradient, radialGradient");
+  out.push({
+    name: "…and its gradient border becomes an SVG paint server, so the dashes follow the points",
+    pass:
+      !!svgGrad &&
+      svg?.getAttribute("data-gradient") === "on" &&
+      String(svg?.querySelectorAll("polygon")[1]?.getAttribute("stroke") ?? "").startsWith("url(#"),
+    detail: `${svgGrad?.tagName ?? "no gradient"} · stroke ${svg?.querySelectorAll("polygon")[1]?.getAttribute("stroke") ?? "—"}`,
+  });
+
+  /* ----------------------------- shape effects ----------------------------- */
+  click(barButton("Bullet design"));
+  click(tabBtn("Shape effects"));
+  const effectTiles = pop()?.querySelectorAll('[aria-label^="Shape effect:"]').length ?? 0;
+  click(effectBtn("Neon"));
+  await frame();
+  const neonFx = `${css(body())} ${css(surface())}`;
+  type(popInput("Bullet effect intensity"), "85");
+  await frame();
+  const loudFx = `${css(body())} ${css(surface())}`;
+  out.push({
+    name: "a shape effect paints the marker's body layer — with its own intensity dial",
+    pass:
+      effectTiles >= 30 &&
+      neonFx.includes("drop-shadow") &&
+      loudFx.includes("drop-shadow") &&
+      loudFx !== neonFx &&
+      !css(digits()).includes("filter"),
+    detail: `${effectTiles} effects · ${neonFx.slice(0, 70)}`,
+  });
+  click(effectBtn("Stack"));
+  await frame();
+  out.push({
+    name: "an effect that needs its own silhouettes paints them under the body (two paper copies behind)",
+    pass: (marker()?.querySelectorAll("[data-bullet-behind]").length ?? 0) >= 2,
+    detail: `${marker()?.querySelectorAll("[data-bullet-behind]").length ?? 0} behind layers`,
+  });
+  click(effectBtn("Sticker"));
+  await frame();
+  out.push({
+    name: "…and a sticker's pale outline rides the body's own filter, so it follows the cut",
+    pass: `${css(body())} ${css(surface())}`.includes("drop-shadow"),
+    detail: `${css(body())} ${css(surface())}`.slice(0, 90),
+  });
+  click(effectBtn("Reflection"));
+  await frame();
+  out.push({
+    name: "…and the reflection pass mirrors the marker below itself",
+    pass: !!marker()?.querySelector("[data-bullet-reflection]"),
+    detail: marker()?.querySelector("[data-bullet-reflection]") ? "reflection painted" : "none",
+  });
+  click(effectBtn("None"));
+  closePop();
 
   /* ----------------------------- the position card ------------------------- */
   click(barButton("Bullet position"));
@@ -373,11 +678,14 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   /* ---------------------------- the inspector side ------------------------- */
   nav("questionBullet");
   out.push({
-    name: "the inspector's Question bullet destination shows the same shape and position controls",
+    name: "the inspector's Question bullet destination shows the design card and every channel",
     pass:
-      ["Shape fill colour", "Border style", "Border weight", "Transparency", "Nudge horizontally"].every((t) => panelText().includes(t)) &&
+      ["Shape fill colour", "Border colour", "Border style", "Border radius", "Border weight", "Transparency", "Nudge horizontally"].every((t) =>
+        panelText().includes(t),
+      ) &&
       !!doc.querySelector("[data-bullet-shape-controls]") &&
-      !!doc.querySelector("[data-bullet-position-controls]"),
+      !!doc.querySelector("[data-bullet-position-controls]") &&
+      !!doc.querySelector("[data-bullet-design-panel]"),
     detail: panelText().slice(0, 140),
   });
 
@@ -389,12 +697,14 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     solid: !css(surface()).includes("dashed"),
     round: String(surface()?.style.borderRadius) === "50%",
     noClip: !surface()?.style.clipPath,
-    autoFill: !!barColor("Shape fill (auto until set)"),
+    autoFill: (barButton("Fill")?.getAttribute("title") ?? "").includes("auto"),
+    autoBorder: (barButton("Border")?.getAttribute("title") ?? "").includes("auto"),
+    noFx: !css(body()).includes("filter") && !marker()?.querySelector("[data-bullet-behind]"),
   };
   out.push({
-    name: "Default unwinds the whole shape in one click (design · fill · border · radius · weight · transparency · nudge)",
+    name: "Default unwinds the whole marker in one click (design · fill · border · gradients · style · radius · weight · transparency · effect · nudge)",
     pass: Object.values(reset).every(Boolean),
-    detail: `${css(marker())} · ${JSON.stringify(reset)}`,
+    detail: `${css(marker()).slice(0, 90)} · ${JSON.stringify(reset)}`,
   });
 
   out.push({

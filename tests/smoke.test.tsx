@@ -93,7 +93,11 @@ export async function runSmokeTests(): Promise<CaseResult[]> {
   fire(shape, "pointerdown", rect.left + rect.width * 0.3, rect.top + rect.height * 0.25, 1);
   fire(shape, "pointerup", rect.left + rect.width * 0.3, rect.top + rect.height * 0.25, 0);
   // (the font button reads the face in use — "Font: Kalpurush" — so it is matched by prefix)
-  out.push({ name: "shape selection shows contextual shape tools", pass: !!doc.querySelector('.context-toolbar [aria-label="Fill"]') && !doc.querySelector('.context-toolbar .ctx-font-toggle, .context-toolbar [aria-label^="Font:"]') });
+  // A shape's Fill is a colour WELL (an <input type="color">); the question
+  // bullet line also has a "Fill" button, but that one opens the marker's paint
+  // card (solid · gradient · auto · none), so the shape tool is matched as an
+  // input and the two never get confused.
+  out.push({ name: "shape selection shows contextual shape tools", pass: !!doc.querySelector('.context-toolbar input[aria-label="Fill"]') && !doc.querySelector('.context-toolbar .ctx-font-toggle, .context-toolbar [aria-label^="Font:"]') });
   const frame = doc.querySelector('.slide-editable [data-sel="g1"]');
   out.push({ name: "clicking a deck shape selects it and shows its handles", pass: !!frame && frame.querySelectorAll("[data-handle]").length === 8, detail: `frame=${!!frame} handles=${frame?.querySelectorAll("[data-handle]").length ?? 0}` });
   const still = `${shape.style.left},${shape.style.top}`;
@@ -111,7 +115,7 @@ export async function runSmokeTests(): Promise<CaseResult[]> {
   const question = doc.querySelector('.slide-editable [data-el="question"]')!;
   fire(question, "pointerdown", 120, 160, 1);
   fire(question, "pointerup", 120, 160, 0);
-  out.push({ name: "text selection immediately replaces shape tools", pass: !!doc.querySelector('.context-toolbar [aria-label="Bold"]') && !doc.querySelector('.context-toolbar [aria-label="Fill"]') });
+  out.push({ name: "text selection immediately replaces shape tools", pass: !!doc.querySelector('.context-toolbar [aria-label="Bold"]') && !doc.querySelector('.context-toolbar input[aria-label="Fill"]') });
   act(() => win.dispatchEvent(new win.KeyboardEvent('keydown', {key:'Escape', bubbles:true})));
   out.push({ name: "Escape hides the toolbar", pass: !doc.querySelector('.context-toolbar') });
   out.push({ name: "no uncaught errors while interacting", pass: errors.length === 0, detail: errors.join(" | ") });
