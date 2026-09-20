@@ -226,6 +226,15 @@ export async function runSlideStackTests(): Promise<CaseResult[]> {
     detail: `options=${pickerOptions().length} list=${!!doc.querySelector("[data-slide-picker-list]")}`,
   });
   out.push({
+    name: "the list is sized to the room under it — it opens down the window, not to a fixed cap",
+    pass: (() => {
+      const list = doc.querySelector<HTMLElement>("[data-slide-picker-list]");
+      const room = (win.innerHeight || 800) - 12;
+      return list?.style.maxHeight === `${room}px`;
+    })(),
+    detail: `maxHeight=${doc.querySelector<HTMLElement>("[data-slide-picker-list]")?.style.maxHeight} window=${win.innerHeight}`,
+  });
+  out.push({
     name: "each option previews its slide and marks the answer state",
     pass:
       (pickerOptions()[0]?.textContent ?? "").includes("Alpha question one") &&

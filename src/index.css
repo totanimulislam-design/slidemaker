@@ -230,6 +230,19 @@ input[type="text"] {
 .ctx-pop-head > span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #fcd34d; }
 /* only the body scrolls, under the pinned head */
 .ctx-pop-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 2px 12px 12px; }
+/* A pop-up hangs from the top bar and may use the whole height of the window, so
+   a list or a gallery inside it must not cap itself at a few hundred pixels
+   while the card still has room to spare: inside a pop-up card the body is the
+   one thing that scrolls, and only once the content really is taller than the
+   space under the top bar. The same control living in the inspector keeps its
+   own cap — this only reaches what is painted inside a pop-up. */
+.ctx-pop .max-h-44,
+.ctx-pop .max-h-52,
+.ctx-pop .max-h-56,
+.ctx-pop .max-h-64,
+.ctx-pop .max-h-72 {
+  max-height: none;
+}
 .ctx-field { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: #cbd5e1; padding: 6px 2px; }
 .ctx-menu-cap { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #64748b; margin: 8px 2px 4px; }
 .ctx-menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }

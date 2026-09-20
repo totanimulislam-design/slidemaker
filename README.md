@@ -25,7 +25,10 @@ abandons the drop instead of committing it.
 There is also a **slide selector in the top-right corner** of the editor
 (`🎞 3 / 12`): it opens the whole deck as a list of live previews — number,
 question and answer state — and jumps the editor to the picked slide.
-`Esc` or a click away closes it.
+`Esc` or a click away closes it. The list is sized to the room under it
+(`useRoomBelow` in `src/lib/useRoomBelow.ts`), so a long deck opens all the way
+down the window and only then starts scrolling, instead of stopping at a fixed
+cap with empty screen left below it.
 
 The card the editor is showing wears a **moving gradient border**: the frame is
 painted by a colour ramp clipped to the border box under the card's own surface,
@@ -489,8 +492,9 @@ on the board and puts the answer tools in the toolbar above it:
 
 The card a toolbar toggle opens (Font, Spacing, Frame, Answer …) docks to the
 **right edge of the window, hanging from just under the top bar**, and stretches
-downward only as far as its content needs — never past the bottom of the
-viewport. The card is still dragged by its header when you want it elsewhere:
+downward only as far as its content needs — all the way to the bottom of the
+window when the content is that long, never past it. The card is still dragged
+by its header when you want it elsewhere:
 
 - it starts docked (the right-side look) and only switches to free positioning
   once a real drag begins — a press that stays inside the 4px threshold is
@@ -502,7 +506,19 @@ viewport. The card is still dragged by its header when you want it elsewhere:
   bar on the right, and the ✕ button still just closes it;
 - **the panel's name and the ✕ never scroll away** — they live in a head that
   sits above the scrolling body, so a long panel (fonts, numbering, answer
-  key …) scrolls underneath its pinned title and close mark.
+  key …) scrolls underneath its pinned title and close mark;
+- **the card opens to the bottom of the window before anything scrolls** — a
+  gallery or list inside a pop-up does not cap itself at a few hundred pixels
+  while the card still has room to spare. The font list, the marker gallery,
+  the shape-style and shape-effect grids, the frame presets and the gradient
+  library all grow with the card, so the pop-up reaches down the window first
+  and its body only scrolls once the content really is taller than the space
+  under the top bar. The same control living in the inspector keeps its own
+  cap, because a rail is not a pop-up.
+
+The two other floating cards follow the same rule: the **slide selector** list
+and the **History** card are measured against the room left below them
+(`src/lib/useRoomBelow.ts`) instead of a fixed `max-h-*`.
 
 Like every other gesture in the editor, the drag runs through
 `src/lib/dragSession.ts`, so a missed pointer-up can never leave the card
