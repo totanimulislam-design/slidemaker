@@ -154,6 +154,12 @@ export type TextBgShapeKind =
 
 export type TextBgBorderStyle = "none" | "solid" | "dashed" | "dotted" | "double";
 
+/**
+ * Outline style of a question-bullet marker. `"auto"` keeps whatever line the
+ * numbering design itself draws, so an untouched deck paints exactly as before.
+ */
+export type NumberBorderStyle = "auto" | "none" | "solid" | "dashed" | "dotted" | "double";
+
 /** the 30+ looks a background shape can wear (lib/textBgShape TEXT_BG_EFFECTS) */
 export type TextBgEffectKind =
   | "none"
@@ -828,6 +834,30 @@ export interface ThemeSettings {
   numberStyle: string;
   /** bullet size in px */
   bulletSize: number;
+  /**
+   * The question bullet's own shape channels (toolbar ▸ Question bullet). They
+   * follow the same tri-state convention the option marker uses:
+   *
+   *   ""            → auto: the numbering design paints itself
+   *   "transparent" → paint nothing there
+   *   "#rrggbb"     → the picked colour
+   *
+   * `bulletBorderStyle`, `bulletBorderWeight` and `bulletRadius` fall back to
+   * the design's own line and corners, and `bulletOpacity` fades the marker's
+   * body only — the number keeps its own ink.
+   */
+  bulletFill?: string;
+  bulletBorder?: string;
+  bulletBorderStyle?: NumberBorderStyle;
+  /** outline weight in px (undefined = the design's own line) */
+  bulletBorderWeight?: number;
+  /** corner radius in px (undefined = the design's own corners) */
+  bulletRadius?: number;
+  /** 0–100: the marker's body, never the number */
+  bulletOpacity?: number;
+  /** nudge of the whole marker in px — works attached to the question or on its own */
+  bulletNudgeX?: number;
+  bulletNudgeY?: number;
   /** bullet design id */
   answerStyle: "glow" | "tick" | "fill";
 }
@@ -930,6 +960,12 @@ export const DEFAULT_THEME: ThemeSettings = {
   bulletSeparate: false,
   numberStyle: "circle",
   bulletSize: 54,
+  bulletFill: "",
+  bulletBorder: "",
+  bulletBorderStyle: "auto",
+  bulletOpacity: 100,
+  bulletNudgeX: 0,
+  bulletNudgeY: 0,
   answerStyle: "glow",
 };
 

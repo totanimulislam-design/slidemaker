@@ -127,7 +127,7 @@ panel holds **only the features its tile names**:
 
 | Deck | Header | Question | Options | Slide & insert |
 | --- | --- | --- | --- | --- |
-| **Design** (theme presets, base colours, shared fonts) | Title text | Question bullet | Option bullet (marker shape/colour/plate) | Footnote |
+| **Design** (theme presets, base colours, shared fonts) | Title text | Question bullet (design/shape/position) | Option bullet (marker shape/colour/plate) | Footnote |
 |  | Title background | Q bullet text | Opt bullet text | Slide background (board colour too) |
 |  | Badge 1 · Badge 2 · Badge 3 · Logo | Question text | Option text (choices + rows/layout/gap) | Slide frame |
 |  |  |  | **Answer key** | **Layout** (element positions) |
@@ -168,13 +168,14 @@ is the right-hand tag ("DAKHIL-26"). They share one movable box but each line
 can be hidden, resized and recoloured independently (`brandTop*` /
 `brandBottom*` in `ThemeSettings`).
 
-The split panels keep one concern each: a bullet's *body* (design, size, accent)
-is separate from the *text inside it* (wording, ink, face, weight, case, size),
-for both the question bullet and the option markers; the option *markers* are
-separate from the option *rows* (container style, column layout and gap live
-with the choices under Option text). Pictures moved out of the shapes panel
-into their own "Uploads" destination, and the fixed elements' positions moved
-out into their own "Layout" destination.
+The split panels keep one concern each: a bullet's *shape* (silhouette, fill,
+outline, corners, transparency, position) is separate from the *text inside it*
+(wording, ink, face, weight, case, size), for both the question bullet and the
+option markers; the option *markers* are separate from the option *rows*
+(container style, column layout and gap live with the choices under Option
+text). Pictures moved out of the shapes panel into their own "Uploads"
+destination, and the fixed elements' positions moved out into their own
+"Layout" destination.
 
 ### Merged contents show every related toolbar
 
@@ -197,7 +198,9 @@ on *Question bullet*, and so on, matching the panel's *Edit … →* jump); the
 others are one click away from being styled without leaving the board.
 Every line carries the compact slice of its inspector panel — **Question text**
 gets font, size, ink, bold/italic/underline and alignment; **Question bullet**
-its design, size, accent colour and show/hide; **Q bullet text** the number's
+its design, size, accent colour, shape fill, border colour, border style, corner
+radius, border weight, transparency, position and show/hide (the full set, see
+*Question bullet* below); **Q bullet text** the number's
 ink, typeface, weight and size; **Title text** typeface, size, colour, case and
 glyph effects; **Title background** the banner silhouette, colour, gradient,
 opacity, halo, padding and on/off; each **badge line** its own typeface, colour
@@ -214,9 +217,9 @@ Two rules keep the stack honest:
   shrinks to *Question bullet · Q bullet text* and the stem falls back to the
   ordinary single toolbar.
 
-The deeper pickers (bullet designs, banner shapes, marker shapes, row styles,
-plain numbering, fonts) open from their line in the same movable pop-up card
-every other toolbar toggle uses. A multi-selection or a drawn shape always gets
+The deeper pickers (bullet designs and the bullet's shape and position cards,
+banner shapes, marker shapes, row styles, plain numbering, fonts) open from
+their line in the same movable pop-up card every other toolbar toggle uses. A multi-selection or a drawn shape always gets
 the plain toolbar, never a merged stack.
 
 **Default on every toolbar.** Each style toolbar — every merged line, the
@@ -311,6 +314,61 @@ styles exactly that part: Badge 1's plate never wraps Badge 2, the marker
 letter's plate sits inside the marker, and a line's **Default** clears its plate
 with the rest of its look. The settings live in `boxFonts[part].bgShape`
 (`TextBgShape` in `lib/types.ts`) and in `textBgShape` on a custom text box.
+
+### Question bullet — design · fill · outline · corners · weight · transparency · position
+
+The marker a question wears is a **numbering design** plus the teacher's own
+shape channels, and both live on the toolbar line *Question bullet* as well as
+in the inspector destination of the same name. The line reads, left to right:
+**Bullet design** · **size** · **Bullet colour** · **Shape fill** ·
+**Border colour** · **Bullet shape** · **Bullet position** · **show / hide** ·
+**Default** — so the whole set is one click away without leaving the board.
+
+| Control | What it drives | Field |
+| --- | --- | --- |
+| **Bullet design** — the silhouette gallery | the marker's shape, opened on the toolbar's design card | `numberStyle` |
+| **Bullet size** | the marker's box, unbounded | `bulletSize` |
+| **Bullet colour** | the accent every design derives its own paint from | `accent` |
+| **Shape fill colour** | the silhouette's body | `bulletFill` |
+| **Border colour** | its outline | `bulletBorder` |
+| **Border style** — *Auto · None · Solid · Dash · Dot · Double* | the outline's line, or *Auto* to keep the design's own | `bulletBorderStyle` |
+| **Border radius** 0 – 80 px (with **auto**) | the corners of the box family, back to the shape's own | `bulletRadius` |
+| **Border weight** 0 – 16 px (with **auto**) | the outline's thickness, back to the shape's own line | `bulletBorderWeight` |
+| **Transparency** 0 – 100 | the marker's **body** — **100 = fully visible**, and the number never fades | `bulletOpacity` |
+| **Position** | a horizontal / vertical nudge of the whole marker (the number travels with its shape), and **Bullet is a separate movable element** for free placement — X / Y / width / height / rotation open right there | `bulletNudgeX` · `bulletNudgeY` · `bulletSeparate` |
+
+The gallery carries 33 silhouettes plus *None*, in five groups: **Round &
+soft** (Circle · Ring · Coin · Squircle · Arch · Blob · Gradient · Glow),
+**Cards & chips** (Square · Rounded · Pill · Cut corner · Ticket · Bookmark ·
+Speech), **Polygons** (Diamond · Hexagon · Hexagon ▲ · Kite · Shield · Slant ·
+Step · Ribbon · Banner), **Seals & stars** (Star · Sparkle · Burst · Scallop ·
+Gear) and **Marks** (Bracket · Underline · Bar · Slashed · None). They are the
+marker shapes a quiz or an exam paper wears the world over — discs, app-icon
+squircles, notched cards, coins, seals, ribbons and tags — drawn from generic
+shape families rather than copied from any one product. Every tile is a live
+preview painted by the same renderer as the board, and the group you last
+browsed stays put. Wide designs (Pill, Ticket, Ribbon, Step, Banner, Speech,
+Slashed) get a box wider than it is tall, and *Marks* designs that are a rule
+rather than a shape (*Bracket*, *Underline*, *Bar*) or *None* drop the number.
+
+Three conventions keep the controls predictable:
+
+- **Every colour channel is tri-state**, exactly like the option marker's:
+  **Auto** (empty) paints the design's own value, **None** paints nothing there,
+  and a picked colour replaces it.
+- **The outline follows the silhouette.** Box-family designs take a real CSS
+  border, so *Double* and *Dot* render as the panel shows; a cut silhouette
+  (clip-path) cannot hold a CSS border, so its outline is stroked as an SVG
+  polygon over the same points — *Double* becomes two polygons — and the
+  radius control reports that polygons keep their straight corners.
+- **Transparency fades the body only.** The fill, the outline, the corners and
+  the marker's shadow sit on a layer of their own (`components/NumberBullet`),
+  so the digits keep their own ink, face and opacity (*Q bullet text*).
+
+Because the canvas, the thumbnails, the inspector preview and the PNG / PDF
+export all read the same `renderNumberStyle` (`lib/numberStyles.ts`), a shape
+set here is what every view paints. The **Default** button on the line unwinds
+all eight channels — and re-attaches the marker — in one click, one undo step.
 
 ## Layers
 

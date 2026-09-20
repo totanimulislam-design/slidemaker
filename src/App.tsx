@@ -1485,6 +1485,7 @@ function AppContent() {
                   patchTheme={patch => setThemeScoped(patch, "slide", [slide.id])}
                   patchHeader={scopedHeader}
                   patchBox={patch => selectedEl && patchLayoutScoped(selectedEl, patch, "slide", [slide.id])}
+                  patchLayout={scopedPatchLayout}
                   patchBackground={patch => setBackground(patch, "slide", slide.id)}
                   align={op => {
                     if (selectedShapes.length < 2) { alignSelected(op); return; }

@@ -3,6 +3,7 @@ import { renderNumberStyle, showsNumber, type NumberStyle } from "../lib/numberS
 import { boxFontCss, boxInlineCss, clearBoxFont, offsetCss, setBoxFont } from "../lib/boxFonts";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
+import NumberBullet from "./NumberBullet";
 import { Btn, ColorInput, Field, PanelHead, TextInput, Toggle } from "./ui";
 
 /**
@@ -41,12 +42,12 @@ export default function BulletTextPanel({ theme: T, slide, setTheme, updateSlide
         className="flex items-center justify-center gap-5 overflow-hidden rounded-xl border border-white/10 px-4 py-6"
         style={{ background: T.board }}
       >
-        <div style={r.style}>
+        <NumberBullet render={r}>
           {/* the number is its own node inside the shape, exactly as on the board */}
           <span style={{ ...boxFontCss(T, "bullet", { fontSize: PREVIEW_SIZE * r.fontScale, color: r.color, display: "inline-block" }), ...offsetCss(bulletFont) }}>
             {boxInlineCss(T, "bullet") ? <span style={boxInlineCss(T, "bullet")}>{r.content}</span> : r.content}
           </span>
-        </div>
+        </NumberBullet>
         <span className="text-[11px] text-slate-400">
           {drawsNumber ? (
             <>

@@ -66,6 +66,15 @@ export function applySlideDesign(
         bulletSize: effTheme.bulletSize,
         numberStyle: effTheme.numberStyle,
         accent: effTheme.accent,
+        // the marker's own shape channels travel with the bullet design
+        bulletFill: effTheme.bulletFill,
+        bulletBorder: effTheme.bulletBorder,
+        bulletBorderStyle: effTheme.bulletBorderStyle,
+        bulletBorderWeight: effTheme.bulletBorderWeight,
+        bulletRadius: effTheme.bulletRadius,
+        bulletOpacity: effTheme.bulletOpacity,
+        bulletNudgeX: effTheme.bulletNudgeX,
+        bulletNudgeY: effTheme.bulletNudgeY,
       };
     }
     if (section === "options") {
@@ -168,6 +177,15 @@ export function applySlideDesign(
           bulletSize: effTheme.bulletSize,
           numberStyle: effTheme.numberStyle,
           accent: effTheme.accent,
+          // the marker's own shape channels travel with the bullet design
+          bulletFill: effTheme.bulletFill,
+          bulletBorder: effTheme.bulletBorder,
+          bulletBorderStyle: effTheme.bulletBorderStyle,
+          bulletBorderWeight: effTheme.bulletBorderWeight,
+          bulletRadius: effTheme.bulletRadius,
+          bulletOpacity: effTheme.bulletOpacity,
+          bulletNudgeX: effTheme.bulletNudgeX,
+          bulletNudgeY: effTheme.bulletNudgeY,
         });
       } else if (section === "options") {
         nextThemeOverride = mergeThemeOverride(s.themeOverride, {
