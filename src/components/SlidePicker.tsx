@@ -3,6 +3,7 @@ import Slide from "./Slide";
 import { Thumb } from "./SlideViews";
 import { effectiveBackground } from "../lib/background";
 import { effectiveHeader, effectiveTheme } from "../lib/overrides";
+import { useRoomBelow } from "../lib/useRoomBelow";
 import type { Deck } from "../lib/types";
 import { cn } from "../utils/cn";
 
@@ -29,6 +30,8 @@ const labelOf = (q: string): string =>
 export default function SlidePicker({ deck, current, revision, onCurrent }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  /** the list opens down to the bottom of the window, never past it */
+  const { ref: listRef, room } = useRoomBelow(open, 12, 240);
   const n = deck.slides.length;
   const index = Math.min(current, Math.max(0, n - 1));
 
@@ -87,10 +90,12 @@ export default function SlidePicker({ deck, current, revision, onCurrent }: Prop
 
       {open && (
         <div
+          ref={listRef}
           data-slide-picker-list
           role="listbox"
           aria-label="Slides"
           className="absolute right-0 top-full z-40 mt-2 max-h-[70vh] w-[248px] overflow-y-auto rounded-xl border border-white/10 bg-slate-950/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur"
+          style={room ? { maxHeight: room } : undefined}
         >
           {deck.slides.map((s, i) => (
             <button
