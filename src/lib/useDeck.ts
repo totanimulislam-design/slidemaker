@@ -184,6 +184,14 @@ const THEME_LABELS: Partial<Record<keyof ThemeSettings, string>> = {
   bulletSeparate: "Separate number bullet",
   numberStyle: "Numbering style",
   bulletSize: "Bullet size",
+  bulletFill: "Bullet shape fill",
+  bulletBorder: "Bullet border colour",
+  bulletBorderStyle: "Bullet border style",
+  bulletBorderWeight: "Bullet border weight",
+  bulletRadius: "Bullet corner radius",
+  bulletOpacity: "Bullet transparency",
+  bulletNudgeX: "Bullet position",
+  bulletNudgeY: "Bullet position",
 };
 
 export function useDeck() {

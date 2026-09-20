@@ -1,8 +1,21 @@
+import { useState } from "react";
 import type { ThemeSettings } from "../lib/types";
-import { NUMBER_STYLES, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
+import {
+  NUMBER_STYLES,
+  NUMBER_STYLE_CATEGORIES,
+  numberStyleDef,
+  renderNumberStyle,
+  type NumberStyle,
+  type NumberStyleCategory,
+} from "../lib/numberStyles";
 import { cn } from "../utils/cn";
+import NumberBullet from "./NumberBullet";
 
-/** a live-rendered numbering style using the deck's accent colour */
+/**
+ * A live-rendered numbering design, drawn from the deck's own theme — so the
+ * accent, the fill, the outline and the silhouette are exactly what the board
+ * will paint.
+ */
 export function NumberStylePreview({
   style,
   theme,
@@ -14,38 +27,16 @@ export function NumberStylePreview({
   size?: number;
   number?: string;
 }) {
-  const r = renderNumberStyle(style as NumberStyle, theme, size, number);
-  if (style === "none") return <span className="text-[10px] text-slate-600">off</span>;
-  const w = typeof r.style.width === "number" ? (r.style.width as number) : size;
+  const id = style as NumberStyle;
+  const r = renderNumberStyle(id, theme, size, number);
+  if (id === "none") return <span className="text-[10px] text-slate-600">off</span>;
   return (
-    <span className="flex items-center justify-center" style={{ width: size * 1.35, height: size }}>
-      <span
-        style={{
-          ...r.style,
-          position: "relative",
-          width: w,
-          height: r.style.height,
-          fontSize: size * r.fontScale,
-          color: r.color,
-        }}
-      >
-        {r.content}
-        {style === "slash" && (
-          <span
-            style={{
-              position: "absolute",
-              right: size * 0.14,
-              top: size * 0.08,
-              width: Math.max(2, size * 0.05),
-              height: size * 0.84,
-              background: theme.accent,
-              transform: "rotate(22deg)",
-              borderRadius: 999,
-            }}
-          />
-        )}
-      </span>
-    </span>
+    <NumberBullet
+      render={r}
+      style={{ fontSize: Math.round(size * r.fontScale), color: r.color, fontWeight: 700 }}
+    >
+      {r.content}
+    </NumberBullet>
   );
 }
 
@@ -54,35 +45,78 @@ interface Props {
   setTheme: (patch: Partial<ThemeSettings>) => void;
 }
 
+const ALL: NumberStyleCategory | "all" = "all";
+
+/**
+ * The bullet-design gallery: every silhouette the question marker can wear,
+ * grouped the way a picker is browsed (round, cards, polygons, seals, marks)
+ * and previewed with the deck's own colours. Picking one writes `numberStyle`.
+ */
 export default function NumberStylePicker({ theme, setTheme }: Props) {
   const current = (theme.numberStyle ?? "circle") as NumberStyle;
+  const [group, setGroup] = useState<NumberStyleCategory | "all">(ALL);
+  const designs = group === ALL ? NUMBER_STYLES : NUMBER_STYLES.filter((d) => d.category === group);
 
   return (
-    <div className="space-y-2.5">
-      <div className="grid grid-cols-5 gap-1.5">
-        {NUMBER_STYLES.map((d) => (
+    <div className="space-y-3" data-bullet-design-picker="">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Bullet design</span>
+        <span className="text-[10px] text-slate-500">
+          {NUMBER_STYLES.length} designs · now {numberStyleDef(current).label}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Bullet design group">
+        {[{ id: ALL, label: "All" }, ...NUMBER_STYLE_CATEGORIES].map((c) => (
           <button
-            key={d.id}
-            onClick={() => setTheme({ numberStyle: d.id })}
-            title={d.label}
+            key={c.id}
+            type="button"
+            aria-pressed={group === c.id}
+            onClick={() => setGroup(c.id as NumberStyleCategory | "all")}
             className={cn(
-              "flex flex-col items-center gap-1 rounded-lg border px-1 py-2 transition-colors",
-              current === d.id
-                ? "border-amber-400 bg-amber-400/15"
-                : "border-white/10 bg-white/[0.03] hover:border-white/25",
+              "rounded-full border px-2 py-0.5 text-[9.5px] transition-colors",
+              group === c.id
+                ? "border-amber-400 bg-amber-400 font-semibold text-slate-950"
+                : "border-white/5 bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200",
             )}
           >
-            <span className="flex h-7 items-center justify-center">
-              <NumberStylePreview style={d.id} theme={theme} size={22} number="7" />
-            </span>
-            <span className="w-full truncate text-center text-[8px] leading-none text-slate-400">{d.label}</span>
+            {c.label}
           </button>
         ))}
       </div>
+
+      <div className="grid max-h-64 grid-cols-4 gap-1.5 overflow-y-auto p-0.5" role="listbox" aria-label="Bullet design">
+        {designs.map((d) => {
+          const chosen = current === d.id;
+          return (
+            <button
+              key={d.id}
+              type="button"
+              role="option"
+              aria-selected={chosen}
+              aria-label={`Bullet design: ${d.label}`}
+              title={d.hint}
+              onClick={() => setTheme({ numberStyle: d.id })}
+              className={cn(
+                "flex min-h-[58px] flex-col items-center justify-between gap-1 rounded-lg border p-1.5 text-center transition-all",
+                chosen
+                  ? "border-amber-400 bg-amber-400/15 shadow-[0_0_10px_rgba(251,191,36,0.3)]"
+                  : "border-white/10 bg-slate-900/60 hover:border-white/25 hover:bg-slate-900",
+              )}
+            >
+              <span className="relative flex w-full flex-1 items-center justify-center py-0.5">
+                <NumberStylePreview style={d.id} theme={theme} size={24} number="7" />
+              </span>
+              <span className="w-full truncate text-[9px] font-medium leading-tight text-slate-300">{d.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <p className="text-[10px] leading-relaxed text-slate-500">
         {current === "none"
           ? "No numbering mark is drawn. Turn on “Number inside bullet” if you want the number back."
-          : "All styles use the deck accent colour (Design ▸ Accent). Pill, banner, ribbon and slashed are wider; Underline and Bar are marks without a number."}
+          : `${numberStyleDef(current).hint}. Every design derives from the accent colour, and its fill, outline, corners and transparency are yours to change below.`}
       </p>
     </div>
   );

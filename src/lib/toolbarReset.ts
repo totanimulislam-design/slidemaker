@@ -136,6 +136,17 @@ function resetQuestionBullet(): ToolbarResetPatch {
       bulletSize: D.bulletSize,
       numberStyle: D.numberStyle,
       accent: D.accent,
+      bulletSeparate: D.bulletSeparate,
+      // the shape channels unwind with the design — an auto channel drops the
+      // key entirely (undefined), so the numbering design paints itself again
+      bulletFill: D.bulletFill,
+      bulletBorder: D.bulletBorder,
+      bulletBorderStyle: D.bulletBorderStyle,
+      bulletBorderWeight: undefined,
+      bulletRadius: undefined,
+      bulletOpacity: D.bulletOpacity,
+      bulletNudgeX: D.bulletNudgeX,
+      bulletNudgeY: D.bulletNudgeY,
     },
   };
 }

@@ -1,7 +1,7 @@
 import { memo, useRef, useState, type CSSProperties } from "react";
 import type { Box, DeckHeader, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { shade, withAlpha } from "../lib/color";
-import { isWideNumberStyle, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
+import { numberStyleAspect, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
 import { effectiveOptionLabel } from "../lib/plainNumbering";
 import { optionRowStyle, type OptionStyle } from "../lib/optionStyles";
 import OptionBulletMarker from "./OptionBulletMarker";
@@ -30,6 +30,7 @@ import { HANDLES, applyMove, applyResize, applyRotate, type Gesture as FreeGestu
 import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
 import { measureElement } from "../lib/layoutMeasure";
 import MathText from "./MathText";
+import NumberBullet from "./NumberBullet";
 import TextBgShapeBox, { textBgWrap } from "./TextBgShape";
 import ShapeLayer from "./ShapeLayer";
 import type { ShapeItem } from "../lib/shapes";
@@ -505,13 +506,14 @@ function SlideBase({
   const BulletGraphic = ({ theme: t, slide: sl, size }: { theme: ThemeSettings; slide: SlideData; size: number }) => {
     const id = (t.numberStyle ?? "circle") as NumberStyle;
     const r = renderNumberStyle(id, t, size, sl.number);
-    const slash = id === "slash";
     /**
      * "Text inside question bullet" — the number is its own node inside the
      * painted shape, so every typography control (family, colour, weight,
      * case, tracking, opacity, effects, nudge) lands on the digits and
-     * only on them: the bullet's silhouette, fill and ring come from r.style
-     * and are never faded, stroked or moved by a text setting.
+     * only on them. The marker's own silhouette, fill, outline, corners,
+     * transparency and position all live on the surface layer `NumberBullet`
+     * paints underneath (see lib/numberStyles), so a faded or transparent
+     * marker never fades the number.
      */
     const tf = boxTypeface(t, "bullet");
     const inline = boxInlineCss(t, "bullet");
@@ -521,28 +523,13 @@ function SlideBase({
     };
     const justify = tf.align === "left" ? "flex-start" : tf.align === "right" ? "flex-end" : tf.align === "center" ? "center" : undefined;
     return (
-      <div style={justify ? { ...r.style, justifyContent: justify } : r.style}>
+      <NumberBullet render={r} style={justify ? { justifyContent: justify } : undefined}>
         {r.content ? (
           <span style={numberCss}>
             <TextBgShapeBox shape={tf.bgShape}>{inline ? <span style={inline}>{r.content}</span> : r.content}</TextBgShapeBox>
           </span>
         ) : null}
-        {slash && (
-          <span
-            aria-hidden
-            style={{
-              position: "absolute",
-              right: size * 0.14,
-              top: size * 0.08,
-              width: Math.max(2, size * 0.05),
-              height: size * 0.84,
-              background: `linear-gradient(160deg, ${shade(t.accent, 0.3)}, ${t.accent})`,
-              transform: "rotate(22deg)",
-              borderRadius: 999,
-            }}
-          />
-        )}
-      </div>
+      </NumberBullet>
     );
   };
 
@@ -973,7 +960,8 @@ function SlideBase({
           {theme.bulletSeparate && theme.showBullet && (() => {
             const id = (theme.numberStyle ?? "circle") as NumberStyle;
             const size = theme.bulletSize ?? 54;
-            const aspect = isWideNumberStyle(id) ? 1.6 : 1;
+            /* wide designs (pill, ribbon, ticket…) get the box their silhouette needs */
+            const aspect = numberStyleAspect(id);
             return (
               <div
                 {...handlers("bullet")}

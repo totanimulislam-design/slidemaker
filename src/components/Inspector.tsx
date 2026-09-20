@@ -555,6 +555,7 @@ export default function Inspector({
             theme={T}
             slide={slide}
             setTheme={setTheme}
+            patchLayout={patchLayout}
             onSelectBullet={() => onNavSelect({ element: "bullet" })}
             onOpenText={() => choose(NAV.find((n) => n.id === "bulletText")!)}
           />

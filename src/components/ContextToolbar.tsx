@@ -24,6 +24,7 @@ import type { AlignOp } from "../lib/shapeAlign";
 import { usePointerDrag } from "../lib/dragSession";
 import { Z_LABELS, type ZOp } from "../lib/zorder";
 import { shade } from "../lib/color";
+import { BULLET_COLOR_NONE } from "../lib/optionBulletColors";
 import { ensureFamily, faceStack, firstFamily, fontChoiceFor } from "../lib/fonts";
 import FontPicker from "./FontPicker";
 import TextEffectsEditor from "./TextEffectsEditor";
@@ -31,6 +32,7 @@ import TextBgShapePanel from "./TextBgShapePanel";
 import { bgShapeIsOn, describeBgShape, type TextBgShape } from "../lib/textBgShape";
 import OptionBulletShapePicker from "./OptionBulletShapePicker";
 import OptionStylePicker from "./OptionStylePicker";
+import { BulletPositionControls, BulletShapeControls } from "./BulletShapePanel";
 import PlainNumberingPicker from "./PlainNumberingPicker";
 import NumberStylePicker from "./NumberStylePicker";
 import ShapeDesignPanel from "./ShapeDesignPanel";
@@ -139,6 +141,8 @@ interface Props {
   insertShape?: (kind: ShapeKind) => void;
   onAddImages?: (files: File[]) => void;
   onPickElement?: (id: ElementId) => void;
+  /** the z-preserving layout writer — the canvas drags' own path, used by the position cards */
+  patchLayout?: (id: ElementId, patch: Partial<Box>, label?: string) => void;
 }
 
 const INSERT_SHAPES: ShapeKind[] = ["text", "rect", "rounded", "ellipse", "triangle", "diamond", "star", "line", "arrow"];
@@ -994,6 +998,17 @@ export default function ContextToolbar(p: Props) {
   if (panel === "Bullet design" && optLine("questionBullet")) content = (
     <NumberStylePicker theme={theme} setTheme={p.patchTheme} />
   );
+  if (panel === "Bullet shape" && optLine("questionBullet")) content = (
+    <BulletShapeControls theme={theme} setTheme={p.patchTheme} />
+  );
+  if (panel === "Bullet position" && optLine("questionBullet")) content = (
+    <BulletPositionControls
+      theme={theme}
+      setTheme={p.patchTheme}
+      patchLayout={p.patchLayout}
+      onSelectBullet={() => p.onPickElement?.("bullet")}
+    />
+  );
 
   const sizeField = el ? ELEMENT_SIZE_FIELD[el] : undefined;
   const size = s?.fontSize ?? (sizeField ? Number(theme[sizeField] ?? 0) : (tf.fontSize ?? Math.round((tf.scale ?? 1) * 100)));
@@ -1261,16 +1276,51 @@ export default function ContextToolbar(p: Props) {
           </>
         );
 
-      case "questionBullet":
+      case "questionBullet": {
+        /**
+         * The marker's body, the way a teacher reaches for it: its design, its
+         * size, the accent every design derives from, and then the three shape
+         * channels the option marker already exposes — fill, outline, and the
+         * card that holds the outline's style, corners, weight and the body's
+         * transparency. The marker's place on the board is the ✥ toggle.
+         */
+        const bulletBase = theme.accent || "#2f4fff";
+        const bulletFill = /^#[0-9a-f]{6}$/i.test(theme.bulletFill ?? "") ? (theme.bulletFill as string) : shade(bulletBase, 0.2);
+        const bulletRing = /^#[0-9a-f]{6}$/i.test(theme.bulletBorder ?? "") ? (theme.bulletBorder as string) : shade(bulletBase, 0.5);
+        const fillOff = theme.bulletFill === BULLET_COLOR_NONE;
+        const ringOff = theme.bulletBorder === BULLET_COLOR_NONE || theme.bulletBorderStyle === "none";
         return (
           <>
             {toggle("Bullet design", <span aria-hidden="true">⬤</span>)}
             {stepper("Bullet size", theme.bulletSize ?? 54, v => p.patchTheme({ bulletSize: v }), 0, 99999, 1, { prefix: "Size" })}
-            {swatch("Bullet colour", theme.accent, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: theme.accent }} />)}
+            {swatch("Bullet colour", bulletBase, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: bulletBase }} />)}
+            {swatch(
+              `Shape fill${theme.bulletFill && !fillOff ? "" : fillOff ? " (none)" : " (auto until set)"}`,
+              fillOff ? "transparent" : bulletFill,
+              v => p.patchTheme({ bulletFill: v }),
+              <span
+                className="ctx-dot"
+                style={fillOff ? { background: "repeating-linear-gradient(45deg, #334155 0 3px, #0f172a 3px 6px)" } : { background: bulletFill }}
+              />,
+              "bulletFill",
+            )}
+            {swatch(
+              `Border colour${theme.bulletBorder && !ringOff ? "" : ringOff ? " (none)" : " (auto until set)"}`,
+              ringOff ? "transparent" : bulletRing,
+              v => p.patchTheme({ bulletBorder: v, ...(theme.bulletBorderStyle === "none" ? { bulletBorderStyle: "auto" as const } : {}) }),
+              <span
+                className="ctx-ring"
+                style={ringOff ? { borderColor: "#334155", borderStyle: "dashed" } : { borderColor: bulletRing }}
+              />,
+              "bulletBorder",
+            )}
+            {toggle("Bullet shape", <span aria-hidden="true">▭</span>)}
+            {toggle("Bullet position", <span aria-hidden="true">✥</span>)}
             {sep()}
             {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
           </>
         );
+      }
 
       case "bulletText": {
         const solid = lineFont.color || theme.accent;
