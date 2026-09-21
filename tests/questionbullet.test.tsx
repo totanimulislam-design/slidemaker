@@ -557,6 +557,41 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     detail: `${geometric.length} geometric · ${organic.length} organic · ${BULLET_STYLES.length} looks in all`,
   });
 
+  /* --------- the triangle-flag family: the stock libraries' colourful ---- */
+  /* --------- numbered triangles, in every triangle silhouette there is ---- */
+  const flags = BULLET_STYLES.filter((s) => s.group === "Triangle flags");
+  const flagShapes = flags.map((s) => s.patch.numberStyle as NumberStyle);
+  const brokenFlag: string[] = [];
+  for (const st of flags) {
+    const r = renderNumberStyle((st.patch.numberStyle ?? "triangleRight") as NumberStyle, { ...BASE, ...st.patch } as ThemeSettings, 54, "৭");
+    if (!String(r.surface?.clipPath ?? "").startsWith("polygon(")) brokenFlag.push(`${st.id}:no-clip`);
+  }
+  out.push({
+    name: "the Triangle flags family dresses every triangle silhouette — ▶ ▲ ▼ ◀, the peak, the drop, the right angle, the open outline, the rounded play flag, the pennant, the gem, the pole flag — in the rainbow that family ships with",
+    pass:
+      BULLET_STYLE_GROUPS.includes("Triangle flags") &&
+      flags.length >= 12 &&
+      new Set(flagShapes).size === flags.length &&
+      ["triangleRight", "triangle", "triangleDown", "triangleLeft", "rightTriangle", "softTriangleRight", "softTriangle", "hollowTriangle", "numArrowFlag", "gem", "flagDot", "hexPoint"].every((id) =>
+        flagShapes.includes(id as NumberStyle),
+      ) &&
+      flagShapes.every((id) => NUMBER_STYLES.some((d) => d.id === id)) &&
+      brokenFlag.length === 0 &&
+      flags.every((s) => s.label.length <= 20),
+    detail: brokenFlag.join(" · ") || `${flags.length} flags over ${new Set(flagShapes).size} silhouettes · ${flags.map((s) => s.patch.numberStyle).join("/")}`,
+  });
+
+  const flagPaint = flags.find((s) => s.id === "flagAmberGloss")!;
+  const flagRender = renderNumberStyle((flagPaint.patch.numberStyle ?? "circle") as NumberStyle, { ...BASE, ...flagPaint.patch } as ThemeSettings, 54, "৭");
+  out.push({
+    name: "…and one click writes the whole flag — silhouette, gradient body, pale rim and gloss together, and stops claiming the look once a channel is hand-tuned",
+    pass:
+      String(flagRender.surface?.background ?? "").includes("gradient") &&
+      bulletStyleOf({ ...BASE, ...bulletStylePatch(flagPaint) } as ThemeSettings) === "flagAmberGloss" &&
+      bulletStyleOf({ ...BASE, ...bulletStylePatch(flagPaint), bulletFill: "#123456" } as ThemeSettings) === "",
+    detail: `${String(flagRender.surface?.background ?? "—").slice(0, 52)}… · clip ${String(flagRender.surface?.clipPath ?? "—").slice(0, 24)}…`,
+  });
+
   /* ---------------------------- the toolbar line --------------------------- */
   nav("questionBullet");
   const labels = Array.from(line("Question bullet tools")?.querySelectorAll<HTMLElement>("button, input") ?? []).map(
@@ -625,12 +660,16 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
       presetsCard.includes("Exam classic") &&
       presetsCard.includes("Hand drawn") &&
       presetsCard.includes("Number + arrow") &&
+      presetsCard.includes("Triangle flags") &&
       !!presetBtn("Dot") &&
       !!presetBtn("Check mark") &&
       !!presetBtn("(1)") &&
       !!presetBtn("Disc + arrow") &&
       !!presetBtn("1 →") &&
       !!pop()?.querySelector('[aria-label="Bullet presets: Number + arrow"]') &&
+      !!pop()?.querySelector('[aria-label="Bullet presets: Triangle flags"]') &&
+      !!presetBtn("Crimson flag ▶") &&
+      !!presetBtn("Rose pennant") &&
       !!presetBtn("Hex tile") &&
       !!presetBtn("Gold seal") &&
       !!presetBtn("Crimson arrow →") &&
