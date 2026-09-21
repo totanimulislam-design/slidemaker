@@ -1,5 +1,6 @@
 import type { Box, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { numberStyleDef, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
+import { questionNumberLabel } from "../lib/plainNumbering";
 import { boxFontCss } from "../lib/boxFonts";
 import { BulletPositionControls, BulletShapeControls } from "./BulletShapePanel";
 import BulletDesignPanel from "./BulletDesignPanel";
@@ -32,7 +33,8 @@ interface Props {
 export default function QuestionBulletPanel({ theme: T, slide, setTheme, patchLayout, onSelectBullet, onOpenText }: Props) {
   const id = (T.numberStyle ?? "circle") as NumberStyle;
   const size = T.bulletSize ?? 54;
-  const r = renderNumberStyle(id, T, size, slide?.number || "৭");
+  /** the number's effective reading — the Numbering system re-letters what the slide stores */
+  const r = renderNumberStyle(id, T, size, questionNumberLabel(T.questionNumbering, slide?.number || "৭"));
 
   return (
     <div className="space-y-4">

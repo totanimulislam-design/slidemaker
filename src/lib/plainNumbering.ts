@@ -18,7 +18,7 @@
  * the very function the board calls, so a chip can only ever show real output.
  */
 
-import { AR_KEYS, BN_KEYS } from "./parse";
+import { AR_KEYS, BN_KEYS, toLatinDigits } from "./parse";
 import type { OptionKey, QuizOption } from "./types";
 
 export type PlainNumbering =
@@ -211,6 +211,44 @@ export function autoOptionKey(
 /** True when at least one option on the slide carries a manual label override. */
 export const hasManualOptionLabels = (options: QuizOption[]): boolean =>
   options.some((o) => o.labelMode === "manual");
+
+/**
+ * The question bullet's number, re-lettered by the numbering system the
+ * "Numbering" control on the Q bullet text toolbar picked
+ * (components/QuestionBulletNumberingPanel).
+ *
+ * A slide stores its number as plain text ("1", "১২", "7"…) — this converts
+ * whatever digits it carries into the picked system and returns the marker's
+ * reading: English digits, Bangla digits or letters, English capital / small
+ * letters, Roman capitals / smalls, Arabic-Indic digits or Arabic abjad
+ * letters. "none" — the default — hands the slide's own number back untouched,
+ * and a number with no readable digits ("Q3" aside… any free wording) passes
+ * through unchanged too, so custom wording is never clobbered.
+ *
+ * The conversions are exactly the option markers' (`plainNumberLabel`), so a
+ * deck can letter its questions the way it letters its options — one shared
+ * generator, one behaviour on the board, in the thumbnails and in the exports.
+ */
+export function questionNumberLabel(style: string | undefined | null, raw: string): string {
+  if (!style || style === "none" || !raw) return raw;
+  const n = parseInt(toLatinDigits(raw).replace(/[^0-9]/g, ""), 10);
+  if (!Number.isFinite(n) || n < 1) return raw;
+  return plainNumberLabel(style, n - 1) ?? raw;
+}
+
+/**
+ * The first few readings a system produces, starting at 1 — what a picker chip
+ * draws, so the control shows real output instead of a name. "none" previews
+ * the digits a fresh slide carries ("1 2 3"), which is what Default keeps.
+ */
+export function questionNumberSample(style: string | undefined | null, count = 3): string[] {
+  if (!style || style === "none") return Array.from({ length: count }, (_, i) => String(i + 1));
+  return plainNumberingSample(style as PlainNumbering, count);
+}
+
+/** True when `style` is a system the question number can be converted with. */
+export const isQuestionNumbering = (style: string | undefined | null): style is PlainNumbering =>
+  !!style && PLAIN_NUMBERING_STYLES.some((s) => s.id === style && s.id !== "none");
 
 /**
  * Drop every manual label override on one slide.

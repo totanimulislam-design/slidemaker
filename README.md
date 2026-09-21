@@ -203,9 +203,10 @@ Every line carries the compact slice of its inspector panel — **Question text*
 gets font, size, ink, bold/italic/underline and alignment; **Question bullet**
 one button per channel — **Fill** · **Border** · border style · radius · weight ·
 transparency · position · **Bullet design** · show/hide (the full set, see
-*Question bullet* below); **Q bullet text** the number's numbering gallery
-(bullet points · numbering formats · number + arrow — right where the option
-markers keep their own label numbering), ink, typeface, weight and size;
+*Question bullet* below); **Q bullet text** the number's **Numbering** system —
+what the number reads: English · Bangla · Arabic digits and letters, Roman
+numerals (right where the option markers keep their own label numbering), ink,
+typeface, weight and size;
 **Title text** typeface, size, colour, case and
 glyph effects; **Title background** the banner silhouette, colour, gradient,
 opacity, halo, padding and on/off; each **badge line** its own typeface, colour
@@ -481,6 +482,21 @@ here is what every view paints. The **Default** button on the line unwinds all
 of it — design, size, both paints and their gradients, style, radius, weight,
 transparency, shape effect, preset and nudge, re-attaching the marker — in one
 click, one undo step.
+
+**What the number reads — the Numbering system (`questionNumbering`).** The
+**Numbering** control on the *Q bullet text* line is not a style gallery — the
+marker's looks live in the Design card above. It picks the numeral system every
+question's number is drawn in: **Number** (1 2 3), **Bangla Number** (১ ২ ৩),
+**Bangla Letter** (ক খ গ), **English Capital Letter** (A B C), **English Small
+Letter** (a b c), **Roman Capital** (I II III), **Roman Small** (i ii iii),
+**Arabic Number** (١ ٢ ٣) and **Arabic Letter** (أ ب ج), plus **Default**,
+which keeps each slide's own number exactly as stored (a Bangla "১" stays "১",
+a custom wording stays itself). A slide's stored digits are read in any script
+— "৭" and "7" both count as seven — and the chosen system re-letters them on
+the board, in the thumbnails and in the PNG / PDF export, while the marker's
+design, paint and effects stay untouched. The conversions are the option
+markers' own (`lib/plainNumbering.ts` · `questionNumberLabel`), so questions
+and options can letter in the same script with one behaviour.
 
 ## Layers
 

@@ -832,6 +832,14 @@ export interface ThemeSettings {
   optionLineHeight: number;
   /** plain numbering painted over the option markers (see lib/plainNumbering) — "none" keeps the option keys */
   plainNumbering: string;
+  /**
+   * The numeral system the question bullet's number reads in — English digits,
+   * Bangla digits or letters, English capital / small letters, Roman capitals
+   * / smalls, Arabic-Indic digits or Arabic abjad letters (see
+   * lib/plainNumbering · `questionNumberLabel`). "none" — the default — keeps
+   * each slide's own number exactly as stored.
+   */
+  questionNumbering: string;
   optionsLayout: OptionsLayout;
   /** free positioning for every element (0–100 % both axes) */
   layout: LayoutMap;
@@ -981,6 +989,7 @@ export const DEFAULT_THEME: ThemeSettings = {
   optionGap: 0,
   optionLineHeight: 1.45,
   plainNumbering: "none",
+  questionNumbering: "none",
   optionsLayout: "right",
   layout: cloneLayout(),
   snapEnabled: true,
