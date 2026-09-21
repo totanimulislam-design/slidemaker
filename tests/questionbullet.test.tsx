@@ -598,10 +598,11 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     (el) => el.getAttribute("aria-label") ?? "",
   );
   out.push({
-    name: "the Question bullet line carries one button per channel — fill · border · numbering · style · radius · weight · transparency · position · design",
-    pass: ["Fill", "Border", "Numbering", "Border style", "Border radius", "Border weight", "Transparency", "Bullet position", "Design"].every((l) =>
-      labels.includes(l),
-    ),
+    name: "the Question bullet line carries one button per channel — fill · border · style · radius · weight · transparency · position · design (numbering moved to the number's own line)",
+    pass:
+      ["Fill", "Border", "Border style", "Border radius", "Border weight", "Transparency", "Bullet position", "Design"].every((l) =>
+        labels.includes(l),
+      ) && !labels.includes("Numbering"),
     detail: labels.filter(Boolean).join(" · "),
   });
 
@@ -649,9 +650,18 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     detail: `panel ${pop()?.getAttribute("data-pop-panel")} · tabs ${Array.from(pop()?.querySelectorAll('[role="tab"]') ?? []).map((t) => t.textContent?.trim()).join("/")}`,
   });
 
-  // also verify the new Numbering option exists and opens its own gallery
+  // the Numbering option now sits on the number's own line (Q bullet text),
+  // exactly like the option markers' numbering on theirs — and still opens
+  // its own gallery
   closePop();
-  click(barButton("Numbering"));
+  const textBarButton = (label: string) =>
+    line("Text inside question bullet tools")?.querySelector<HTMLElement>(`button[aria-label="${label}"]`);
+  out.push({
+    name: "the Question bullet line no longer carries Numbering — the Q bullet text line does",
+    pass: !barButton("Numbering") && !!textBarButton("Numbering"),
+    detail: `question bullet line ${barButton("Numbering") ? "still has it" : "clean"} · text line ${textBarButton("Numbering") ? "has it" : "missing"}`,
+  });
+  click(textBarButton("Numbering"));
   const numberingTiles = pop()?.querySelectorAll('[aria-label^="Numbering:"]').length ?? 0;
   out.push({
     name: "Numbering opens its own gallery — bullet points · numbering · number + arrow presets",
@@ -1036,17 +1046,28 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   /* ---------------------------- the inspector side ------------------------- */
   nav("questionBullet");
   out.push({
-    name: "the inspector's Question bullet destination shows the design card and every channel",
+    name: "the inspector's Question bullet destination shows the design card and every channel — the numbering gallery is no longer among them",
     pass:
-      ["Shape fill colour", "Border colour", "Border style", "Border radius", "Border weight", "Transparency", "Nudge horizontally", "Numbering"].every((t) =>
+      ["Shape fill colour", "Border colour", "Border style", "Border radius", "Border weight", "Transparency", "Nudge horizontally"].every((t) =>
         panelText().includes(t),
       ) &&
       !!doc.querySelector("[data-bullet-shape-controls]") &&
       !!doc.querySelector("[data-bullet-position-controls]") &&
       !!doc.querySelector("[data-bullet-design-panel]") &&
-      !!doc.querySelector("[data-bullet-numbering-panel]"),
+      !doc.querySelector("[data-bullet-numbering-panel]"),
     detail: panelText().slice(0, 200),
   });
+
+  nav("bulletText");
+  out.push({
+    name: "the inspector's Q bullet text destination now holds the numbering gallery, like the option markers' label numbering lives in their text panel",
+    pass:
+      !!doc.querySelector("[data-bullet-numbering-panel]") &&
+      (doc.querySelectorAll('[aria-label^="Numbering:"]').length ?? 0) >= 90 &&
+      (doc.querySelector('[data-bullet-numbering-panel]')?.textContent ?? "").includes("Numbering"),
+    detail: `${doc.querySelectorAll('[aria-label^="Numbering:"]').length} numbering tiles in the text destination`,
+  });
+  nav("questionBullet");
 
   /* -------------------------------- Default -------------------------------- */
   click(line("Question bullet tools")?.querySelector<HTMLElement>("[data-toolbar-default]"));

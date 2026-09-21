@@ -4,15 +4,18 @@ import { boxFontCss, boxInlineCss, clearBoxFont, offsetCss, setBoxFont } from ".
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
 import NumberBullet from "./NumberBullet";
+import QuestionBulletNumberingPanel from "./QuestionBulletNumberingPanel";
 import { Btn, ColorInput, Field, PanelHead, TextInput, Toggle } from "./ui";
 
 /**
  * Navigation ▸ "Text inside question bullet".
  *
  * The number painted *inside* the question bullet, kept separate from the
- * bullet's own silhouette: whether it is drawn at all, what it says, its ink
- * colour, face, weight, case, tracking and size — all through the `bullet`
- * box-typeface so it never leaks into the question text.
+ * bullet's own silhouette: how it reads (the numbering gallery — bullet
+ * points · numbering formats · number + arrow, exactly where the option
+ * markers keep their own label numbering), whether it is drawn at all, what
+ * it says, its ink colour, face, weight, case, tracking and size — all
+ * through the `bullet` box-typeface so it never leaks into the question text.
  */
 interface Props {
   theme: ThemeSettings;
@@ -65,10 +68,17 @@ export default function BulletTextPanel({ theme: T, slide, setTheme, updateSlide
 
       <Toggle label="Show number inside bullet" checked={T.showNumber} onChange={(v) => setTheme({ showNumber: v })} />
 
+      {/* the numbering gallery — how the number (or bullet glyph) reads. Kept
+          with the number's own panel, like the option markers keep their label
+          numbering under "Text inside option bullet" */}
+      <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <QuestionBulletNumberingPanel theme={T} setTheme={setTheme} />
+      </div>
+
       {!showsNumber(id) && (
         <p className="rounded-lg border border-amber-400/30 bg-amber-400/[0.07] p-2.5 text-[11px] leading-relaxed text-amber-200">
-          The <b>{id}</b> bullet design is a mark without a number. Pick another design under{" "}
-          <b>Question bullet</b> to paint one.
+          The <b>{id}</b> bullet design is a mark without a number. Pick another design in the <b>Numbering</b>{" "}
+          gallery above to paint one.
         </p>
       )}
 

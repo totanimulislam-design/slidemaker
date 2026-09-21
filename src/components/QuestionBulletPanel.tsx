@@ -3,7 +3,6 @@ import { numberStyleDef, renderNumberStyle, type NumberStyle } from "../lib/numb
 import { boxFontCss } from "../lib/boxFonts";
 import { BulletPositionControls, BulletShapeControls } from "./BulletShapePanel";
 import BulletDesignPanel from "./BulletDesignPanel";
-import QuestionBulletNumberingPanel from "./QuestionBulletNumberingPanel";
 import NumberBullet from "./NumberBullet";
 import { Btn, PanelHead, Toggle } from "./ui";
 
@@ -14,7 +13,9 @@ import { Btn, PanelHead, Toggle } from "./ui";
  * presets · shapes · shape effects, with its size and base colour) and
  * the shape channels the toolbar reaches one button each — fill, outline, its
  * style, corners, weight, transparency — plus where the marker sits. The number
- * painted *inside* it has its own destination ("Text inside question bullet").
+ * painted *inside* it — its numbering, wording, ink and face — has its own
+ * destination ("Text inside question bullet"), exactly like the option
+ * markers keep their label numbering with the letter.
  */
 interface Props {
   theme: ThemeSettings;
@@ -55,11 +56,6 @@ export default function QuestionBulletPanel({ theme: T, slide, setTheme, patchLa
 
       <Toggle label="Show question bullet" checked={T.showBullet} onChange={(v) => setTheme({ showBullet: v })} />
 
-      {/* numbering option — focused gallery for bullet points · numbering · number+arrow */}
-      <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-        <QuestionBulletNumberingPanel theme={T} setTheme={setTheme} />
-      </div>
-
       {/* the design card: bullet point presets, shapes and shape effects */}
       <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
         <BulletDesignPanel theme={T} setTheme={setTheme} />
@@ -88,7 +84,8 @@ export default function QuestionBulletPanel({ theme: T, slide, setTheme, patchLa
       <p className="text-[10px] leading-relaxed text-slate-500">
         “{numberStyleDef(id).label}” — {numberStyleDef(id).hint}. Every design derives from the base colour on the
         design card, and the fill, outline, corners, weight, transparency and effect you set here paint the marker's body
-        only. Wording, ink, face and size of the number itself live under <b>Q bullet text</b>.
+        only. The numbering, wording, ink, face and size of the number itself live under <b>Q bullet text</b> — just
+        like the option markers keep their label numbering with the letter's own panel.
       </p>
     </div>
   );
