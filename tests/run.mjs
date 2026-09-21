@@ -49,6 +49,7 @@ const suites = [
   ["solid native colour wells (one deck write per frame, the swatch painted in the event)", "colorframe.test.tsx", "runColorFrameTests"],
   ["every colour control (the picker stays open, and the colour reaches the slide)", "colors.test.tsx", "runColorTests"],
   ["question bullet (bullet point presets · shapes · effects, shape fill · border colour/style/radius/weight · transparency · position)", "questionbullet.test.tsx", "runQuestionBulletTests"],
+  ["slide designs (the Design gallery: 100+ complete looks — badges · title · plate · bullet · stem · options · markers · rows · board · frame)", "slidedesigns.test.tsx", "runSlideDesignTests"],
 ];
 
 installDom();

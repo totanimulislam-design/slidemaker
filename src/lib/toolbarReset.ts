@@ -371,8 +371,91 @@ export function resetShapeStyle(s: ShapeItem, accent: string): Partial<ShapeItem
   };
 }
 
+/**
+ * The Design toolbar's Default: the factory look.
+ *
+ * "Design" is the gallery of complete slide designs (`lib/slideDesigns`), so
+ * its Default writes back every field one of those designs paints — the three
+ * badges, the title and its plate, the question bullet and stem, the option
+ * text, markers, their plate and rows, the board background and the frame —
+ * at the values the app ships with (`DESIGN_ASPECTS` lists the same fields).
+ */
 export function resetThemeToolbar(): ToolbarResetPatch {
-  return { theme: { accent: D.accent, board: D.board, brandColor: D.brandColor } };
+  return {
+    theme: {
+      /* board background + frame */
+      board: D.board,
+      background: cloneBackground(),
+      frame: { ...cloneFrame(), image: undefined, imageInset: undefined, imagePlacement: undefined },
+      frameOuter: D.frameOuter,
+      frameInner: D.frameInner,
+      showFrame: D.showFrame,
+      /* title text + title background */
+      titleColor: D.titleColor,
+      titleSize: D.titleSize,
+      titleBanner: D.titleBanner,
+      banner: cloneBanner(),
+      /* badges 1 · 2 · 3 */
+      brandColor: D.brandColor,
+      brandTopColor: D.brandTopColor,
+      brandBottomColor: D.brandBottomColor,
+      brandTopSize: D.brandTopSize,
+      brandBottomSize: D.brandBottomSize,
+      showBrandTop: D.showBrandTop,
+      showBrandBottom: D.showBrandBottom,
+      badgeColor: D.badgeColor,
+      badgeSize: D.badgeSize,
+      badgePlate: cloneBadgePlate(),
+      /* question bullet + question text */
+      showBullet: D.showBullet,
+      numberStyle: D.numberStyle,
+      bulletSize: D.bulletSize,
+      bulletFill: D.bulletFill,
+      bulletFillGradient: undefined,
+      bulletBorder: D.bulletBorder,
+      bulletBorderGradient: undefined,
+      bulletBorderStyle: D.bulletBorderStyle,
+      bulletBorderWeight: undefined,
+      bulletRadius: undefined,
+      bulletOpacity: D.bulletOpacity,
+      bulletEffect: undefined,
+      bulletEffectIntensity: undefined,
+      bulletEffectColor: undefined,
+      bulletStylePreset: "",
+      questionColor: D.questionColor,
+      questionSize: D.questionSize,
+      /* option text · marker · marker plate · row */
+      optionTextColor: D.optionTextColor,
+      optionSize: D.optionSize,
+      optionStyle: D.optionStyle,
+      optionAccent: D.optionAccent,
+      optionGap: D.optionGap,
+      optionLineHeight: D.optionLineHeight,
+      optionBulletShape: D.optionBulletShape,
+      optionBulletTreatment: D.optionBulletTreatment,
+      optionBulletInk: D.optionBulletInk,
+      optionBulletFill: D.optionBulletFill,
+      optionBulletBorder: D.optionBulletBorder,
+      optionBulletCustomOnAnswer: D.optionBulletCustomOnAnswer,
+      optionBulletFontFamily: D.optionBulletFontFamily,
+      optionBulletTextSize: D.optionBulletTextSize,
+      optionBulletTextWeight: D.optionBulletTextWeight,
+      optionBulletUppercase: D.optionBulletUppercase,
+      optionBulletBgColor: D.optionBulletBgColor,
+      optionBulletBgScope: D.optionBulletBgScope,
+      optionBulletBgShape: D.optionBulletBgShape,
+      optionBulletBgSize: D.optionBulletBgSize,
+      optionBulletBgOpacity: D.optionBulletBgOpacity,
+      /* footnote, accent and every per-box typeface */
+      noteColor: D.noteColor,
+      noteOpacity: D.noteOpacity,
+      noteSize: D.noteSize,
+      showNote: D.showNote,
+      accent: D.accent,
+      answerStyle: D.answerStyle,
+      boxFonts: {},
+    },
+  };
 }
 
 export function resetLayoutToolbar(): ToolbarResetPatch {

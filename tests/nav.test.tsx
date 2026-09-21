@@ -31,7 +31,7 @@ export interface CaseResult {
 
 /** navigation order + the heading each destination must open */
 const NAV: [id: string, label: string, heading: string][] = [
-  ["theme", "Design", "Design & defaults"],
+  ["theme", "Design", "Slide designs"],
   ["titleText", "Title text", "Title text"],
   ["titleBg", "Title background", "Title background"],
   ["badge1", "Badge 1", "Badge 1"],
@@ -260,8 +260,11 @@ export async function runNavTests(): Promise<CaseResult[]> {
   /* ------------- Design & Layout bring their own tools too ---------------- */
   click(doc.querySelector('aside nav button[data-nav="theme"]'));
   out.push({
-    name: "Design opens its deck tools above the slide",
-    pass: toolbar() === "theme tools" && !!doc.querySelector('.context-toolbar [aria-label="Accent colour"]'),
+    name: "Design opens its slide-design tools above the slide",
+    pass:
+      toolbar() === "theme tools" &&
+      !!doc.querySelector('.context-toolbar [aria-label="Previous slide design"]') &&
+      !!doc.querySelector('.context-toolbar [aria-label="Next slide design"]'),
     detail: String(toolbar()),
   });
   click(doc.querySelector('aside nav button[data-nav="layout"]'));

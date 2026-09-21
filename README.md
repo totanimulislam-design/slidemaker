@@ -122,6 +122,63 @@ the same renderer the exporter uses (`src/lib/pptx.ts`). Slides therefore come
 in as **visual snapshots**: the text on them is not editable. Charts, video and
 audio have no renderer and are drawn as a labelled placeholder.
 
+## Slide designs — the Design destination
+
+The **Design** tile no longer holds a handful of colour presets, the deck's base
+colour wells or shared font pickers. It opens a **gallery of complete slide
+designs** instead: `src/lib/slideDesigns.ts` ships **128 designs** in **16
+families** (Classic board, Chalk & slate, Neon night, Exam paper, Royal luxe,
+Medical mint, Mesh gradient, Sunset energy, Campus blue, Gilt arabesque,
+Notebook, Minimal mono, Cyber grid, Pastel junior, Deep forest, Retro print),
+each family a different way real MCQ slides are built, and each design a whole
+look rather than a colour swap.
+
+Every design combines all **thirteen aspects** of a slide
+(`DESIGN_ASPECTS`, also listed under the gallery):
+
+| | |
+| --- | --- |
+| Badge 1 · Badge 2 · Badge 3 | size, colour, faces, plate |
+| Title text | ink, size, face, gradient, glow, shadow |
+| Title background | plate shape, fill, radius, border, padding, shimmer, halo |
+| Question bullet | number style, shape, fill, ring, weight, radius, opacity, effect, preset |
+| Question text | ink, size, face |
+| Option text | ink, size, line height, face |
+| Option bullet marker | shape, treatment, letter ink, fill, ring, case, size |
+| Option bullet background | plate colour, scope, shape, size, opacity |
+| Option row | row style, accent, gap |
+| Board background | one of the 130 board presets (gradient, art, vignette, opacity) |
+| Frame | style, colour, gradient, width, radius, shadow, outer/inner edges |
+
+**The card is the truth.** Each card paints a live 16:9 thumbnail
+(`src/components/DesignThumb.tsx` — the design's own `ThemeSettings` patch fed to
+a cached `previewTheme`, so 128 thumbnails cost one build), with its name and the
+one-line hint of what it is for. Search matches name, hint and family; the family
+chips narrow to that family; `All` brings the gallery back.
+
+**Applying is one deck write** (`designPatch` → `patchTheme`, one undo step). It
+carries every field of the thirteen aspects so no stale channel is left behind,
+and it deliberately **keeps what belongs to the slide**: your background photo,
+the frame image and its inset/placement, the element boxes, the layout, the text.
+Faces are loaded first (`loadDesignFonts`), so a design never renders with a
+fallback font.
+
+**The gallery knows what is in use.** `designFingerprint` reads only the fields
+the aspects own, so the painted design's card says **IN USE**, the panel's banner
+names it (`data-active-design`) and the toolbar hint chip over the board repeats
+it with **◀ / ▶** to walk the gallery (a ring: next after the last is the first).
+Hand-tune any one of those channels and the deck is no longer a catalogue design:
+the card stops claiming it and everything reads **Custom look**.
+
+**Readability is guarded, not hoped for.** Every ink a design brings is checked
+against the surface it is really painted on — the board's own gradient stop, a
+filled plate's first stop, a marker's fill, a badge's plate — and an ink below
+contrast is replaced by one that reads (`contrastOf` / `inkOn` in
+`lib/slideDesigns.ts`). `tests/slidedesigns.test.tsx` pins all of it: the
+catalogue's uniqueness (ids, names, fingerprints, palettes), aspect coverage,
+that every referenced bullet / marker / row / frame / plate / art / face really
+exists, the contrast floor, the ring walk, and the DOM behaviour of the gallery.
+
 ## Inspector navigation
 
 The right-hand inspector lists **one destination per restylable thing on a
@@ -130,15 +187,16 @@ panel holds **only the features its tile names**:
 
 | Deck | Header | Question | Options | Slide & insert |
 | --- | --- | --- | --- | --- |
-| **Design** (theme presets, base colours, shared fonts) | Title text | Question bullet (bullet point presets · shapes · effects · channels · position) | Option bullet (marker shape/colour/plate) | Footnote |
+| **Design** (slide designs — 128 complete looks) | Title text | Question bullet (bullet point presets · shapes · effects · channels · position) | Option bullet (marker shape/colour/plate) | Footnote |
 |  | Title background | Q bullet text | Opt bullet text | Slide background (board colour too) |
 |  | Badge 1 · Badge 2 · Badge 3 · Logo | Question text | Option text (choices + rows/layout/gap) | Slide frame |
 |  |  |  | **Answer key** | **Layout** (element positions) |
 |  |  |  |  | Uploads · Insert shapes · **Layers** |
 
-The ownership rule that keeps it predictable: **deck-wide** starting points
-(presets, board + accent colours, Bangla / English / Arabic fallback faces)
-live under **Design**; **where elements sit** lives under **Layout**; the
+The ownership rule that keeps it predictable: the **deck-wide look** (the slide
+designs — badges, title and its plate, bullet, stem, options, markers, rows,
+board and frame, all in one card) lives under **Design**; **where elements sit**
+lives under **Layout**; the
 *surface base colour* lives under **Slide background**; *answer actions*
 (reveal all, answer copies) live under **Answer key**. No tile borrows another
 tile's feature — so the name you click is always what you get.
@@ -160,7 +218,8 @@ Two-way selection sync ties the navigation to the canvas:
   context toolbar above the board. Tiles that own an element or a surface
   already did; the destinations that don't — **Design**, **Layout**,
   **Answer key**, **Uploads**, **Insert shapes** and **Layers** — bring their
-  own tools instead of leaving the strip empty (the deck's base colour wells; an
+  own tools instead of leaving the strip empty (the design stepper — the name of
+  the look in use plus ◀ / ▶; an
   element picker plus the snapping switches; answer
   marking/reveal/style/paste-key; quick image insert; quick shape insert; and
   the layer count plus the arrange buttons). `Esc`, changing slides, or picking
