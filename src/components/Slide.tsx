@@ -883,7 +883,11 @@ function SlideBase({
               >
                 <div style={{ position: "relative", padding: css.padding }}>
                   {header.showBanner && css.halo && <div style={css.halo} />}
-                  {header.showBanner && <div className={bset.shimmer ? "banner-shimmer" : undefined} style={css.box} />}
+                  {/* the plate's body; its own outline rides a second layer under the text */}
+                  {header.showBanner && (
+                    <div data-banner-plate="" className={bset.shimmer ? "banner-shimmer" : undefined} style={css.box} />
+                  )}
+                  {header.showBanner && css.border && <div data-banner-line="" style={css.border} />}
                   <div
                     style={{
                       ...boxFontCss(theme, "title", {

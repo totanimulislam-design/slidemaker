@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   BackgroundSettings, BannerSettings, BannerShape, Box, BoxFontId, BoxTypeface, DeckHeader, ElementId, OptionsLayout, QuizOption, ThemeSettings,
 } from "../lib/types";
-import { DEFAULT_BANNER, DEFAULT_FRAME, ELEMENT_LABELS } from "../lib/types";
+import { DEFAULT_FRAME, ELEMENT_LABELS } from "../lib/types";
 import { activeSlideDesign, designPatch, loadDesignFonts, neighbourDesign } from "../lib/slideDesigns";
 import {
   resetAnswerToolbar,
@@ -16,7 +16,7 @@ import {
   resetToolbarLine,
   type ToolbarResetPatch,
 } from "../lib/toolbarReset";
-import { TEXT_GRADIENT_PRESETS } from "../lib/banner";
+import { TEXT_GRADIENT_PRESETS, bannerBorderStyle, gradientCss } from "../lib/banner";
 import {
   TEXT_PART_LABELS, WEIGHTS, boxFontLabel, boxTypeface, elementInk, opacityAlpha, opacityPercent, patchTextPart, setBoxFont, setElementInk, textPartDeckFamily, textPartTypeface,
 } from "../lib/boxFonts";
@@ -24,7 +24,7 @@ import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, type ShapeItem, type ShapeKin
 import type { AlignOp } from "../lib/shapeAlign";
 import { usePointerDrag } from "../lib/dragSession";
 import { Z_LABELS, type ZOp } from "../lib/zorder";
-import { shade } from "../lib/color";
+import { shade, withAlpha } from "../lib/color";
 import { BULLET_COLOR_NONE } from "../lib/optionBulletColors";
 import { ensureFamily, faceStack, firstFamily, fontChoiceFor } from "../lib/fonts";
 import FontPicker from "./FontPicker";
@@ -44,6 +44,25 @@ import {
   WeightIcon,
 } from "./BulletShapePanel";
 import BulletDesignPanel from "./BulletDesignPanel";
+import {
+  BannerBorderPanel,
+  BannerBorderStylePanel,
+  BannerEffectsPanel,
+  BannerFillPanel,
+  BannerPositionPanel,
+  BannerPresetPanel,
+  BannerRadiusPanel,
+  BannerShapePanel,
+  BannerSizePanel,
+  BannerTransparencyPanel,
+  BannerWeightPanel,
+  BorderStyleIcon as BannerBorderStyleIcon,
+  PositionIcon as BannerPositionIcon,
+  SizeIcon as BannerSizeIcon,
+  TransparencyIcon as BannerTransparencyIcon,
+  WeightIcon as BannerWeightIcon,
+  bannerOf,
+} from "./BannerDesignPanel";
 import QuestionBulletNumberingPanel from "./QuestionBulletNumberingPanel";
 import PaintColorPanel from "./PaintColorPanel";
 import PlainNumberingPicker from "./PlainNumberingPicker";
@@ -55,7 +74,6 @@ import { SegButtons, Toggle } from "./ui";
 import { useColorFrame } from "../lib/frameSend";
 import { cn } from "../utils/cn";
 import type { Gradient } from "../lib/types";
-import { gradientCss } from "../lib/banner";
 
 const normColor = (v: string): string => {
   const c = String(v ?? "").trim();
@@ -253,15 +271,54 @@ export function mergedLinesFor(
   return lines.some((id) => MERGED_LINE[id].element === element) ? lines : null;
 }
 
-const BANNER_SHAPES: { id: BannerShape; label: string; icon: string }[] = [
-  { id: "glow", label: "Glow", icon: "◉" },
-  { id: "pill", label: "Pill", icon: "⬭" },
-  { id: "rounded", label: "Rounded", icon: "▢" },
-  { id: "rect", label: "Box", icon: "▭" },
-  { id: "ribbon", label: "Ribbon", icon: "⧓" },
-  { id: "underline", label: "Underline", icon: "▁" },
-  { id: "none", label: "None", icon: "∅" },
-];
+/** the title plate as a little mark — its current silhouette, worn by the bar */
+function ShapeGlyph({ shape }: { shape: BannerShape }) {
+  return (
+    <svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true">
+      {shape === "none" ? (
+        <rect x="1.4" y="2.6" width="15.2" height="10.8" rx="2.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="3 2.4" />
+      ) : shape === "glow" ? (
+        <>
+          <defs>
+            <radialGradient id="ctx-banner-glow-mark" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.9" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <ellipse cx="9" cy="8" rx="7.8" ry="5.4" fill="url(#ctx-banner-glow-mark)" />
+        </>
+      ) : shape === "underline" ? (
+        <rect x="1.6" y="10.4" width="14.8" height="2.8" rx="1.4" fill="currentColor" />
+      ) : (
+        <rect
+          x="1.6"
+          y="3.4"
+          width="14.8"
+          height="9.2"
+          rx={shape === "pill" ? 4.6 : shape === "rounded" ? 2.8 : 0.8}
+          fill="currentColor"
+          fillOpacity="0.24"
+          stroke="currentColor"
+          strokeWidth="1.4"
+        />
+      )}
+    </svg>
+  );
+}
+
+/** the Design presets mark: a little gallery with a sparkle */
+const PRESET_GLYPH = (
+  <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <rect x="2.4" y="2.4" width="6.4" height="6.4" rx="1.7" />
+    <rect x="11.2" y="2.4" width="6.4" height="6.4" rx="1.7" />
+    <rect x="2.4" y="11.2" width="6.4" height="6.4" rx="1.7" />
+    <path
+      d="M14.4 10.4c.5 1.6 1.5 2.5 3 3-1.5.5-2.5 1.5-3 3.1-.5-1.6-1.4-2.6-3-3.1 1.6-.5 2.5-1.4 3-3Z"
+      fill="currentColor"
+      stroke="none"
+    />
+  </svg>
+);
 
 const BADGE_LINE = {
   badge1: { n: 1, size: "brandTopSize", color: "brandTopColor", show: "showBrandTop", fallback: 25 },
@@ -413,11 +470,7 @@ export default function ContextToolbar(p: Props) {
 
   const stack = !surface && !multi && !s ? mergedLinesFor(p.nav, el, theme) : null;
   const activeLine = stack?.find((id) => id === p.nav) ?? (el ? ELEMENT_LEAD_LINE[el] : undefined);
-  const banner: BannerSettings = {
-    ...DEFAULT_BANNER,
-    ...(theme.banner ?? {}),
-    color: theme.banner?.color ?? theme.titleBanner,
-  };
+  const banner: BannerSettings = bannerOf(theme);
   const patchBanner = (patch: Partial<BannerSettings>) =>
     p.patchTheme({ banner: { ...banner, ...patch }, ...(patch.color ? { titleBanner: patch.color } : {}) });
   const patchLine = (patch: Record<string, unknown>) => p.patchTheme(patch as Partial<ThemeSettings>);
@@ -1138,35 +1191,41 @@ export default function ContextToolbar(p: Props) {
     if (panel === `${chip} background shape`) content = bgShapeContent(part);
   }
 
-  if (panel === "Banner shape" && optLine("titleBg")) content = (
-    <div className="ctx-menu-grid">
-      {BANNER_SHAPES.map(b => (
-        <span key={b.id}>
-          {button(<>{b.icon} {b.label}</>, () => patchBanner({ shape: b.id }), banner.shape === b.id, `Banner shape: ${b.label}`)}
-        </span>
-      ))}
-    </div>
-  );
-  if (panel === "Banner fill" && optLine("titleBg")) content = (
-    <GradientEditor
-      label="Banner gradient"
-      value={banner.gradient}
-      fallback={banner.color}
-      onChange={g => patchBanner({ gradient: g })}
-    />
-  );
-  if (panel === "Banner padding" && optLine("titleBg")) content = (
-    <div>
-      <div className="ctx-field">
-        <span>Width padding</span>
-        {stepper("Width padding", banner.padX, v => patchBanner({ padX: v }), 0, 40)}
-      </div>
-      <div className="ctx-field">
-        <span>Height padding</span>
-        {stepper("Height padding", banner.padY, v => patchBanner({ padY: v }), 0, 80)}
-      </div>
-    </div>
-  );
+  /**
+   * The title background line — one button per channel, in the order a plate is
+   * dressed:
+   *
+   *   Design presets   eight complete looks, painted as they will be
+   *   Shape            the silhouettes, as pictures
+   *   Effects          softness · halo · shimmer
+   *   Fill             the body's paint: solid or gradient
+   *   Border           the outline's paint
+   *   Border radius    the corners, one slider with no ceiling
+   *   Border style     solid · dashed · dotted · double · none
+   *   Border weight    the line's thickness
+   *   Transparency     the SHAPE and the BORDER, each on a line bar
+   *   Banner size      free width and height, on line bars
+   *   Banner position  free X and Y, on line bars
+   *
+   * and then the eye that shows/hides the plate and the line's Default.
+   */
+  if (optLine("titleBg")) {
+    const p = (patch: Partial<typeof banner>) => patchBanner(patch);
+    const cards: Record<string, ReactNode> = {
+      "Design presets": <BannerPresetPanel theme={theme} banner={banner} setBanner={p} />,
+      "Banner shape": <BannerShapePanel theme={theme} banner={banner} setBanner={p} />,
+      "Banner effects": <BannerEffectsPanel banner={banner} setBanner={p} />,
+      "Banner fill": <BannerFillPanel banner={banner} setBanner={p} />,
+      "Banner border": <BannerBorderPanel banner={banner} setBanner={p} />,
+      "Banner radius": <BannerRadiusPanel banner={banner} setBanner={p} />,
+      "Banner border style": <BannerBorderStylePanel banner={banner} setBanner={p} />,
+      "Banner weight": <BannerWeightPanel banner={banner} setBanner={p} />,
+      "Banner transparency": <BannerTransparencyPanel banner={banner} setBanner={p} />,
+      "Banner size": <BannerSizePanel theme={theme} banner={banner} setBanner={p} />,
+      "Banner position": <BannerPositionPanel banner={banner} setBanner={p} />,
+    };
+    if (panel && panel in cards) content = cards[panel];
+  }
 
   /**
    * Numbering — the question bullet's number system, on the number's own line
@@ -1434,19 +1493,66 @@ export default function ContextToolbar(p: Props) {
         );
 
       case "titleBg": {
+        /**
+         * The plate's line. Every channel is one button — the bar reads in the
+         * order a plate is dressed, and each button opens exactly the card it
+         * names (see the panel block above).
+         */
         const shown = p.header?.showBanner ?? true;
+        /** the little well each colour button wears */
+        const plateWell = (
+          <span
+            className="ctx-plate-well"
+            aria-hidden="true"
+            style={{ background: banner.gradient.enabled ? gradientCss(banner.gradient, banner.color) : banner.color }}
+          />
+        );
+        const lineWell = (
+          <span
+            className="ctx-line-well"
+            aria-hidden="true"
+            style={{
+              borderColor: withAlpha(banner.border.color, banner.border.opacity ?? 1),
+              borderStyle: bannerBorderStyle(banner) === "none" ? "dashed" : bannerBorderStyle(banner),
+              borderWidth: Math.max(1, Math.min(6, banner.border.width)),
+              opacity: banner.border.enabled ? 1 : 0.4,
+            }}
+          />
+        );
         return (
           <>
-            {toggle("Banner shape", <span aria-hidden="true">▣</span>)}
-            {swatch("Banner colour", banner.color, v => patchBanner({ color: v }), <span className="ctx-dot" style={{ background: banner.color }} />)}
-            {toggle("Banner fill", <span aria-hidden="true">◩</span>)}
-            {stepper("Banner opacity %", Math.round(banner.opacity * 100), v => patchBanner({ opacity: Math.max(0, Math.min(1, v / 100)) }), 0, 100, 5, { prefix: "◐" })}
-            {stepper("Banner halo", banner.halo, v => patchBanner({ halo: v }), 0, 100, 5, { prefix: "☀" })}
-            {toggle("Banner padding", <span aria-hidden="true">↔</span>)}
+            {toggle(
+              "Design presets",
+              PRESET_GLYPH,
+              <span className="ctx-word">
+                {PRESET_GLYPH}
+                <span>Presets</span>
+              </span>,
+            )}
+            {toggle("Banner shape", <ShapeGlyph shape={banner.shape} />)}
+            {toggle("Banner effects", <span aria-hidden="true">✨</span>)}
+            {toggle(
+              "Banner fill",
+              <span className="ctx-plate-fill" aria-hidden="true">
+                <span className="ctx-word">Fill</span>
+                {plateWell}
+              </span>,
+            )}
+            {toggle(
+              "Banner border",
+              <span className="ctx-plate-fill" aria-hidden="true">
+                <span className="ctx-word">Border</span>
+                {lineWell}
+              </span>,
+            )}
+            {toggle("Banner radius", RADIUS_GLYPH)}
+            {toggle("Banner border style", <BannerBorderStyleIcon style={bannerBorderStyle(banner)} size={16} />)}
+            {toggle("Banner weight", <BannerWeightIcon size={16} />)}
+            {toggle("Banner transparency", <BannerTransparencyIcon size={16} />)}
+            {toggle("Banner size", <BannerSizeIcon size={16} />)}
+            {toggle("Banner position", <BannerPositionIcon size={16} />)}
             {sep()}
-            {button(<span aria-hidden="true">▣</span>, () => p.patchHeader?.({ showBanner: !shown }), shown, "Show / hide the banner behind the title")}
-            {sep()}
-            {toggle("Position", <span aria-hidden="true">✥</span>)}
+            {button(<span aria-hidden="true">👁</span>, () => p.patchHeader?.({ showBanner: !shown }), shown, "Show / hide the banner behind the title")}
           </>
         );
       }

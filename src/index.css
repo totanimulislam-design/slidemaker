@@ -377,6 +377,30 @@ input[type="text"] {
 .ctx-paint.is-on .ctx-paint-drop.is-auto { opacity: .85; }
 .ctx-paint .ctx-caret { font-size: 9px; opacity: .7; }
 
+/* The title background line's own buttons: the two paint wells (Fill · Border)
+   wear what is on right now — the fill's gradient/solid, the line's colour and
+   style — beside the word naming the channel, Canva-style. */
+.ctx-word { font-size: 12px; font-weight: 600; letter-spacing: .01em; }
+.ctx-plate-fill { display: inline-flex; align-items: center; gap: 5px; }
+.ctx-plate-well {
+  width: 22px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,.45);
+  box-shadow: 0 1px 2px rgba(0,0,0,.45);
+  background-size: 100% 100%;
+}
+.ctx-line-well {
+  width: 22px;
+  height: 11px;
+  border-radius: 3px;
+  border-width: 2px;
+  border-color: rgba(255,255,255,.8);
+}
+.ctx-btn.is-on .ctx-word { color: #0f172a; }
+.ctx-btn.is-on .ctx-plate-well { border-color: rgba(15,23,42,.55); }
+.ctx-btn.is-on .ctx-line-well { box-shadow: none; }
+
 /* the slider inside a bullet card (radius · weight · transparency · intensity) */
 .ctx-pop-body input[type="range"] { width: 100%; accent-color: #fbbf24; }
 

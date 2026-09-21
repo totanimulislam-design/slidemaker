@@ -882,11 +882,17 @@ function themeOf(p: Palette, k: Kit): Partial<ThemeSettings> {
     padX: 6,
     padY: k.bannerPadY,
     radius: k.bannerRadius,
+    // a design is the plate's WHOLE look: the outline names every one of its
+    // channels (so a hand-tuned style cannot follow it onto the next design),
+    // and the free size and place are handed back to auto
     border: {
+      ...cloneBanner().border,
       enabled: k.bannerBorder,
       color: k.bannerBorderInk ?? titleInk,
       width: k.bannerBorderWidth,
     },
+    size: undefined,
+    pos: undefined,
     textGradient: k.titleGradient ? lin(180, shade(titleInk, 0.35), titleInk) : noGradient(),
     textGlow: k.titleGlow,
     textShadow: k.titleShadow,

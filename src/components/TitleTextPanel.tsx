@@ -42,6 +42,7 @@ export default function TitleTextPanel({ theme, header, setTheme, setHeader, pat
           <div style={{ position: "relative", padding: css.padding }}>
             {header.showBanner && css.halo && <div style={css.halo} />}
             {header.showBanner && <div className={b.shimmer ? "banner-shimmer" : undefined} style={css.box} />}
+            {header.showBanner && css.border && <div style={css.border} />}
             <div
               style={{
                 position: "relative",
