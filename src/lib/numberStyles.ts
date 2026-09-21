@@ -124,7 +124,7 @@ export type NumberStyle =
   | "numArrowHex" | "numArrowHexHollow" | "numArrowDiamond" | "numArrowShield" | "numArrowSquircle"
   | "numArrowBlock" | "numArrowChevron" | "numArrowStep" | "numArrowRibbon" | "numArrowFlag"
   | "numArrowBack" | "numArrowUp" | "numArrowDown" | "numArrowBoth" | "numArrowThin"
-  | "numArrowDiagonal" | "numArrowNotch" | "numArrowDoubleLine"
+  | "numArrowDiagonal" | "numArrowNotch" | "numArrowDoubleLine" | "numArrowDoubleChevron"
   | "numArrowText" | "numArrowText2" | "numArrowTextTri";
 
 export type NumberStyleCategory =
@@ -178,6 +178,12 @@ export interface NumberStyleDef {
    * transparency channel cover them together with the main glyph
    */
   extras?: [number, number][][];
+  /**
+   * the design's own decorative marks (the twin chevron's gap shadows):
+   * positioned CSS boxes painted over the body, faded with the body's own
+   * transparency channel
+   */
+  marks?: CSSProperties[];
 }
 
 export const NUMBER_STYLE_CATEGORIES: { id: NumberStyleCategory; label: string }[] = [
@@ -744,9 +750,27 @@ const DOUBLE_LINE_ARROW: [number, number][] = [[0, 44], [58, 44], [58, 34], [98,
 const DOUBLE_LINE_BAR: [number, number][] = [[0, 26], [58, 26], [58, 36], [0, 36]];
 const BACK_BLOCK: [number, number][] = [[100, 26], [42, 26], [42, 0], [0, 50], [42, 100], [42, 74], [100, 74]];
 
+/* the twin chevron — the stock libraries' "fast-forward" step marker, in its
+   3-D dress: the number rides in a front chevron, a second chevron steps
+   behind it and its V notch wraps the front tip in a white gap. Modelled in
+   a near-square box from the reference artwork: the front chevron is the
+   flat triangle the number sits in, the back one is a single polygon whose
+   notch edges run parallel to the front tip's slant, and the body folds in
+   two tones along its middle line — lit from above, shaded below. */
+const TWIN_FRONT: [number, number][] = [[0, 15.2], [0, 84.7], [54.3, 50.7]];
+const TWIN_BACK: [number, number][] = [[19.9, 0], [100, 50.8], [19.9, 100], [19.9, 83.2], [74.6, 51], [19.9, 16.3]];
+
 /* two-tone plate + tail: the plate keeps the accent, the tail runs darker */
 const twoTailPaint = (accent: string): CSSProperties => ({
   background: `linear-gradient(90deg, ${accent} 0 32%, ${shade(accent, -0.28)} 44% 100%)`,
+});
+/* the twin chevron's 3-D fold: the upper half of the marker lit, the lower
+   half shaded, split hard along the middle line — plus the soft drop shadow
+   the front chevron throws towards the lower right, into the notch and onto
+   the board below its base */
+const twinChevronPaint = (accent: string, size: number): CSSProperties => ({
+  background: `linear-gradient(180deg, ${shade(accent, 0.16)} 0%, ${shade(accent, -0.05)} 50%, ${shade(accent, -0.19)} 50%, ${shade(accent, -0.21)} 100%)`,
+  filter: `drop-shadow(${r1(size * 0.02)}px ${r1(size * 0.03)}px ${r1(size * 0.07)}px rgba(0, 0, 0, 0.16))`,
 });
 /* a gloss lit from the top left of the plate */
 const glossTailPaint = (accent: string): CSSProperties => ({
@@ -889,6 +913,40 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "numArrowBack", label: "Arrow back ←", category: "numArrow", hint: "The number inside a block arrow pointing back", points: BACK_BLOCK, aspect: 1.4, font: 0.3, pad: [0, 0, 0, 0.62] },
   { id: "numArrowNotch", label: "Notched arrow", category: "numArrow", hint: "The number inside a notched block arrow — a process step", points: NOTCHEDARROW, aspect: 1.4, font: 0.3, pad: [0, 0.56, 0, 0] },
   { id: "numArrowDoubleLine", label: "Double line →", category: "numArrow", hint: "The number in a double-stem arrow — two shafts, one head", points: DOUBLE_LINE_ARROW, extras: [DOUBLE_LINE_BAR], aspect: 1.45, font: 0.26, pad: [0, 0.52, 0, 0] },
+  {
+    id: "numArrowDoubleChevron",
+    label: "Twin chevron »",
+    category: "numArrow",
+    hint: "The number inside a 3-D twin chevron — the fast-forward step marker, a lit-over-shaded fold with the front chevron's shadow cast into the notch",
+    points: TWIN_FRONT,
+    extras: [TWIN_BACK],
+    aspect: 0.95,
+    font: 0.23,
+    pad: [0, 0.6, 0, 0],
+    paint: twinChevronPaint,
+    marks: [
+      /* the front tip's shadow, strongest at its slanted edge and fading into the notch */
+      {
+        position: "absolute",
+        left: "19.9%",
+        top: "50.7%",
+        width: "54.7%",
+        height: "32.5%",
+        clipPath: "polygon(0% 66.2%, 62.9% 0%, 100% 0.9%, 0% 100%)",
+        background: "linear-gradient(135deg, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.08) 36%, rgba(0, 0, 0, 0) 64%)",
+      },
+      /* a fainter trace of it on the upper side of the gap */
+      {
+        position: "absolute",
+        left: "19.9%",
+        top: "16.3%",
+        width: "54.7%",
+        height: "34.7%",
+        clipPath: "polygon(0% 0%, 100% 100%, 62.9% 99.1%, 0% 34.3%)",
+        background: "linear-gradient(45deg, rgba(0, 0, 0, 0.05) 0%, rgba(0, 0, 0, 0) 55%)",
+      },
+    ],
+  },
 
   /* --- number + arrow: text formats — the number with its own arrow -------- */
   { id: "numArrowText", label: "1 →", category: "numArrow", hint: "The number with an arrow after it — 1 → 2 → 3 →", format: (n) => `${n} →`, aspect: 1.7, font: 0.46 },
@@ -1204,7 +1262,9 @@ export function renderNumberStyle(
   const text = theme.showNumber && showsNumber(id) ? rawNumber : "";
   const def = numberStyleDef(id);
   const aspect = def.aspect ?? 1;
-  const wide = aspect > 1 ? size * aspect : size;
+  /* the box is as wide as the silhouette's aspect wants — a narrow silhouette
+     (aspect < 1) gets its true, narrower box instead of being stretched square */
+  const wide = size * aspect;
 
   const box = (w: number, h: number, font: number): CSSProperties => ({
     width: w,
@@ -1564,6 +1624,13 @@ export function renderNumberStyle(
       ...(surface.opacity !== undefined ? { opacity: surface.opacity } : {}),
     }));
     marks = [...(marks ?? []), ...satellites];
+  }
+
+  /* the design's own decorative marks (the twin chevron's gap shadows) —
+     painted over the body, faded with its own transparency channel */
+  if (def.marks?.length) {
+    const o = typeof surface.opacity === "number" && surface.opacity < 1 ? surface.opacity : 1;
+    marks = [...(marks ?? []), ...def.marks.map((m) => ({ ...m, opacity: (typeof m.opacity === "number" ? m.opacity : 1) * o }))];
   }
 
   /* how the silhouette is cut, so an effect's own passes follow it */
