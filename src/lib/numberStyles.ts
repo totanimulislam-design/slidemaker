@@ -94,7 +94,7 @@ export type NumberStyle =
   /* marks, extended */
   | "brackets" | "dots3" | "cornerTick"
   /* round & soft — the shape families of a proper shape library */
-  | "oval" | "egg" | "dome" | "lens" | "softTriangle" | "softDiamond" | "softHexagon"
+  | "oval" | "egg" | "dome" | "lens" | "softTriangle" | "softTriangleRight" | "softDiamond" | "softHexagon"
   /* cards & chips, the label family */
   | "plaque" | "frame" | "chamfer" | "folder" | "tagLeft" | "label" | "slot"
   /* polygons: every regular polygon and the slanted / mirrored cuts */
@@ -917,6 +917,7 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "dome", label: "Dome", category: "curve", hint: "A half-circle standing on its flat base", radius: "50% 50% 0 0 / 100% 100% 0 0", aspect: 1.3, font: 0.38, pad: [0.14, 0, 0, 0] },
   { id: "lens", label: "Lens", category: "curve", hint: "Two arcs meeting at the sides — an eye", points: lens(40), aspect: 1.3, font: 0.38 },
   { id: "softTriangle", label: "Soft triangle", category: "curve", hint: "A triangle with rounded corners", points: soften(TRIUP, 18), font: 0.32, pad: [0.2, 0, 0.02, 0] },
+  { id: "softTriangleRight", label: "Soft triangle ▶", category: "curve", hint: "A play triangle with rounded corners", points: soften(TRIRIGHT, 16), font: 0.3, pad: [0, 0.32, 0, 0] },
   { id: "softDiamond", label: "Soft diamond", category: "curve", hint: "A diamond with rounded corners", points: soften(DIAMOND, 16), font: 0.36 },
   { id: "softHexagon", label: "Soft hexagon", category: "curve", hint: "A hexagon with rounded corners", points: soften(HEXAGON, 12), font: 0.4 },
 

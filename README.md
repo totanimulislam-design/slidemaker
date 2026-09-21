@@ -354,7 +354,7 @@ mesh with up to eight stops), with **Auto** and **None** above it.
 One card, three tabs, every tile a live preview painted by the same renderer as
 the board:
 
-- **Bullet point presets** — the ready-made looks, 242 of them in sixteen
+- **Bullet point presets** — the ready-made looks, 258 of them in seventeen
   groups, with the marker's **size** (20 – 160 px) and **base colour** every
   design derives from. The list opens with the families a bullet row is
   expected to hold: **Bullet points** (Dot · Hollow dot · Small square · Hollow
@@ -379,8 +379,8 @@ the board:
   and the text arrows (1 → · 1 ⇒ · 1 ▸). The plate + tail compounds are each
   cut as ONE silhouette — plate arc and tail outline merged — so fill,
   outline, corners and shape effects follow the whole marker as one shape.
-  Then the 119 **one-click designs** that write the whole marker at once
-  (silhouette · fill · line · corners · transparency · effect), in thirteen
+  Then the 135 **one-click designs** that write the whole marker at once
+  (silhouette · fill · line · corners · transparency · effect), in fourteen
   families. The shape-led ones come first:
   *Geometric* (Hex tile · Octagon stop · Diamond stud · Pentagon badge ·
   Triangle flag · Violet kite · Plinth · Arrow step · Slant stripe · Plus block
@@ -393,10 +393,21 @@ the board:
   *Infographic* and *Number + arrow* — the numbered disc / hexagon / capsule
   with its own tail, and the flat, chevron, step, ribbon, flag and two-way
   numbered arrows, each in the colour system that family ships with (crimson
-  with a white rim, teal and emerald, gold, navy, rose, midnight and gold…). A design stays claimed only while every channel still matches
+  with a white rim, teal and emerald, gold, navy, rose, midnight and gold…),
+  and the closing *Triangle flags* (Crimson flag ▶ · Tangerine peak ▲ · Amber
+  gloss ▶ · Lime drop ▼ · Teal right angle · Sky outline ▶ · Indigo neon ◀ ·
+  Violet sticker ▲ · Rose pennant · Emerald gem · Mini crimson ▶ · Mini lime ▲
+  · Mini sky ▼ · Mini indigo ◀ · Pole flag · Fuchsia point) — the colourful
+  numbered triangle family, sixteen looks over sixteen different triangle
+  silhouettes: the play triangle and its rounded twin, the peak and the drop,
+  the right angle, the open outline triangle, the swallow-tailed pennant, the
+  gem, the four small no-number triangles, the flag on its pole and the
+  six-sided point, each in one hue of that rainbow and in the treatment it is
+  usually seen in — flat with a hard shadow, gradient with a pale rim, glossy,
+  bevelled, outlined, neon, sticker or material. A design stays claimed only while every channel still matches
   it — fine-tune one, or swap the silhouette under *Shape*, and the card
   reports **custom** instead (`lib/bulletStyles.ts`).
-- **Shape** — the silhouette alone: 142 shapes in nine families, and picking
+- **Shape** — the silhouette alone: 143 shapes in nine families, and picking
   one changes nothing but the silhouette, so the fill, line, corners,
   transparency and effect the marker already has travel onto it (a *Gold seal*
   becomes a gold hexagon with the same bevel). **Round & soft** (Circle · Ring ·

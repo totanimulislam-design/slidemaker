@@ -30,7 +30,18 @@ import type { NumberBorderStyle } from "./types";
  * row dresses the stock libraries' "number then arrow" family — a numbered
  * disc / card / hexagon / capsule with its own tail, or the number inside
  * the flat, chevron, step, ribbon and flag arrows — in the colour systems
- * those sets ship with. Every look is an original combination of the
+ * those sets ship with. The last row, **Triangle flags**, is the stock
+ * libraries' "colourful triangle bullet points" family — the flat, vivid,
+ * often gradient-painted triangles and pennants numbered 1 to 12 — grown
+ * into sixteen looks over every triangle silhouette the shape library
+ * carries: the play triangle ▶ and its rounded twin, the peak ▲ and the drop
+ * ▼, the right angle, the open outline triangle, the swallow-tailed pennant,
+ * the gem, the four small no-number triangles (▶ ▲ ▼ ◀), the flag on its pole
+ * and the six-sided point — each in one hue of that rainbow (crimson,
+ * tangerine, amber, lime, teal, sky, indigo, violet, rose, emerald, fuchsia)
+ * and in the treatment it is usually seen in: flat with a hard shadow,
+ * gradient with a pale rim, glossy 3-D, bevelled, outlined, neon, sticker or
+ * material. Every look is an original combination of the
  * marker's own channels, collected from those conventions rather than copied
  * from any one product.
  */
@@ -48,7 +59,8 @@ export type BulletStyleGroup =
   | "Hand drawn"
   | "Infographic"
   | "Arrow directions"
-  | "Number + arrow";
+  | "Number + arrow"
+  | "Triangle flags";
 
 export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
   "Geometric",
@@ -64,6 +76,7 @@ export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
   "Infographic",
   "Arrow directions",
   "Number + arrow",
+  "Triangle flags",
 ];
 
 /** the marker channels one style writes */
@@ -1223,6 +1236,150 @@ export const BULLET_STYLES: BulletStyle[] = [
     bulletBorderWeight: 1.5,
     bulletEffect: "lift",
     bulletEffectIntensity: 40,
+  }),
+
+  /* ------------------------------------------------------- triangle flags -- */
+  style("flagCrimsonFlat", "Crimson flag ▶", "Triangle flags", "A flat crimson triangle flag with a hard shadow", {
+    numberStyle: "triangleRight",
+    bulletFill: "#e11d48",
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "pop",
+    bulletEffectColor: "#881337",
+    bulletEffectIntensity: 30,
+  }),
+  style("flagTangerinePeak", "Tangerine peak ▲", "Triangle flags", "An orange triangle standing on its base, softly shadowed", {
+    numberStyle: "triangle",
+    bulletFillGradient: grad(170, "#fdba74", "#ea580c"),
+    bulletBorder: "#fff7ed",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("flagAmberGloss", "Amber gloss ▶", "Triangle flags", "A rounded triangle flag in amber with a glossy top", {
+    numberStyle: "softTriangleRight",
+    bulletFillGradient: grad(160, "#fde68a", "#f59e0b"),
+    bulletBorder: "#fffbeb",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "gloss",
+    bulletEffectIntensity: 50,
+  }),
+  style("flagLimeDrop", "Lime drop ▼", "Triangle flags", "A lime triangle hanging from its base with a long flat shadow", {
+    numberStyle: "triangleDown",
+    bulletFill: "#65a30d",
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "longShadow",
+    bulletEffectColor: "#3f6212",
+    bulletEffectIntensity: 50,
+  }),
+  style("flagTealBevel", "Teal right angle", "Triangle flags", "A right-angled teal triangle with a bevelled edge", {
+    numberStyle: "rightTriangle",
+    bulletFillGradient: grad(135, "#5eead4", "#0f766e"),
+    bulletBorder: "#ccfbf1",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "bevel",
+    bulletEffectIntensity: 50,
+  }),
+  style("flagSkyOutline", "Sky outline ▶", "Triangle flags", "An open sky-blue triangle — line only, no fill", {
+    numberStyle: "hollowTriangle",
+    bulletFill: "transparent",
+    bulletBorder: "#0ea5e9",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 3,
+  }),
+  style("flagIndigoNeon", "Indigo neon ◀", "Triangle flags", "A midnight triangle rimmed in glowing indigo", {
+    numberStyle: "triangleLeft",
+    bulletFill: "#1e1b4b",
+    bulletBorder: "#6366f1",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "neon",
+    bulletEffectColor: "#818cf8",
+    bulletEffectIntensity: 55,
+  }),
+  style("flagVioletSticker", "Violet sticker ▲", "Triangle flags", "A die-cut violet triangle with a pale sticker outline", {
+    numberStyle: "softTriangle",
+    bulletFillGradient: grad(160, "#c084fc", "#7e22ce"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "sticker",
+    bulletEffectColor: "#ffffff",
+    bulletEffectIntensity: 45,
+  }),
+  style("flagRosePennant", "Rose pennant", "Triangle flags", "A swallow-tailed rose pennant with a pale rim", {
+    numberStyle: "numArrowFlag",
+    bulletFillGradient: grad(90, "#fb7185", "#be123c"),
+    bulletBorder: "#ffe4e6",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 42,
+  }),
+  style("flagEmeraldGem", "Emerald gem", "Triangle flags", "A five-sided emerald gem flag, layered like plastic", {
+    numberStyle: "gem",
+    bulletFillGradient: grad(170, "#6ee7b7", "#047857"),
+    bulletBorder: "#d1fae5",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "material",
+    bulletEffectColor: "#34d399",
+    bulletEffectIntensity: 45,
+  }),
+  style("flagMiniCrimson", "Mini crimson ▶", "Triangle flags", "A small solid crimson triangle, no number — a plain bullet", {
+    numberStyle: "triangleDot",
+    bulletFill: "#ef4444",
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 35,
+  }),
+  style("flagMiniLime", "Mini lime ▲", "Triangle flags", "A small lime triangle with a hard offset shadow", {
+    numberStyle: "triangleUpDot",
+    bulletFill: "#84cc16",
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "pop",
+    bulletEffectColor: "#3f6212",
+    bulletEffectIntensity: 28,
+  }),
+  style("flagMiniSky", "Mini sky ▼", "Triangle flags", "A small sky-blue triangle with a white rim", {
+    numberStyle: "triangleDownDot",
+    bulletFillGradient: grad(180, "#7dd3fc", "#0369a1"),
+    bulletBorder: "#f0f9ff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 35,
+  }),
+  style("flagMiniIndigo", "Mini indigo ◀", "Triangle flags", "A small indigo triangle that glows", {
+    numberStyle: "triangleLeftDot",
+    bulletFill: "#6366f1",
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "glow",
+    bulletEffectColor: "#a5b4fc",
+    bulletEffectIntensity: 45,
+  }),
+  style("flagPoleEmerald", "Pole flag", "Triangle flags", "An emerald flag on its own pole", {
+    numberStyle: "flagDot",
+    bulletFill: "#10b981",
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("flagFuchsiaPoint", "Fuchsia point", "Triangle flags", "A six-sided fuchsia flag standing on its point", {
+    numberStyle: "hexPoint",
+    bulletFillGradient: grad(160, "#f0abfc", "#a21caf"),
+    bulletBorder: "#fdf4ff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "bevel",
+    bulletEffectIntensity: 45,
   }),
 ];
 
