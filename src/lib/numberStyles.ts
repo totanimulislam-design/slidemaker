@@ -21,7 +21,12 @@ export type { NumberBorderStyle } from "./types";
  *
  * The catalogue is data: `NUMBER_STYLES` carries the label, the group, the
  * silhouette (a `clip-path` polygon for the cut shapes) and the look its own
- * paint derives from `theme.accent`. On top of every design the teacher can set
+ * paint derives from `theme.accent`. It opens with the two families a "bullet
+ * point preset" row is expected to hold — the classic **bullet points** (dot,
+ * hollow dot, square, dash, arrowhead, check…), which stand in for the number
+ * the way a list bullet does, and the **numbering** presets ("7." · "(7)" ·
+ * "Q7" · "07"), which keep the number and add its punctuation — followed by
+ * the marker silhouettes. On top of every design the teacher can set
  * their own channels — fill colour, outline colour, outline style, corner
  * radius, outline weight and transparency — through the same tri-state
  * convention the option marker uses:
@@ -32,6 +37,12 @@ export type { NumberBorderStyle } from "./types";
  */
 
 export type NumberStyle =
+  /* classic bullet points — the list bullets every slide tool's "Bullets"
+     preset row offers (they replace the number, like a bullet does) */
+  | "dot" | "hollowDot" | "squareDot" | "hollowSquare" | "diamondDot" | "triangleDot"
+  | "dash" | "arrowhead" | "chevron" | "check" | "starDot"
+  /* numbering presets — the number with its own punctuation, no shape */
+  | "numDot" | "numParen" | "numParens" | "numColon" | "numZero" | "numQ" | "numHash" | "numBar"
   | "circle" | "ring" | "glow" | "gradient" | "square" | "rounded"
   | "diamond" | "hexagon" | "kite" | "star" | "burst" | "shield"
   | "ribbon" | "banner" | "pill" | "bracket" | "underline" | "bar"
@@ -55,7 +66,7 @@ export type NumberStyle =
   /* marks, extended */
   | "brackets" | "dots3" | "cornerTick";
 
-export type NumberStyleCategory = "curve" | "cards" | "polygons" | "seals" | "stickers" | "marks";
+export type NumberStyleCategory = "bullets" | "numbering" | "curve" | "cards" | "polygons" | "seals" | "stickers" | "marks";
 
 export interface NumberStyleDef {
   id: NumberStyle;
@@ -68,6 +79,8 @@ export interface NumberStyleDef {
   radius?: number | string;
   /** the shape's own outline weight as a fraction of the marker size */
   line?: number;
+  /** the colour of that line (default: a half-white rim over the fill) */
+  lineColor?: (accent: string) => string;
   /** how much wider than tall the marker is (1 = square) */
   aspect?: number;
   /** the number's size as a factor of the marker size (default 0.4) */
@@ -80,9 +93,16 @@ export interface NumberStyleDef {
   ink?: (accent: string) => string;
   /** force the box path (CSS corners) for a design with no `points` of its own */
   generic?: boolean;
+  /**
+   * a numbering preset: the number is painted with its own punctuation
+   * ("7." · "(7)" · "Q7" · "07") and no shape at all
+   */
+  format?: (number: string) => string;
 }
 
 export const NUMBER_STYLE_CATEGORIES: { id: NumberStyleCategory; label: string }[] = [
+  { id: "bullets", label: "Bullet points" },
+  { id: "numbering", label: "Numbering" },
   { id: "curve", label: "Round & soft" },
   { id: "cards", label: "Cards & chips" },
   { id: "polygons", label: "Polygons" },
@@ -201,6 +221,43 @@ const OCTAGON: [number, number][] = [[30, 0], [70, 0], [100, 30], [100, 70], [70
 const TRIUP: [number, number][] = [[50, 4], [98, 96], [2, 96]];
 const TRIDOWN: [number, number][] = [[2, 4], [98, 4], [50, 96]];
 
+/*
+ * The classic bullet points, drawn small in the middle of the marker's box so
+ * they sit on the question's first line exactly where a disc would — the
+ * round dot, its hollow twin, the square, the diamond, the triangle, the dash,
+ * the arrowhead, the chevron, the check mark and the star every slide tool's
+ * bullet row offers.
+ */
+const DOT: [number, number][] = poly(36, 22);
+const SQUARE_DOT: [number, number][] = [[30, 30], [70, 30], [70, 70], [30, 70]];
+const DIAMOND_DOT: [number, number][] = [[50, 23], [77, 50], [50, 77], [23, 50]];
+const TRIANGLE_DOT: [number, number][] = [[31, 25], [77, 50], [31, 75]];
+const DASH: [number, number][] = [[20, 44], [80, 44], [80, 56], [20, 56]];
+const ARROWHEAD: [number, number][] = [[24, 22], [80, 50], [24, 78], [37, 50]];
+const CHEVRON: [number, number][] = [[34, 20], [47, 20], [75, 50], [47, 80], [34, 80], [62, 50]];
+const CHECK: [number, number][] = [[14, 54], [27, 41], [42, 56], [74, 22], [87, 35], [42, 80]];
+const STAR_DOT: [number, number][] = starPoints(5, 28, 12);
+
+/* a hollow bullet: no body of its own — only the line the design draws */
+const hollow = (): CSSProperties => ({ background: "transparent" });
+
+/**
+ * "01": a leading zero in the number's own script, so a Bengali "৭" becomes
+ * "০৭" and a Latin "7" becomes "07". Two digits and more are left alone.
+ */
+const ZERO_OF: [RegExp, string][] = [
+  [/^[0-9]$/, "0"],
+  [/^[০-৯]$/, "০"],
+  [/^[०-९]$/, "०"],
+  [/^[٠-٩]$/, "٠"],
+  [/^[۰-۹]$/, "۰"],
+];
+export function zeroPadNumber(number: string): string {
+  const n = number.trim();
+  for (const [re, zero] of ZERO_OF) if (re.test(n)) return zero + n;
+  return number;
+}
+
 /* a paint every "flat" design can share: no gloss, no rim, just the colour */
 const flat = (accent: string): CSSProperties => ({ background: accent });
 /* two concentric rims — the double-ring look */
@@ -219,6 +276,29 @@ const dottedRim = (accent: string, size: number): CSSProperties => ({
 });
 
 export const NUMBER_STYLES: NumberStyleDef[] = [
+  /* --- bullet points: the classic list bullets (they replace the number) --- */
+  { id: "dot", label: "Dot", category: "bullets", hint: "The classic round bullet — a plain dot, no number", points: DOT },
+  { id: "hollowDot", label: "Hollow dot", category: "bullets", hint: "An open ring bullet — no number", points: DOT, line: 0.07, lineColor: (a) => a, paint: hollow },
+  { id: "squareDot", label: "Small square", category: "bullets", hint: "A solid square bullet — no number", points: SQUARE_DOT },
+  { id: "hollowSquare", label: "Hollow square", category: "bullets", hint: "An open square bullet — no number", points: SQUARE_DOT, line: 0.07, lineColor: (a) => a, paint: hollow },
+  { id: "diamondDot", label: "Small diamond", category: "bullets", hint: "A diamond bullet — no number", points: DIAMOND_DOT },
+  { id: "triangleDot", label: "Small triangle", category: "bullets", hint: "A triangle pointing at the question — no number", points: TRIANGLE_DOT },
+  { id: "dash", label: "Dash", category: "bullets", hint: "A dash bullet — no number", points: DASH },
+  { id: "arrowhead", label: "Arrowhead", category: "bullets", hint: "An arrowhead bullet — no number", points: ARROWHEAD },
+  { id: "chevron", label: "Chevron", category: "bullets", hint: "A chevron bullet, like ›  — no number", points: CHEVRON },
+  { id: "check", label: "Check mark", category: "bullets", hint: "A check-mark bullet — no number", points: CHECK },
+  { id: "starDot", label: "Small star", category: "bullets", hint: "A star bullet — no number", points: STAR_DOT },
+
+  /* --- numbering: the number with its own punctuation, no shape ------------ */
+  { id: "numDot", label: "1.", category: "numbering", hint: "The number with a full stop — 1. 2. 3.", format: (n) => `${n}.`, aspect: 1.1, font: 0.46 },
+  { id: "numParen", label: "1)", category: "numbering", hint: "The number with a closing bracket — 1) 2) 3)", format: (n) => `${n})`, aspect: 1.1, font: 0.46 },
+  { id: "numParens", label: "(1)", category: "numbering", hint: "The number in round brackets — (1) (2) (3)", format: (n) => `(${n})`, aspect: 1.35, font: 0.46 },
+  { id: "numColon", label: "1:", category: "numbering", hint: "The number with a colon — 1: 2: 3:", format: (n) => `${n}:`, aspect: 1.1, font: 0.46 },
+  { id: "numZero", label: "01", category: "numbering", hint: "Two digits with a leading zero — 01 02 03", format: zeroPadNumber, aspect: 1.3, font: 0.46 },
+  { id: "numQ", label: "Q1", category: "numbering", hint: "Q before the number — Q1 Q2 Q3", format: (n) => `Q${n}`, aspect: 1.4, font: 0.46 },
+  { id: "numHash", label: "#1", category: "numbering", hint: "A hash before the number — #1 #2 #3", format: (n) => `#${n}`, aspect: 1.3, font: 0.46 },
+  { id: "numBar", label: "1 |", category: "numbering", hint: "The number with an upright divider — 1 | 2 | 3 |", format: (n) => `${n} |`, aspect: 1.35, font: 0.46 },
+
   /* --- round & soft ------------------------------------------------------ */
   { id: "circle", label: "Circle", category: "curve", hint: "Classic disc with a hairline rim — the default", line: 0.07, radius: "50%" },
   { id: "ring", label: "Ring", category: "curve", hint: "Hollow circle: a bold outline with a tinted centre", line: 0.1, radius: "50%" },
@@ -310,9 +390,12 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
 
 const DEF_BY_ID = new Map<NumberStyle, NumberStyleDef>(NUMBER_STYLES.map((d) => [d.id, d]));
 
-export const numberStyleDef = (id: NumberStyle): NumberStyleDef => DEF_BY_ID.get(id) ?? NUMBER_STYLES[0];
-
 export const DEFAULT_NUMBER_STYLE: NumberStyle = "circle";
+
+/** an id the catalogue doesn't know (an older deck, a typo) falls back to the default disc */
+const FALLBACK_DEF: NumberStyleDef = DEF_BY_ID.get(DEFAULT_NUMBER_STYLE) ?? NUMBER_STYLES[0];
+
+export const numberStyleDef = (id: NumberStyle): NumberStyleDef => DEF_BY_ID.get(id) ?? FALLBACK_DEF;
 
 /** styles whose box is wider than it is tall */
 export const numberStyleAspect = (id: NumberStyle): number => numberStyleDef(id).aspect ?? 1;
@@ -332,9 +415,18 @@ export const numberStyleLineWeight = (id: NumberStyle, size: number): number => 
   return l === undefined ? 0 : Math.round(Math.max(1.5, l * size) * 10) / 10;
 };
 
-/** designs that show no number */
-const BLANK: NumberStyle[] = ["underline", "bar", "none"];
+/** designs that show no number — the rules, and the classic bullets that stand in for it */
+const BLANK: NumberStyle[] = [
+  "underline", "bar", "none",
+  "dot", "hollowDot", "squareDot", "hollowSquare", "diamondDot", "triangleDot",
+  "dash", "arrowhead", "chevron", "check", "starDot",
+];
 export const showsNumber = (id: NumberStyle) => !BLANK.includes(id);
+
+/** the classic bullet points — a glyph instead of a number */
+export const isBulletPoint = (id: NumberStyle) => numberStyleDef(id).category === "bullets";
+/** the numbering presets — the number with its own punctuation */
+export const isNumberingPreset = (id: NumberStyle) => !!numberStyleDef(id).format;
 
 /** the silhouette's points, when the design is cut with clip-path */
 export const numberStylePoints = (id: NumberStyle): [number, number][] | undefined => numberStyleDef(id).points;
@@ -676,6 +768,19 @@ export function renderNumberStyle(
 
       /* --- every cut silhouette shares one path ---------------------------- */
       default: {
+        /* --- a numbering preset: the number and its punctuation, no shape --- */
+        if (def.format) {
+          const fontScale = def.font ?? 0.46;
+          return {
+            style: { ...box(wide, size, Math.round(size * fontScale)), whiteSpace: "nowrap" },
+            surface: {},
+            content: text ? def.format(text) : "",
+            fontScale,
+            color: accent,
+            aspect,
+          };
+        }
+
         if (def.points) {
           const fontScale = def.font ?? 0.4;
           const pad = def.pad;
@@ -694,6 +799,10 @@ export function renderNumberStyle(
               paddingLeft: pad ? Math.round(size * pad[3]) : 0,
             },
             surface: { ...base, ...painted },
+            /* a cut silhouette's own line (the hollow bullets) is stroked over the clip in SVG */
+            line: def.line
+              ? { color: def.lineColor ? def.lineColor(accent) : withAlpha("#ffffff", 0.5), width: Math.max(1.5, def.line * size) }
+              : undefined,
             content: text,
             fontScale,
             color: def.ink ? def.ink(accent) : "#ffffff",
@@ -723,7 +832,9 @@ export function renderNumberStyle(
           return {
             style: box(wide, size, Math.round(size * fontScale)),
             surface: { ...base, ...painted },
-            line: def.line ? { color: withAlpha("#ffffff", 0.5), width: Math.max(1.5, def.line * size) } : undefined,
+            line: def.line
+              ? { color: def.lineColor ? def.lineColor(accent) : withAlpha("#ffffff", 0.5), width: Math.max(1.5, def.line * size) }
+              : undefined,
             content: text,
             fontScale,
             color: def.ink ? def.ink(accent) : "#ffffff",

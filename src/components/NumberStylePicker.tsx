@@ -3,6 +3,8 @@ import type { ThemeSettings } from "../lib/types";
 import {
   NUMBER_STYLES,
   NUMBER_STYLE_CATEGORIES,
+  isBulletPoint,
+  isNumberingPreset,
   numberStyleDef,
   renderNumberStyle,
   type NumberStyle,
@@ -58,16 +60,28 @@ interface Props {
 
 const ALL: NumberStyleCategory | "all" = "all";
 
+/** what the footer says about the design that is on */
+function describe(id: NumberStyle): string {
+  const def = numberStyleDef(id);
+  if (id === "none") return "No numbering mark is drawn. Turn on “Number inside bullet” if you want the number back.";
+  if (isBulletPoint(id))
+    return `${def.hint}. A bullet point stands in for the number, like a list bullet does — its colour, outline, transparency and effect are still yours to change below.`;
+  if (isNumberingPreset(id))
+    return `${def.hint}. A numbering preset paints the number with its punctuation and no shape; its ink, face and size live under Q bullet text.`;
+  return `${def.hint}. Every design derives from the accent colour, and its fill, outline, corners and transparency are yours to change below.`;
+}
+
 /**
- * The bullet-design gallery: every silhouette the question marker can wear,
- * grouped the way a picker is browsed (round, cards, polygons, seals, marks,
- * stickers) and previewed with the deck's own colours. Picking one writes
- * `numberStyle`.
+ * The bullet-point preset gallery: the classic bullets (dot, hollow dot,
+ * square, dash, arrowhead, check…), the numbering presets ("7." · "(7)" ·
+ * "Q7" · "07") and every silhouette the question marker can wear, grouped the
+ * way a picker is browsed and previewed with the deck's own colours. Picking
+ * one writes `numberStyle`.
  */
 export default function NumberStylePicker({
   theme,
   setTheme,
-  title = "Bullet design",
+  title = "Bullet point presets",
   controls = "designs",
   maxHeight = "max-h-64",
 }: Props) {
@@ -80,7 +94,7 @@ export default function NumberStylePicker({
       <div className="flex items-baseline justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">{title}</span>
         <span className="text-[10px] text-slate-500">
-          {NUMBER_STYLES.length} designs · now {numberStyleDef(current).label}
+          {NUMBER_STYLES.length} presets · now {numberStyleDef(current).label}
         </span>
       </div>
 
@@ -158,11 +172,7 @@ export default function NumberStylePicker({
         })}
       </div>
 
-      <p className="text-[10px] leading-relaxed text-slate-500">
-        {current === "none"
-          ? "No numbering mark is drawn. Turn on “Number inside bullet” if you want the number back."
-          : `${numberStyleDef(current).hint}. Every design derives from the accent colour, and its fill, outline, corners and transparency are yours to change below.`}
-      </p>
+      <p className="text-[10px] leading-relaxed text-slate-500">{describe(current)}</p>
     </div>
   );
 }

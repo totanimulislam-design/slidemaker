@@ -26,9 +26,13 @@ import { DEFAULT_LOGO, type ThemeSettings } from "../src/lib/types";
 import {
   NUMBER_STYLES,
   NUMBER_STYLE_CATEGORIES,
+  isBulletPoint,
+  isNumberingPreset,
   numberStyleAspect,
+  numberStyleDef,
   renderNumberStyle,
   showsNumber,
+  zeroPadNumber,
   type NumberStyle,
 } from "../src/lib/numberStyles";
 import { BULLET_EFFECTS, BULLET_EFFECT_GROUPS } from "../src/lib/bulletEffects";
@@ -108,7 +112,7 @@ const BASE: ThemeSettings = {
 const designBtn = (label: string) => pop()?.querySelector(`[aria-label="Bullet design: ${label}"]`) ?? null;
 /** the bullet design card's three tabs */
 const tabBtn = (label: string) => pop()?.querySelector(`[aria-label="Bullet design tab: ${label}"]`) ?? null;
-const styleBtn = (label: string) => pop()?.querySelector(`[aria-label="Shape style: ${label}"]`) ?? null;
+const styleBtn = (label: string) => pop()?.querySelector(`[aria-label="Shape: ${label}"]`) ?? null;
 const effectBtn = (label: string) => pop()?.querySelector(`[aria-label="Shape effect: ${label}"]`) ?? null;
 /** a card's own tile (a border style, an option in a listbox) */
 const tile = (label: string) => pop()?.querySelector(`[aria-label="${label}"]`) ?? null;
@@ -123,7 +127,7 @@ const swatchIn = (hex: string) => pop()?.querySelector<HTMLElement>(`button[titl
 const effectBtnTab = () => {
   click(tabBtn("Shape effects"));
   click(effectBtn("None"));
-  click(tabBtn("Markers & stickers"));
+  click(tabBtn("Bullet point presets"));
   click(designBtn("Rounded"));
   return null;
 };
@@ -324,7 +328,7 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   const stylePatch = bulletStylePatch(BULLET_STYLES.find((x) => x.id === "goldSeal")!);
   const styled = renderNumberStyle("scallop", { ...BASE, ...stylePatch } as ThemeSettings, 54, "৭");
   out.push({
-    name: "a one-click shape style writes the whole marker at once (fill · line · effect)",
+    name: "a one-click shape writes the whole marker at once (fill · line · effect)",
     pass:
       String(styled.surface.background).includes("gradient") &&
       !!styled.effect &&
@@ -365,9 +369,85 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     }
   }
   out.push({
-    name: "every shape style renders (none throws, none comes out empty)",
+    name: "every shape renders (none throws, none comes out empty)",
     pass: brokenStyle.length === 0 && BULLET_STYLE_GROUPS.length >= 6,
     detail: brokenStyle.join(" · ") || `${BULLET_STYLES.length} styles · ${BULLET_STYLE_GROUPS.length} groups`,
+  });
+
+  /* ---------------- the presets the renamed tabs are named after ---------- */
+  const bulletPoints = NUMBER_STYLES.filter((d) => d.category === "bullets");
+  const numbering = NUMBER_STYLES.filter((d) => d.category === "numbering");
+  const wantedBullets: NumberStyle[] = ["dot", "hollowDot", "squareDot", "hollowSquare", "dash", "arrowhead", "chevron", "check", "starDot"];
+  out.push({
+    name: "Bullet point presets open with the classic bullets (dot · hollow dot · square · dash · arrowhead · chevron · check · star) and the numbering formats",
+    pass:
+      NUMBER_STYLE_CATEGORIES[0]?.id === "bullets" &&
+      NUMBER_STYLE_CATEGORIES[1]?.id === "numbering" &&
+      bulletPoints.length >= 9 &&
+      numbering.length >= 6 &&
+      wantedBullets.every((id) => bulletPoints.some((d) => d.id === id)) &&
+      NUMBER_STYLES.findIndex((d) => d.category === "bullets") === 0,
+    detail: `${bulletPoints.length} bullets · ${numbering.length} numbering · groups ${NUMBER_STYLE_CATEGORIES.map((c) => c.label).join("/")}`,
+  });
+
+  /* a classic bullet is a small cut silhouette in the middle of a full-size box, and no number */
+  const dotRender = renderNumberStyle("dot", { ...BASE }, 54, "৭");
+  const hollowRender = renderNumberStyle("hollowDot", { ...BASE }, 54, "৭");
+  out.push({
+    name: "a bullet point stands in for the number: a cut glyph in a full-size box, the hollow ones stroked as a ring in the accent",
+    pass:
+      bulletPoints.every((d) => !showsNumber(d.id) && isBulletPoint(d.id)) &&
+      dotRender.content === "" &&
+      Number(dotRender.style.width) === 54 &&
+      !!dotRender.surface.clipPath &&
+      hollowRender.surface.background === "transparent" &&
+      !!hollowRender.outline &&
+      hollowRender.outline.color === BASE.accent &&
+      hollowRender.outline.width > 2,
+    detail: `dot ${dotRender.style.width}px clip=${dotRender.surface.clipPath ? "yes" : "no"} · hollow ring ${hollowRender.outline?.width}px ${hollowRender.outline?.color}`,
+  });
+
+  /* the numbering presets keep the number and add the punctuation, in the number's own script */
+  const fmt = (id: NumberStyle, n: string) => renderNumberStyle(id, { ...BASE }, 54, n).content;
+  const hiddenFmt = renderNumberStyle("numDot", { ...BASE, showNumber: false }, 54, "৭").content;
+  out.push({
+    name: "a numbering preset paints the number with its punctuation and no shape — 7. · (7) · Q7 · 07 — a leading zero in the number's own script",
+    pass:
+      numbering.every((d) => showsNumber(d.id) && isNumberingPreset(d.id) && !renderNumberStyle(d.id, { ...BASE }, 54, "৭").surface.clipPath) &&
+      fmt("numDot", "৭") === "৭." &&
+      fmt("numParen", "7") === "7)" &&
+      fmt("numParens", "৭") === "(৭)" &&
+      fmt("numQ", "7") === "Q7" &&
+      fmt("numHash", "7") === "#7" &&
+      fmt("numZero", "7") === "07" &&
+      fmt("numZero", "৭") === "০৭" &&
+      fmt("numZero", "12") === "12" &&
+      zeroPadNumber("१") === "०१" &&
+      hiddenFmt === "" &&
+      Number(renderNumberStyle("numParens", { ...BASE }, 54, "৭").style.width) > 54,
+    detail: `${fmt("numDot", "৭")} · ${fmt("numParens", "৭")} · ${fmt("numQ", "7")} · ${fmt("numZero", "7")} · ${fmt("numZero", "৭")} · hidden="${hiddenFmt}"`,
+  });
+
+  out.push({
+    name: "an id the catalogue doesn't know still falls back to the default disc (the list no longer opens with it)",
+    pass: numberStyleDef("bogus" as NumberStyle).id === "circle" && NUMBER_STYLES[0].id !== "circle",
+    detail: `fallback ${numberStyleDef("bogus" as NumberStyle).id} · first tile ${NUMBER_STYLES[0].id}`,
+  });
+
+  const geometric = BULLET_STYLES.filter((s) => s.group === "Geometric");
+  const organic = BULLET_STYLES.filter((s) => s.group === "Organic");
+  const shapeLed = [...geometric, ...organic];
+  out.push({
+    name: "the Shape tab opens with shape-led families — Geometric and Organic — each look wearing a different silhouette",
+    pass:
+      BULLET_STYLE_GROUPS[0] === "Geometric" &&
+      BULLET_STYLE_GROUPS[1] === "Organic" &&
+      geometric.length >= 10 &&
+      organic.length >= 5 &&
+      BULLET_STYLES[0].group === "Geometric" &&
+      new Set(shapeLed.map((s) => s.patch.numberStyle)).size === shapeLed.length &&
+      shapeLed.every((s) => NUMBER_STYLES.some((d) => d.id === s.patch.numberStyle)),
+    detail: `${geometric.length} geometric · ${organic.length} organic · ${BULLET_STYLES.length} shapes in all`,
   });
 
   /* ---------------------------- the toolbar line --------------------------- */
@@ -413,10 +493,10 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   /* ----------------------- the bullet design card ------------------------- */
   click(barButton("Bullet design"));
   out.push({
-    name: "Bullet design opens one card with three tabs: markers & stickers · shape style · shape effects",
+    name: "Bullet design opens one card with three tabs: bullet point presets · shape · shape effects",
     pass:
       pop()?.getAttribute("data-pop-panel") === "Bullet design" &&
-      ["Markers & stickers", "Shape style", "Shape effects"].every((t) => !!tabBtn(t)),
+      ["Bullet point presets", "Shape", "Shape effects"].every((t) => !!tabBtn(t)),
     detail: `panel ${pop()?.getAttribute("data-pop-panel")} · tabs ${Array.from(pop()?.querySelectorAll('[role="tab"]') ?? []).map((t) => t.textContent?.trim()).join("/")}`,
   });
 
@@ -424,13 +504,19 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   const groups = pop()?.querySelectorAll('[aria-label="Bullet design group"] button').length ?? 0;
   const markersCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
   out.push({
-    name: "the markers tab lists the whole gallery — the sticker family included — with its size and base colour",
+    name: "the Bullet point presets tab lists the whole gallery — bullet points, numbering, the sticker family — with its size and base colour",
     pass:
-      listed >= 60 &&
-      groups >= 6 &&
+      listed >= 80 &&
+      groups >= 8 &&
       !!popInput("Bullet size") &&
+      markersCard.includes("Bullet point presets") &&
       markersCard.includes("Bullet colour") &&
-      markersCard.includes("Stickers"),
+      markersCard.includes("Bullet points") &&
+      markersCard.includes("Numbering") &&
+      markersCard.includes("Stickers") &&
+      !!designBtn("Dot") &&
+      !!designBtn("Check mark") &&
+      !!designBtn("(1)"),
     detail: `${listed} designs · ${groups} groups · size ${popInput("Bullet size") ? "yes" : "no"}`,
   });
 
@@ -440,16 +526,35 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     pass: !!surface()?.style.clipPath,
     detail: `clip ${surface()?.style.clipPath ? "seal" : "—"}`,
   });
+
+  /* a classic bullet point on the board: the glyph is cut out of the body, and the number goes */
+  click(designBtn("Check mark"));
+  const checkClip = surface()?.style.clipPath ?? "";
+  const checkDigits = digits()?.textContent ?? "";
+  out.push({
+    name: "picking a bullet point paints the glyph instead of the number (a check mark cut out of the marker's body)",
+    pass: checkClip.startsWith("polygon(") && checkDigits === "" && !!body(),
+    detail: `clip ${checkClip.slice(0, 32)}… · digits "${checkDigits}"`,
+  });
+
+  /* a numbering preset on the board: the number keeps its script and gains its punctuation */
+  click(designBtn("(1)"));
+  const parensText = (marker()?.textContent ?? "").trim();
+  out.push({
+    name: "picking a numbering preset wraps the slide's own number — (১) — with no shape body behind it",
+    pass: parensText === "(১)" && !surface(),
+    detail: `marker text "${parensText}" · surface ${surface() ? "yes" : "no"}`,
+  });
   click(designBtn("Circle"));
 
   /* the marker grows, and the corner slider's ceiling grows with it */
   type(popInput("Bullet size"), "120");
 
-  click(tabBtn("Shape style"));
-  const styleTiles = pop()?.querySelectorAll('[aria-label^="Shape style:"]').length ?? 0;
+  click(tabBtn("Shape"));
+  const styleTiles = pop()?.querySelectorAll('[aria-label^="Shape:"]').length ?? 0;
   click(styleBtn("Gold seal"));
   out.push({
-    name: "a shape style is one click: the tile writes the marker's fill, line and effect together",
+    name: "a shape is one click: the tile writes the marker's silhouette, fill, line and effect together",
     pass:
       styleTiles >= 24 &&
       css(surface()).includes("gradient") &&

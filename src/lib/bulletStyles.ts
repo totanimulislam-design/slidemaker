@@ -2,23 +2,30 @@ import type { Gradient, ShapeEffectKind, ThemeSettings } from "./types";
 import type { NumberBorderStyle } from "./types";
 
 /**
- * Shape styles for the question marker — one-click looks.
+ * Shapes for the question marker — one-click looks (the Bullet design card's
+ * **Shape** tab).
  *
- * A style is nothing but a set of the marker's own channels written together:
- * the silhouette it wears, its fill (solid or gradient), its line (colour,
- * style, weight), its corners, its transparency and the shape effect on top.
- * Picking one writes all of them at once, so a teacher can go from "a plain
- * blue circle" to "a gold seal with a bevel" in one click and then fine-tune
- * any single channel from the toolbar.
+ * A shape here is nothing but a set of the marker's own channels written
+ * together: the silhouette it wears, its fill (solid or gradient), its line
+ * (colour, style, weight), its corners, its transparency and the shape effect
+ * on top. Picking one writes all of them at once, so a teacher can go from "a
+ * plain blue circle" to "a gold seal with a bevel" in one click and then
+ * fine-tune any single channel from the toolbar.
  *
- * The looks are the ones exam papers, coaching slides, workbooks and the big
- * design tools keep reaching for — the classic rimmed disc, the chalk-dashed
- * circle, the crimson capsule, the die-cut sticker, the neon tube, the gold
- * rosette, the midnight-and-gold card, the material / 3-D badge — collected
- * from those conventions rather than from any one product.
+ * The list opens with the shape-led families — **Geometric** (hexagon,
+ * octagon, diamond, pentagon, triangle, kite, plinth, arrow, slant, plus,
+ * speech bubble, bookmark) and **Organic** (cloud, drop, blob, sparkle, heart,
+ * bubble, wavy sun) — each silhouette dressed in the paint it is usually seen
+ * in. The rest are the looks exam papers, coaching slides, workbooks and the
+ * big design tools keep reaching for — the classic rimmed disc, the
+ * chalk-dashed circle, the crimson capsule, the die-cut sticker, the neon
+ * tube, the gold rosette, the midnight-and-gold card, the material / 3-D
+ * badge — collected from those conventions rather than from any one product.
  */
 
 export type BulletStyleGroup =
+  | "Geometric"
+  | "Organic"
   | "Exam classic"
   | "Soft & minimal"
   | "Bold sticker"
@@ -29,6 +36,8 @@ export type BulletStyleGroup =
   | "Hand drawn";
 
 export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
+  "Geometric",
+  "Organic",
   "Exam classic",
   "Soft & minimal",
   "Bold sticker",
@@ -103,6 +112,178 @@ const style = (
 ): BulletStyle => ({ id, label, group, hint, patch: { ...plain, ...patch } });
 
 export const BULLET_STYLES: BulletStyle[] = [
+  /* ---------------------------------------------------------- geometric -- */
+  style("hexTile", "Hex tile", "Geometric", "A teal hexagon tile with a pale rim", {
+    numberStyle: "hexagon",
+    bulletFillGradient: grad(150, "#2dd4bf", "#0f766e"),
+    bulletBorder: "#ccfbf1",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 45,
+  }),
+  style("octagonStop", "Octagon stop", "Geometric", "The stop-sign octagon in red with a white rim", {
+    numberStyle: "octagon",
+    bulletFill: "#dc2626",
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2.5,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("diamondStud", "Diamond stud", "Geometric", "A bevelled diamond, sky to indigo", {
+    numberStyle: "diamond",
+    bulletFillGradient: grad(135, "#7dd3fc", "#4338ca"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "bevel",
+    bulletEffectIntensity: 55,
+  }),
+  style("pentagonBadge", "Pentagon badge", "Geometric", "An amber pentagon badge", {
+    numberStyle: "pentagon",
+    bulletFillGradient: grad(160, "#fbbf24", "#b45309"),
+    bulletBorder: "#fff7ed",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("triangleFlag", "Triangle flag", "Geometric", "An orange triangle with a hard shadow", {
+    numberStyle: "triangle",
+    bulletFill: "#f97316",
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "pop",
+    bulletEffectColor: "#7c2d12",
+    bulletEffectIntensity: 30,
+  }),
+  style("violetKite", "Violet kite", "Geometric", "A tall kite in violet that glows", {
+    numberStyle: "kite",
+    bulletFillGradient: grad(160, "#c084fc", "#6b21a8"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "glow",
+    bulletEffectColor: "#d8b4fe",
+    bulletEffectIntensity: 45,
+  }),
+  style("slatePlinth", "Plinth", "Geometric", "A slate trapezoid with a gold rim", {
+    numberStyle: "trapezoid",
+    bulletFill: "#334155",
+    bulletBorder: "#fbbf24",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "innerShadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("arrowStep", "Arrow step", "Geometric", "A green arrow pointing at the question", {
+    numberStyle: "arrowRight",
+    bulletFillGradient: grad(90, "#4ade80", "#15803d"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "lift",
+    bulletEffectIntensity: 45,
+  }),
+  style("slantStripe", "Slant stripe", "Geometric", "A blue parallelogram with a long shadow", {
+    numberStyle: "slant",
+    bulletFillGradient: grad(120, "#60a5fa", "#1d4ed8"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "longShadow",
+    bulletEffectColor: "#1e3a8a",
+    bulletEffectIntensity: 50,
+  }),
+  style("plusBlock", "Plus block", "Geometric", "A rose plus block with a white rim", {
+    numberStyle: "cross",
+    bulletFill: "#f43f5e",
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("speechBubble", "Speech bubble", "Geometric", "A sky-blue speech bubble with a hard shadow", {
+    numberStyle: "speech",
+    bulletFill: "#0ea5e9",
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "pop",
+    bulletEffectColor: "#0c4a6e",
+    bulletEffectIntensity: 30,
+  }),
+  style("bookmarkRed", "Bookmark", "Geometric", "A red bookmark tab", {
+    numberStyle: "bookmark",
+    bulletFillGradient: grad(180, "#f87171", "#b91c1c"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+
+  /* ------------------------------------------------------------ organic -- */
+  style("softCloud", "Soft cloud", "Organic", "A blue cloud floating on a soft shadow", {
+    numberStyle: "cloud",
+    bulletFillGradient: grad(180, "#93c5fd", "#3b82f6"),
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "float",
+    bulletEffectIntensity: 35,
+  }),
+  style("aquaDrop", "Aqua drop", "Organic", "A glossy cyan drop", {
+    numberStyle: "drop",
+    bulletFillGradient: grad(170, "#22d3ee", "#0e7490"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "gloss",
+    bulletEffectIntensity: 50,
+  }),
+  style("coralBlob", "Coral blob", "Organic", "A hand-pulled blob in coral", {
+    numberStyle: "blob",
+    bulletFillGradient: grad(140, "#fb7185", "#be123c"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "lift",
+    bulletEffectIntensity: 45,
+  }),
+  style("mintSparkle", "Mint sparkle", "Organic", "A four-point glint in mint", {
+    numberStyle: "sparkle",
+    bulletFillGradient: grad(150, "#6ee7b7", "#047857"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "glow",
+    bulletEffectColor: "#a7f3d0",
+    bulletEffectIntensity: 40,
+  }),
+  style("roseHeart", "Rose heart", "Organic", "A rose heart with a pale rim", {
+    numberStyle: "heart",
+    bulletFillGradient: grad(160, "#f472b6", "#be185d"),
+    bulletBorder: "#fff1f2",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("skyBubble", "Sky bubble", "Organic", "A round speech bubble in deep sky", {
+    numberStyle: "bubbleRound",
+    bulletFill: "#0284c7",
+    bulletBorder: "#e0f2fe",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "pop",
+    bulletEffectColor: "#0c4a6e",
+    bulletEffectIntensity: 30,
+  }),
+  style("wavySun", "Wavy sun", "Organic", "A rippled sun in amber that glows", {
+    numberStyle: "wavy",
+    bulletFillGradient: grad(150, "#fcd34d", "#d97706"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "glow",
+    bulletEffectColor: "#fde68a",
+    bulletEffectIntensity: 40,
+  }),
+
   /* ------------------------------------------------------- exam classic -- */
   style("classicDisc", "Classic disc", "Exam classic", "The rimmed disc every question paper wears", {
     numberStyle: "circle",

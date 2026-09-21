@@ -21,16 +21,20 @@ import { cn } from "../utils/cn";
  *
  * Three tabs, in the order a teacher reaches for them:
  *
- *   Markers & stickers   the silhouette itself — circles, chips, polygons,
- *                        seals, marks and the sticker family — plus its size
- *                        and base colour.
- *   Shape style          one-click looks: a whole set of channels written
- *                        together (fill · line · corners · effect), so "gold
- *                        seal" or "neon tube" is a single click.
- *   Shape effects        the effects an object can wear — shadow, glow, neon,
- *                        bevel, 3-D, reflection, material, texture, soft edges,
- *                        sticker outline… — each with its own intensity and
- *                        colour.
+ *   Bullet point presets   what the marker is — the classic bullet points
+ *                          (dot, hollow dot, square, dash, arrowhead, check…),
+ *                          the numbering presets ("7." · "(7)" · "Q7" · "07")
+ *                          and every silhouette: circles, chips, polygons,
+ *                          seals, marks and the sticker family — plus its
+ *                          size and base colour.
+ *   Shape                  one-click shapes: a silhouette dressed in a whole
+ *                          set of channels written together (fill · line ·
+ *                          corners · effect), so "hex tile", "gold seal" or
+ *                          "neon tube" is a single click.
+ *   Shape effects          the effects an object can wear — shadow, glow,
+ *                          neon, bevel, 3-D, reflection, material, texture,
+ *                          soft edges, sticker outline… — each with its own
+ *                          intensity and colour.
  *
  * Everything is previewed with the deck's own theme through the same renderer
  * the board uses, so a tile is the marker as it will actually paint. The
@@ -46,8 +50,8 @@ interface Props {
 type Tab = "designs" | "style" | "effects";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
-  { id: "designs", label: "Markers & stickers", hint: "The silhouette the number sits in" },
-  { id: "style", label: "Shape style", hint: "One-click looks: fill, line and effect together" },
+  { id: "designs", label: "Bullet point presets", hint: "Classic bullets, numbering and every marker silhouette" },
+  { id: "style", label: "Shape", hint: "One-click shapes: silhouette, fill, line and effect together" },
   { id: "effects", label: "Shape effects", hint: "Shadow, glow, bevel, texture and the rest" },
 ];
 
@@ -108,7 +112,7 @@ export default function BulletDesignPanel({ theme: T, setTheme }: Props) {
       <p className="-mt-1 text-[10px] leading-relaxed text-slate-500">{hint}</p>
 
       {tab === "designs" && (
-        <NumberStylePicker theme={T} setTheme={setTheme} title="Markers & stickers" controls="full" maxHeight="max-h-52" />
+        <NumberStylePicker theme={T} setTheme={setTheme} title="Bullet point presets" controls="full" maxHeight="max-h-52" />
       )}
       {tab === "style" && <StyleTab theme={T} setTheme={setTheme} />}
       {tab === "effects" && <EffectsTab theme={T} setTheme={setTheme} />}
@@ -117,7 +121,7 @@ export default function BulletDesignPanel({ theme: T, setTheme }: Props) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Shape style — one-click looks                                      */
+/*  Shape — one-click shapes (silhouette · fill · line · effect)       */
 /* ------------------------------------------------------------------ */
 
 function StyleTab({ theme: T, setTheme }: Props) {
@@ -128,24 +132,24 @@ function StyleTab({ theme: T, setTheme }: Props) {
   return (
     <div className="space-y-2" data-bullet-style-tab="">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Shape style</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Shape</span>
         <span className="text-[10px] text-slate-500">
-          {BULLET_STYLES.length} looks · {current ? BULLET_STYLE_BY_ID.get(current)?.label : "custom"}
+          {BULLET_STYLES.length} shapes · {current ? BULLET_STYLE_BY_ID.get(current)?.label : "custom"}
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-1" role="group" aria-label="Shape style group">
-        <Chip on={group === "all"} onClick={() => setGroup("all")} label="All shape styles">
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Shape group">
+        <Chip on={group === "all"} onClick={() => setGroup("all")} label="All shapes">
           All
         </Chip>
         {BULLET_STYLE_GROUPS.map((g) => (
-          <Chip key={g} on={group === g} onClick={() => setGroup(g)} label={`Shape styles: ${g}`}>
+          <Chip key={g} on={group === g} onClick={() => setGroup(g)} label={`Shapes: ${g}`}>
             {g}
           </Chip>
         ))}
       </div>
 
-      <div className="grid max-h-56 grid-cols-4 gap-1.5 overflow-y-auto p-0.5" role="listbox" aria-label="Shape style">
+      <div className="grid max-h-56 grid-cols-4 gap-1.5 overflow-y-auto p-0.5" role="listbox" aria-label="Shape">
         {shown.map((s) => {
           const chosen = current === s.id;
           const patched: ThemeSettings = { ...T, ...s.patch } as ThemeSettings;
@@ -155,7 +159,7 @@ function StyleTab({ theme: T, setTheme }: Props) {
               type="button"
               role="option"
               aria-selected={chosen}
-              aria-label={`Shape style: ${s.label}`}
+              aria-label={`Shape: ${s.label}`}
               title={s.hint}
               onClick={() => setTheme(bulletStylePatch(s))}
               className={cn(
@@ -181,8 +185,8 @@ function StyleTab({ theme: T, setTheme }: Props) {
 
       <p className="text-[10px] leading-relaxed text-slate-500">
         {current
-          ? `${BULLET_STYLE_BY_ID.get(current)?.hint}. Fine-tune any channel on the toolbar — the tile stops claiming the look as soon as one is edited.`
-          : "A style writes the marker's fill, line, corners, transparency and effect together. Fine-tune any of them afterwards on the toolbar line."}
+          ? `${BULLET_STYLE_BY_ID.get(current)?.hint}. Fine-tune any channel on the toolbar — the tile stops claiming the shape as soon as one is edited.`
+          : "A shape writes the marker's silhouette, fill, line, corners, transparency and effect together. Fine-tune any of them afterwards on the toolbar line."}
       </p>
     </div>
   );
