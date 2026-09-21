@@ -36,7 +36,9 @@ export function previewTheme(preset: SlideDesignPreset): ThemeSettings {
 /** title plate CSS with the slide-scale positioning stripped out */
 function plateCss(t: ThemeSettings): { plate: CSSProperties; isRule: boolean } {
   const box = bannerCss(t.banner, t.titleColor).box;
-  const { position: _p, inset: _i, left: _l, right: _r, bottom: _b, top: _t, height: _h, pointerEvents: _pe, ...rest } =
+  // the miniature lays the plate out itself (a fixed inset), so the stage's own
+  // geometry and the glow's scale are stripped and only the paint is kept
+  const { position: _p, inset: _i, left: _l, right: _r, bottom: _b, top: _t, height: _h, transform: _tf, pointerEvents: _pe, ...rest } =
     box as CSSProperties & Record<string, unknown>;
   if (t.banner.shape === "none") return { plate: { display: "none" }, isRule: false };
   return { plate: rest as CSSProperties, isRule: t.banner.shape === "underline" };

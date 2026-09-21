@@ -409,12 +409,18 @@ export interface Gradient {
   cy?: number;
 }
 
+/**
+ * The title plate's outline, in the same words the markers use: a solid rule, a
+ * dashed one, dots, two parallel lines, or none at all.
+ */
+export type BannerBorderStyle = "solid" | "dashed" | "dotted" | "double" | "none";
+
 export interface BannerSettings {
   shape: BannerShape;
   /** solid colour (used when gradient is disabled) */
   color: string;
   gradient: Gradient;
-  /** 0–1 */
+  /** the SHAPE's own transparency 0–1 — the outline keeps its own below */
   opacity: number;
   /** soft edge / blur strength 0–100 (glow shape) */
   glow: number;
@@ -425,7 +431,23 @@ export interface BannerSettings {
   padY: number;
   /** corner radius for rounded / rect shapes, px */
   radius: number;
-  border: { enabled: boolean; color: string; width: number };
+  /**
+   * The plate's outline: its colour, thickness, line style and its own
+   * transparency (0–1, independent of the shape's).
+   */
+  border: { enabled: boolean; color: string; width: number; style?: BannerBorderStyle; opacity?: number };
+  /**
+   * Free plate box in px of the 1280 × 720 stage. Left out, the plate hugs the
+   * title text (its padding); set, the plate is painted at that exact size and
+   * centred on the title — and nothing clamps it, so it may be wider or taller
+   * than the board itself.
+   */
+  size?: { w?: number; h?: number };
+  /**
+   * Where the plate sits, as a nudge in px of the stage from its own place:
+   * x → right, y → down. Free of any limit, like the size.
+   */
+  pos?: { x?: number; y?: number };
   /** title text: solid colour or gradient */
   textGradient: Gradient;
   /** text glow */
@@ -453,7 +475,7 @@ export const DEFAULT_BANNER: BannerSettings = {
   padX: 6,
   padY: 26,
   radius: 18,
-  border: { enabled: false, color: "#ffd633", width: 2 },
+  border: { enabled: false, color: "#ffd633", width: 2, style: "solid", opacity: 1 },
   textGradient: {
     enabled: false,
     type: "linear",

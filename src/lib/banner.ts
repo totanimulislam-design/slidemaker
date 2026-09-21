@@ -1,5 +1,68 @@
-import type { BannerSettings, Gradient } from "./types";
+import type { BannerBorderStyle, BannerSettings, Gradient } from "./types";
 import { withAlpha } from "./color";
+
+/** the stage every deck is designed on (Slide.tsx) — the plate's px speak in it */
+export const BOARD_W = 1280;
+export const BOARD_H = 720;
+
+/**
+ * Every silhouette can wear an outline — the soft glow and the underline rule
+ * included, since the line follows the plate's own box. Only "none" (no plate)
+ * has nothing to outline.
+ */
+export const canOutline = (shape: BannerSettings["shape"]): boolean => shape !== "none";
+
+export const bannerBorderStyle = (b: BannerSettings): BannerBorderStyle => b.border.style ?? "solid";
+
+/** the outline is painted as its own layer, so it needs to exist at all */
+export const bannerHasLine = (b: BannerSettings): boolean =>
+  b.border.enabled && (b.border.opacity ?? 1) > 0 && b.border.width > 0 && bannerBorderStyle(b) !== "none" && canOutline(b.shape);
+
+export const clampOpacity = (v: number | undefined, fallback = 1): number =>
+  Math.max(0, Math.min(1, Number.isFinite(v) ? (v as number) : fallback));
+
+/** `+ 12px` / `- 12px` — a signed nudge inside a calc() */
+const nudge = (v: number) => (v < 0 ? `- ${Math.abs(v)}px` : `+ ${v}px`);
+
+/** the plate's box — free when the teacher sized it, else the title's own room */
+export function plateRect(b: BannerSettings): Pick<React.CSSProperties, "left" | "top" | "width" | "height"> {
+  const x = b.pos?.x ?? 0;
+  const y = b.pos?.y ?? 0;
+  const w = b.size?.w;
+  const h = b.size?.h;
+  return {
+    // free size is centred on the title (where the plate already sits), so
+    // resizing grows both ways and the glyphs stay in the middle of the plate
+    // the nudge stays a term of its own, so a plate can be read (and tested) as
+    // "centred, then moved" instead of one folded number
+    left: w === undefined ? `calc(-${b.padX}% ${nudge(x)})` : `calc(50% ${nudge(x)} ${nudge(-w / 2)})`,
+    top: h === undefined ? `calc(-${b.padY}% ${nudge(y)})` : `calc(50% ${nudge(y)} ${nudge(-h / 2)})`,
+    width: w === undefined ? `calc(100% + ${2 * b.padX}%)` : `${w}px`,
+    height: h === undefined ? `calc(100% + ${2 * b.padY}%)` : `${h}px`,
+  };
+}
+
+/** the plate's corner radius for the silhouette in use */
+export function plateRadius(b: BannerSettings): number | undefined {
+  if (b.shape === "pill") return 999;
+  if (b.shape === "rounded" || b.shape === "glow") return b.radius;
+  if (b.shape === "underline") return 999;
+  return undefined;
+}
+
+/** the rule under the title (the "underline" silhouette) has a shape of its own */
+function ruleRect(b: BannerSettings): Pick<React.CSSProperties, "left" | "bottom" | "width" | "height"> {
+  const x = b.pos?.x ?? 0;
+  const y = b.pos?.y ?? 0;
+  const w = b.size?.w;
+  return {
+    left: w === undefined ? `calc(-${b.padX}% ${nudge(x)})` : `calc(50% ${nudge(x - w / 2)})`,
+    bottom: `calc(-${Math.max(4, b.padY / 3)}% ${nudge(y)})`,
+    width: w === undefined ? `calc(100% + ${2 * b.padX}%)` : `${w}px`,
+    // the Height slider is a rule's thickness; the radius keeps its default
+    height: b.size?.h === undefined ? Math.max(4, b.radius / 2) : b.size.h,
+  };
+}
 
 /** CSS gradient string (or a solid colour when the gradient is off). */
 export function gradientCss(g: Gradient, fallback: string): string {
@@ -30,8 +93,13 @@ export function gradientCss(g: Gradient, fallback: string): string {
 export const baseColor = (g: Gradient, fallback: string) => (g.enabled && g.stops[0] ? g.stops[0].color : fallback);
 
 export interface BannerCss {
-  /** the box behind the title (absolute inside the title wrapper) */
+  /** the plate's body — fill, corners, silhouette and its own transparency */
   box: React.CSSProperties;
+  /**
+   * the outline, on a layer of its own: its transparency is the Border
+   * transparency, so it fades without taking the fill down with it
+   */
+  border?: React.CSSProperties;
   /** extra glow layer under the box, optional */
   halo?: React.CSSProperties;
   /** styles applied to the title text */
@@ -43,16 +111,20 @@ export interface BannerCss {
 /**
  * Builds all the CSS for a banner. Keeps everything inline so html-to-image,
  * thumbnails and the presenter render it identically.
+ *
+ * Geometry is free: the plate hugs the title by default (its padding), and as
+ * soon as `size` / `pos` carry numbers it is painted at exactly that box — in px
+ * of the 1280 × 720 stage, with no ceiling anywhere.
  */
 export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
   const fill = gradientCss(b.gradient, b.color);
   const base = baseColor(b.gradient, b.color);
+  const shapeOpacity = clampOpacity(b.opacity);
+  const radius = plateRadius(b);
   const common: React.CSSProperties = {
     position: "absolute",
     pointerEvents: "none",
-    opacity: b.opacity,
   };
-  const border = b.border.enabled ? `${b.border.width}px solid ${b.border.color}` : undefined;
 
   let box: React.CSSProperties;
   switch (b.shape) {
@@ -64,12 +136,10 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
       const g = Math.max(0, Math.min(100, b.glow));
       const inner = 30 + (100 - g) * 0.3; // where the fade starts
       const outer = 55 + g * 0.35; // where it reaches transparent
-      const stops = b.gradient.enabled
-        ? gradientCss({ ...b.gradient, type: "linear" }, b.color)
-        : undefined;
+      const stops = b.gradient.enabled ? gradientCss({ ...b.gradient, type: "linear" }, b.color) : undefined;
       box = {
         ...common,
-        inset: `-${b.padY}% -${b.padX}%`,
+        ...plateRect(b),
         background: stops
           ? `${stops}`
           : `radial-gradient(ellipse 52% 58% at 50% 50%, ${base} 0%, ${withAlpha(base, 0.75)} ${inner}%, ${withAlpha(base, 0)} ${outer}%)`,
@@ -83,47 +153,54 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
       };
       break;
     }
-    case "pill":
-      box = { ...common, inset: `-${b.padY}% -${b.padX}%`, background: fill, borderRadius: 999, border };
-      break;
-    case "rounded":
-      box = { ...common, inset: `-${b.padY}% -${b.padX}%`, background: fill, borderRadius: b.radius, border };
-      break;
-    case "rect":
-      box = { ...common, inset: `-${b.padY}% -${b.padX}%`, background: fill, border };
-      break;
     case "ribbon":
       box = {
         ...common,
-        inset: `-${b.padY}% -${b.padX}%`,
+        ...plateRect(b),
         background: fill,
-        border,
         clipPath: "polygon(0 0, 100% 0, calc(100% - 22px) 50%, 100% 100%, 0 100%, 22px 50%)",
       };
       break;
     case "underline":
-      box = {
-        ...common,
-        left: `-${b.padX}%`,
-        right: `-${b.padX}%`,
-        bottom: `-${Math.max(4, b.padY / 3)}%`,
-        height: Math.max(4, b.radius / 2),
-        background: fill,
-        borderRadius: 999,
-      };
+      box = { ...common, ...ruleRect(b), background: fill, borderRadius: 999 };
       break;
+    default:
+      // pill · rounded · box: one body, differing only in the corners
+      box = { ...common, ...plateRect(b), background: fill, borderRadius: radius };
   }
 
   const halo: React.CSSProperties | undefined =
     b.halo > 0 && b.shape !== "none"
       ? {
-          position: "absolute",
-          inset: `-${b.padY + b.halo * 0.6}% -${b.padX + b.halo * 0.25}%`,
+          ...common,
+          ...(b.shape === "underline" ? ruleRect(b) : plateRect(b)),
           background: `radial-gradient(ellipse at center, ${withAlpha(base, 0.55 * (b.halo / 100) + 0.15)} 0%, ${withAlpha(base, 0)} 70%)`,
+          // grows outward from the plate's own middle, whatever its size
+          transform: `scale(${1 + b.halo / 160})`,
           filter: `blur(${4 + b.halo * 0.3}px)`,
-          pointerEvents: "none",
         }
       : undefined;
+
+  /**
+   * The outline is its own layer: a transparent box wearing only a border, so
+   * Border transparency fades the line alone and never the paint behind it.
+   */
+  const borderLine: React.CSSProperties | undefined = bannerHasLine(b)
+    ? {
+        ...common,
+        ...(b.shape === "underline" ? ruleRect(b) : plateRect(b)),
+        border: `${b.border.width}px ${bannerBorderStyle(b)} ${withAlpha(b.border.color, clampOpacity(b.border.opacity))}`,
+        borderRadius: radius,
+        boxSizing: "border-box",
+        clipPath: b.shape === "ribbon" ? "polygon(0 0, 100% 0, calc(100% - 22px) 50%, 100% 100%, 0 100%, 22px 50%)" : undefined,
+      }
+    : undefined;
+
+  // the shape's transparency paints the body (and its own glow), never the line
+  if (b.shape !== "none") {
+    box.opacity = shapeOpacity;
+    if (halo) halo.opacity = shapeOpacity;
+  }
 
   const tg = b.textGradient;
   const textBase = tg.enabled && tg.stops[0] ? tg.stops[0].color : titleColor;
@@ -145,7 +222,39 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
       }
     : { color: titleColor, textShadow: shadows.join(", ") || undefined };
 
-  return { box, halo, text, padding: "10px 0" };
+  return { box, border: borderLine, halo, text, padding: "10px 0" };
+}
+
+/**
+ * Measures the plate as it is painted right now, in px of the 1280 × 720 stage,
+ * so "Banner size" can start from the plate the teacher is looking at instead
+ * of jumping the moment they touch a slider. Null when nothing is measured
+ * (no canvas yet) — callers then fall back to a sensible guess.
+ */
+export function measureBannerPlate(): { w: number; h: number } | null {
+  if (typeof document === "undefined") return null;
+  const board = document.querySelector<HTMLElement>(".slide-editable [data-board]");
+  const plate = document.querySelector<HTMLElement>(".slide-editable [data-banner-plate]");
+  if (!board || !plate) return null;
+  // CSS zoom (a non-transform scale) would already be inside offsetWidth
+  const k = BOARD_W / (board.offsetWidth || BOARD_W);
+  const w = Math.round(plate.offsetWidth * k);
+  const h = Math.round(plate.offsetHeight * k);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  return { w, h };
+}
+
+/**
+ * The plate's size for a slider that has not been touched yet: the measured
+ * canvas when it can be measured, an estimate from the title's own box else.
+ */
+export function bannerSizeNow(b: BannerSettings, titleSize = 54, titleWidthPct = 57): { w: number; h: number } {
+  const measured = measureBannerPlate();
+  if (measured) return measured;
+  const w = Math.round((BOARD_W * (titleWidthPct + 2 * b.padX)) / 100);
+  const line = titleSize * 1.25 + 20;
+  const h = Math.round((line * (100 + 2 * b.padY)) / 100);
+  return { w: Math.max(40, w), h: Math.max(24, h) };
 }
 
 /* ------------------------------------------------------------ presets */
@@ -223,6 +332,18 @@ export const BANNER_PRESETS: BannerPreset[] = [
     banner: { shape: "none", halo: 0 },
   },
 ];
+
+/**
+ * What a design preset writes: its own channels over the current plate, plus
+ * the plate's *place* handed back to auto — a preset is a whole look, so a size
+ * or nudge left over from the last one must not follow it around.
+ */
+export function bannerPresetPatch(
+  current: BannerSettings,
+  preset: BannerPreset,
+): Partial<BannerSettings> {
+  return { ...JSON.parse(JSON.stringify(current)) as BannerSettings, size: undefined, pos: undefined, ...preset.banner };
+}
 
 function DEFAULT_GRADIENT(): Gradient {
   return { enabled: false, type: "linear", angle: 90, stops: [{ color: "#1f5fd0", at: 0 }, { color: "#5b8cff", at: 100 }] };
