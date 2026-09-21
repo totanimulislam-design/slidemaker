@@ -21,7 +21,7 @@ import { cn } from "../utils/cn";
  * The title background plate's own controls — one card per channel, so the
  * toolbar's buttons each open exactly what they name.
  *
- *   Design presets    eight complete looks                     BANNER_PRESETS
+ *   Design presets    thirty-two complete looks                BANNER_PRESETS
  *   Shape             glow · pill · rounded · box · ribbon · underline · none
  *   Effects           softness (glow) · outer halo · shimmer
  *   Fill colour       solid + gradient                          `color` · `gradient`

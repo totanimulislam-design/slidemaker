@@ -1195,7 +1195,7 @@ export default function ContextToolbar(p: Props) {
    * The title background line — one button per channel, in the order a plate is
    * dressed:
    *
-   *   Design presets   eight complete looks, painted as they will be
+   *   Design presets   thirty-two complete looks, painted as they will be
    *   Shape            the silhouettes, as pictures
    *   Effects          softness · halo · shimmer
    *   Fill             the body's paint: solid or gradient
