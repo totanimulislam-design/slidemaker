@@ -361,17 +361,20 @@ const RADIUS_GLYPH = (
   </svg>
 );
 
-/** elegant design icon: layered diamond + sparkle — the "design" glyph */
-const DESIGN_GLYPH = (
-  <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true">
-    <path d="M10 2.6 16.4 9 10 17.4 3.6 9 10 2.6Z" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinejoin="round" />
-    <path d="M10 6.2 13.2 9 10 12.2 6.8 9 10 6.2Z" fill="currentColor" opacity="0.88" />
-    <path d="M15.9 1.1c.38 1.05 1 1.68 2.05 2.06-1.05.38-1.67 1-2.05 2.06C15.52 4.17 14.9 3.55 13.85 3.17c1.05-.38 1.67-1 2.05-2.06Z" fill="currentColor" />
+/** premium design mark: a polished crown with a sparkle — the design+ glyph */
+const PREMIUM_DESIGN_GLYPH = (
+  <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+    <path
+      d="m3.1 5.1 3.7 3.3L10 3.2l3.2 5.2 3.7-3.3-1.1 10H4.2l-1.1-10Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.35"
+      strokeLinejoin="round"
+    />
+    <path d="M4.1 12.2h11.8l-.4 2.9H4.5l-.4-2.9Z" fill="currentColor" opacity=".82" />
+    <path d="M16.2 1.2c.35 1.03.98 1.65 2 2.02-1.02.37-1.65.99-2 2.02-.36-1.03-.98-1.65-2.01-2.02 1.03-.37 1.65-.99 2.01-2.02Z" fill="currentColor" />
   </svg>
 );
-
-/** keep the old name as alias for any external reference */
-const ELEGANT_DESIGN_GLYPH = DESIGN_GLYPH;
 
 /** numbering option icon: "1. 2. 3." list with a subtle accent */
 const NUMBERING_GLYPH = (
@@ -604,7 +607,7 @@ export default function ContextToolbar(p: Props) {
    * available to assistive technology and as a hover tooltip; this keeps every
    * toolbar on one line without making repeated part names consume its width.
    */
-  const toggle = (name: string, icon?: ReactNode) => (
+  const toggle = (name: string, icon?: ReactNode, display?: ReactNode) => (
     <button
       type="button"
       className={cn("ctx-btn ctx-toggle", icon && "ctx-icon-toggle", panel === name && "is-on")}
@@ -614,7 +617,7 @@ export default function ContextToolbar(p: Props) {
       aria-expanded={panel === name}
       onClick={() => setPanel(panel === name ? null : name)}
     >
-      {icon ?? name}
+      {display ?? icon ?? name}
       <span className="ctx-caret" aria-hidden="true">▾</span>
     </button>
   );
@@ -1568,7 +1571,14 @@ export default function ContextToolbar(p: Props) {
             {toggle("Border weight", <WeightIcon size={16} />)}
             {toggle("Transparency", <TransparencyIcon size={16} />)}
             {toggle("Bullet position", <span aria-hidden="true">✥</span>)}
-            {toggle("Design", DESIGN_GLYPH)}
+            {toggle(
+              "Design",
+              PREMIUM_DESIGN_GLYPH,
+              <span className="ctx-design-plus-control">
+                <span className="ctx-design-plus-word">design+</span>
+                {PREMIUM_DESIGN_GLYPH}
+              </span>,
+            )}
             {sep()}
             {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
           </>
