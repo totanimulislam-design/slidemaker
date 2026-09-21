@@ -26,9 +26,13 @@ import type { NumberBorderStyle } from "./types";
  * directional pointers, line markers, gradient orbs, target rings and petal
  * badges. A dedicated **Arrow directions** row turns that vocabulary into
  * numbered forward, reverse, vertical, two-way, notched, diagonal, bent,
- * outline, ribbon and material arrows. Every look is an original combination
- * of the marker's own channels, collected from those conventions rather than
- * copied from any one product.
+ * outline, ribbon and material arrows, and the closing **Number + arrow**
+ * row dresses the stock libraries' "number then arrow" family — a numbered
+ * disc / card / hexagon / capsule with its own tail, or the number inside
+ * the flat, chevron, step, ribbon and flag arrows — in the colour systems
+ * those sets ship with. Every look is an original combination of the
+ * marker's own channels, collected from those conventions rather than copied
+ * from any one product.
  */
 
 export type BulletStyleGroup =
@@ -43,7 +47,8 @@ export type BulletStyleGroup =
   | "3-D & depth"
   | "Hand drawn"
   | "Infographic"
-  | "Arrow directions";
+  | "Arrow directions"
+  | "Number + arrow";
 
 export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
   "Geometric",
@@ -58,6 +63,7 @@ export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
   "Hand drawn",
   "Infographic",
   "Arrow directions",
+  "Number + arrow",
 ];
 
 /** the marker channels one style writes */
@@ -1077,6 +1083,146 @@ export const BULLET_STYLES: BulletStyle[] = [
     bulletEffect: "material",
     bulletEffectColor: "#f59e0b",
     bulletEffectIntensity: 48,
+  }),
+
+  /* --------------------------------------------------------- number + arrow --
+     The stock libraries' "number then arrow" direction family dressed in its
+     usual colour systems: the numbered disc / card / hexagon / capsule with
+     its own arrow tail, and the number inside the flat, chevron, step,
+     ribbon, flag and two-way arrows. A look whose silhouette carries its own
+     paint (the two-tone, striped, gloss and hollow compounds) keeps that
+     paint — only the rim and the effect are written here. */
+  style("flatCrimsonArrow", "Crimson arrow →", "Number + arrow", "A flat crimson block arrow with a white rim — the stock set's workhorse", {
+    numberStyle: "numArrowBlock",
+    bulletFill: "#dc2626",
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "pop",
+    bulletEffectColor: "#7f0c10",
+    bulletEffectIntensity: 30,
+  }),
+  style("tealStepArrow", "Teal step", "Number + arrow", "A numbered step chip in teal and emerald", {
+    numberStyle: "numArrowStep",
+    bulletFillGradient: grad(120, "#4ade80", "#0f766e"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "lift",
+    bulletEffectIntensity: 45,
+  }),
+  style("goldRoundArrow", "Gold round arrow", "Number + arrow", "A glossy gold numbered disc with its arrow tail", {
+    numberStyle: "numArrowDisc",
+    bulletFillGradient: radial(34, 26, "#fde68a", "#b45309"),
+    bulletBorder: "#fff7ed",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "gloss",
+    bulletEffectIntensity: 50,
+  }),
+  style("navyHexArrow", "Navy hex arrow", "Number + arrow", "A numbered hexagon + tail in navy and blue", {
+    numberStyle: "numArrowHex",
+    bulletFillGradient: grad(150, "#3b82f6", "#1e3a8a"),
+    bulletBorder: "#bfdbfe",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 42,
+  }),
+  style("outlineHexArrow", "Outline hex arrow", "Number + arrow", "No fill — a gold-rimmed hexagon + tail, the line set's step", {
+    numberStyle: "numArrowHexHollow",
+    bulletBorder: "#fbbf24",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2.5,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 30,
+  }),
+  style("roseRibbonArrow", "Rose ribbon", "Number + arrow", "A numbered ribbon arrow in rose with a die-cut edge", {
+    numberStyle: "numArrowRibbon",
+    bulletFillGradient: grad(160, "#fb7185", "#be123c"),
+    bulletBorder: "#ffe4e6",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "sticker",
+    bulletEffectColor: "#ffffff",
+    bulletEffectIntensity: 45,
+  }),
+  style("skyLineArrow", "Sky line arrow", "Number + arrow", "A slim numbered line arrow in sky blue that glows", {
+    numberStyle: "numArrowThin",
+    bulletFillGradient: grad(90, "#38bdf8", "#1d4ed8"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "glow",
+    bulletEffectColor: "#93c5fd",
+    bulletEffectIntensity: 45,
+  }),
+  style("swallowFlagArrow", "Swallow flag", "Number + arrow", "A numbered pennant in sunset orange with a hard shadow", {
+    numberStyle: "numArrowFlag",
+    bulletFillGradient: grad(180, "#f97316", "#c2410c"),
+    bulletBorder: "#ffedd5",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "pop",
+    bulletEffectColor: "#7c2d12",
+    bulletEffectIntensity: 30,
+  }),
+  style("blackTwoToneArrow", "Black two-tone", "Number + arrow", "A black numbered disc with its tail a shade darker", {
+    numberStyle: "numArrowDiscTwo",
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("stripedRoundArrow", "Striped round arrow", "Number + arrow", "Candy stripes over a numbered disc + tail with a white rim", {
+    numberStyle: "numArrowDiscStripe",
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+  }),
+  style("sketchArrow", "Sketch arrow", "Number + arrow", "A hand-drawn dashed outline around the numbered disc + tail", {
+    numberStyle: "numArrowDiscHollow",
+    bulletBorder: "#f59e0b",
+    bulletBorderStyle: "dashed",
+    bulletBorderWeight: 2.5,
+  }),
+  style("glossOrbArrow", "Glossy orb arrow", "Number + arrow", "A 3-D glossy numbered orb with its arrow tail, lifted", {
+    numberStyle: "numArrowDiscGloss",
+    bulletEffect: "lift",
+    bulletEffectIntensity: 45,
+  }),
+  style("midnightGoldArrow", "Midnight + gold", "Number + arrow", "A dark return arrow rimmed in double gold", {
+    numberStyle: "numArrowBack",
+    bulletFillGradient: grad(270, "#334155", "#0f172a"),
+    bulletBorder: "#fbbf24",
+    bulletBorderStyle: "double",
+    bulletBorderWeight: 2,
+    bulletEffect: "material",
+    bulletEffectColor: "#f59e0b",
+    bulletEffectIntensity: 48,
+  }),
+  style("mintChevronArrow", "Mint chevron", "Number + arrow", "A numbered chevron in teal with a bevel", {
+    numberStyle: "numArrowChevron",
+    bulletFillGradient: grad(90, "#2dd4bf", "#0f766e"),
+    bulletBorder: "#ccfbf1",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "bevel",
+    bulletEffectIntensity: 45,
+  }),
+  style("twinTealArrow", "Twin arrow ↔", "Number + arrow", "A two-way numbered arrow in teal, quietly lifted", {
+    numberStyle: "numArrowBoth",
+    bulletFillGradient: grad(90, "#2dd4bf", "#0f766e"),
+    bulletBorder: "#ccfbf1",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 38,
+  }),
+  style("amberCapsuleArrow", "Amber capsule", "Number + arrow", "A numbered capsule + tail in amber, soft shadow", {
+    numberStyle: "numArrowPill",
+    bulletFillGradient: grad(140, "#fbbf24", "#d97706"),
+    bulletBorder: "#fff7ed",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 40,
   }),
 ];
 
