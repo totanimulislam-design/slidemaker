@@ -9,9 +9,12 @@
  * opacity under "Text inside question bullet".
  *
  * Pinned here:
- *   • the catalogue (round · cards · polygons · seals · marks) and that every
- *     design renders a box (no design throws or comes out empty)
- *   • the toolbar line and its three cards (design · shape · position)
+ *   • the catalogue (round · cards · polygons · arrows · seals · callouts ·
+ *     flowchart · stickers · marks) and that every design renders a box (no
+ *     design throws or comes out empty)
+ *   • the Bullet design card: Bullet point presets (bullet points · numbering ·
+ *     the one-click looks) · Shape (the silhouette alone) · Shape effects
+ *   • the toolbar line and its cards (design · channels · position)
  *   • fill, border colour, border style, radius, weight and transparency
  *     reaching the board, and cut silhouettes stroking their outline in SVG
  *     (a clipped CSS border would vanish)
@@ -24,9 +27,12 @@ import { createRoot, type Root } from "react-dom/client";
 import App from "../src/App";
 import { DEFAULT_LOGO, type ThemeSettings } from "../src/lib/types";
 import {
+  NUMBER_SHAPES,
   NUMBER_STYLES,
   NUMBER_STYLE_CATEGORIES,
+  SHAPE_CATEGORIES,
   isBulletPoint,
+  isNumberShape,
   isNumberingPreset,
   numberStyleAspect,
   numberStyleDef,
@@ -109,10 +115,12 @@ const BASE: ThemeSettings = {
   bulletOpacity: 100,
 } as ThemeSettings;
 
-const designBtn = (label: string) => pop()?.querySelector(`[aria-label="Bullet design: ${label}"]`) ?? null;
+/** a tile on the Bullet point presets tab — a bullet point, a numbering format or a one-click look */
+const presetBtn = (label: string) => pop()?.querySelector(`[aria-label="Bullet preset: ${label}"]`) ?? null;
 /** the bullet design card's three tabs */
 const tabBtn = (label: string) => pop()?.querySelector(`[aria-label="Bullet design tab: ${label}"]`) ?? null;
-const styleBtn = (label: string) => pop()?.querySelector(`[aria-label="Shape: ${label}"]`) ?? null;
+/** a tile on the Shape tab — a silhouette alone */
+const shapeBtn = (label: string) => pop()?.querySelector(`[aria-label="Shape: ${label}"]`) ?? null;
 const effectBtn = (label: string) => pop()?.querySelector(`[aria-label="Shape effect: ${label}"]`) ?? null;
 /** a card's own tile (a border style, an option in a listbox) */
 const tile = (label: string) => pop()?.querySelector(`[aria-label="${label}"]`) ?? null;
@@ -121,14 +129,14 @@ const body = () => marker()?.querySelector<HTMLElement>("[data-bullet-body]");
 const popAll = (text: string) => Array.from(pop()?.querySelectorAll<HTMLElement>("button") ?? []).filter((b) => b.textContent?.trim() === text);
 const swatchIn = (hex: string) => pop()?.querySelector<HTMLElement>(`button[title="${hex}"]`) ?? null;
 /**
- * leave the shape-style tab the way the channel tests need it: no effect of its
+ * leave the design card the way the channel tests need it: no effect of its
  * own, and a box silhouette again (a cut one keeps its corners as a clip)
  */
 const effectBtnTab = () => {
   click(tabBtn("Shape effects"));
   click(effectBtn("None"));
-  click(tabBtn("Bullet point presets"));
-  click(designBtn("Rounded"));
+  click(tabBtn("Shape"));
+  click(shapeBtn("Rounded"));
   return null;
 };
 
@@ -434,11 +442,71 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     detail: `fallback ${numberStyleDef("bogus" as NumberStyle).id} · first tile ${NUMBER_STYLES[0].id}`,
   });
 
+  /* ---------------- the Shape catalogue: every silhouette family ------------ */
+  const shapeGroups = SHAPE_CATEGORIES.map((c) => c.id);
+  const wantedGroups = ["curve", "cards", "polygons", "arrows", "seals", "callouts", "flowchart", "stickers", "marks"];
+  const newShapes: NumberStyle[] = [
+    "oval", "egg", "dome", "lens", "softTriangle", "softDiamond", "softHexagon",
+    "plaque", "frame", "chamfer", "folder", "tagLeft", "label", "slot",
+    "rightTriangle", "heptagon", "nonagon", "decagon", "dodecagon", "rhombus", "slantLeft", "trapezoidDown", "stepLeft", "house", "gem", "hexWide",
+    "arrowLeft", "arrowUp", "arrowDown", "blockRight", "blockLeft", "arrowBoth", "arrowUpDown", "notchedArrow", "triangleRight", "triangleLeft",
+    "star4", "star7", "star10", "star16", "explosion", "flower", "softStar",
+    "calloutDown", "calloutUp", "calloutLeft", "calloutRight", "roundCallout",
+    "document", "delay", "display", "manualInput", "offPage", "cylinder", "subroutine", "loopLimit",
+    "bell", "lock", "flask", "trefoil", "quatrefoil", "parens",
+  ];
+  const missingShapes = newShapes.filter((id) => !NUMBER_SHAPES.some((d) => d.id === id));
+  out.push({
+    name: "the Shape catalogue holds every silhouette family — round · cards · polygons · arrows · seals · callouts · flowchart · stickers · marks — and none of the presets",
+    pass:
+      wantedGroups.every((g) => shapeGroups.includes(g as never)) &&
+      !shapeGroups.includes("bullets" as never) &&
+      !shapeGroups.includes("numbering" as never) &&
+      NUMBER_SHAPES.length >= 130 &&
+      missingShapes.length === 0 &&
+      NUMBER_SHAPES.every((d) => isNumberShape(d.id) && !isBulletPoint(d.id) && !isNumberingPreset(d.id)) &&
+      NUMBER_STYLES.filter((d) => !isNumberShape(d.id)).every((d) => isBulletPoint(d.id) || isNumberingPreset(d.id)),
+    detail: missingShapes.length
+      ? `missing ${missingShapes.join(", ")}`
+      : `${NUMBER_SHAPES.length} shapes · ${SHAPE_CATEGORIES.map((c) => `${c.label} ${NUMBER_SHAPES.filter((d) => d.category === c.id).length}`).join(" / ")}`,
+  });
+
+  /* the new shapes all render a body, and the ones drawn for a direction keep the number inside it */
+  const brokenNew: string[] = [];
+  for (const id of newShapes) {
+    try {
+      const r = renderNumberStyle(id, { ...BASE }, 54, "৭");
+      if (!r.style.width) brokenNew.push(`${id}:no-box`);
+      else if (id !== "parens" && !Object.keys(r.surface).length) brokenNew.push(`${id}:no-surface`);
+      else if (r.content !== "৭") brokenNew.push(`${id}:content`);
+    } catch (e) {
+      brokenNew.push(`${id}:${String(e)}`);
+    }
+  }
+  const arrowUp = renderNumberStyle("arrowUp", { ...BASE }, 100, "৭");
+  const cylinder = renderNumberStyle("cylinder", { ...BASE }, 100, "৭");
+  const parens = renderNumberStyle("parens", { ...BASE }, 54, "৭");
+  const frameR = renderNumberStyle("frame", { ...BASE }, 54, "৭");
+  const softHex = numberStyleDef("softHexagon");
+  out.push({
+    name: "every new shape renders with its number — a block arrow pads the digit into its shaft, the cylinder paints its rim, the parens are two round rules, soft corners are real arcs",
+    pass:
+      brokenNew.length === 0 &&
+      Number(arrowUp.style.paddingTop) >= 40 &&
+      String(arrowUp.surface.clipPath).startsWith("polygon(") &&
+      String(cylinder.surface.background).includes("radial-gradient") &&
+      (parens.marks?.length ?? 0) === 2 &&
+      String(parens.marks?.[0].borderRadius ?? "").startsWith("22px") &&
+      String(frameR.surface.border ?? "").includes(BASE.accent) &&
+      (softHex.points?.length ?? 0) > 12,
+    detail: brokenNew.join(" · ") || `arrow ▲ pad ${arrowUp.style.paddingTop}px · parens ${parens.marks?.[0].borderRadius} · soft hexagon ${softHex.points?.length} pts`,
+  });
+
   const geometric = BULLET_STYLES.filter((s) => s.group === "Geometric");
   const organic = BULLET_STYLES.filter((s) => s.group === "Organic");
   const shapeLed = [...geometric, ...organic];
   out.push({
-    name: "the Shape tab opens with shape-led families — Geometric and Organic — each look wearing a different silhouette",
+    name: "the one-click looks open with shape-led families — Geometric and Organic — each look wearing a different silhouette",
     pass:
       BULLET_STYLE_GROUPS[0] === "Geometric" &&
       BULLET_STYLE_GROUPS[1] === "Organic" &&
@@ -447,7 +515,7 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
       BULLET_STYLES[0].group === "Geometric" &&
       new Set(shapeLed.map((s) => s.patch.numberStyle)).size === shapeLed.length &&
       shapeLed.every((s) => NUMBER_STYLES.some((d) => d.id === s.patch.numberStyle)),
-    detail: `${geometric.length} geometric · ${organic.length} organic · ${BULLET_STYLES.length} shapes in all`,
+    detail: `${geometric.length} geometric · ${organic.length} organic · ${BULLET_STYLES.length} looks in all`,
   });
 
   /* ---------------------------- the toolbar line --------------------------- */
@@ -500,35 +568,81 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     detail: `panel ${pop()?.getAttribute("data-pop-panel")} · tabs ${Array.from(pop()?.querySelectorAll('[role="tab"]') ?? []).map((t) => t.textContent?.trim()).join("/")}`,
   });
 
-  const listed = pop()?.querySelectorAll('[aria-label^="Bullet design:"]').length ?? 0;
-  const groups = pop()?.querySelectorAll('[aria-label="Bullet design group"] button').length ?? 0;
-  const markersCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
+  const listed = pop()?.querySelectorAll('[aria-label^="Bullet preset:"]').length ?? 0;
+  const groups = pop()?.querySelectorAll('[aria-label="Bullet preset group"] button').length ?? 0;
+  const presetsCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
   out.push({
-    name: "the Bullet point presets tab lists the whole gallery — bullet points, numbering, the sticker family — with its size and base colour",
+    name: "the Bullet point presets tab lists the ready-made looks — bullet points, numbering and every one-click design — with the size and base colour, and no bare silhouettes",
     pass:
-      listed >= 80 &&
-      groups >= 8 &&
+      listed >= 90 &&
+      listed === NUMBER_STYLES.filter((d) => !isNumberShape(d.id)).length + BULLET_STYLES.length &&
+      groups >= 12 &&
       !!popInput("Bullet size") &&
-      markersCard.includes("Bullet point presets") &&
-      markersCard.includes("Bullet colour") &&
-      markersCard.includes("Bullet points") &&
-      markersCard.includes("Numbering") &&
-      markersCard.includes("Stickers") &&
-      !!designBtn("Dot") &&
-      !!designBtn("Check mark") &&
-      !!designBtn("(1)"),
-    detail: `${listed} designs · ${groups} groups · size ${popInput("Bullet size") ? "yes" : "no"}`,
+      presetsCard.includes("Bullet point presets") &&
+      presetsCard.includes("Bullet colour") &&
+      presetsCard.includes("Bullet points") &&
+      presetsCard.includes("Numbering") &&
+      presetsCard.includes("Geometric") &&
+      presetsCard.includes("Exam classic") &&
+      presetsCard.includes("Hand drawn") &&
+      !!presetBtn("Dot") &&
+      !!presetBtn("Check mark") &&
+      !!presetBtn("(1)") &&
+      !!presetBtn("Hex tile") &&
+      !!presetBtn("Gold seal") &&
+      !!presetBtn("Neon tube") &&
+      !presetBtn("Circle") &&
+      !presetBtn("Star") &&
+      !presetBtn("Hexagon") &&
+      !pop()?.querySelector('[aria-label^="Shape:"]'),
+    detail: `${listed} presets · ${groups} groups · size ${popInput("Bullet size") ? "yes" : "no"}`,
   });
 
-  click(designBtn("Scallop"));
+  click(tabBtn("Shape"));
+  const shapeTiles = pop()?.querySelectorAll('[aria-label^="Shape:"]').length ?? 0;
+  const shapeChips = pop()?.querySelectorAll('[aria-label="Shape group"] button').length ?? 0;
+  const shapeCard = (pop()?.textContent ?? "").replace(/\s+/g, " ");
   out.push({
-    name: "picking a design repaints the marker with that silhouette",
+    name: "the Shape tab lists every silhouette — round · cards · polygons · arrows · seals · callouts · flowchart · stickers · marks — and none of the presets",
+    pass:
+      shapeTiles >= 130 &&
+      shapeTiles === NUMBER_SHAPES.length &&
+      shapeChips === SHAPE_CATEGORIES.length + 1 &&
+      ["Round & soft", "Cards & chips", "Polygons", "Arrows", "Seals & stars", "Callouts", "Flowchart", "Stickers", "Marks"].every((g) => shapeCard.includes(g)) &&
+      ["Circle", "Hexagon", "Arrow ▲", "Block arrow ▶", "Star 16", "Callout ▼", "Document", "Cylinder", "Padlock", "Soft hexagon", "Parens", "None"].every(
+        (l) => !!shapeBtn(l),
+      ) &&
+      !shapeBtn("Dot") &&
+      !shapeBtn("(1)") &&
+      !shapeBtn("Gold seal") &&
+      !pop()?.querySelector('[aria-label^="Bullet preset:"]'),
+    detail: `${shapeTiles} shapes · ${shapeChips} chips · ${shapeCard.slice(0, 80)}`,
+  });
+
+  click(shapeBtn("Scallop"));
+  out.push({
+    name: "picking a shape repaints the marker with that silhouette",
     pass: !!surface()?.style.clipPath,
     detail: `clip ${surface()?.style.clipPath ? "seal" : "—"}`,
   });
 
+  /* the Shape group chips narrow the gallery to one family */
+  click(pop()?.querySelector('[aria-label="Shapes: Arrows"]'));
+  const arrowTiles = Array.from(pop()?.querySelectorAll('[aria-label^="Shape:"]') ?? []).map((b) => b.getAttribute("aria-label") ?? "");
+  click(pop()?.querySelector('[aria-label="All shapes"]'));
+  out.push({
+    name: "a Shape group chip narrows the gallery to that family (Arrows → arrows only)",
+    pass:
+      arrowTiles.length === NUMBER_SHAPES.filter((d) => d.category === "arrows").length &&
+      arrowTiles.includes("Shape: Arrow ▶") &&
+      arrowTiles.includes("Shape: Arrow ◀▶") &&
+      !arrowTiles.includes("Shape: Circle"),
+    detail: arrowTiles.join(" · "),
+  });
+
   /* a classic bullet point on the board: the glyph is cut out of the body, and the number goes */
-  click(designBtn("Check mark"));
+  click(tabBtn("Bullet point presets"));
+  click(presetBtn("Check mark"));
   const checkClip = surface()?.style.clipPath ?? "";
   const checkDigits = digits()?.textContent ?? "";
   out.push({
@@ -538,29 +652,50 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   });
 
   /* a numbering preset on the board: the number keeps its script and gains its punctuation */
-  click(designBtn("(1)"));
+  click(presetBtn("(1)"));
   const parensText = (marker()?.textContent ?? "").trim();
   out.push({
     name: "picking a numbering preset wraps the slide's own number — (১) — with no shape body behind it",
     pass: parensText === "(১)" && !surface(),
     detail: `marker text "${parensText}" · surface ${surface() ? "yes" : "no"}`,
   });
-  click(designBtn("Circle"));
 
   /* the marker grows, and the corner slider's ceiling grows with it */
   type(popInput("Bullet size"), "120");
 
-  click(tabBtn("Shape"));
-  const styleTiles = pop()?.querySelectorAll('[aria-label^="Shape:"]').length ?? 0;
-  click(styleBtn("Gold seal"));
+  const lookTiles = BULLET_STYLES.filter((s) => !!presetBtn(s.label)).length;
+  click(presetBtn("Gold seal"));
+  const presetsNow = (pop()?.textContent ?? "").replace(/\s+/g, " ");
   out.push({
-    name: "a shape is one click: the tile writes the marker's silhouette, fill, line and effect together",
+    name: "a one-click look is one click: the preset tile writes the marker's silhouette, fill, line and effect together",
     pass:
-      styleTiles >= 24 &&
+      lookTiles === BULLET_STYLES.length &&
       css(surface()).includes("gradient") &&
+      String(surface()?.style.clipPath).startsWith("polygon(") &&
       !!body() &&
-      css(marker()).includes("120px"),
-    detail: `${styleTiles} styles · ${css(surface()).slice(0, 86)}`,
+      css(marker()).includes("120px") &&
+      presetsNow.includes("now Gold seal"),
+    detail: `${lookTiles} looks · ${css(surface()).slice(0, 86)}`,
+  });
+
+  /* a shape changes the silhouette alone — the look's paint and effect travel onto it */
+  click(tabBtn("Shape"));
+  const shapeCardNow = (pop()?.textContent ?? "").replace(/\s+/g, " ");
+  click(shapeBtn("Hexagon"));
+  const hexClip = surface()?.style.clipPath ?? "";
+  click(tabBtn("Bullet point presets"));
+  const presetsAfter = (pop()?.textContent ?? "").replace(/\s+/g, " ");
+  out.push({
+    name: "picking a shape keeps the paint: Gold seal's gradient and effect travel onto a hexagon, and the presets tab now reads custom",
+    pass:
+      shapeCardNow.includes("now Scallop") &&
+      hexClip.startsWith("polygon(25% 0%") &&
+      css(surface()).includes("gradient") &&
+      css(surface()).includes("rgb(255, 241, 184)") &&
+      !!body() &&
+      presetsAfter.includes("now custom") &&
+      shapeBtn("Hexagon") === null,
+    detail: `clip ${hexClip.slice(0, 24)}… · ${css(surface()).slice(0, 70)} · ${presetsAfter.includes("now custom") ? "custom" : "still claimed"}`,
   });
   /* back to a box silhouette, so the corners and the line read as plain CSS */
   click(effectBtnTab());
@@ -689,7 +824,8 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
 
   /* ---------------------- outline on a cut silhouette ---------------------- */
   click(barButton("Bullet design"));
-  click(designBtn("Star"));
+  click(tabBtn("Shape"));
+  click(shapeBtn("Star"));
   closePop();
   click(barButton("Border style"));
   click(tile("Border style: Double"));

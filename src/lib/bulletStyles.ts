@@ -2,15 +2,17 @@ import type { Gradient, ShapeEffectKind, ThemeSettings } from "./types";
 import type { NumberBorderStyle } from "./types";
 
 /**
- * Shapes for the question marker — one-click looks (the Bullet design card's
- * **Shape** tab).
+ * One-click looks for the question marker — the designs the Bullet design
+ * card's **Bullet point presets** tab lists after the classic bullet points
+ * and the numbering formats (`lib/numberStyles`).
  *
- * A shape here is nothing but a set of the marker's own channels written
+ * A look here is nothing but a set of the marker's own channels written
  * together: the silhouette it wears, its fill (solid or gradient), its line
  * (colour, style, weight), its corners, its transparency and the shape effect
  * on top. Picking one writes all of them at once, so a teacher can go from "a
  * plain blue circle" to "a gold seal with a bevel" in one click and then
- * fine-tune any single channel from the toolbar.
+ * fine-tune any single channel from the toolbar — or swap the silhouette alone
+ * on the **Shape** tab, which changes `numberStyle` and leaves the paint be.
  *
  * The list opens with the shape-led families — **Geometric** (hexagon,
  * octagon, diamond, pentagon, triangle, kite, plinth, arrow, slant, plus,

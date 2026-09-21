@@ -48,7 +48,7 @@ const suites = [
   ["colour picker latency (what a drag is allowed to cost per pointer event)", "latency.test.tsx", "runLatencyTests"],
   ["solid native colour wells (one deck write per frame, the swatch painted in the event)", "colorframe.test.tsx", "runColorFrameTests"],
   ["every colour control (the picker stays open, and the colour reaches the slide)", "colors.test.tsx", "runColorTests"],
-  ["question bullet (34 designs, shape fill · border colour/style/radius/weight · transparency · position)", "questionbullet.test.tsx", "runQuestionBulletTests"],
+  ["question bullet (bullet point presets · shapes · effects, shape fill · border colour/style/radius/weight · transparency · position)", "questionbullet.test.tsx", "runQuestionBulletTests"],
 ];
 
 installDom();

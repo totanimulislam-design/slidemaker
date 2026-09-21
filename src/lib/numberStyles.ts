@@ -21,12 +21,15 @@ export type { NumberBorderStyle } from "./types";
  *
  * The catalogue is data: `NUMBER_STYLES` carries the label, the group, the
  * silhouette (a `clip-path` polygon for the cut shapes) and the look its own
- * paint derives from `theme.accent`. It opens with the two families a "bullet
- * point preset" row is expected to hold — the classic **bullet points** (dot,
+ * paint derives from `theme.accent`. It opens with the two families the
+ * **Bullet point presets** tab lists — the classic **bullet points** (dot,
  * hollow dot, square, dash, arrowhead, check…), which stand in for the number
  * the way a list bullet does, and the **numbering** presets ("7." · "(7)" ·
  * "Q7" · "07"), which keep the number and add its punctuation — followed by
- * the marker silhouettes. On top of every design the teacher can set
+ * the marker **shapes** the *Shape* tab lists (`NUMBER_SHAPES`): round & soft,
+ * cards & chips, polygons, arrows, seals & stars, callouts, flowchart, the
+ * sticker pack and the marks. Picking a shape changes the silhouette only; the
+ * paint the teacher has set stays. On top of every design the teacher can set
  * their own channels — fill colour, outline colour, outline style, corner
  * radius, outline weight and transparency — through the same tri-state
  * convention the option marker uses:
@@ -64,9 +67,40 @@ export type NumberStyle =
   | "bulb" | "book" | "gradCap" | "trophy" | "bolt" | "flame" | "rocket"
   | "crown" | "heart" | "pin" | "bubbleRound"
   /* marks, extended */
-  | "brackets" | "dots3" | "cornerTick";
+  | "brackets" | "dots3" | "cornerTick"
+  /* round & soft — the shape families of a proper shape library */
+  | "oval" | "egg" | "dome" | "lens" | "softTriangle" | "softDiamond" | "softHexagon"
+  /* cards & chips, the label family */
+  | "plaque" | "frame" | "chamfer" | "folder" | "tagLeft" | "label" | "slot"
+  /* polygons: every regular polygon and the slanted / mirrored cuts */
+  | "rightTriangle" | "heptagon" | "nonagon" | "decagon" | "dodecagon" | "rhombus"
+  | "slantLeft" | "trapezoidDown" | "stepLeft" | "house" | "gem" | "hexWide"
+  /* arrows — block arrows in every direction */
+  | "arrowLeft" | "arrowUp" | "arrowDown" | "blockRight" | "blockLeft" | "arrowBoth"
+  | "arrowUpDown" | "notchedArrow" | "triangleRight" | "triangleLeft"
+  /* seals & stars, extended */
+  | "star4" | "star7" | "star10" | "star16" | "explosion" | "flower" | "softStar"
+  /* callouts — a plate with a tail on each side */
+  | "calloutDown" | "calloutUp" | "calloutLeft" | "calloutRight" | "roundCallout"
+  /* flowchart — the diagram symbols */
+  | "document" | "delay" | "display" | "manualInput" | "offPage" | "cylinder" | "subroutine" | "loopLimit"
+  /* stickers, extended */
+  | "bell" | "lock" | "flask" | "trefoil" | "quatrefoil"
+  /* marks, extended */
+  | "parens";
 
-export type NumberStyleCategory = "bullets" | "numbering" | "curve" | "cards" | "polygons" | "seals" | "stickers" | "marks";
+export type NumberStyleCategory =
+  | "bullets"
+  | "numbering"
+  | "curve"
+  | "cards"
+  | "polygons"
+  | "arrows"
+  | "seals"
+  | "callouts"
+  | "flowchart"
+  | "stickers"
+  | "marks";
 
 export interface NumberStyleDef {
   id: NumberStyle;
@@ -106,10 +140,25 @@ export const NUMBER_STYLE_CATEGORIES: { id: NumberStyleCategory; label: string }
   { id: "curve", label: "Round & soft" },
   { id: "cards", label: "Cards & chips" },
   { id: "polygons", label: "Polygons" },
+  { id: "arrows", label: "Arrows" },
   { id: "seals", label: "Seals & stars" },
+  { id: "callouts", label: "Callouts" },
+  { id: "flowchart", label: "Flowchart" },
   { id: "stickers", label: "Stickers & icons" },
   { id: "marks", label: "Marks" },
 ];
+
+/**
+ * The two families that are *presets* rather than shapes — the classic bullet
+ * points and the numbering formats. They are listed on the Bullet point
+ * presets tab next to the one-click looks (`lib/bulletStyles`); every other
+ * category is a marker **shape** and is listed on the Shape tab.
+ */
+export const PRESET_CATEGORIES: NumberStyleCategory[] = ["bullets", "numbering"];
+export const isPresetCategory = (c: NumberStyleCategory) => PRESET_CATEGORIES.includes(c);
+
+/** the Shape tab's groups — every family except the two preset ones */
+export const SHAPE_CATEGORIES = NUMBER_STYLE_CATEGORIES.filter((c) => !isPresetCategory(c.id));
 
 /* ------------------------------------------------------------------ */
 /*  Silhouettes                                                        */
@@ -122,13 +171,91 @@ const pt = (deg: number, radius: number): [number, number] => {
   return [r1(50 + radius * Math.cos(a)), r1(50 + radius * Math.sin(a))];
 };
 
-/** a circle whose edge ripples `count` times — the seal / flower stamp silhouette */
-function lobes(count: number, base: number, amplitude: number): [number, number][] {
-  const steps = count * 6;
+/**
+ * a circle whose edge ripples `count` times — the seal / flower stamp
+ * silhouette; `per` points per lobe, and `phase` turns the first lobe (0 = it
+ * points right, 90 = it points up)
+ */
+function lobes(count: number, base: number, amplitude: number, per = 6, phase = 0): [number, number][] {
+  const steps = count * per;
   const out: [number, number][] = [];
   for (let i = 0; i < steps; i++) {
     const deg = (i * 360) / steps;
-    out.push(pt(deg, base + amplitude * Math.cos((count * deg * Math.PI) / 180)));
+    out.push(pt(deg, base + amplitude * Math.cos((count * (deg + phase) * Math.PI) / 180)));
+  }
+  return out;
+}
+
+/**
+ * The same polygon with its corners rounded off: every vertex becomes a short
+ * arc (a quadratic curve from one edge onto the next, `steps` points long),
+ * pulled in by at most `radius` — the soft triangle, diamond, hexagon, star and
+ * the rounded callout come out of it.
+ */
+function soften(points: [number, number][], radius: number, steps = 4): [number, number][] {
+  const n = points.length;
+  const out: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const p = points[i];
+    const a = points[(i - 1 + n) % n];
+    const b = points[(i + 1) % n];
+    const da = Math.hypot(a[0] - p[0], a[1] - p[1]) || 1;
+    const db = Math.hypot(b[0] - p[0], b[1] - p[1]) || 1;
+    const d = Math.min(radius, da / 2, db / 2);
+    const t1 = [p[0] + ((a[0] - p[0]) / da) * d, p[1] + ((a[1] - p[1]) / da) * d];
+    const t2 = [p[0] + ((b[0] - p[0]) / db) * d, p[1] + ((b[1] - p[1]) / db) * d];
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps;
+      const u = 1 - t;
+      out.push([r1(u * u * t1[0] + 2 * u * t * p[0] + t * t * t2[0]), r1(u * u * t1[1] + 2 * u * t * p[1] + t * t * t2[1])]);
+    }
+  }
+  return out;
+}
+
+/** a burst whose spikes are all different lengths — the comic "explosion" */
+function jagged(outers: number[], inner: number): [number, number][] {
+  const n = outers.length;
+  const out: [number, number][] = [];
+  for (let k = 0; k < n; k++) {
+    out.push(pt(-90 + (k * 360) / n, outers[k]));
+    out.push(pt(-90 + ((k + 0.5) * 360) / n, inner + (k % 3) * 3));
+  }
+  return out;
+}
+
+/** a rectangle whose four corners are scooped inwards — the plaque / certificate plate */
+function plaque(r: number, steps = 5): [number, number][] {
+  const corners: [number, number, number][] = [[0, 0, 90], [100, 0, 180], [100, 100, 270], [0, 100, 360]];
+  const out: [number, number][] = [];
+  for (const [cx, cy, from] of corners) {
+    for (let k = 0; k <= steps; k++) {
+      const a = ((from - (90 * k) / steps) * Math.PI) / 180;
+      out.push([r1(cx + r * Math.cos(a)), r1(cy + r * Math.sin(a))]);
+    }
+  }
+  return out;
+}
+
+/** two arcs meeting at the sides — a lens / eye, `bulge` tall above the middle line */
+function lens(bulge: number, steps = 14): [number, number][] {
+  const R = (2500 + bulge * bulge) / (2 * bulge);
+  const c = R - bulge;
+  const upper: [number, number][] = [];
+  for (let k = 0; k <= steps; k++) {
+    const x = (k * 100) / steps;
+    upper.push([r1(x), r1(50 + c - Math.sqrt(Math.max(0, R * R - (x - 50) * (x - 50))))]);
+  }
+  const lower = upper.slice(1, -1).reverse().map(([x, y]): [number, number] => [x, r1(100 - y)]);
+  return [...upper, ...lower];
+}
+
+/** a sheet whose bottom edge waves — the flowchart "document" */
+function documentSheet(): [number, number][] {
+  const out: [number, number][] = [[0, 0], [100, 0]];
+  for (let k = 10; k >= 0; k--) {
+    const x = k * 10;
+    out.push([x, r1(86 + 8 * Math.sin((2 * Math.PI * x) / 100))]);
   }
   return out;
 }
@@ -220,6 +347,47 @@ const TRAPEZOID: [number, number][] = [[14, 0], [86, 0], [100, 100], [0, 100]];
 const OCTAGON: [number, number][] = [[30, 0], [70, 0], [100, 30], [100, 70], [70, 100], [30, 100], [0, 70], [0, 30]];
 const TRIUP: [number, number][] = [[50, 4], [98, 96], [2, 96]];
 const TRIDOWN: [number, number][] = [[2, 4], [98, 4], [50, 96]];
+const HEXAGON: [number, number][] = [[25, 0], [75, 0], [100, 50], [75, 100], [25, 100], [0, 50]];
+const DIAMOND: [number, number][] = [[50, 0], [100, 50], [50, 100], [0, 50]];
+const STAR: [number, number][] = [[50, 0], [61, 35], [98, 35], [68, 57], [79, 91], [50, 70], [21, 91], [32, 57], [2, 35], [39, 35]];
+
+/* the shape library: arrows, callouts, flowchart symbols and the rest */
+const ARROWLEFT: [number, number][] = [[100, 0], [38, 0], [0, 50], [38, 100], [100, 100], [76, 50]];
+const ARROWUP: [number, number][] = [[50, 0], [100, 42], [70, 42], [70, 100], [30, 100], [30, 42], [0, 42]];
+const ARROWDOWN: [number, number][] = [[30, 0], [70, 0], [70, 58], [100, 58], [50, 100], [0, 58], [30, 58]];
+const BLOCKRIGHT: [number, number][] = [[0, 26], [58, 26], [58, 0], [100, 50], [58, 100], [58, 74], [0, 74]];
+const BLOCKLEFT: [number, number][] = [[100, 26], [42, 26], [42, 0], [0, 50], [42, 100], [42, 74], [100, 74]];
+const ARROWBOTH: [number, number][] = [[0, 50], [24, 0], [24, 28], [76, 28], [76, 0], [100, 50], [76, 100], [76, 72], [24, 72], [24, 100]];
+const ARROWUPDOWN: [number, number][] = [[50, 0], [100, 24], [72, 24], [72, 76], [100, 76], [50, 100], [0, 76], [28, 76], [28, 24], [0, 24]];
+const NOTCHEDARROW: [number, number][] = [[0, 18], [58, 18], [58, 0], [100, 50], [58, 100], [58, 82], [0, 82], [14, 50]];
+const TRIRIGHT: [number, number][] = [[2, 4], [98, 50], [2, 96]];
+const TRILEFT: [number, number][] = [[98, 4], [2, 50], [98, 96]];
+const RIGHTTRI: [number, number][] = [[0, 0], [100, 100], [0, 100]];
+const SLANTLEFT: [number, number][] = [[0, 0], [86, 0], [100, 100], [14, 100]];
+const TRAPDOWN: [number, number][] = [[0, 0], [100, 0], [86, 100], [14, 100]];
+const STEPLEFT: [number, number][] = [[26, 0], [100, 0], [74, 50], [100, 100], [26, 100], [0, 50]];
+const HOUSE: [number, number][] = [[50, 0], [100, 38], [100, 100], [0, 100], [0, 38]];
+const GEM: [number, number][] = [[22, 0], [78, 0], [100, 32], [50, 100], [0, 32]];
+const HEXWIDE: [number, number][] = [[16, 0], [84, 0], [100, 50], [84, 100], [16, 100], [0, 50]];
+const CHAMFER: [number, number][] = [[14, 0], [86, 0], [100, 14], [100, 86], [86, 100], [14, 100], [0, 86], [0, 14]];
+const FOLDER: [number, number][] = [[0, 0], [40, 0], [48, 12], [100, 12], [100, 100], [0, 100]];
+const TAGLEFT: [number, number][] = [[28, 0], [100, 0], [100, 100], [28, 100], [0, 50]];
+const LABEL: [number, number][] = [[20, 0], [80, 0], [100, 50], [80, 100], [20, 100], [0, 50]];
+const SLOT: [number, number][] = [[0, 0], [34, 0], [40, 14], [60, 14], [66, 0], [100, 0], [100, 100], [0, 100]];
+const CALLOUTDOWN: [number, number][] = [[0, 0], [100, 0], [100, 76], [62, 76], [50, 98], [38, 76], [0, 76]];
+const CALLOUTUP: [number, number][] = [[0, 24], [38, 24], [50, 2], [62, 24], [100, 24], [100, 100], [0, 100]];
+const CALLOUTRIGHT: [number, number][] = [[0, 0], [76, 0], [76, 36], [98, 50], [76, 64], [76, 100], [0, 100]];
+const CALLOUTLEFT: [number, number][] = [[24, 0], [100, 0], [100, 100], [24, 100], [24, 64], [2, 50], [24, 36]];
+const ROUNDCALLOUT: [number, number][] = soften([[0, 0], [100, 0], [100, 76], [36, 76], [20, 98], [20, 76], [0, 76]], 12);
+const DISPLAY: [number, number][] = [[0, 50], [16, 0], [82, 0], [94, 6], [100, 20], [100, 80], [94, 94], [82, 100], [16, 100]];
+const MANUALINPUT: [number, number][] = [[0, 26], [100, 0], [100, 100], [0, 100]];
+const OFFPAGE: [number, number][] = [[0, 0], [100, 0], [100, 70], [50, 100], [0, 70]];
+const LOOPLIMIT: [number, number][] = [[16, 0], [84, 0], [100, 20], [100, 100], [0, 100], [0, 20]];
+const CYLINDER: [number, number][] = [[0, 10], [8, 5], [20, 2], [35, 0.5], [50, 0], [65, 0.5], [80, 2], [92, 5], [100, 10], [100, 90], [92, 95], [80, 98], [65, 99.5], [50, 100], [35, 99.5], [20, 98], [8, 95], [0, 90]];
+const BELL: [number, number][] = [[50, 2], [60, 5], [68, 13], [73, 25], [75, 44], [79, 62], [92, 76], [92, 84], [62, 84], [58, 94], [50, 98], [42, 94], [38, 84], [8, 84], [8, 76], [21, 62], [25, 44], [27, 25], [32, 13], [40, 5]];
+const LOCK: [number, number][] = [[12, 40], [30, 40], [30, 24], [36, 12], [50, 6], [64, 12], [70, 24], [70, 40], [88, 40], [88, 98], [12, 98]];
+const FLASK: [number, number][] = [[38, 0], [62, 0], [62, 34], [92, 86], [88, 100], [12, 100], [8, 86], [38, 34]];
+const EXPLOSION: [number, number][] = jagged([50, 40, 48, 36, 50, 42, 46, 38, 50, 44, 47, 39], 26);
 
 /*
  * The classic bullet points, drawn small in the middle of the marker's box so
@@ -240,6 +408,8 @@ const STAR_DOT: [number, number][] = starPoints(5, 28, 12);
 
 /* a hollow bullet: no body of its own — only the line the design draws */
 const hollow = (): CSSProperties => ({ background: "transparent" });
+/* a hollow frame: a tinted centre inside the bold line the design draws */
+const hollowFrame = (accent: string): CSSProperties => ({ background: withAlpha(accent, 0.14) });
 
 /**
  * "01": a leading zero in the number's own script, so a Bengali "৭" becomes
@@ -273,6 +443,14 @@ const bullseye = (accent: string, size: number): CSSProperties => ({
 const dottedRim = (accent: string, size: number): CSSProperties => ({
   background: withAlpha(accent, 0.12),
   boxShadow: `inset 0 0 0 ${Math.max(2, size * 0.06)}px ${withAlpha(accent, 0.25)}`,
+});
+/* a cylinder: the lit rim of its top face over a side-lit body */
+const cylinderPaint = (accent: string): CSSProperties => ({
+  background: `radial-gradient(ellipse 50% 10% at 50% 10%, ${withAlpha("#ffffff", 0.4)} 0 96%, ${withAlpha("#ffffff", 0)} 100%), linear-gradient(90deg, ${shade(accent, -0.18)}, ${shade(accent, 0.3)} 42%, ${accent})`,
+});
+/* the flowchart subroutine: a box with a rule down each side */
+const subroutinePaint = (accent: string): CSSProperties => ({
+  background: `linear-gradient(90deg, transparent 0 10%, ${withAlpha("#ffffff", 0.6)} 10% 13.5%, transparent 13.5% 86.5%, ${withAlpha("#ffffff", 0.6)} 86.5% 90%, transparent 90%), linear-gradient(145deg, ${shade(accent, 0.3)}, ${accent})`,
 });
 
 export const NUMBER_STYLES: NumberStyleDef[] = [
@@ -316,6 +494,13 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "drop", label: "Teardrop", category: "curve", hint: "A drop with a pointed tip", points: DROP, font: 0.34, pad: [0.12, 0, 0.04, 0] },
   { id: "leaf", label: "Leaf", category: "curve", hint: "A leaf laid diagonally", points: LEAF, font: 0.32 },
   { id: "cloud", label: "Cloud", category: "curve", hint: "A soft thought cloud", points: CLOUD, font: 0.34, pad: [0.1, 0, 0.14, 0] },
+  { id: "oval", label: "Oval", category: "curve", hint: "An ellipse, wider than it is tall", radius: "50%", aspect: 1.35, font: 0.4 },
+  { id: "egg", label: "Egg", category: "curve", hint: "An egg — narrow at the top, full at the base", radius: "50% 50% 50% 50% / 62% 62% 38% 38%", font: 0.4 },
+  { id: "dome", label: "Dome", category: "curve", hint: "A half-circle standing on its flat base", radius: "50% 50% 0 0 / 100% 100% 0 0", aspect: 1.3, font: 0.38, pad: [0.14, 0, 0, 0] },
+  { id: "lens", label: "Lens", category: "curve", hint: "Two arcs meeting at the sides — an eye", points: lens(40), aspect: 1.3, font: 0.38 },
+  { id: "softTriangle", label: "Soft triangle", category: "curve", hint: "A triangle with rounded corners", points: soften(TRIUP, 18), font: 0.32, pad: [0.2, 0, 0.02, 0] },
+  { id: "softDiamond", label: "Soft diamond", category: "curve", hint: "A diamond with rounded corners", points: soften(DIAMOND, 16), font: 0.36 },
+  { id: "softHexagon", label: "Soft hexagon", category: "curve", hint: "A hexagon with rounded corners", points: soften(HEXAGON, 12), font: 0.4 },
 
   /* --- cards & chips ----------------------------------------------------- */
   { id: "square", label: "Square", category: "cards", hint: "Crisp architectural tile" },
@@ -324,13 +509,19 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "cutCorner", label: "Cut corner", category: "cards", hint: "Card with its top-right corner sliced off", points: [[0, 0], [74, 0], [100, 26], [100, 100], [0, 100]] },
   { id: "ticket", label: "Ticket", category: "cards", hint: "Admit-one stub with side notches", points: [[0, 0], [100, 0], [100, 36], [93, 50], [100, 64], [100, 100], [0, 100], [0, 64], [7, 50], [0, 36]], aspect: 1.3 },
   { id: "bookmark", label: "Bookmark", category: "cards", hint: "Tab with a V cut out of its base", points: [[0, 0], [100, 0], [100, 100], [50, 76], [0, 100]], pad: [0, 0, 0.08, 0] },
-  { id: "speech", label: "Speech", category: "cards", hint: "Bubble with a tail at the bottom left", points: [[0, 0], [100, 0], [100, 78], [32, 78], [18, 98], [18, 78], [0, 78]], aspect: 1.15 },
   { id: "tab", label: "Tab", category: "cards", hint: "A folder tab — round shoulders, square base", radius: "36% 36% 8% 8%", line: 0.05 },
   { id: "notch", label: "Notched", category: "cards", hint: "A card with two opposite corners cut", points: NOTCH, font: 0.4 },
   { id: "tag", label: "Tag", category: "cards", hint: "A price tag pointing right", points: TAG, aspect: 1.25, font: 0.38 },
   { id: "coupon", label: "Coupon", category: "cards", hint: "A stub with round notches top and bottom", points: COUPON, aspect: 1.4, font: 0.38 },
   { id: "stamp", label: "Stamp", category: "cards", hint: "A perforated postage edge all round", points: zigRect(7, 5), aspect: 1.15, font: 0.36 },
   { id: "washi", label: "Tape", category: "cards", hint: "A strip of tape with torn ends", points: tornBand(4, 8), aspect: 1.8, font: 0.36 },
+  { id: "plaque", label: "Plaque", category: "cards", hint: "A plate with its four corners scooped in", points: plaque(16), font: 0.4 },
+  { id: "frame", label: "Frame", category: "cards", hint: "A hollow square — a bold outline with a tinted centre", generic: true, radius: 0.12, line: 0.1, lineColor: (a) => a, paint: hollowFrame, ink: (a) => a },
+  { id: "chamfer", label: "Chamfer", category: "cards", hint: "A card with all four corners bevelled", points: CHAMFER, font: 0.4 },
+  { id: "folder", label: "Folder", category: "cards", hint: "A file folder with its tab at the top left", points: FOLDER, font: 0.38, pad: [0.1, 0, 0, 0] },
+  { id: "tagLeft", label: "Tag ◀", category: "cards", hint: "A price tag pointing left", points: TAGLEFT, aspect: 1.25, font: 0.38, pad: [0, 0, 0, 0.12] },
+  { id: "label", label: "Label", category: "cards", hint: "A label pointed at both ends", points: LABEL, aspect: 1.5, font: 0.38 },
+  { id: "slot", label: "Slot", category: "cards", hint: "A card with a slot cut into its top edge", points: SLOT, font: 0.38, pad: [0.1, 0, 0, 0] },
 
   /* --- polygons ---------------------------------------------------------- */
   { id: "diamond", label: "Diamond", category: "polygons", hint: "45° rhombus", points: [[50, 0], [100, 50], [50, 100], [0, 50]] },
@@ -348,8 +539,32 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "pentagon", label: "Pentagon", category: "polygons", hint: "Five sides standing on a point", points: poly(5, 49), font: 0.36 },
   { id: "octagon", label: "Octagon", category: "polygons", hint: "Eight sides — the stop sign", points: OCTAGON, font: 0.38 },
   { id: "cross", label: "Plus", category: "polygons", hint: "A cross / plus block", points: CROSS, font: 0.34 },
-  { id: "arrowRight", label: "Arrow ▶", category: "polygons", hint: "An arrow pointing at the question", points: ARROWRIGHT, aspect: 1.3, font: 0.36 },
   { id: "hourglass", label: "Hourglass", category: "polygons", hint: "Pinched in the middle", points: HOURGLASS, font: 0.3 },
+  { id: "rightTriangle", label: "Right triangle", category: "polygons", hint: "A right angle in the bottom-left corner", points: RIGHTTRI, font: 0.3, pad: [0.34, 0.34, 0, 0] },
+  { id: "heptagon", label: "Heptagon", category: "polygons", hint: "Seven sides", points: poly(7, 49), font: 0.36 },
+  { id: "nonagon", label: "Nonagon", category: "polygons", hint: "Nine sides", points: poly(9, 49), font: 0.38 },
+  { id: "decagon", label: "Decagon", category: "polygons", hint: "Ten sides", points: poly(10, 49), font: 0.38 },
+  { id: "dodecagon", label: "Dodecagon", category: "polygons", hint: "Twelve sides — almost a coin", points: poly(12, 49), font: 0.4 },
+  { id: "rhombus", label: "Rhombus", category: "polygons", hint: "A wide diamond", points: DIAMOND, aspect: 1.4, font: 0.34 },
+  { id: "slantLeft", label: "Slant ◣", category: "polygons", hint: "Parallelogram swept to the left", points: SLANTLEFT },
+  { id: "trapezoidDown", label: "Trapezoid ▼", category: "polygons", hint: "A plinth that narrows to its base", points: TRAPDOWN, font: 0.38 },
+  { id: "stepLeft", label: "Step ◀", category: "polygons", hint: "Chevron chip pointing left", points: STEPLEFT, aspect: 1.25 },
+  { id: "house", label: "House", category: "polygons", hint: "A pentagon with a flat base — a house", points: HOUSE, font: 0.36, pad: [0.2, 0, 0, 0] },
+  { id: "gem", label: "Gem", category: "polygons", hint: "A cut jewel, pointed at its base", points: GEM, font: 0.34, pad: [0, 0, 0.2, 0] },
+  { id: "hexWide", label: "Hexagon ▬", category: "polygons", hint: "A wide hexagon", points: HEXWIDE, aspect: 1.4, font: 0.38 },
+
+  /* --- arrows ------------------------------------------------------------ */
+  { id: "arrowRight", label: "Arrow ▶", category: "arrows", hint: "A chevron arrow pointing at the question", points: ARROWRIGHT, aspect: 1.3, font: 0.36 },
+  { id: "arrowLeft", label: "Arrow ◀", category: "arrows", hint: "A chevron arrow pointing left", points: ARROWLEFT, aspect: 1.3, font: 0.36 },
+  { id: "arrowUp", label: "Arrow ▲", category: "arrows", hint: "A block arrow pointing up", points: ARROWUP, font: 0.28, pad: [0.42, 0, 0, 0] },
+  { id: "arrowDown", label: "Arrow ▼", category: "arrows", hint: "A block arrow pointing down", points: ARROWDOWN, font: 0.28, pad: [0, 0, 0.42, 0] },
+  { id: "blockRight", label: "Block arrow ▶", category: "arrows", hint: "A block arrow pointing right", points: BLOCKRIGHT, aspect: 1.4, font: 0.3, pad: [0, 0.42, 0, 0] },
+  { id: "blockLeft", label: "Block arrow ◀", category: "arrows", hint: "A block arrow pointing left", points: BLOCKLEFT, aspect: 1.4, font: 0.3, pad: [0, 0, 0, 0.42] },
+  { id: "arrowBoth", label: "Arrow ◀▶", category: "arrows", hint: "A two-headed arrow, left and right", points: ARROWBOTH, aspect: 1.6, font: 0.3 },
+  { id: "arrowUpDown", label: "Arrow ▲▼", category: "arrows", hint: "A two-headed arrow, up and down", points: ARROWUPDOWN, font: 0.3 },
+  { id: "notchedArrow", label: "Notched arrow", category: "arrows", hint: "A block arrow with a notched tail", points: NOTCHEDARROW, aspect: 1.4, font: 0.3, pad: [0, 0.42, 0, 0.1] },
+  { id: "triangleRight", label: "Triangle ▶", category: "arrows", hint: "A play button — a triangle pointing right", points: TRIRIGHT, font: 0.32, pad: [0, 0.3, 0, 0] },
+  { id: "triangleLeft", label: "Triangle ◀", category: "arrows", hint: "A triangle pointing left", points: TRILEFT, font: 0.32, pad: [0, 0, 0, 0.3] },
 
   /* --- seals & stars ----------------------------------------------------- */
   { id: "star", label: "Star", category: "seals", hint: "Five-point achievement star", points: [[50, 0], [61, 35], [98, 35], [68, 57], [79, 91], [50, 70], [21, 91], [32, 57], [2, 35], [39, 35]], font: 0.5, pad: [0, 0, 0, 0.08] },
@@ -363,6 +578,32 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "star8", label: "Star 8", category: "seals", hint: "An eight-point compass star", points: starPoints(8, 49, 21), font: 0.34 },
   { id: "sunburst", label: "Sunburst", category: "seals", hint: "Twelve rays — a promo burst", points: starPoints(12, 49, 34), font: 0.34 },
   { id: "medal", label: "Medal", category: "seals", hint: "A seal with two ribbon tails", points: MEDAL, font: 0.34, pad: [0.02, 0, 0.14, 0] },
+  { id: "star4", label: "Star 4", category: "seals", hint: "A four-point star", points: starPoints(4, 49, 21), font: 0.3 },
+  { id: "star7", label: "Star 7", category: "seals", hint: "A seven-point star", points: starPoints(7, 49, 27), font: 0.34 },
+  { id: "star10", label: "Star 10", category: "seals", hint: "A ten-point star", points: starPoints(10, 49, 36), font: 0.36 },
+  { id: "star16", label: "Star 16", category: "seals", hint: "A sixteen-point seal", points: starPoints(16, 49, 39), font: 0.36 },
+  { id: "explosion", label: "Explosion", category: "seals", hint: "A comic burst with spikes of every length", points: EXPLOSION, font: 0.32 },
+  { id: "flower", label: "Flower", category: "seals", hint: "Six round petals", points: lobes(6, 39, 10, 8), font: 0.36 },
+  { id: "softStar", label: "Soft star", category: "seals", hint: "A five-point star with rounded tips", points: soften(STAR, 7), font: 0.4, pad: [0.1, 0, 0, 0] },
+
+  /* --- callouts ---------------------------------------------------------- */
+  { id: "speech", label: "Speech", category: "callouts", hint: "Bubble with a tail at the bottom left", points: [[0, 0], [100, 0], [100, 78], [32, 78], [18, 98], [18, 78], [0, 78]], aspect: 1.15 },
+  { id: "bubbleRound", label: "Bubble", category: "callouts", hint: "A round speech bubble with a tail", points: BUBBLEROUND, font: 0.32 },
+  { id: "calloutDown", label: "Callout ▼", category: "callouts", hint: "A plate with its tail pointing down", points: CALLOUTDOWN, aspect: 1.1, font: 0.38, pad: [0, 0, 0.24, 0] },
+  { id: "calloutUp", label: "Callout ▲", category: "callouts", hint: "A plate with its tail pointing up", points: CALLOUTUP, aspect: 1.1, font: 0.38, pad: [0.24, 0, 0, 0] },
+  { id: "calloutRight", label: "Callout ▶", category: "callouts", hint: "A plate with its tail pointing right", points: CALLOUTRIGHT, aspect: 1.2, font: 0.38, pad: [0, 0.24, 0, 0] },
+  { id: "calloutLeft", label: "Callout ◀", category: "callouts", hint: "A plate with its tail pointing left", points: CALLOUTLEFT, aspect: 1.2, font: 0.38, pad: [0, 0, 0, 0.24] },
+  { id: "roundCallout", label: "Rounded callout", category: "callouts", hint: "A rounded plate with a tail at the bottom left", points: ROUNDCALLOUT, aspect: 1.1, font: 0.38, pad: [0, 0, 0.24, 0] },
+
+  /* --- flowchart --------------------------------------------------------- */
+  { id: "document", label: "Document", category: "flowchart", hint: "A sheet with a wavy bottom edge", points: documentSheet(), aspect: 1.15, font: 0.38, pad: [0, 0, 0.12, 0] },
+  { id: "delay", label: "Delay", category: "flowchart", hint: "A D — flat on the left, round on the right", radius: "0 50% 50% 0 / 0 50% 50% 0", aspect: 1.15, font: 0.4, pad: [0, 0.08, 0, 0] },
+  { id: "display", label: "Display", category: "flowchart", hint: "Pointed on the left, rounded on the right", points: DISPLAY, aspect: 1.3, font: 0.38, pad: [0, 0, 0, 0.12] },
+  { id: "manualInput", label: "Manual input", category: "flowchart", hint: "A box with a sloping top", points: MANUALINPUT, font: 0.38, pad: [0.14, 0, 0, 0] },
+  { id: "offPage", label: "Off-page", category: "flowchart", hint: "A pentagon pointing down — the off-page connector", points: OFFPAGE, font: 0.38, pad: [0, 0, 0.2, 0] },
+  { id: "cylinder", label: "Cylinder", category: "flowchart", hint: "A database cylinder with a lit top rim", points: CYLINDER, font: 0.36, pad: [0.1, 0, 0, 0], paint: cylinderPaint },
+  { id: "subroutine", label: "Subroutine", category: "flowchart", hint: "A box with a rule down each side", generic: true, aspect: 1.25, font: 0.38, paint: subroutinePaint },
+  { id: "loopLimit", label: "Loop limit", category: "flowchart", hint: "A box with its top corners cut", points: LOOPLIMIT, font: 0.4 },
 
   /* --- stickers & icons --------------------------------------------------- */
   { id: "bulb", label: "Bulb", category: "stickers", hint: "A light bulb — an idea sticker", points: BULB, font: 0.3, pad: [0.06, 0, 0.16, 0] },
@@ -375,7 +616,11 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "crown", label: "Crown", category: "stickers", hint: "A crown — top of the class", points: CROWN, font: 0.3, pad: [0.1, 0, 0.16, 0] },
   { id: "heart", label: "Heart", category: "stickers", hint: "A favourite / liked marker", points: HEART, font: 0.3, pad: [0.1, 0, 0.1, 0] },
   { id: "pin", label: "Pin", category: "stickers", hint: "A map pin — a place in the syllabus", points: PIN, font: 0.32, pad: [0.04, 0, 0.18, 0] },
-  { id: "bubbleRound", label: "Bubble", category: "stickers", hint: "A round speech bubble with a tail", points: BUBBLEROUND, font: 0.32 },
+  { id: "bell", label: "Bell", category: "stickers", hint: "A bell — a reminder", points: BELL, font: 0.28, pad: [0.1, 0, 0.22, 0] },
+  { id: "lock", label: "Padlock", category: "stickers", hint: "A padlock — a locked or bonus question", points: LOCK, font: 0.3, pad: [0.4, 0, 0, 0] },
+  { id: "flask", label: "Flask", category: "stickers", hint: "A conical flask — the science round", points: FLASK, font: 0.28, pad: [0.42, 0, 0, 0] },
+  { id: "trefoil", label: "Trefoil", category: "stickers", hint: "Three round lobes", points: lobes(3, 37, 12, 14, 90), font: 0.32 },
+  { id: "quatrefoil", label: "Clover", category: "stickers", hint: "Four round lobes — a clover", points: lobes(4, 37, 12, 12), font: 0.34 },
 
   /* --- marks ------------------------------------------------------------- */
   { id: "bracket", label: "Bracket", category: "marks", hint: "Corner rule holding the number" },
@@ -385,10 +630,14 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "brackets", label: "Brackets", category: "marks", hint: "Two rules holding the number, like [7]" },
   { id: "dots3", label: "Three dots", category: "marks", hint: "The number over three small dots" },
   { id: "cornerTick", label: "Corner tick", category: "marks", hint: "A folded corner tick behind the number" },
+  { id: "parens", label: "Parens", category: "marks", hint: "Two round rules holding the number, like (7)" },
   { id: "none", label: "None", category: "marks", hint: "No marker at all" },
 ];
 
 const DEF_BY_ID = new Map<NumberStyle, NumberStyleDef>(NUMBER_STYLES.map((d) => [d.id, d]));
+
+/** the Shape tab's catalogue — every silhouette that is not a bullet point or a numbering format */
+export const NUMBER_SHAPES: NumberStyleDef[] = NUMBER_STYLES.filter((d) => !isPresetCategory(d.category));
 
 export const DEFAULT_NUMBER_STYLE: NumberStyle = "circle";
 
@@ -427,6 +676,8 @@ export const showsNumber = (id: NumberStyle) => !BLANK.includes(id);
 export const isBulletPoint = (id: NumberStyle) => numberStyleDef(id).category === "bullets";
 /** the numbering presets — the number with its own punctuation */
 export const isNumberingPreset = (id: NumberStyle) => !!numberStyleDef(id).format;
+/** a marker shape — anything the Shape tab lists (neither a bullet point nor a numbering format) */
+export const isNumberShape = (id: NumberStyle) => !isPresetCategory(numberStyleDef(id).category);
 
 /** the silhouette's points, when the design is cut with clip-path */
 export const numberStylePoints = (id: NumberStyle): [number, number][] | undefined => numberStyleDef(id).points;
@@ -657,20 +908,24 @@ export function renderNumberStyle(
         };
 
       /* --- the marks that are rules / decorations rather than a silhouette -- */
-      case "brackets": {
+      case "brackets":
+      case "parens": {
+        /* square rules hold the number like [7]; round ones curve like (7) */
         const w = Math.max(2, Math.round(size * 0.07));
+        const round = id === "parens";
+        const corner = Math.round(size * (round ? 0.4 : 0.1));
         const bar = (side: "left" | "right"): CSSProperties => ({
           position: "absolute",
           [side]: 0,
           top: Math.round(size * 0.1),
-          width: Math.round(size * 0.24),
+          width: Math.round(size * (round ? 0.2 : 0.24)),
           height: Math.round(size * 0.8),
           boxSizing: "border-box",
           borderTop: `${w}px solid ${accent}`,
           borderBottom: `${w}px solid ${accent}`,
           ...(side === "left"
-            ? { borderLeft: `${w}px solid ${accent}`, borderRadius: `${Math.round(size * 0.1)}px 0 0 ${Math.round(size * 0.1)}px` }
-            : { borderRight: `${w}px solid ${accent}`, borderRadius: `0 ${Math.round(size * 0.1)}px ${Math.round(size * 0.1)}px 0` }),
+            ? { borderLeft: `${w}px solid ${accent}`, borderRadius: `${corner}px 0 0 ${corner}px` }
+            : { borderRight: `${w}px solid ${accent}`, borderRadius: `0 ${corner}px ${corner}px 0` }),
         });
         return {
           style: box(size * 1.15, size, Math.round(size * 0.42)),
