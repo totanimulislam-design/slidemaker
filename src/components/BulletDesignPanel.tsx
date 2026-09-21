@@ -1,7 +1,17 @@
 import { useState } from "react";
 import type { ShapeEffectKind, ThemeSettings } from "../lib/types";
 import { shade } from "../lib/color";
-import { numberStyleDef, type NumberStyle } from "../lib/numberStyles";
+import {
+  NUMBER_STYLES,
+  NUMBER_STYLE_CATEGORIES,
+  PRESET_CATEGORIES,
+  isBulletPoint,
+  isNumberingPreset,
+  isPresetCategory,
+  numberStyleDef,
+  type NumberStyle,
+  type NumberStyleCategory,
+} from "../lib/numberStyles";
 import { BULLET_EFFECTS, BULLET_EFFECT_BY_ID, BULLET_EFFECT_GROUPS, bulletEffectColor, bulletEffectIsOn } from "../lib/bulletEffects";
 import {
   BULLET_STYLES,
@@ -9,11 +19,12 @@ import {
   BULLET_STYLE_GROUPS,
   bulletStyleOf,
   bulletStylePatch,
+  type BulletStyle,
   type BulletStyleGroup,
 } from "../lib/bulletStyles";
 import type { ShapeEffectGroup } from "../lib/shapeEffects";
 import NumberStylePicker, { NumberStylePreview } from "./NumberStylePicker";
-import { ColorInput, Slider } from "./ui";
+import { ColorField, ColorInput, Field, Slider } from "./ui";
 import { cn } from "../utils/cn";
 
 /**
@@ -21,16 +32,18 @@ import { cn } from "../utils/cn";
  *
  * Three tabs, in the order a teacher reaches for them:
  *
- *   Bullet point presets   what the marker is — the classic bullet points
+ *   Bullet point presets   the ready-made looks — the classic bullet points
  *                          (dot, hollow dot, square, dash, arrowhead, check…),
  *                          the numbering presets ("7." · "(7)" · "Q7" · "07")
- *                          and every silhouette: circles, chips, polygons,
- *                          seals, marks and the sticker family — plus its
- *                          size and base colour.
- *   Shape                  one-click shapes: a silhouette dressed in a whole
- *                          set of channels written together (fill · line ·
- *                          corners · effect), so "hex tile", "gold seal" or
- *                          "neon tube" is a single click.
+ *                          and the one-click designs: a silhouette dressed in
+ *                          a whole set of channels written together (fill ·
+ *                          line · corners · effect), so "hex tile", "gold
+ *                          seal" or "neon tube" is a single click — plus the
+ *                          marker's size and base colour.
+ *   Shape                  the silhouette alone — round & soft, cards &
+ *                          chips, polygons, arrows, seals & stars, callouts,
+ *                          flowchart symbols, the sticker family and the
+ *                          marks. Picking one keeps the paint the marker has.
  *   Shape effects          the effects an object can wear — shadow, glow,
  *                          neon, bevel, 3-D, reflection, material, texture,
  *                          soft edges, sticker outline… — each with its own
@@ -50,8 +63,8 @@ interface Props {
 type Tab = "designs" | "style" | "effects";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
-  { id: "designs", label: "Bullet point presets", hint: "Classic bullets, numbering and every marker silhouette" },
-  { id: "style", label: "Shape", hint: "One-click shapes: silhouette, fill, line and effect together" },
+  { id: "designs", label: "Bullet point presets", hint: "Ready-made looks: classic bullets, numbering and one-click designs" },
+  { id: "style", label: "Shape", hint: "The silhouette alone — round, cards, polygons, arrows, seals, callouts, flowchart, stickers, marks" },
   { id: "effects", label: "Shape effects", hint: "Shadow, glow, bevel, texture and the rest" },
 ];
 
@@ -111,83 +124,129 @@ export default function BulletDesignPanel({ theme: T, setTheme }: Props) {
       </div>
       <p className="-mt-1 text-[10px] leading-relaxed text-slate-500">{hint}</p>
 
-      {tab === "designs" && (
-        <NumberStylePicker theme={T} setTheme={setTheme} title="Bullet point presets" controls="full" maxHeight="max-h-52" />
-      )}
-      {tab === "style" && <StyleTab theme={T} setTheme={setTheme} />}
+      {tab === "designs" && <PresetsTab theme={T} setTheme={setTheme} />}
+      {tab === "style" && <NumberStylePicker theme={T} setTheme={setTheme} title="Shape" maxHeight="max-h-56" />}
       {tab === "effects" && <EffectsTab theme={T} setTheme={setTheme} />}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Shape — one-click shapes (silhouette · fill · line · effect)       */
+/*  Bullet point presets — the ready-made looks                        */
 /* ------------------------------------------------------------------ */
 
-function StyleTab({ theme: T, setTheme }: Props) {
-  const [group, setGroup] = useState<BulletStyleGroup | "all">("all");
-  const current = bulletStyleOf(T);
-  const shown = group === "all" ? BULLET_STYLES : BULLET_STYLES.filter((s) => s.group === group);
+type PresetGroup = "all" | NumberStyleCategory | BulletStyleGroup;
+
+/** the groups the presets tab is browsed by: the two glyph families, then the one-click looks */
+const PRESET_GROUPS: { id: PresetGroup; label: string }[] = [
+  ...NUMBER_STYLE_CATEGORIES.filter((c) => isPresetCategory(c.id)).map((c) => ({ id: c.id as PresetGroup, label: c.label })),
+  ...BULLET_STYLE_GROUPS.map((g) => ({ id: g as PresetGroup, label: g })),
+];
+
+/** the classic bullet points and the numbering formats (`lib/numberStyles`) */
+const GLYPH_PRESETS = NUMBER_STYLES.filter((d) => isPresetCategory(d.category));
+
+/** what the footer says about the preset that is on */
+function describePreset(T: ThemeSettings, look: BulletStyle | undefined): string {
+  if (look) return `${look.hint}. Fine-tune any channel on the toolbar — the tile stops claiming the look as soon as one is edited.`;
+  const id = (T.numberStyle ?? "circle") as NumberStyle;
+  const def = numberStyleDef(id);
+  if (isBulletPoint(id))
+    return `${def.hint}. A bullet point stands in for the number, like a list bullet does — its colour, outline, transparency and effect are still yours to change.`;
+  if (isNumberingPreset(id))
+    return `${def.hint}. A numbering preset paints the number with its punctuation and no shape; its ink, face and size live under Q bullet text.`;
+  return "A preset writes the whole marker at once — a bullet point or numbering format, or a one-click look with its silhouette, fill, line, corners, transparency and effect. Swap the silhouette alone under Shape.";
+}
+
+function PresetsTab({ theme: T, setTheme }: Props) {
+  const [group, setGroup] = useState<PresetGroup>("all");
+  const shape = (T.numberStyle ?? "circle") as NumberStyle;
+  const lookId = bulletStyleOf(T);
+  const look = lookId ? BULLET_STYLE_BY_ID.get(lookId) : undefined;
+  /* the preset the marker is wearing: a claimed look, a bullet point, a numbering format — else "custom" */
+  const now = look?.label ?? (isPresetCategory(numberStyleDef(shape).category) ? numberStyleDef(shape).label : "custom");
+  const total = GLYPH_PRESETS.length + BULLET_STYLES.length;
+
+  const glyphs = group === "all" ? GLYPH_PRESETS : GLYPH_PRESETS.filter((d) => d.category === group);
+  const looks =
+    group === "all"
+      ? BULLET_STYLES
+      : (PRESET_CATEGORIES as string[]).includes(group)
+        ? []
+        : BULLET_STYLES.filter((s) => s.group === group);
+
+  const tile = (key: string, label: string, hint: string, chosen: boolean, onClick: () => void, preview: React.ReactNode) => (
+    <button
+      key={key}
+      type="button"
+      role="option"
+      aria-selected={chosen}
+      aria-label={`Bullet preset: ${label}`}
+      title={hint}
+      onClick={onClick}
+      className={cn(
+        "flex min-h-[58px] flex-col items-center justify-between gap-1 rounded-lg border p-1.5 text-center transition-all",
+        chosen
+          ? "border-amber-400 bg-amber-400/15 shadow-[0_0_10px_rgba(251,191,36,0.3)]"
+          : "border-white/10 bg-slate-900/60 hover:border-white/25 hover:bg-slate-900",
+      )}
+    >
+      <span className="relative flex w-full flex-1 items-center justify-center py-0.5">{preview}</span>
+      <span className="w-full truncate text-[9px] font-medium leading-tight text-slate-300">{label}</span>
+    </button>
+  );
 
   return (
-    <div className="space-y-2" data-bullet-style-tab="">
+    <div className="space-y-3" data-bullet-presets-tab="">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Shape</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Bullet point presets</span>
         <span className="text-[10px] text-slate-500">
-          {BULLET_STYLES.length} shapes · {current ? BULLET_STYLE_BY_ID.get(current)?.label : "custom"}
+          {total} presets · now {now}
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-1" role="group" aria-label="Shape group">
-        <Chip on={group === "all"} onClick={() => setGroup("all")} label="All shapes">
+      {/* the marker's size and the base colour every design derives from */}
+      <Field label="Bullet size" hint={`${T.bulletSize ?? 54} px`}>
+        <Slider min={20} max={160} value={T.bulletSize ?? 54} onChange={(v) => setTheme({ bulletSize: v })} ariaLabel="Bullet size" />
+      </Field>
+      <ColorField
+        label="Bullet colour"
+        value={T.accent || "#2f4fff"}
+        fallback={T.accent || "#2f4fff"}
+        onChange={(v) => setTheme({ accent: v })}
+        allowNone={false}
+        autoLabel="Accent"
+        presets={[T.accent || "#2f4fff", "#0f2a5f", "#e30613", "#0b0b0f", "#ffd633", "#ffffff"]}
+      />
+
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Bullet preset group">
+        <Chip on={group === "all"} onClick={() => setGroup("all")} label="All bullet presets">
           All
         </Chip>
-        {BULLET_STYLE_GROUPS.map((g) => (
-          <Chip key={g} on={group === g} onClick={() => setGroup(g)} label={`Shapes: ${g}`}>
-            {g}
+        {PRESET_GROUPS.map((g) => (
+          <Chip key={g.id} on={group === g.id} onClick={() => setGroup(g.id)} label={`Bullet presets: ${g.label}`}>
+            {g.label}
           </Chip>
         ))}
       </div>
 
-      <div className="grid max-h-56 grid-cols-4 gap-1.5 overflow-y-auto p-0.5" role="listbox" aria-label="Shape">
-        {shown.map((s) => {
-          const chosen = current === s.id;
+      <div className="grid max-h-52 grid-cols-4 gap-1.5 overflow-y-auto p-0.5" role="listbox" aria-label="Bullet preset">
+        {/* a bullet point or a numbering format writes the silhouette alone — the paint stays */}
+        {glyphs.map((d) =>
+          tile(d.id, d.label, d.hint, shape === d.id, () => setTheme({ numberStyle: d.id }), (
+            <NumberStylePreview style={d.id} theme={T} size={24} number="7" />
+          )),
+        )}
+        {/* a one-click look writes every channel at once */}
+        {looks.map((s) => {
           const patched: ThemeSettings = { ...T, ...s.patch } as ThemeSettings;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              role="option"
-              aria-selected={chosen}
-              aria-label={`Shape: ${s.label}`}
-              title={s.hint}
-              onClick={() => setTheme(bulletStylePatch(s))}
-              className={cn(
-                "flex min-h-[58px] flex-col items-center justify-between gap-1 rounded-lg border p-1.5 text-center transition-all",
-                chosen
-                  ? "border-amber-400 bg-amber-400/15 shadow-[0_0_10px_rgba(251,191,36,0.3)]"
-                  : "border-white/10 bg-slate-900/60 hover:border-white/25 hover:bg-slate-900",
-              )}
-            >
-              <span className="relative flex w-full flex-1 items-center justify-center py-0.5">
-                <NumberStylePreview
-                  style={s.patch.numberStyle ?? String(T.numberStyle ?? "circle")}
-                  theme={patched}
-                  size={24}
-                  number="7"
-                />
-              </span>
-              <span className="w-full truncate text-[9px] font-medium leading-tight text-slate-300">{s.label}</span>
-            </button>
-          );
+          return tile(s.id, s.label, s.hint, lookId === s.id, () => setTheme(bulletStylePatch(s)), (
+            <NumberStylePreview style={s.patch.numberStyle ?? String(T.numberStyle ?? "circle")} theme={patched} size={24} number="7" />
+          ));
         })}
       </div>
 
-      <p className="text-[10px] leading-relaxed text-slate-500">
-        {current
-          ? `${BULLET_STYLE_BY_ID.get(current)?.hint}. Fine-tune any channel on the toolbar — the tile stops claiming the shape as soon as one is edited.`
-          : "A shape writes the marker's silhouette, fill, line, corners, transparency and effect together. Fine-tune any of them afterwards on the toolbar line."}
-      </p>
+      <p className="text-[10px] leading-relaxed text-slate-500">{describePreset(T, look)}</p>
     </div>
   );
 }

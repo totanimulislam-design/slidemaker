@@ -1149,9 +1149,9 @@ export default function ContextToolbar(p: Props) {
 
   /**
    * Bullet design — the one card that decides how the marker looks: the
-   * bullet point presets (classic bullets, numbering, every silhouette), the
-   * one-click shapes, and the shape effects, each previewed with the deck's
-   * own theme.
+   * bullet point presets (classic bullets, numbering, the one-click looks),
+   * the shapes (every silhouette alone), and the shape effects, each
+   * previewed with the deck's own theme.
    */
   if (panel === "Bullet design" && optLine("questionBullet")) content = (
     <BulletDesignPanel theme={theme} setTheme={p.patchTheme} />
@@ -1472,7 +1472,7 @@ export default function ContextToolbar(p: Props) {
          *   Border weight   the outline's thickness
          *   Transparency    the body only; the number keeps its own opacity
          *   Bullet position where the marker sits on the board
-         *   Bullet design   the bullet point presets, the one-click shapes, the effects
+         *   Bullet design   the bullet point presets, the shapes, the effects
          *
          * Fill and Border spell their name out and wear the colour-picker icon:
          * a shape's paint has four states to show (auto · solid · gradient ·

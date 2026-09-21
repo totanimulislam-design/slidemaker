@@ -1,10 +1,9 @@
 import { useState } from "react";
 import type { ThemeSettings } from "../lib/types";
 import {
-  NUMBER_STYLES,
-  NUMBER_STYLE_CATEGORIES,
-  isBulletPoint,
-  isNumberingPreset,
+  NUMBER_SHAPES,
+  SHAPE_CATEGORIES,
+  isNumberShape,
   numberStyleDef,
   renderNumberStyle,
   type NumberStyle,
@@ -12,10 +11,9 @@ import {
 } from "../lib/numberStyles";
 import { cn } from "../utils/cn";
 import NumberBullet from "./NumberBullet";
-import { ColorField, Field, Slider } from "./ui";
 
 /**
- * A live-rendered numbering design, drawn from the deck's own theme — so the
+ * A live-rendered marker design, drawn from the deck's own theme — so the
  * accent, the fill, the outline and the silhouette are exactly what the board
  * will paint.
  */
@@ -48,85 +46,52 @@ interface Props {
   setTheme: (patch: Partial<ThemeSettings>) => void;
   /** the card's own title */
   title?: string;
-  /**
-   * "full" adds the marker's size and base colour above the gallery — the
-   * Bullet design pop-up's own tab. "designs" is the gallery alone, for a card
-   * that already offers both (the inspector's Question bullet destination).
-   */
-  controls?: "full" | "designs";
   /** how tall the scrolling gallery is */
   maxHeight?: string;
 }
 
 const ALL: NumberStyleCategory | "all" = "all";
 
-/** what the footer says about the design that is on */
+/** what the footer says about the shape that is on */
 function describe(id: NumberStyle): string {
   const def = numberStyleDef(id);
-  if (id === "none") return "No numbering mark is drawn. Turn on “Number inside bullet” if you want the number back.";
-  if (isBulletPoint(id))
-    return `${def.hint}. A bullet point stands in for the number, like a list bullet does — its colour, outline, transparency and effect are still yours to change below.`;
-  if (isNumberingPreset(id))
-    return `${def.hint}. A numbering preset paints the number with its punctuation and no shape; its ink, face and size live under Q bullet text.`;
-  return `${def.hint}. Every design derives from the accent colour, and its fill, outline, corners and transparency are yours to change below.`;
+  if (id === "none") return "No marker is drawn. Turn on “Number inside bullet” if you want the number back.";
+  if (!isNumberShape(id))
+    return `The marker is wearing the “${def.label}” bullet point preset. Pick a shape here to give it a silhouette instead — the paint you have set stays.`;
+  return `${def.hint}. A shape changes the silhouette only — the fill, outline, corners, transparency and effect you have set stay on it.`;
 }
 
 /**
- * The bullet-point preset gallery: the classic bullets (dot, hollow dot,
- * square, dash, arrowhead, check…), the numbering presets ("7." · "(7)" ·
- * "Q7" · "07") and every silhouette the question marker can wear, grouped the
- * way a picker is browsed and previewed with the deck's own colours. Picking
- * one writes `numberStyle`.
+ * The **Shape** gallery: every silhouette the question marker can wear —
+ * round & soft, cards & chips, polygons, arrows, seals & stars, callouts,
+ * flowchart symbols, the sticker pack and the marks — grouped the way a shape
+ * library is browsed and previewed with the deck's own colours. Picking one
+ * writes `numberStyle` and nothing else, so the marker's paint, line and
+ * effect travel onto the new silhouette. The ready-made looks live one tab
+ * over, under Bullet point presets.
  */
-export default function NumberStylePicker({
-  theme,
-  setTheme,
-  title = "Bullet point presets",
-  controls = "designs",
-  maxHeight = "max-h-64",
-}: Props) {
+export default function NumberStylePicker({ theme, setTheme, title = "Shape", maxHeight = "max-h-64" }: Props) {
   const current = (theme.numberStyle ?? "circle") as NumberStyle;
   const [group, setGroup] = useState<NumberStyleCategory | "all">(ALL);
-  const designs = group === ALL ? NUMBER_STYLES : NUMBER_STYLES.filter((d) => d.category === group);
+  const shapes = group === ALL ? NUMBER_SHAPES : NUMBER_SHAPES.filter((d) => d.category === group);
+  const now = isNumberShape(current) ? numberStyleDef(current).label : "preset";
 
   return (
-    <div className="space-y-3" data-bullet-design-picker="">
+    <div className="space-y-3" data-bullet-shape-picker="">
       <div className="flex items-baseline justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">{title}</span>
         <span className="text-[10px] text-slate-500">
-          {NUMBER_STYLES.length} presets · now {numberStyleDef(current).label}
+          {NUMBER_SHAPES.length} shapes · now {now}
         </span>
       </div>
 
-      {controls === "full" && (
-        <>
-          <Field label="Bullet size" hint={`${theme.bulletSize ?? 54} px`}>
-            <Slider
-              min={20}
-              max={160}
-              value={theme.bulletSize ?? 54}
-              onChange={(v) => setTheme({ bulletSize: v })}
-              ariaLabel="Bullet size"
-            />
-          </Field>
-          <ColorField
-            label="Bullet colour"
-            value={theme.accent || "#2f4fff"}
-            fallback={theme.accent || "#2f4fff"}
-            onChange={(v) => setTheme({ accent: v })}
-            allowNone={false}
-            autoLabel="Accent"
-            presets={[theme.accent || "#2f4fff", "#0f2a5f", "#e30613", "#0b0b0f", "#ffd633", "#ffffff"]}
-          />
-        </>
-      )}
-
-      <div className="flex flex-wrap gap-1" role="group" aria-label="Bullet design group">
-        {[{ id: ALL, label: "All" }, ...NUMBER_STYLE_CATEGORIES].map((c) => (
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Shape group">
+        {[{ id: ALL, label: "All" }, ...SHAPE_CATEGORIES].map((c) => (
           <button
             key={c.id}
             type="button"
             aria-pressed={group === c.id}
+            aria-label={c.id === ALL ? "All shapes" : `Shapes: ${c.label}`}
             onClick={() => setGroup(c.id as NumberStyleCategory | "all")}
             className={cn(
               "rounded-full border px-2 py-0.5 text-[9.5px] transition-colors",
@@ -140,12 +105,8 @@ export default function NumberStylePicker({
         ))}
       </div>
 
-      <div
-        className={cn("grid grid-cols-4 gap-1.5 overflow-y-auto p-0.5", maxHeight)}
-        role="listbox"
-        aria-label="Bullet design"
-      >
-        {designs.map((d) => {
+      <div className={cn("grid grid-cols-4 gap-1.5 overflow-y-auto p-0.5", maxHeight)} role="listbox" aria-label="Shape">
+        {shapes.map((d) => {
           const chosen = current === d.id;
           return (
             <button
@@ -153,7 +114,7 @@ export default function NumberStylePicker({
               type="button"
               role="option"
               aria-selected={chosen}
-              aria-label={`Bullet design: ${d.label}`}
+              aria-label={`Shape: ${d.label}`}
               title={d.hint}
               onClick={() => setTheme({ numberStyle: d.id })}
               className={cn(

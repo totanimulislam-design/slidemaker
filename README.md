@@ -354,45 +354,59 @@ mesh with up to eight stops), with **Auto** and **None** above it.
 One card, three tabs, every tile a live preview painted by the same renderer as
 the board:
 
-- **Bullet point presets** — 94 presets plus *None*, in eight groups, with the
-  marker's **size** (20 – 160 px) and **base colour** every design derives from.
-  The list opens with the two families a bullet row is expected to hold:
-  **Bullet points** (Dot · Hollow dot · Small square · Hollow square · Small
-  diamond · Small triangle · Dash · Arrowhead · Chevron · Check mark · Small
-  star) — the classic list bullets, drawn small in the middle of a full-size
-  box so they sit on the question's first line where a disc would, and standing
-  in for the number the way a bullet does — and **Numbering** (1. · 1) · (1) ·
-  1: · 01 · Q1 · #1 · 1 |), which keep the number and add its punctuation with
-  no shape at all (the leading zero of *01* comes in the number's own script,
-  so ৭ becomes ০৭). Then every marker silhouette:
-  **Round & soft** (Circle · Ring · Coin · Squircle · Arch · Blob · Gradient ·
-  Glow · Flat disc · Double ring · Dotted ring · Bullseye · Wavy rim · Teardrop ·
-  Leaf · Cloud), **Cards & chips** (Square · Rounded · Pill · Cut corner ·
-  Ticket · Bookmark · Speech · Tab · Notched · Tag · Coupon · Stamp · Tape),
-  **Polygons** (Diamond · Hexagon · Hexagon ▲ · Kite · Shield · Slant · Step ·
-  Ribbon · Banner · Triangle · Triangle ▼ · Trapezoid · Pentagon · Octagon ·
-  Plus · Arrow ▶ · Hourglass), **Seals & stars** (Star · Sparkle · Burst ·
-  Scallop · Gear · Rosette · Cap seal · Star 6 · Star 8 · Sunburst · Medal),
-  **Stickers & icons** (Bulb · Book · Grad cap · Trophy · Bolt · Flame · Rocket ·
-  Crown · Heart · Pin · Bubble) and **Marks** (Bracket · Underline · Bar ·
-  Slashed · Brackets · Three dots · Corner tick · None). They are the marker
-  shapes a quiz, a workbook or an exam paper wears the world over — discs,
-  app-icon squircles, notched cards, coins, seals, ribbons, tags, badges and the
-  sticker family — drawn from generic shape families rather than copied from any
-  one product. Wide designs get a box wider than it is tall; the *Bullet
-  points*, the *Marks* that are a rule rather than a shape, and *None*, drop
-  the number.
-- **Shape** — 73 one-click shapes that write the whole marker at once
-  (silhouette · fill · line · corners · transparency · effect), in ten
-  families. The shape-led ones come first: *Geometric* (Hex tile · Octagon stop
-  · Diamond stud · Pentagon badge · Triangle flag · Violet kite · Plinth · Arrow
-  step · Slant stripe · Plus block · Speech bubble · Bookmark) and *Organic*
-  (Soft cloud · Aqua drop · Coral blob · Mint sparkle · Rose heart · Sky bubble
-  · Wavy sun), each silhouette dressed in the paint it is usually seen in; then
-  *Exam classic*, *Soft & minimal*, *Bold sticker*, *Neon & glow*, *Medal &
-  seal*, *Dark & gold*, *3-D & depth* and *Hand drawn*. A shape stays claimed
-  only while every channel still matches it — fine-tune one and the card reports
-  **custom** instead (`lib/bulletStyles.ts`).
+- **Bullet point presets** — the ready-made looks, 92 of them in twelve
+  groups, with the marker's **size** (20 – 160 px) and **base colour** every
+  design derives from. The list opens with the two families a bullet row is
+  expected to hold: **Bullet points** (Dot · Hollow dot · Small square · Hollow
+  square · Small diamond · Small triangle · Dash · Arrowhead · Chevron · Check
+  mark · Small star) — the classic list bullets, drawn small in the middle of a
+  full-size box so they sit on the question's first line where a disc would,
+  and standing in for the number the way a bullet does — and **Numbering** (1. ·
+  1) · (1) · 1: · 01 · Q1 · #1 · 1 |), which keep the number and add its
+  punctuation with no shape at all (the leading zero of *01* comes in the
+  number's own script, so ৭ becomes ০৭). Then the 73 **one-click designs**
+  that write the whole marker at once (silhouette · fill · line · corners ·
+  transparency · effect), in ten families. The shape-led ones come first:
+  *Geometric* (Hex tile · Octagon stop · Diamond stud · Pentagon badge ·
+  Triangle flag · Violet kite · Plinth · Arrow step · Slant stripe · Plus block
+  · Speech bubble · Bookmark) and *Organic* (Soft cloud · Aqua drop · Coral blob
+  · Mint sparkle · Rose heart · Sky bubble · Wavy sun), each silhouette dressed
+  in the paint it is usually seen in; then *Exam classic*, *Soft & minimal*,
+  *Bold sticker*, *Neon & glow*, *Medal & seal*, *Dark & gold*, *3-D & depth*
+  and *Hand drawn*. A design stays claimed only while every channel still
+  matches it — fine-tune one, or swap the silhouette under *Shape*, and the
+  card reports **custom** instead (`lib/bulletStyles.ts`).
+- **Shape** — the silhouette alone: 138 shapes in nine families, and picking
+  one changes nothing but the silhouette, so the fill, line, corners,
+  transparency and effect the marker already has travel onto it (a *Gold seal*
+  becomes a gold hexagon with the same bevel). **Round & soft** (Circle · Ring ·
+  Coin · Squircle · Arch · Blob · Gradient · Glow · Flat disc · Double ring ·
+  Dotted ring · Bullseye · Wavy rim · Teardrop · Leaf · Cloud · Oval · Egg ·
+  Dome · Lens · Soft triangle · Soft diamond · Soft hexagon), **Cards & chips**
+  (Square · Rounded · Pill · Cut corner · Ticket · Bookmark · Tab · Notched ·
+  Tag · Coupon · Stamp · Tape · Plaque · Frame · Chamfer · Folder · Tag ◀ ·
+  Label · Slot), **Polygons** (Diamond · Hexagon · Hexagon ▲ · Kite · Shield ·
+  Slant · Step · Ribbon · Banner · Triangle · Triangle ▼ · Trapezoid · Pentagon
+  · Octagon · Plus · Hourglass · Right triangle · Heptagon · Nonagon · Decagon ·
+  Dodecagon · Rhombus · Slant ◣ · Trapezoid ▼ · Step ◀ · House · Gem · Hexagon
+  ▬), **Arrows** (Arrow ▶ · Arrow ◀ · Arrow ▲ · Arrow ▼ · Block arrow ▶ · Block
+  arrow ◀ · Arrow ◀▶ · Arrow ▲▼ · Notched arrow · Triangle ▶ · Triangle ◀),
+  **Seals & stars** (Star · Sparkle · Burst · Scallop · Gear · Rosette · Cap
+  seal · Star 6 · Star 8 · Sunburst · Medal · Star 4 · Star 7 · Star 10 · Star
+  16 · Explosion · Flower · Soft star), **Callouts** (Speech · Bubble · Callout
+  ▼ · Callout ▲ · Callout ▶ · Callout ◀ · Rounded callout), **Flowchart**
+  (Document · Delay · Display · Manual input · Off-page · Cylinder · Subroutine
+  · Loop limit), **Stickers & icons** (Bulb · Book · Grad cap · Trophy · Bolt ·
+  Flame · Rocket · Crown · Heart · Pin · Bell · Padlock · Flask · Trefoil ·
+  Clover) and **Marks** (Bracket · Underline · Bar · Slashed · Brackets · Parens
+  · Three dots · Corner tick · None). They are the shape families a slide or
+  diagram tool's shape library is browsed by — basic shapes, block arrows,
+  stars and banners, callouts, flowchart symbols — plus the marker shapes a
+  quiz, a workbook or an exam paper wears the world over, drawn from generic
+  shape families rather than copied from any one product. Wide shapes get a
+  box wider than it is tall; a directional shape (a block arrow, a callout, a
+  flask) pads the number into its body; the *Marks* that are a rule rather
+  than a shape, and *None*, drop the number.
 - **Shape effects** — 36 effects plus *None*, the set an object can wear in a
   slide or design tool, in six groups (`lib/bulletEffects.ts`, painted by the
   shared engine in `lib/shapeEffects.ts`): **Shadow** (Shadow · Lift · Float ·
