@@ -598,11 +598,17 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     (el) => el.getAttribute("aria-label") ?? "",
   );
   out.push({
-    name: "the Question bullet line carries one button per channel — fill · border · style · radius · weight · transparency · position · design",
-    pass: ["Fill", "Border", "Border style", "Border radius", "Border weight", "Transparency", "Bullet position", "Bullet design"].every((l) =>
+    name: "the Question bullet line carries one button per channel — fill · border · numbering · style · radius · weight · transparency · position · design",
+    pass: ["Fill", "Border", "Numbering", "Border style", "Border radius", "Border weight", "Transparency", "Bullet position", "Design"].every((l) =>
       labels.includes(l),
     ),
     detail: labels.filter(Boolean).join(" · "),
+  });
+
+  out.push({
+    name: "the Design button wears the elegant diamond + sparkle icon (not the old disc)",
+    pass: !!barButton("Design")?.querySelector("svg") && (barButton("Design")?.innerHTML.includes("M10 2.6") || !!barButton("Design")?.querySelector("path")),
+    detail: barButton("Design")?.innerHTML.slice(0, 120) ?? "no Design button",
   });
 
   out.push({
@@ -633,14 +639,30 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   });
 
   /* ----------------------- the bullet design card ------------------------- */
-  click(barButton("Bullet design"));
+  // new elegant name is "Design" — old "Bullet design" kept as alias in code
+  click(barButton("Design") ?? barButton("Bullet design"));
   out.push({
-    name: "Bullet design opens one card with three tabs: bullet point presets · shape · shape effects",
+    name: "Design (Bullet design) opens one card with three tabs: bullet point presets · shape · shape effects",
     pass:
-      pop()?.getAttribute("data-pop-panel") === "Bullet design" &&
+      (pop()?.getAttribute("data-pop-panel") === "Design" || pop()?.getAttribute("data-pop-panel") === "Bullet design") &&
       ["Bullet point presets", "Shape", "Shape effects"].every((t) => !!tabBtn(t)),
     detail: `panel ${pop()?.getAttribute("data-pop-panel")} · tabs ${Array.from(pop()?.querySelectorAll('[role="tab"]') ?? []).map((t) => t.textContent?.trim()).join("/")}`,
   });
+
+  // also verify the new Numbering option exists and opens its own gallery
+  closePop();
+  click(barButton("Numbering"));
+  const numberingTiles = pop()?.querySelectorAll('[aria-label^="Numbering:"]').length ?? 0;
+  out.push({
+    name: "Numbering opens its own gallery — bullet points · numbering · number + arrow presets",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Numbering" &&
+      numberingTiles >= 90 &&
+      !!pop()?.querySelector('[data-bullet-numbering-panel]'),
+    detail: `${numberingTiles} numbering tiles · panel ${pop()?.getAttribute("data-pop-panel")}`,
+  });
+  closePop();
+  click(barButton("Design") ?? barButton("Bullet design"));
 
   const listed = pop()?.querySelectorAll('[aria-label^="Bullet preset:"]').length ?? 0;
   const groups = pop()?.querySelectorAll('[aria-label="Bullet preset group"] button').length ?? 0;
@@ -918,7 +940,7 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   closePop();
 
   /* ---------------------- outline on a cut silhouette ---------------------- */
-  click(barButton("Bullet design"));
+  click(barButton("Design") ?? barButton("Bullet design"));
   click(tabBtn("Shape"));
   click(shapeBtn("Star"));
   closePop();
@@ -943,7 +965,7 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   });
 
   /* ----------------------------- shape effects ----------------------------- */
-  click(barButton("Bullet design"));
+  click(barButton("Design") ?? barButton("Bullet design"));
   click(tabBtn("Shape effects"));
   const effectTiles = pop()?.querySelectorAll('[aria-label^="Shape effect:"]').length ?? 0;
   click(effectBtn("Neon"));
@@ -1016,13 +1038,14 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
   out.push({
     name: "the inspector's Question bullet destination shows the design card and every channel",
     pass:
-      ["Shape fill colour", "Border colour", "Border style", "Border radius", "Border weight", "Transparency", "Nudge horizontally"].every((t) =>
+      ["Shape fill colour", "Border colour", "Border style", "Border radius", "Border weight", "Transparency", "Nudge horizontally", "Numbering"].every((t) =>
         panelText().includes(t),
       ) &&
       !!doc.querySelector("[data-bullet-shape-controls]") &&
       !!doc.querySelector("[data-bullet-position-controls]") &&
-      !!doc.querySelector("[data-bullet-design-panel]"),
-    detail: panelText().slice(0, 140),
+      !!doc.querySelector("[data-bullet-design-panel]") &&
+      !!doc.querySelector("[data-bullet-numbering-panel]"),
+    detail: panelText().slice(0, 200),
   });
 
   /* -------------------------------- Default -------------------------------- */
