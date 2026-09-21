@@ -29,7 +29,11 @@ export type { NumberBorderStyle } from "./types";
  * compound pairs (… · : · » · ✓✓ · → · ☑ · ◎) and the finished dots (pie,
  * half, stripes, gloss, rings) — and the **numbering** presets ("7." · "(7)" ·
  * "Q7" · "07" · "[7]" · "No.7" · "G" · "VII"), which keep the number and add
- * its punctuation — followed by
+ * its punctuation — and the **Number + arrow** presets (a numbered disc /
+ * card / hexagon / shield / capsule with its own arrow tail, the number
+ * inside a flat · chevron · step · ribbon · flag · two-way · thin · diagonal
+ * · notched · double-line arrow, and the "1 →" · "1 ⇒" · "1 ▸" text arrows) —
+ * followed by
  * the marker **shapes** the *Shape* tab lists (`NUMBER_SHAPES`): round & soft,
  * cards & chips, polygons, arrows, seals & stars, callouts, flowchart, the
  * sticker pack and the marks. Picking a shape changes the silhouette only; the
@@ -109,11 +113,24 @@ export type NumberStyle =
   /* stickers, extended */
   | "bell" | "lock" | "flask" | "trefoil" | "quatrefoil"
   /* marks, extended */
-  | "parens";
+  | "parens"
+  /* number + arrow — the stock libraries' direction family: the number rides
+     on its own plate (disc, card, hexagon, shield…) with an arrow tail, or
+     sits inside the arrow itself (flat block, chevron, step, ribbon, flag,
+     two-way, thin line, diagonal), plus the "1 →" text formats */
+  | "numArrowDisc" | "numArrowDiscHollow" | "numArrowDiscTwo" | "numArrowDiscTaper"
+  | "numArrowDiscThin" | "numArrowDiscGloss" | "numArrowDiscStripe" | "numArrowPill"
+  | "numArrowCard" | "numArrowCardHollow" | "numArrowCardCut"
+  | "numArrowHex" | "numArrowHexHollow" | "numArrowDiamond" | "numArrowShield" | "numArrowSquircle"
+  | "numArrowBlock" | "numArrowChevron" | "numArrowStep" | "numArrowRibbon" | "numArrowFlag"
+  | "numArrowBack" | "numArrowUp" | "numArrowDown" | "numArrowBoth" | "numArrowThin"
+  | "numArrowDiagonal" | "numArrowNotch" | "numArrowDoubleLine"
+  | "numArrowText" | "numArrowText2" | "numArrowTextTri";
 
 export type NumberStyleCategory =
   | "bullets"
   | "numbering"
+  | "numArrow"
   | "curve"
   | "cards"
   | "polygons"
@@ -166,6 +183,7 @@ export interface NumberStyleDef {
 export const NUMBER_STYLE_CATEGORIES: { id: NumberStyleCategory; label: string }[] = [
   { id: "bullets", label: "Bullet points" },
   { id: "numbering", label: "Numbering" },
+  { id: "numArrow", label: "Number + arrow" },
   { id: "curve", label: "Round & soft" },
   { id: "cards", label: "Cards & chips" },
   { id: "polygons", label: "Polygons" },
@@ -178,12 +196,13 @@ export const NUMBER_STYLE_CATEGORIES: { id: NumberStyleCategory; label: string }
 ];
 
 /**
- * The two families that are *presets* rather than shapes — the classic bullet
- * points and the numbering formats. They are listed on the Bullet point
- * presets tab next to the one-click looks (`lib/bulletStyles`); every other
- * category is a marker **shape** and is listed on the Shape tab.
+ * The families that are *presets* rather than shapes — the classic bullet
+ * points, the numbering formats and the number + arrow compounds. They are
+ * listed on the Bullet point presets tab next to the one-click looks
+ * (`lib/bulletStyles`); every other category is a marker **shape** and is
+ * listed on the Shape tab.
  */
-export const PRESET_CATEGORIES: NumberStyleCategory[] = ["bullets", "numbering"];
+export const PRESET_CATEGORIES: NumberStyleCategory[] = ["bullets", "numbering", "numArrow"];
 export const isPresetCategory = (c: NumberStyleCategory) => PRESET_CATEGORIES.includes(c);
 
 /** the Shape tab's groups — every family except the two preset ones */
@@ -654,6 +673,86 @@ const subroutinePaint = (accent: string): CSSProperties => ({
   background: `linear-gradient(90deg, transparent 0 10%, ${withAlpha("#ffffff", 0.6)} 10% 13.5%, transparent 13.5% 86.5%, ${withAlpha("#ffffff", 0.6)} 86.5% 90%, transparent 90%), linear-gradient(145deg, ${shade(accent, 0.3)}, ${accent})`,
 });
 
+/* ------------------------------------------------------------------ */
+/*  Number + arrow — the stock libraries' direction family             */
+/* ------------------------------------------------------------------ */
+/*
+ * The "number then arrow" markers every stock library sells for step /
+ * process / option lists: the number rides on its own plate (disc, card,
+ * hexagon, shield…) with an arrow tail pointing at the question, or it sits
+ * inside the arrow body itself (flat block, chevron, step, ribbon, flag,
+ * two-way, thin line, diagonal, return), plus the "1 →" text formats.
+ *
+ * The plate + tail compounds are each ONE polygon — the plate's left arc and
+ * the tail's outline merged into a single silhouette — so the fill, the
+ * outline stroke, the corner effect and every shape effect follow the whole
+ * marker as one shape. They are original, editable polygons modelled on that
+ * stock convention, not imported artwork.
+ */
+
+/**
+ * The union of a disc (or ellipse) plate and a right-pointing arrow tail as
+ * one polygon: the tail's two edges meet the plate at its own boundary, then
+ * the plate's long way round (bottom → left → top) closes the outline.
+ * `cx`/`ry` are in the 0–100 box, `rx` in box-x units (a true circle in a
+ * wide box is an ellipse there: rx = ry / aspect), `s` the tail's half height.
+ */
+function ellipseTail(
+  cx: number,
+  rx: number,
+  ry: number,
+  s: number,
+  headLeft: number,
+  taper = false,
+): [number, number][] {
+  const a = Math.asin(Math.min(0.999, s / ry));
+  const xt = r1(cx + rx * Math.cos(a));
+  const yT = r1(50 - s);
+  const yB = r1(50 + s);
+  const pts: [number, number][] = taper
+    ? [[xt, yT], [100, 50], [xt, yB]]
+    : [[xt, yT], [headLeft, yT], [100, 50], [headLeft, yB], [xt, yB]];
+  const span = 2 * Math.PI - 2 * a;
+  const n = 24;
+  for (let k = 1; k < n; k++) {
+    const th = a + (span * k) / n;
+    pts.push([r1(cx + rx * Math.cos(th)), r1(50 + ry * Math.sin(th))]);
+  }
+  return pts;
+}
+
+/** a true-circle plate + tail in a box `aspect` wide */
+const discTail = (cx: number, r: number, s: number, headLeft: number, aspect: number, taper = false) =>
+  ellipseTail(cx, r / aspect, r, s, headLeft, taper);
+
+/* the plate + tail compounds (plate on the left, the number sits in it) */
+const A = 1.8; // the shared box aspect of the plate + tail family
+const DISC_TAIL = discTail(25, 45, 17, 64, A);
+const DISC_TAIL_TAPER = discTail(25, 45, 19, 0, A, true);
+const DISC_TAIL_THIN = discTail(25, 45, 7, 74, A);
+const PILL_TAIL = ellipseTail(28, 26, 44, 16, 64);
+const CARD_TAIL: [number, number][] = [[14, 8], [54, 8], [54, 33], [72, 33], [100, 50], [72, 67], [54, 67], [54, 92], [14, 92], [0, 78], [0, 22]];
+const CARD_CUT_TAIL: [number, number][] = [[0, 8], [40, 8], [54, 22], [54, 33], [72, 33], [100, 50], [72, 67], [54, 67], [54, 92], [0, 92]];
+const HEX_TAIL: [number, number][] = [[40.5, 12], [47.6, 32], [72, 32], [100, 50], [72, 68], [47.6, 68], [40.5, 88], [13.5, 88], [0, 50], [13.5, 12]];
+const DIAMOND_TAIL: [number, number][] = [[28.5, 8], [44.8, 32], [72, 32], [100, 50], [72, 68], [44.8, 68], [28.5, 92], [0, 50]];
+const SHIELD_TAIL: [number, number][] = [[27, 0], [54, 12], [54, 32], [72, 32], [100, 50], [72, 68], [49.7, 68], [27, 100], [0, 62], [0, 12]];
+const SQUARLE_TAIL: [number, number][] = [[12, 0], [48, 0], [58, 10], [58, 33], [72, 33], [100, 50], [72, 67], [58, 67], [58, 90], [48, 100], [12, 100], [2, 90], [2, 10]];
+/* the number-inside-the-arrow set (the arrow body is the marker) */
+const RIBBON_ARROW: [number, number][] = [[0, 18], [78, 18], [100, 50], [78, 82], [0, 82], [14, 50]];
+const FLAG_ARROW: [number, number][] = [[2, 6], [98, 50], [2, 94]];
+const DOUBLE_LINE_ARROW: [number, number][] = [[0, 44], [58, 44], [58, 34], [98, 50], [58, 66], [58, 56], [0, 56]];
+const DOUBLE_LINE_BAR: [number, number][] = [[0, 26], [58, 26], [58, 36], [0, 36]];
+const BACK_BLOCK: [number, number][] = [[100, 26], [42, 26], [42, 0], [0, 50], [42, 100], [42, 74], [100, 74]];
+
+/* two-tone plate + tail: the plate keeps the accent, the tail runs darker */
+const twoTailPaint = (accent: string): CSSProperties => ({
+  background: `linear-gradient(90deg, ${accent} 0 32%, ${shade(accent, -0.28)} 44% 100%)`,
+});
+/* a gloss lit from the top left of the plate */
+const glossTailPaint = (accent: string): CSSProperties => ({
+  background: `radial-gradient(circle at 18% 26%, #ffffff 0 10%, ${shade(accent, 0.38)} 34%, ${accent} 72%)`,
+});
+
 export const NUMBER_STYLES: NumberStyleDef[] = [
   /* --- bullet points: the classic list bullets (they replace the number) --- */
   { id: "dot", label: "Dot", category: "bullets", hint: "The classic round bullet — a plain dot, no number", points: DOT },
@@ -757,6 +856,44 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "numNo", label: "No.1", category: "numbering", hint: "No. before the number — No.1 No.2 No.3", format: (n) => `No.${n}`, aspect: 1.7, font: 0.42 },
   { id: "numAlpha", label: "A", category: "numbering", hint: "A letter for the number — A B C (Latin digits 1–26)", format: toAlphaLabel, aspect: 1.1, font: 0.46 },
   { id: "numRoman", label: "I", category: "numbering", hint: "A Roman numeral — I II III (Latin digits 1–3999)", format: toRomanNumeral, aspect: 1.3, font: 0.42 },
+
+  /* --- number + arrow: the number rides on a plate with its own arrow tail - */
+  { id: "numArrowDisc", label: "Disc + arrow", category: "numArrow", hint: "A numbered disc with a block-arrow tail — the stock set's round arrow", points: DISC_TAIL, aspect: A, font: 0.4, pad: [0, 0.9, 0, 0] },
+  { id: "numArrowDiscHollow", label: "Hollow disc arrow", category: "numArrow", hint: "An outlined disc + tail, tinted centre — the line set's round arrow", points: DISC_TAIL, aspect: A, font: 0.4, pad: [0, 0.9, 0, 0], line: 0.07, lineColor: (a) => a, paint: hollow, ink: (a) => a },
+  { id: "numArrowDiscTwo", label: "Two-tone arrow", category: "numArrow", hint: "A numbered disc with a darker arrow tail behind it", points: DISC_TAIL, aspect: A, font: 0.4, pad: [0, 0.9, 0, 0], paint: twoTailPaint },
+  { id: "numArrowDiscTaper", label: "Disc + wedge", category: "numArrow", hint: "A numbered disc with a tapered wedge tail", points: DISC_TAIL_TAPER, aspect: A, font: 0.4, pad: [0, 0.9, 0, 0] },
+  { id: "numArrowDiscThin", label: "Disc + line arrow", category: "numArrow", hint: "A numbered disc with a slim line-arrow tail, like 7 →", points: DISC_TAIL_THIN, aspect: A, font: 0.4, pad: [0, 0.9, 0, 0] },
+  { id: "numArrowDiscGloss", label: "Gloss disc arrow", category: "numArrow", hint: "A glossy 3-D numbered disc with its arrow tail", points: DISC_TAIL, aspect: A, font: 0.4, pad: [0, 0.9, 0, 0], paint: glossTailPaint },
+  { id: "numArrowDiscStripe", label: "Striped disc arrow", category: "numArrow", hint: "A candy-striped numbered disc with its arrow tail", points: DISC_TAIL, aspect: A, font: 0.4, pad: [0, 0.9, 0, 0], paint: stripePaint },
+  { id: "numArrowPill", label: "Capsule + arrow", category: "numArrow", hint: "A numbered capsule with a block-arrow tail", points: PILL_TAIL, aspect: A, font: 0.4, pad: [0, 0.79, 0, 0] },
+  { id: "numArrowCard", label: "Card + arrow", category: "numArrow", hint: "A soft-cornered card holding the number, with an arrow tail", points: CARD_TAIL, aspect: A, font: 0.4, pad: [0, 0.83, 0, 0] },
+  { id: "numArrowCardHollow", label: "Hollow card arrow", category: "numArrow", hint: "An outlined card + tail — the flat design set's frame arrow", points: CARD_TAIL, aspect: A, font: 0.4, pad: [0, 0.83, 0, 0], line: 0.07, lineColor: (a) => a, paint: hollow, ink: (a) => a },
+  { id: "numArrowCardCut", label: "Cut card + arrow", category: "numArrow", hint: "A card with a sliced corner and an arrow tail", points: CARD_CUT_TAIL, aspect: A, font: 0.4, pad: [0, 0.83, 0, 0] },
+  { id: "numArrowHex", label: "Hex + arrow", category: "numArrow", hint: "A numbered hexagon with an arrow tail — the tech set's step marker", points: HEX_TAIL, aspect: A, font: 0.36, pad: [0, 0.83, 0, 0] },
+  { id: "numArrowHexHollow", label: "Hollow hex arrow", category: "numArrow", hint: "An outlined hexagon + tail — the outline set's step marker", points: HEX_TAIL, aspect: A, font: 0.36, pad: [0, 0.83, 0, 0], line: 0.07, lineColor: (a) => a, paint: hollow, ink: (a) => a },
+  { id: "numArrowDiamond", label: "Diamond + arrow", category: "numArrow", hint: "A numbered diamond with an arrow tail", points: DIAMOND_TAIL, aspect: A, font: 0.34, pad: [0, 0.77, 0, 0] },
+  { id: "numArrowShield", label: "Shield + arrow", category: "numArrow", hint: "A numbered crest with an arrow tail", points: SHIELD_TAIL, aspect: A, font: 0.36, pad: [0, 0.83, 0, 0] },
+  { id: "numArrowSquircle", label: "Squircle + arrow", category: "numArrow", hint: "An app-icon square with the number and an arrow tail", points: SQUARLE_TAIL, aspect: A, font: 0.38, pad: [0, 0.72, 0, 0] },
+
+  /* --- number + arrow: the number sits inside the arrow body itself -------- */
+  { id: "numArrowBlock", label: "Flat arrow →", category: "numArrow", hint: "The number inside a flat block arrow — the stock set's workhorse", points: BLOCKRIGHT, aspect: 1.4, font: 0.3, pad: [0, 0.62, 0, 0] },
+  { id: "numArrowChevron", label: "Chevron →", category: "numArrow", hint: "The number inside a wide chevron arrow", points: ARROWRIGHT, aspect: 1.3, font: 0.32, pad: [0, 0.52, 0, 0] },
+  { id: "numArrowStep", label: "Step chip", category: "numArrow", hint: "The number inside a stepped chevron chip — one step in a sequence", points: [[0, 0], [74, 0], [100, 50], [74, 100], [0, 100], [26, 50]], aspect: 1.25, font: 0.32, pad: [0, 0.38, 0, 0] },
+  { id: "numArrowRibbon", label: "Ribbon arrow", category: "numArrow", hint: "The number inside a ribbon with a notched tail and a point", points: RIBBON_ARROW, aspect: 1.5, font: 0.3, pad: [0, 0.45, 0, 0] },
+  { id: "numArrowFlag", label: "Flag arrow", category: "numArrow", hint: "The number inside a pennant flag pointing at the question", points: FLAG_ARROW, aspect: 1.4, font: 0.3, pad: [0, 0.64, 0, 0] },
+  { id: "numArrowBoth", label: "Twin arrow ↔", category: "numArrow", hint: "The number inside a two-way arrow — for either/or options", points: ARROWBOTH, aspect: 1.6, font: 0.3, pad: [0, 0, 0, 0] },
+  { id: "numArrowUp", label: "Arrow up ↑", category: "numArrow", hint: "The number inside a block arrow pointing up", points: ARROWUP, font: 0.28, pad: [0.44, 0, 0, 0] },
+  { id: "numArrowDown", label: "Arrow down ↓", category: "numArrow", hint: "The number inside a block arrow pointing down", points: ARROWDOWN, font: 0.28, pad: [0, 0, 0.44, 0] },
+  { id: "numArrowThin", label: "Line arrow →", category: "numArrow", hint: "The number inside a slim arrow with a long shaft", points: THINARROWRIGHT, aspect: 1.45, font: 0.28, pad: [0, 0.52, 0, 0] },
+  { id: "numArrowDiagonal", label: "Diagonal ↗", category: "numArrow", hint: "The number inside a block arrow rising to the right", points: DIAGONALUP, aspect: 1.15, font: 0.3, pad: [0.08, 0.18, 0, 0] },
+  { id: "numArrowBack", label: "Arrow back ←", category: "numArrow", hint: "The number inside a block arrow pointing back", points: BACK_BLOCK, aspect: 1.4, font: 0.3, pad: [0, 0, 0, 0.62] },
+  { id: "numArrowNotch", label: "Notched arrow", category: "numArrow", hint: "The number inside a notched block arrow — a process step", points: NOTCHEDARROW, aspect: 1.4, font: 0.3, pad: [0, 0.56, 0, 0] },
+  { id: "numArrowDoubleLine", label: "Double line →", category: "numArrow", hint: "The number in a double-stem arrow — two shafts, one head", points: DOUBLE_LINE_ARROW, extras: [DOUBLE_LINE_BAR], aspect: 1.45, font: 0.26, pad: [0, 0.52, 0, 0] },
+
+  /* --- number + arrow: text formats — the number with its own arrow -------- */
+  { id: "numArrowText", label: "1 →", category: "numArrow", hint: "The number with an arrow after it — 1 → 2 → 3 →", format: (n) => `${n} →`, aspect: 1.7, font: 0.46 },
+  { id: "numArrowText2", label: "1 ⇒", category: "numArrow", hint: "The number with a double arrow after it — 1 ⇒ 2 ⇒ 3 ⇒", format: (n) => `${n} ⇒`, aspect: 1.7, font: 0.46 },
+  { id: "numArrowTextTri", label: "1 ▸", category: "numArrow", hint: "The number with a small pointer after it — 1 ▸ 2 ▸ 3 ▸", format: (n) => `${n} ▸`, aspect: 1.6, font: 0.46 },
 
   /* --- round & soft ------------------------------------------------------ */
   { id: "circle", label: "Circle", category: "curve", hint: "Classic disc with a hairline rim — the default", line: 0.07, radius: "50%" },

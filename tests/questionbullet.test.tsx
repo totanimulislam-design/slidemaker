@@ -34,6 +34,7 @@ import {
   isBulletPoint,
   isNumberShape,
   isNumberingPreset,
+  isPresetCategory,
   numberStyleAspect,
   numberStyleDef,
   renderNumberStyle,
@@ -436,6 +437,44 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     detail: `${fmt("numDot", "৭")} · ${fmt("numParens", "৭")} · ${fmt("numQ", "7")} · ${fmt("numZero", "7")} · ${fmt("numZero", "৭")} · hidden="${hiddenFmt}"`,
   });
 
+  /* the Number + arrow family: a numbered plate with its own arrow tail, or
+     the number inside the arrow body, or the number with a text arrow after it */
+  const numArrow = NUMBER_STYLES.filter((d) => d.category === "numArrow");
+  const brokenArrow: string[] = [];
+  for (const d of numArrow) {
+    try {
+      const r = renderNumberStyle(d.id, { ...BASE }, 54, "৭");
+      if (d.id !== "none" && !r.style.width) brokenArrow.push(`${d.id}:no-box`);
+      else if (!isNumberingPreset(d.id) && r.content !== "৭") brokenArrow.push(`${d.id}:content`);
+      else if (numberStyleAspect(d.id) > 1 && Number(r.style.width) <= 54) brokenArrow.push(`${d.id}:wide`);
+    } catch (e) {
+      brokenArrow.push(`${d.id}:${String(e)}`);
+    }
+  }
+  const arrowDisc = renderNumberStyle("numArrowDisc", { ...BASE }, 54, "৭");
+  const arrowHollow = renderNumberStyle("numArrowDiscHollow", { ...BASE }, 54, "৭");
+  const arrowInBody = renderNumberStyle("numArrowBlock", { ...BASE }, 54, "৭");
+  out.push({
+    name: "the Number + arrow presets: a numbered plate + tail cut as ONE silhouette (the number sits in the plate), hollow ones stroked, and the number inside the arrow body",
+    pass:
+      isPresetCategory("numArrow" as never) &&
+      numArrow.length >= 30 &&
+      brokenArrow.length === 0 &&
+      numArrow.every((d) => showsNumber(d.id)) &&
+      String(arrowDisc.surface.clipPath).startsWith("polygon(") &&
+      arrowDisc.content === "৭" &&
+      Number(arrowDisc.style.width) > 54 * 1.5 &&
+      arrowDisc.style.paddingRight !== undefined &&
+      arrowHollow.surface.background === "transparent" &&
+      !!arrowHollow.outline &&
+      arrowInBody.content === "৭" &&
+      arrowInBody.style.paddingRight !== undefined &&
+      fmt("numArrowText", "৭") === "৭ →" &&
+      fmt("numArrowText2", "৭") === "৭ ⇒" &&
+      fmt("numArrowTextTri", "৭") === "৭ ▸",
+    detail: brokenArrow.join(" · ") || `${numArrow.length} designs · disc ${arrowDisc.style.width}px padR ${arrowDisc.style.paddingRight}px · hollow line ${arrowHollow.outline?.width}px · ${fmt("numArrowText", "৭")}`,
+  });
+
   out.push({
     name: "an id the catalogue doesn't know still falls back to the default disc (the list no longer opens with it)",
     pass: numberStyleDef("bogus" as NumberStyle).id === "circle" && NUMBER_STYLES[0].id !== "circle",
@@ -465,7 +504,7 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
       NUMBER_SHAPES.length >= 130 &&
       missingShapes.length === 0 &&
       NUMBER_SHAPES.every((d) => isNumberShape(d.id) && !isBulletPoint(d.id) && !isNumberingPreset(d.id)) &&
-      NUMBER_STYLES.filter((d) => !isNumberShape(d.id)).every((d) => isBulletPoint(d.id) || isNumberingPreset(d.id)),
+      NUMBER_STYLES.filter((d) => !isNumberShape(d.id)).every((d) => isPresetCategory(d.category)),
     detail: missingShapes.length
       ? `missing ${missingShapes.join(", ")}`
       : `${NUMBER_SHAPES.length} shapes · ${SHAPE_CATEGORIES.map((c) => `${c.label} ${NUMBER_SHAPES.filter((d) => d.category === c.id).length}`).join(" / ")}`,
@@ -585,11 +624,16 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
       presetsCard.includes("Geometric") &&
       presetsCard.includes("Exam classic") &&
       presetsCard.includes("Hand drawn") &&
+      presetsCard.includes("Number + arrow") &&
       !!presetBtn("Dot") &&
       !!presetBtn("Check mark") &&
       !!presetBtn("(1)") &&
+      !!presetBtn("Disc + arrow") &&
+      !!presetBtn("1 →") &&
+      !!pop()?.querySelector('[aria-label="Bullet presets: Number + arrow"]') &&
       !!presetBtn("Hex tile") &&
       !!presetBtn("Gold seal") &&
+      !!presetBtn("Crimson arrow →") &&
       !!presetBtn("Neon tube") &&
       !presetBtn("Circle") &&
       !presetBtn("Star") &&
@@ -658,6 +702,18 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     name: "picking a numbering preset wraps the slide's own number — (১) — with no shape body behind it",
     pass: parensText === "(১)" && !surface(),
     detail: `marker text "${parensText}" · surface ${surface() ? "yes" : "no"}`,
+  });
+
+  /* a Number + arrow preset on the board: the wide compound marker, number in the plate */
+  click(presetBtn("Disc + arrow"));
+  const arrowMarker = marker();
+  out.push({
+    name: "picking a Number + arrow preset paints the wide compound marker — the number in the plate, the tail clipped as one silhouette",
+    pass:
+      digits()?.textContent === "১" &&
+      String(surface()?.style.clipPath ?? "").startsWith("polygon(") &&
+      parseFloat(arrowMarker?.style.width ?? "") > 54 * 1.5,
+    detail: `marker ${arrowMarker?.style.width} · digits "${digits()?.textContent}" · clip ${String(surface()?.style.clipPath ?? "").slice(0, 24)}…`,
   });
 
   /* the marker grows, and the corner slider's ceiling grows with it */

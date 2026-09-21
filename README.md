@@ -354,21 +354,34 @@ mesh with up to eight stops), with **Auto** and **None** above it.
 One card, three tabs, every tile a live preview painted by the same renderer as
 the board:
 
-- **Bullet point presets** — the ready-made looks, 194 of them in fifteen
+- **Bullet point presets** — the ready-made looks, 242 of them in sixteen
   groups, with the marker's **size** (20 – 160 px) and **base colour** every
-  design derives from. The list opens with the two families a bullet row is
+  design derives from. The list opens with the families a bullet row is
   expected to hold: **Bullet points** (Dot · Hollow dot · Small square · Hollow
   square · Small diamond · Small triangle · Dash · Arrowhead · Chevron · Check
   mark · Small star · Arrow right · Arrow left · Arrow up · Arrow down · Arrow
   both ways · Arrow up and down · Arrow northeast · Arrow southeast · Bent arrow
   · Outline arrow) — the classic list bullets, drawn small in the middle of a
   full-size box so they sit on the question's first line where a disc would,
-  and standing in for the number the way a bullet does — and **Numbering** (1. ·
+  and standing in for the number the way a bullet does — **Numbering** (1. ·
   1) · (1) · 1: · 01 · Q1 · #1 · 1 |), which keep the number and add its
   punctuation with no shape at all (the leading zero of *01* comes in the
-  number's own script, so ৭ becomes ০৭). Then the 103 **one-click designs**
-  that write the whole marker at once (silhouette · fill · line · corners ·
-  transparency · effect), in eleven families. The shape-led ones come first:
+  number's own script, so ৭ becomes ০৭), and **Number + arrow** — the
+  direction family the stock libraries sell for step / process / option
+  lists, grown into 32 original presets: the number on its own plate with an
+  arrow tail (Disc + arrow · Hollow disc arrow · Two-tone arrow · Disc + wedge
+  · Disc + line arrow · Gloss disc arrow · Striped disc arrow · Capsule +
+  arrow · Card + arrow · Hollow card arrow · Cut card + arrow · Hex + arrow ·
+  Hollow hex arrow · Diamond + arrow · Shield + arrow · Squircle + arrow),
+  the number inside the arrow body itself (Flat arrow → · Chevron → · Step
+  chip · Ribbon arrow · Flag arrow · Twin arrow ↔ · Arrow up ↑ · Arrow down ↓
+  · Line arrow → · Diagonal ↗ · Arrow back ← · Notched arrow · Double line →),
+  and the text arrows (1 → · 1 ⇒ · 1 ▸). The plate + tail compounds are each
+  cut as ONE silhouette — plate arc and tail outline merged — so fill,
+  outline, corners and shape effects follow the whole marker as one shape.
+  Then the 119 **one-click designs** that write the whole marker at once
+  (silhouette · fill · line · corners · transparency · effect), in thirteen
+  families. The shape-led ones come first:
   *Geometric* (Hex tile · Octagon stop · Diamond stud · Pentagon badge ·
   Triangle flag · Violet kite · Plinth · Arrow step · Slant stripe · Plus block
   · Speech bubble · Bookmark) and *Organic* (Soft cloud · Aqua drop · Coral blob
@@ -376,8 +389,11 @@ the board:
   directions* — numbered forward, back, up, down, two-way, vertical, notched,
   play, chevron, outline, bent, diagonal, stacked, ribbon and midnight arrows.
   The remaining families are *Exam classic*, *Soft & minimal*, *Bold sticker*,
-  *Neon & glow*, *Medal & seal*, *Dark & gold*, *3-D & depth*, *Hand drawn* and
-  *Infographic*. A design stays claimed only while every channel still matches
+  *Neon & glow*, *Medal & seal*, *Dark & gold*, *3-D & depth*, *Hand drawn*,
+  *Infographic* and *Number + arrow* — the numbered disc / hexagon / capsule
+  with its own tail, and the flat, chevron, step, ribbon, flag and two-way
+  numbered arrows, each in the colour system that family ships with (crimson
+  with a white rim, teal and emerald, gold, navy, rose, midnight and gold…). A design stays claimed only while every channel still matches
   it — fine-tune one, or swap the silhouette under *Shape*, and the card
   reports **custom** instead (`lib/bulletStyles.ts`).
 - **Shape** — the silhouette alone: 142 shapes in nine families, and picking

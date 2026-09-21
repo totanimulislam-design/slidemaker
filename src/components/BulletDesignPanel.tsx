@@ -155,6 +155,8 @@ function describePreset(T: ThemeSettings, look: BulletStyle | undefined): string
     return `${def.hint}. A bullet point stands in for the number, like a list bullet does — its colour, outline, transparency and effect are still yours to change.`;
   if (isNumberingPreset(id))
     return `${def.hint}. A numbering preset paints the number with its punctuation and no shape; its ink, face and size live under Q bullet text.`;
+  if (def.category === "numArrow")
+    return `${def.hint}. The number rides on its own arrow — recolour the fill, line and effect like any marker, and swap the silhouette alone under Shape.`;
   return "A preset writes the whole marker at once — a bullet point or numbering format, or a one-click look with its silhouette, fill, line, corners, transparency and effect. Swap the silhouette alone under Shape.";
 }
 
