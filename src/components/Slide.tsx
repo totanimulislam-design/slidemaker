@@ -2,7 +2,7 @@ import { memo, useRef, useState, type CSSProperties } from "react";
 import type { Box, DeckHeader, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { shade, withAlpha } from "../lib/color";
 import { numberStyleAspect, renderNumberStyle, type NumberStyle } from "../lib/numberStyles";
-import { effectiveOptionLabel } from "../lib/plainNumbering";
+import { effectiveOptionLabel, questionNumberLabel } from "../lib/plainNumbering";
 import { optionRowStyle, type OptionStyle } from "../lib/optionStyles";
 import OptionBulletMarker from "./OptionBulletMarker";
 import { isRtlText } from "../lib/fonts";
@@ -505,7 +505,10 @@ function SlideBase({
 
   const BulletGraphic = ({ theme: t, slide: sl, size }: { theme: ThemeSettings; slide: SlideData; size: number }) => {
     const id = (t.numberStyle ?? "circle") as NumberStyle;
-    const r = renderNumberStyle(id, t, size, sl.number);
+    /* the number's own system (Numbering on the Q bullet text toolbar) re-letters
+       the slide's number — English / Bangla / Arabic digits and letters, Roman
+       numerals — before the design draws it; "none" passes the number through */
+    const r = renderNumberStyle(id, t, size, questionNumberLabel(t.questionNumbering, sl.number));
     /**
      * "Text inside question bullet" — the number is its own node inside the
      * painted shape, so every typography control (family, colour, weight,

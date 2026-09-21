@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Deck } from "./types";
 import { cleanFamily, detectScripts, ensureFamily, ensureFontsFor, fontChoiceFor, onFontsChanged, type ScriptId } from "./fonts";
-import { effectiveOptionLabel } from "./plainNumbering";
+import { effectiveOptionLabel, questionNumberLabel } from "./plainNumbering";
 import { effectiveTheme } from "./overrides";
 import { resetFontCache } from "./exporter";
 import { listCustomFonts } from "./customFonts";
@@ -58,6 +58,10 @@ export function useFontCoverage(deck: Deck): { scripts: ScriptId[]; revision: nu
       // per-slide override counts too
       const t = effectiveTheme(deck, s);
       parts.push(s.question, s.note ?? "", s.badge ?? "");
+      // the number's effective reading, not just the stored digits: the
+      // question bullet's numbering system can put Bangla/Arabic/Roman glyphs
+      // on the board that no stored number contains
+      parts.push(questionNumberLabel(t.questionNumbering, s.number));
       s.options.forEach((o, i) =>
         // the effective label, not just the stored key: plain numbering can put
         // Bangla/Arabic/Roman glyphs on the board that no key contains

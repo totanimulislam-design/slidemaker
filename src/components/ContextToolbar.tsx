@@ -1165,11 +1165,12 @@ export default function ContextToolbar(p: Props) {
   );
 
   /**
-   * Numbering — the focused gallery for the question bullet's own numbering
-   * presets (bullet points · numbering formats · number + arrow compounds),
-   * so the marker's reading can be changed without hunting inside the full
-   * design card. It belongs to the number's own line (Q bullet text), the
-   * same way the option markers' numbering sits on their text line.
+   * Numbering — the question bullet's number system, on the number's own line
+   * (Q bullet text): what the number reads — English · Bangla · Arabic digits
+   * and letters, Roman numerals — the same way the option markers' numbering
+   * sits on their text line. The marker's styles (bullet points · numbering
+   * formats · number + arrow · shapes) stay under the Question bullet line's
+   * Design card; this control re-letters the number only.
    */
   if (panel === "Numbering" && optLine("bulletText")) content = (
     <QuestionBulletNumberingPanel theme={theme} setTheme={p.patchTheme} />

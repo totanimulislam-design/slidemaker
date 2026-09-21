@@ -163,6 +163,9 @@ function resetBulletText(theme: ThemeSettings): ToolbarResetPatch {
   return {
     theme: {
       showNumber: D.showNumber,
+      // the Numbering control (the number's own system) rides this line, so
+      // Default hands the reading back to each slide's own number
+      questionNumbering: D.questionNumbering,
       boxFonts: clearPart("bullet"),
       layout: alignBox(theme, "bullet"),
     },

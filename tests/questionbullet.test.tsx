@@ -662,14 +662,62 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
     detail: `question bullet line ${barButton("Numbering") ? "still has it" : "clean"} · text line ${textBarButton("Numbering") ? "has it" : "missing"}`,
   });
   click(textBarButton("Numbering"));
-  const numberingTiles = pop()?.querySelectorAll('[aria-label^="Numbering:"]').length ?? 0;
+  const systemChips = pop()?.querySelectorAll('[aria-label^="Number system:"]').length ?? 0;
   out.push({
-    name: "Numbering opens its own gallery — bullet points · numbering · number + arrow presets",
+    name: "Numbering opens the number's own system picker — Default + nine numeral systems, and no marker-style tiles",
     pass:
       pop()?.getAttribute("data-pop-panel") === "Numbering" &&
-      numberingTiles >= 90 &&
+      systemChips === 10 &&
+      !pop()?.querySelector('[aria-label^="Numbering:"]') &&
       !!pop()?.querySelector('[data-bullet-numbering-panel]'),
-    detail: `${numberingTiles} numbering tiles · panel ${pop()?.getAttribute("data-pop-panel")}`,
+    detail: `${systemChips} number systems · panel ${pop()?.getAttribute("data-pop-panel")}`,
+  });
+
+  /* the nine systems re-letter the slide's own number (stored here as "১"):
+     the marker reads them while its shape stays exactly what Design set */
+  const sysChip = (label: string) =>
+    pop()?.querySelector<HTMLElement>(`[aria-label="Number system: ${label}"]`) ?? null;
+  const reads = () => digits()?.textContent ?? "";
+  click(sysChip("Number"));
+  const englishRead = reads();
+  click(sysChip("Bangla Number"));
+  const banglaRead = reads();
+  click(sysChip("Bangla Letter"));
+  const banglaLetterRead = reads();
+  click(sysChip("English Capital Letter"));
+  const capitalRead = reads();
+  click(sysChip("English Small Letter"));
+  const smallRead = reads();
+  click(sysChip("Roman Capital"));
+  const romanCapRead = reads();
+  click(sysChip("Roman Small"));
+  const romanSmallRead = reads();
+  click(sysChip("Arabic Number"));
+  const arabicNumRead = reads();
+  click(sysChip("Arabic Letter"));
+  const arabicLetterRead = reads();
+  out.push({
+    name: "a system re-letters every slide's number on the board — English · Bangla · Bangla letter · capitals · smalls · Roman · Arabic — while the marker keeps its design",
+    pass:
+      englishRead === "1" &&
+      banglaRead === "১" &&
+      banglaLetterRead === "ক" &&
+      capitalRead === "A" &&
+      smallRead === "a" &&
+      romanCapRead === "I" &&
+      romanSmallRead === "i" &&
+      arabicNumRead === "١" &&
+      arabicLetterRead === "أ" &&
+      !!surface(),
+    detail: `১ → ${englishRead}/${banglaRead}/${banglaLetterRead}/${capitalRead}/${smallRead}/${romanCapRead}/${romanSmallRead}/${arabicNumRead}/${arabicLetterRead}`,
+  });
+
+  /* Default hands the reading back to each slide's own stored number */
+  click(sysChip("Default"));
+  out.push({
+    name: "Default hands the reading back to each slide's own stored number",
+    pass: reads() === "১",
+    detail: `digits ${reads()}`,
   });
   closePop();
   click(barButton("Design") ?? barButton("Bullet design"));
@@ -1060,12 +1108,13 @@ export async function runQuestionBulletTests(): Promise<CaseResult[]> {
 
   nav("bulletText");
   out.push({
-    name: "the inspector's Q bullet text destination now holds the numbering gallery, like the option markers' label numbering lives in their text panel",
+    name: "the inspector's Q bullet text destination now holds the number's system picker, like the option markers' label numbering lives in their text panel",
     pass:
       !!doc.querySelector("[data-bullet-numbering-panel]") &&
-      (doc.querySelectorAll('[aria-label^="Numbering:"]').length ?? 0) >= 90 &&
+      (doc.querySelectorAll('[aria-label^="Number system:"]').length ?? 0) === 10 &&
+      !doc.querySelector('[aria-label^="Numbering:"]') &&
       (doc.querySelector('[data-bullet-numbering-panel]')?.textContent ?? "").includes("Numbering"),
-    detail: `${doc.querySelectorAll('[aria-label^="Numbering:"]').length} numbering tiles in the text destination`,
+    detail: `${doc.querySelectorAll('[aria-label^="Number system:"]').length} number systems in the text destination`,
   });
   nav("questionBullet");
 

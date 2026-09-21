@@ -1,5 +1,6 @@
 import type { Box, ElementId, SlideData, ThemeSettings } from "../lib/types";
 import { renderNumberStyle, showsNumber, type NumberStyle } from "../lib/numberStyles";
+import { questionNumberLabel } from "../lib/plainNumbering";
 import { boxFontCss, boxInlineCss, clearBoxFont, offsetCss, setBoxFont } from "../lib/boxFonts";
 import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
@@ -11,11 +12,12 @@ import { Btn, ColorInput, Field, PanelHead, TextInput, Toggle } from "./ui";
  * Navigation ▸ "Text inside question bullet".
  *
  * The number painted *inside* the question bullet, kept separate from the
- * bullet's own silhouette: how it reads (the numbering gallery — bullet
- * points · numbering formats · number + arrow, exactly where the option
- * markers keep their own label numbering), whether it is drawn at all, what
- * it says, its ink colour, face, weight, case, tracking and size — all
- * through the `bullet` box-typeface so it never leaks into the question text.
+ * bullet's own silhouette: how it reads (the Numbering control — the numeral
+ * system the number is drawn in: English · Bangla · Arabic digits and
+ * letters, Roman numerals — exactly where the option markers keep their own
+ * label numbering), whether it is drawn at all, what it says, its ink colour,
+ * face, weight, case, tracking and size — all through the `bullet`
+ * box-typeface so it never leaks into the question text.
  */
 interface Props {
   theme: ThemeSettings;
@@ -29,7 +31,9 @@ const PREVIEW_SIZE = 64;
 
 export default function BulletTextPanel({ theme: T, slide, setTheme, updateSlide, patchLayout }: Props) {
   const id = (T.numberStyle ?? "circle") as NumberStyle;
-  const r = renderNumberStyle(id, T, PREVIEW_SIZE, slide?.number || "৭");
+  /** the number's effective reading — the Numbering system re-letters what the slide stores */
+  const numberText = questionNumberLabel(T.questionNumbering, slide?.number || "৭");
+  const r = renderNumberStyle(id, T, PREVIEW_SIZE, numberText);
   const drawsNumber = T.showNumber && showsNumber(id);
   const bulletFont = T.boxFonts?.bullet ?? {};
 
@@ -54,7 +58,7 @@ export default function BulletTextPanel({ theme: T, slide, setTheme, updateSlide
         <span className="text-[11px] text-slate-400">
           {drawsNumber ? (
             <>
-              number <b className="text-slate-200">{slide?.number || "৭"}</b>
+              number <b className="text-slate-200">{numberText}</b>
             </>
           ) : id === "none" ? (
             "bullet design is off"
@@ -68,17 +72,18 @@ export default function BulletTextPanel({ theme: T, slide, setTheme, updateSlide
 
       <Toggle label="Show number inside bullet" checked={T.showNumber} onChange={(v) => setTheme({ showNumber: v })} />
 
-      {/* the numbering gallery — how the number (or bullet glyph) reads. Kept
-          with the number's own panel, like the option markers keep their label
-          numbering under "Text inside option bullet" */}
+      {/* the number's own system — what the number reads (English · Bangla ·
+          Arabic digits and letters, Roman numerals). Kept with the number's
+          own panel, like the option markers keep their label numbering under
+          "Text inside option bullet" */}
       <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
         <QuestionBulletNumberingPanel theme={T} setTheme={setTheme} />
       </div>
 
       {!showsNumber(id) && (
         <p className="rounded-lg border border-amber-400/30 bg-amber-400/[0.07] p-2.5 text-[11px] leading-relaxed text-amber-200">
-          The <b>{id}</b> bullet design is a mark without a number. Pick another design in the <b>Numbering</b>{" "}
-          gallery above to paint one.
+          The <b>{id}</b> bullet design is a mark without a number. Pick a numbered design on the{" "}
+          <b>Question bullet</b> line ▸ <b>Design</b> card (Bullet point presets tab) to paint one.
         </p>
       )}
 
