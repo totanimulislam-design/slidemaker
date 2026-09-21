@@ -54,6 +54,10 @@ export type NumberStyle =
   | "pentagonDot" | "octagonDot" | "ovalDot" | "softSquareDot" | "plusDot" | "hollowPlus"
   | "crossDot" | "asteriskDot" | "sparkleDot" | "crescentDot" | "sunDot" | "flowerDot" | "cloverDot"
   | "blockArrowDot" | "triangleUpDot" | "triangleDownDot" | "triangleLeftDot" | "turnArrowDot"
+  /* directional list markers — the arrow / number sets used by infographics */
+  | "arrowRightDot" | "arrowLeftDot" | "arrowUpDot" | "arrowDownDot" | "arrowBothDot"
+  | "arrowUpDownDot" | "arrowThinRightDot" | "arrowThinLeftDot" | "arrowDiagonalUpDot"
+  | "arrowDiagonalDownDot" | "curvedArrowDot" | "doubleArrowDot" | "arrowOutlineDot"
   | "pinDot" | "flagDot" | "boltDot" | "heartDot" | "hollowHeart" | "shieldDot" | "bookmarkDot"
   | "tagDot" | "pillDot" | "dropDot" | "leafDot"
   | "colonDot" | "ellipsisDot" | "dotsColumn" | "doubleChevron" | "doubleCheck" | "equalsDot"
@@ -95,6 +99,7 @@ export type NumberStyle =
   /* arrows — block arrows in every direction */
   | "arrowLeft" | "arrowUp" | "arrowDown" | "blockRight" | "blockLeft" | "arrowBoth"
   | "arrowUpDown" | "notchedArrow" | "triangleRight" | "triangleLeft"
+  | "diagonalUp" | "diagonalDown" | "bentArrow" | "thinArrowRight"
   /* seals & stars, extended */
   | "star4" | "star7" | "star10" | "star16" | "explosion" | "flower" | "softStar"
   /* callouts — a plate with a tail on each side */
@@ -453,6 +458,10 @@ const STAR: [number, number][] = [[50, 0], [61, 35], [98, 35], [68, 57], [79, 91
 const ARROWLEFT: [number, number][] = [[100, 0], [38, 0], [0, 50], [38, 100], [100, 100], [76, 50]];
 const ARROWUP: [number, number][] = [[50, 0], [100, 42], [70, 42], [70, 100], [30, 100], [30, 42], [0, 42]];
 const ARROWDOWN: [number, number][] = [[30, 0], [70, 0], [70, 58], [100, 58], [50, 100], [0, 58], [30, 58]];
+const DIAGONALUP: [number, number][] = [[8, 68], [25, 68], [63, 30], [50, 30], [78, 12], [78, 47], [67, 47], [36, 78], [8, 78]];
+const DIAGONALDOWN: [number, number][] = [[8, 32], [25, 32], [63, 70], [50, 70], [78, 88], [78, 53], [67, 53], [36, 22], [8, 22]];
+const BENTARROW: [number, number][] = [[8, 64], [42, 64], [42, 47], [32, 47], [58, 18], [84, 47], [73, 47], [73, 80], [8, 80]];
+const THINARROWRIGHT: [number, number][] = [[0, 42], [68, 42], [68, 29], [100, 50], [68, 71], [68, 58], [0, 58]];
 const BLOCKRIGHT: [number, number][] = [[0, 26], [58, 26], [58, 0], [100, 50], [58, 100], [58, 74], [0, 74]];
 const BLOCKLEFT: [number, number][] = [[100, 26], [42, 26], [42, 0], [0, 50], [42, 100], [42, 74], [100, 74]];
 const ARROWBOTH: [number, number][] = [[0, 50], [24, 0], [24, 28], [76, 28], [76, 0], [100, 50], [76, 100], [76, 72], [24, 72], [24, 100]];
@@ -524,6 +533,21 @@ const TRIANGLE_UP_DOT: [number, number][] = [[50, 24], [76, 74], [24, 74]];
 const TRIANGLE_DOWN_DOT: [number, number][] = [[24, 26], [76, 26], [50, 76]];
 const TRIANGLE_LEFT_DOT: [number, number][] = [[23, 50], [69, 25], [69, 75]];
 const TURN_ARROW: [number, number][] = [[20, 60], [56, 60], [56, 46], [48, 46], [64, 24], [80, 46], [72, 46], [72, 76], [20, 76]];
+/* directional arrow markers inspired by stock-library infographic families.
+   These are original, editable polygons rather than imported artwork. */
+const ARROW_RIGHT_DOT: [number, number][] = [[18, 40], [58, 40], [58, 26], [84, 50], [58, 74], [58, 60], [18, 60]];
+const ARROW_LEFT_DOT: [number, number][] = [[82, 40], [42, 40], [42, 26], [16, 50], [42, 74], [42, 60], [82, 60]];
+const ARROW_UP_DOT: [number, number][] = [[40, 82], [40, 42], [26, 42], [50, 16], [74, 42], [60, 42], [60, 82]];
+const ARROW_DOWN_DOT: [number, number][] = [[40, 18], [40, 58], [26, 58], [50, 84], [74, 58], [60, 58], [60, 18]];
+const ARROW_BOTH_DOT: [number, number][] = [[12, 50], [30, 28], [30, 40], [70, 40], [70, 28], [88, 50], [70, 72], [70, 60], [30, 60], [30, 72]];
+const ARROW_UPDOWN_DOT: [number, number][] = [[50, 12], [72, 32], [60, 32], [60, 68], [72, 68], [50, 88], [28, 68], [40, 68], [40, 32], [28, 32]];
+const ARROW_THIN_RIGHT_DOT: [number, number][] = [[14, 45], [70, 45], [70, 34], [88, 50], [70, 66], [70, 55], [14, 55]];
+const ARROW_THIN_LEFT_DOT: [number, number][] = [[86, 45], [30, 45], [30, 34], [12, 50], [30, 66], [30, 55], [86, 55]];
+const ARROW_DIAGONAL_UP_DOT: [number, number][] = [[16, 68], [30, 68], [64, 34], [52, 34], [78, 16], [78, 48], [68, 48], [36, 80], [16, 80]];
+const ARROW_DIAGONAL_DOWN_DOT: [number, number][] = [[16, 32], [30, 32], [64, 66], [52, 66], [78, 84], [78, 52], [68, 52], [36, 20], [16, 20]];
+const CURVED_ARROW_DOT: [number, number][] = [[16, 68], [42, 68], [42, 50], [34, 50], [58, 24], [84, 50], [74, 50], [74, 78], [16, 78]];
+const DOUBLE_ARROW_DOT: [number, number][] = [[16, 36], [58, 36], [58, 24], [78, 42], [58, 60], [58, 48], [16, 48]];
+const ARROW_OUTLINE_DOT: [number, number][] = ARROW_RIGHT_DOT;
 const PIN_DOT: [number, number][] = [[50, 82], [44, 62], [34, 54], [30, 44], [32, 34], [40, 27], [50, 25], [60, 27], [68, 34], [70, 44], [66, 54], [56, 62]];
 const FLAG_DOT: [number, number][] = [[30, 20], [37, 20], [74, 31], [37, 43], [37, 80], [30, 80]];
 const BOLT_DOT: [number, number][] = [[56, 22], [38, 50], [48, 50], [43, 78], [63, 46], [52, 46], [60, 22]];
@@ -670,6 +694,19 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "triangleDownDot", label: "Small triangle ▼", category: "bullets", hint: "A triangle pointing down — no number", points: TRIANGLE_DOWN_DOT },
   { id: "triangleLeftDot", label: "Small triangle ◀", category: "bullets", hint: "A triangle pointing left — no number", points: TRIANGLE_LEFT_DOT },
   { id: "turnArrowDot", label: "Turn arrow", category: "bullets", hint: "An elbow arrow turning upward — no number", points: TURN_ARROW },
+  { id: "arrowRightDot", label: "Arrow right", category: "bullets", hint: "A directional block arrow pointing right — no number", points: ARROW_RIGHT_DOT },
+  { id: "arrowLeftDot", label: "Arrow left", category: "bullets", hint: "A directional block arrow pointing left — no number", points: ARROW_LEFT_DOT },
+  { id: "arrowUpDot", label: "Arrow up", category: "bullets", hint: "A directional block arrow pointing up — no number", points: ARROW_UP_DOT },
+  { id: "arrowDownDot", label: "Arrow down", category: "bullets", hint: "A directional block arrow pointing down — no number", points: ARROW_DOWN_DOT },
+  { id: "arrowBothDot", label: "Arrow both ways", category: "bullets", hint: "A two-headed horizontal arrow — no number", points: ARROW_BOTH_DOT },
+  { id: "arrowUpDownDot", label: "Arrow up and down", category: "bullets", hint: "A two-headed vertical arrow — no number", points: ARROW_UPDOWN_DOT },
+  { id: "arrowThinRightDot", label: "Thin arrow right", category: "bullets", hint: "A slim directional arrow pointing right — no number", points: ARROW_THIN_RIGHT_DOT },
+  { id: "arrowThinLeftDot", label: "Thin arrow left", category: "bullets", hint: "A slim directional arrow pointing left — no number", points: ARROW_THIN_LEFT_DOT },
+  { id: "arrowDiagonalUpDot", label: "Arrow northeast", category: "bullets", hint: "A diagonal arrow rising to the right — no number", points: ARROW_DIAGONAL_UP_DOT },
+  { id: "arrowDiagonalDownDot", label: "Arrow southeast", category: "bullets", hint: "A diagonal arrow falling to the right — no number", points: ARROW_DIAGONAL_DOWN_DOT },
+  { id: "curvedArrowDot", label: "Bent arrow", category: "bullets", hint: "A bent corner arrow — no number", points: CURVED_ARROW_DOT },
+  { id: "doubleArrowDot", label: "Double line arrow", category: "bullets", hint: "A compact double-stem arrow — no number", points: DOUBLE_ARROW_DOT, extras: [shiftPts(DOUBLE_ARROW_DOT, 0, 22)] },
+  { id: "arrowOutlineDot", label: "Outline arrow", category: "bullets", hint: "An open directional arrow — no number", points: ARROW_OUTLINE_DOT, line: 0.07, lineColor: (a) => a, paint: hollow },
   { id: "pinDot", label: "Small pin", category: "bullets", hint: "A map-pin bullet — no number", points: PIN_DOT },
   { id: "flagDot", label: "Small flag", category: "bullets", hint: "A flag bullet — no number", points: FLAG_DOT },
   { id: "boltDot", label: "Small bolt", category: "bullets", hint: "A lightning-flash bullet — no number", points: BOLT_DOT },
@@ -809,6 +846,10 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "notchedArrow", label: "Notched arrow", category: "arrows", hint: "A block arrow with a notched tail", points: NOTCHEDARROW, aspect: 1.4, font: 0.3, pad: [0, 0.42, 0, 0.1] },
   { id: "triangleRight", label: "Triangle ▶", category: "arrows", hint: "A play button — a triangle pointing right", points: TRIRIGHT, font: 0.32, pad: [0, 0.3, 0, 0] },
   { id: "triangleLeft", label: "Triangle ◀", category: "arrows", hint: "A triangle pointing left", points: TRILEFT, font: 0.32, pad: [0, 0, 0, 0.3] },
+  { id: "diagonalUp", label: "Diagonal ↗", category: "arrows", hint: "A block arrow rising to the right", points: DIAGONALUP, aspect: 1.15, font: 0.3 },
+  { id: "diagonalDown", label: "Diagonal ↘", category: "arrows", hint: "A block arrow falling to the right", points: DIAGONALDOWN, aspect: 1.15, font: 0.3 },
+  { id: "bentArrow", label: "Bent arrow", category: "arrows", hint: "A corner arrow that turns upward", points: BENTARROW, aspect: 1.15, font: 0.3 },
+  { id: "thinArrowRight", label: "Thin arrow →", category: "arrows", hint: "A slim arrow with a long shaft", points: THINARROWRIGHT, aspect: 1.45, font: 0.3 },
 
   /* --- seals & stars ----------------------------------------------------- */
   { id: "star", label: "Star", category: "seals", hint: "Five-point achievement star", points: [[50, 0], [61, 35], [98, 35], [68, 57], [79, 91], [50, 70], [21, 91], [32, 57], [2, 35], [39, 35]], font: 0.5, pad: [0, 0, 0, 0.08] },
@@ -917,6 +958,9 @@ const BLANK: NumberStyle[] = [
   "pentagonDot", "octagonDot", "ovalDot", "softSquareDot", "plusDot", "hollowPlus",
   "crossDot", "asteriskDot", "sparkleDot", "crescentDot", "sunDot", "flowerDot", "cloverDot",
   "blockArrowDot", "triangleUpDot", "triangleDownDot", "triangleLeftDot", "turnArrowDot",
+  "arrowRightDot", "arrowLeftDot", "arrowUpDot", "arrowDownDot", "arrowBothDot", "arrowUpDownDot",
+  "arrowThinRightDot", "arrowThinLeftDot", "arrowDiagonalUpDot", "arrowDiagonalDownDot", "curvedArrowDot",
+  "doubleArrowDot", "arrowOutlineDot",
   "pinDot", "flagDot", "boltDot", "heartDot", "hollowHeart", "shieldDot", "bookmarkDot",
   "tagDot", "pillDot", "dropDot", "leafDot",
   "colonDot", "ellipsisDot", "dotsColumn", "doubleChevron", "doubleCheck", "equalsDot",

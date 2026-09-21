@@ -24,8 +24,11 @@ import type { NumberBorderStyle } from "./types";
  * tube, the gold rosette, the midnight-and-gold card, the material / 3-D
  * badge — and the **Infographic** row the stock libraries are full of: flat
  * directional pointers, line markers, gradient orbs, target rings and petal
- * badges. Every look is an original combination of the marker's own channels,
- * collected from those conventions rather than copied from any one product.
+ * badges. A dedicated **Arrow directions** row turns that vocabulary into
+ * numbered forward, reverse, vertical, two-way, notched, diagonal, bent,
+ * outline, ribbon and material arrows. Every look is an original combination
+ * of the marker's own channels, collected from those conventions rather than
+ * copied from any one product.
  */
 
 export type BulletStyleGroup =
@@ -39,7 +42,8 @@ export type BulletStyleGroup =
   | "Dark & gold"
   | "3-D & depth"
   | "Hand drawn"
-  | "Infographic";
+  | "Infographic"
+  | "Arrow directions";
 
 export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
   "Geometric",
@@ -53,6 +57,7 @@ export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
   "3-D & depth",
   "Hand drawn",
   "Infographic",
+  "Arrow directions",
 ];
 
 /** the marker channels one style writes */
@@ -906,6 +911,172 @@ export const BULLET_STYLES: BulletStyle[] = [
     bulletBorderWeight: 2,
     bulletEffect: "innerShadow",
     bulletEffectIntensity: 40,
+  }),
+
+  /* ------------------------------------------------------- arrow directions --
+     Original combinations of the editable arrow silhouettes, colour systems,
+     rims and effects. The family follows the visual vocabulary seen in stock
+     arrow-number references (forward/back, up/down, two-way, stepped, outline,
+     diagonal and ribbon pointers) without bundling or tracing stock artwork. */
+  style("arrowForward", "Arrow →", "Arrow directions", "A numbered forward arrow in cyan and blue", {
+    numberStyle: "blockRight",
+    bulletFillGradient: grad(90, "#38bdf8", "#2563eb"),
+    bulletBorder: "#dbeafe",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 45,
+  }),
+  style("arrowBack", "Arrow ←", "Arrow directions", "A numbered return arrow in violet and indigo", {
+    numberStyle: "blockLeft",
+    bulletFillGradient: grad(270, "#c084fc", "#6d28d9"),
+    bulletBorder: "#f5d0fe",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 42,
+  }),
+  style("arrowRise", "Arrow ↑", "Arrow directions", "A numbered upward arrow in emerald green", {
+    numberStyle: "arrowUp",
+    bulletFillGradient: grad(180, "#34d399", "#047857"),
+    bulletBorder: "#d1fae5",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 38,
+  }),
+  style("arrowFall", "Arrow ↓", "Arrow directions", "A numbered downward arrow in amber and orange", {
+    numberStyle: "arrowDown",
+    bulletFillGradient: grad(0, "#fbbf24", "#ea580c"),
+    bulletBorder: "#ffedd5",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "pop",
+    bulletEffectColor: "#9a3412",
+    bulletEffectIntensity: 30,
+  }),
+  style("arrowTwin", "Arrow ↔", "Arrow directions", "A two-way numbered arrow for comparison", {
+    numberStyle: "arrowBoth",
+    bulletFillGradient: grad(90, "#2dd4bf", "#0f766e"),
+    bulletBorder: "#ccfbf1",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 38,
+  }),
+  style("arrowVertical", "Arrow ↕", "Arrow directions", "A vertical two-way numbered arrow", {
+    numberStyle: "arrowUpDown",
+    bulletFillGradient: grad(180, "#60a5fa", "#4338ca"),
+    bulletBorder: "#e0e7ff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "glow",
+    bulletEffectColor: "#93c5fd",
+    bulletEffectIntensity: 35,
+  }),
+  style("arrowNotch", "Notched arrow", "Arrow directions", "A numbered notched arrow for process steps", {
+    numberStyle: "notchedArrow",
+    bulletFillGradient: grad(90, "#fb7185", "#be123c"),
+    bulletBorder: "#ffe4e6",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("arrowPlay", "Play pointer", "Arrow directions", "A crisp triangular numbered pointer", {
+    numberStyle: "triangleRight",
+    bulletFill: "#f43f5e",
+    bulletBorder: "#fff1f2",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "pop",
+    bulletEffectColor: "#881337",
+    bulletEffectIntensity: 32,
+  }),
+  style("arrowReversePlay", "Back pointer", "Arrow directions", "A triangular numbered pointer facing left", {
+    numberStyle: "triangleLeft",
+    bulletFillGradient: grad(270, "#fda4af", "#e11d48"),
+    bulletBorder: "#fff1f2",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 35,
+  }),
+  style("arrowChevron", "Chevron →", "Arrow directions", "A wide chevron numbered marker", {
+    numberStyle: "arrowRight",
+    bulletFillGradient: grad(90, "#a78bfa", "#4f46e5"),
+    bulletBorder: "#ede9fe",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "bevel",
+    bulletEffectIntensity: 45,
+  }),
+  style("arrowOutline", "Outline →", "Arrow directions", "A lightweight outlined numbered arrow", {
+    numberStyle: "arrowRight",
+    bulletFill: "transparent",
+    bulletBorder: "#22d3ee",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 3,
+    bulletEffect: "neon",
+    bulletEffectColor: "#67e8f9",
+    bulletEffectIntensity: 45,
+  }),
+  style("arrowTurn", "Turn arrow", "Arrow directions", "A numbered corner arrow for a change of direction", {
+    numberStyle: "bentArrow",
+    bulletFillGradient: grad(135, "#f472b6", "#7c3aed"),
+    bulletBorder: "#fce7f3",
+    bulletBorderStyle: "dashed",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "longShadow",
+    bulletEffectColor: "#4c1d95",
+    bulletEffectIntensity: 38,
+  }),
+  style("arrowDiagonal", "Diagonal ↗", "Arrow directions", "A numbered diagonal pointer for growth", {
+    numberStyle: "diagonalUp",
+    bulletFillGradient: grad(135, "#4ade80", "#0891b2"),
+    bulletBorder: "#cffafe",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 42,
+  }),
+  style("arrowDiagonalDown", "Diagonal ↘", "Arrow directions", "A numbered diagonal pointer for a descending step", {
+    numberStyle: "diagonalDown",
+    bulletFillGradient: grad(45, "#fbbf24", "#f97316"),
+    bulletBorder: "#ffedd5",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("arrowStack", "Stacked arrows", "Arrow directions", "A layered numbered arrow with a material shadow", {
+    numberStyle: "thinArrowRight",
+    bulletFillGradient: grad(90, "#f97316", "#c2410c"),
+    bulletBorder: "#ffedd5",
+    bulletBorderStyle: "double",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "stack",
+    bulletEffectIntensity: 58,
+  }),
+  style("arrowRibbon", "Ribbon arrow", "Arrow directions", "A numbered ribbon pointer for milestones", {
+    numberStyle: "ribbon",
+    bulletFillGradient: grad(160, "#f9a8d4", "#db2777"),
+    bulletBorder: "#fce7f3",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "sticker",
+    bulletEffectColor: "#ffffff",
+    bulletEffectIntensity: 45,
+  }),
+  style("arrowMidnight", "Midnight arrow", "Arrow directions", "A dark and gold numbered direction marker", {
+    numberStyle: "blockRight",
+    bulletFillGradient: grad(90, "#334155", "#0f172a"),
+    bulletBorder: "#fbbf24",
+    bulletBorderStyle: "double",
+    bulletBorderWeight: 2,
+    bulletEffect: "material",
+    bulletEffectColor: "#f59e0b",
+    bulletEffectIntensity: 48,
   }),
 ];
 
