@@ -132,7 +132,7 @@ function AppContent() {
   const { preview } = useFontPreview();
 
   // loads any extra font files the content needs (CJK, Hebrew, Thai…)
-  const { scripts, revision } = useFontCoverage(deck);
+  const { revision } = useFontCoverage(deck);
 
   // re-register the user's uploaded fonts (survives reloads)
   useEffect(() => {
@@ -1765,7 +1765,6 @@ function AppContent() {
             onPasteAnswers={() => setAnswersOpen(true)}
             onJumpToSlide={setCurrent}
             onFixFormatting={fixFormatting}
-            scripts={scripts}
             selectedEl={selectedEl ?? "title"}
             onSelectEl={id => { setSelectedEl(id); setSelectedShapes([]); setSurface(null); }}
             onNavSelect={handleNavSelect}

@@ -29,8 +29,7 @@ import BoxFontControls from "./BoxFontControls";
 import ElementPosition from "./ElementPosition";
 import { boxFontLabel, elementInk, setElementInk } from "../lib/boxFonts";
 import { MATH_SNIPPETS } from "../lib/presets";
-import { type ScriptId } from "../lib/fonts";
-import ThemePanel from "./ThemePanel";
+import SlideDesignPanel from "./SlideDesignPanel";
 import { handleSmartPaste } from "../lib/richPaste";
 import type { ApplySection } from "../lib/applyDesign";
 import type { SlideField } from "./Slide";
@@ -95,7 +94,7 @@ const NAV: NavItem[] = [
     id: "theme",
     label: "Design",
     icon: "🎨",
-    title: "Design & defaults — deck-wide presets, base colours and shared fonts",
+    title: "Design — slide design presets: one click paints badges, title, bullet, options, board and frame",
   },
   { id: "titleText", label: "Title text", icon: "T", title: "Title text — the heading itself", element: "title" },
   { id: "titleBg", label: "Title background", icon: "▣", title: "Title background — the banner behind it", element: "title" },
@@ -202,7 +201,6 @@ interface Props {
   /** jump the editor to a slide (the Answer key overview does this) */
   onJumpToSlide: (index: number) => void;
   onFixFormatting: (scope: "slide" | "all") => void;
-  scripts: ScriptId[];
   selectedEl: ElementId;
   onSelectEl: (id: ElementId) => void;
   /**
@@ -291,7 +289,6 @@ export default function Inspector({
   onPasteAnswers,
   onJumpToSlide,
   onFixFormatting,
-  scripts,
   selectedEl,
   onSelectEl,
   onNavSelect,
@@ -494,8 +491,8 @@ export default function Inspector({
       />
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {/* ------------------------ design & defaults ------------------------ */}
-        {tab === "theme" && <ThemePanel theme={T} setTheme={setTheme} scripts={scripts} />}
+        {/* --------------------------- slide designs ------------------------- */}
+        {tab === "theme" && <SlideDesignPanel theme={T} setTheme={setTheme} />}
 
         {/* --------------------------- title text ---------------------------- */}
         {tab === "titleText" && (
@@ -644,7 +641,7 @@ export default function Inspector({
               {/* the stem's own text style (this box only): font from the whole
                   Google catalogue, size 0 → ∞, weight, case, spacing,
                   opacity, effects and nudge — the bullet beside it and the
-                  deck-wide default faces ("Design & defaults") are untouched */}
+                  deck-wide default faces are untouched */}
               <BoxFontControls
                 theme={T}
                 setTheme={setTheme}

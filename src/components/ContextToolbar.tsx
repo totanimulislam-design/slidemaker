@@ -4,6 +4,7 @@ import type {
   BackgroundSettings, BannerSettings, BannerShape, Box, BoxFontId, BoxTypeface, DeckHeader, ElementId, OptionsLayout, QuizOption, ThemeSettings,
 } from "../lib/types";
 import { DEFAULT_BANNER, DEFAULT_FRAME, ELEMENT_LABELS } from "../lib/types";
+import { activeSlideDesign, designPatch, loadDesignFonts, neighbourDesign } from "../lib/slideDesigns";
 import {
   resetAnswerToolbar,
   resetBackgroundToolbar,
@@ -1237,6 +1238,13 @@ export default function ContextToolbar(p: Props) {
   };
   const inserting = !s && !surface && (p.nav === "images" || p.nav === "shapes");
   const themePill = p.nav === "theme" && !s && !surface && !el && !multi;
+  /** which slide design the deck is wearing, and how to walk the gallery */
+  const activeDesign = themePill ? activeSlideDesign(theme) : null;
+  const stepDesign = (by: number) => {
+    const d = neighbourDesign(activeDesign?.id ?? null, by);
+    loadDesignFonts(d);
+    p.patchTheme(designPatch(d, theme));
+  };
   const layoutPill = p.nav === "layout" && !s && !surface && !el && !multi;
   const layering = !!p.layerTools && !s && !surface && !el && !multi;
   const arrangeBar = !!p.layerTools && !layering && !surface;
@@ -1767,9 +1775,13 @@ export default function ContextToolbar(p: Props) {
           {sep()}
         </>}
         {themePill && <>
-          {swatch("Accent colour", theme.accent, v => p.patchTheme({ accent: v }), <span className="ctx-dot" style={{ background: theme.accent }} />)}
-          {swatch("Board colour", theme.board, v => p.patchTheme({ board: v }), <span className="ctx-dot" style={{ background: theme.board }} />)}
-          {swatch("Brand colour", theme.brandColor, v => p.patchTheme({ brandColor: v }), <span className="ctx-dot" style={{ background: theme.brandColor }} />)}
+          {/* Design is the gallery of complete slide looks: the strip names the
+              one painted now and walks the gallery, the panel holds the grid */}
+          <span className="ctx-hint" title="The slide design painted on this deck — the Design panel holds the whole gallery">
+            {activeDesign?.name ?? "Custom look"}
+          </span>
+          {button(<span aria-hidden="true">◀</span>, () => stepDesign(-1), undefined, "Previous slide design")}
+          {button(<span aria-hidden="true">▶</span>, () => stepDesign(1), undefined, "Next slide design")}
           {sep()}
         </>}
         {layoutPill && <>
