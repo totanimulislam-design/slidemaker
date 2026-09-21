@@ -1168,9 +1168,10 @@ export default function ContextToolbar(p: Props) {
    * Numbering — the focused gallery for the question bullet's own numbering
    * presets (bullet points · numbering formats · number + arrow compounds),
    * so the marker's reading can be changed without hunting inside the full
-   * design card.
+   * design card. It belongs to the number's own line (Q bullet text), the
+   * same way the option markers' numbering sits on their text line.
    */
-  if (panel === "Numbering" && optLine("questionBullet")) content = (
+  if (panel === "Numbering" && optLine("bulletText")) content = (
     <QuestionBulletNumberingPanel theme={theme} setTheme={p.patchTheme} />
   );
 
@@ -1561,7 +1562,6 @@ export default function ContextToolbar(p: Props) {
               onAuto: () => p.patchTheme({ bulletBorder: "", bulletBorderGradient: undefined }),
               onNone: () => p.patchTheme({ bulletBorder: BULLET_COLOR_NONE, bulletBorderGradient: undefined }),
             })}
-            {toggle("Numbering", NUMBERING_GLYPH)}
             {toggle("Border style", <BorderStyleIcon style={theme.bulletBorderStyle ?? "auto"} size={16} />)}
             {toggle("Border radius", RADIUS_GLYPH)}
             {toggle("Border weight", <WeightIcon size={16} />)}
@@ -1579,6 +1579,9 @@ export default function ContextToolbar(p: Props) {
         const grad = part ? partTf(part).textGradient : undefined;
         return (
           <>
+            {/* the numbering gallery rides with the number's own line — exactly
+                where the option markers' numbering sits on theirs */}
+            {toggle("Numbering", NUMBERING_GLYPH)}
             {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showNumber: !theme.showNumber }), theme.showNumber, "Show / hide the number inside the bullet")}
             {lineFontToggle()}
             {stepper("Number size %", Math.round((lineFont.scale ?? 1) * 100), v => set({ scale: Math.max(0, v) / 100 }), 0, 99999, 5, { prefix: "Size" })}

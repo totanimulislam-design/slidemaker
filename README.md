@@ -203,8 +203,10 @@ Every line carries the compact slice of its inspector panel — **Question text*
 gets font, size, ink, bold/italic/underline and alignment; **Question bullet**
 one button per channel — **Fill** · **Border** · border style · radius · weight ·
 transparency · position · **Bullet design** · show/hide (the full set, see
-*Question bullet* below); **Q bullet text** the number's
-ink, typeface, weight and size; **Title text** typeface, size, colour, case and
+*Question bullet* below); **Q bullet text** the number's numbering gallery
+(bullet points · numbering formats · number + arrow — right where the option
+markers keep their own label numbering), ink, typeface, weight and size;
+**Title text** typeface, size, colour, case and
 glyph effects; **Title background** the banner silhouette, colour, gradient,
 opacity, halo, padding and on/off; each **badge line** its own typeface, colour
 (with *auto* back to the shared brand colour), size and visibility; the
