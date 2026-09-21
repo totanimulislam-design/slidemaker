@@ -183,6 +183,20 @@ input[type="text"] {
 .ctx-btn svg { display: block; }
 .ctx-toggle .ctx-caret { font-size: 9px; opacity: .7; }
 .ctx-icon-toggle { gap: 2px; padding-inline: 5px 4px; }
+/* The bullet design control is the premium design+ entry: keep the wordmark
+   visible beside its crown mark instead of hiding the action behind an icon. */
+.ctx-design-plus-control { display: inline-flex; align-items: center; gap: 4px; }
+.ctx-design-plus-word {
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: -.02em;
+  line-height: 1;
+  color: #fcd34d;
+  background: linear-gradient(115deg, #fde68a 0%, #fbbf24 46%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 /* the font control names the face in use, drawn in that face (Canva-style);
    long catalogue names are clipped with an ellipsis instead of widening the line */
 .ctx-font-toggle { padding: 0 6px 0 9px; }
