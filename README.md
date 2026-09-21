@@ -354,29 +354,33 @@ mesh with up to eight stops), with **Auto** and **None** above it.
 One card, three tabs, every tile a live preview painted by the same renderer as
 the board:
 
-- **Bullet point presets** — the ready-made looks, 92 of them in twelve
+- **Bullet point presets** — the ready-made looks, 194 of them in fifteen
   groups, with the marker's **size** (20 – 160 px) and **base colour** every
   design derives from. The list opens with the two families a bullet row is
   expected to hold: **Bullet points** (Dot · Hollow dot · Small square · Hollow
   square · Small diamond · Small triangle · Dash · Arrowhead · Chevron · Check
-  mark · Small star) — the classic list bullets, drawn small in the middle of a
+  mark · Small star · Arrow right · Arrow left · Arrow up · Arrow down · Arrow
+  both ways · Arrow up and down · Arrow northeast · Arrow southeast · Bent arrow
+  · Outline arrow) — the classic list bullets, drawn small in the middle of a
   full-size box so they sit on the question's first line where a disc would,
   and standing in for the number the way a bullet does — and **Numbering** (1. ·
   1) · (1) · 1: · 01 · Q1 · #1 · 1 |), which keep the number and add its
   punctuation with no shape at all (the leading zero of *01* comes in the
-  number's own script, so ৭ becomes ০৭). Then the 73 **one-click designs**
+  number's own script, so ৭ becomes ০৭). Then the 103 **one-click designs**
   that write the whole marker at once (silhouette · fill · line · corners ·
-  transparency · effect), in ten families. The shape-led ones come first:
+  transparency · effect), in eleven families. The shape-led ones come first:
   *Geometric* (Hex tile · Octagon stop · Diamond stud · Pentagon badge ·
   Triangle flag · Violet kite · Plinth · Arrow step · Slant stripe · Plus block
   · Speech bubble · Bookmark) and *Organic* (Soft cloud · Aqua drop · Coral blob
-  · Mint sparkle · Rose heart · Sky bubble · Wavy sun), each silhouette dressed
-  in the paint it is usually seen in; then *Exam classic*, *Soft & minimal*,
-  *Bold sticker*, *Neon & glow*, *Medal & seal*, *Dark & gold*, *3-D & depth*
-  and *Hand drawn*. A design stays claimed only while every channel still
-  matches it — fine-tune one, or swap the silhouette under *Shape*, and the
-  card reports **custom** instead (`lib/bulletStyles.ts`).
-- **Shape** — the silhouette alone: 138 shapes in nine families, and picking
+  · Mint sparkle · Rose heart · Sky bubble · Wavy sun), followed by *Arrow
+  directions* — numbered forward, back, up, down, two-way, vertical, notched,
+  play, chevron, outline, bent, diagonal, stacked, ribbon and midnight arrows.
+  The remaining families are *Exam classic*, *Soft & minimal*, *Bold sticker*,
+  *Neon & glow*, *Medal & seal*, *Dark & gold*, *3-D & depth*, *Hand drawn* and
+  *Infographic*. A design stays claimed only while every channel still matches
+  it — fine-tune one, or swap the silhouette under *Shape*, and the card
+  reports **custom** instead (`lib/bulletStyles.ts`).
+- **Shape** — the silhouette alone: 142 shapes in nine families, and picking
   one changes nothing but the silhouette, so the fill, line, corners,
   transparency and effect the marker already has travel onto it (a *Gold seal*
   becomes a gold hexagon with the same bevel). **Round & soft** (Circle · Ring ·
@@ -390,7 +394,8 @@ the board:
   · Octagon · Plus · Hourglass · Right triangle · Heptagon · Nonagon · Decagon ·
   Dodecagon · Rhombus · Slant ◣ · Trapezoid ▼ · Step ◀ · House · Gem · Hexagon
   ▬), **Arrows** (Arrow ▶ · Arrow ◀ · Arrow ▲ · Arrow ▼ · Block arrow ▶ · Block
-  arrow ◀ · Arrow ◀▶ · Arrow ▲▼ · Notched arrow · Triangle ▶ · Triangle ◀),
+  arrow ◀ · Arrow ◀▶ · Arrow ▲▼ · Notched arrow · Triangle ▶ · Triangle ◀ ·
+  Diagonal ↗ · Diagonal ↘ · Bent arrow · Thin arrow →),
   **Seals & stars** (Star · Sparkle · Burst · Scallop · Gear · Rosette · Cap
   seal · Star 6 · Star 8 · Sunburst · Medal · Star 4 · Star 7 · Star 10 · Star
   16 · Explosion · Flower · Soft star), **Callouts** (Speech · Bubble · Callout
