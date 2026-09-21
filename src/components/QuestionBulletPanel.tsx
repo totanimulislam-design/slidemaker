@@ -3,6 +3,7 @@ import { numberStyleDef, renderNumberStyle, type NumberStyle } from "../lib/numb
 import { boxFontCss } from "../lib/boxFonts";
 import { BulletPositionControls, BulletShapeControls } from "./BulletShapePanel";
 import BulletDesignPanel from "./BulletDesignPanel";
+import QuestionBulletNumberingPanel from "./QuestionBulletNumberingPanel";
 import NumberBullet from "./NumberBullet";
 import { Btn, PanelHead, Toggle } from "./ui";
 
@@ -53,6 +54,11 @@ export default function QuestionBulletPanel({ theme: T, slide, setTheme, patchLa
       </div>
 
       <Toggle label="Show question bullet" checked={T.showBullet} onChange={(v) => setTheme({ showBullet: v })} />
+
+      {/* numbering option — focused gallery for bullet points · numbering · number+arrow */}
+      <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <QuestionBulletNumberingPanel theme={T} setTheme={setTheme} />
+      </div>
 
       {/* the design card: bullet point presets, shapes and shape effects */}
       <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">

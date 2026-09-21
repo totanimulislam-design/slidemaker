@@ -43,6 +43,7 @@ import {
   WeightIcon,
 } from "./BulletShapePanel";
 import BulletDesignPanel from "./BulletDesignPanel";
+import QuestionBulletNumberingPanel from "./QuestionBulletNumberingPanel";
 import PaintColorPanel from "./PaintColorPanel";
 import PlainNumberingPicker from "./PlainNumberingPicker";
 import ShapeDesignPanel from "./ShapeDesignPanel";
@@ -334,7 +335,7 @@ interface PaintCtx {
 }
 
 /** the pop-ups that need the wide card (a colour grid, a design gallery) */
-const WIDE_PANELS = new Set(["TextColor", "Paint", "Bullet design"]);
+const WIDE_PANELS = new Set(["TextColor", "Paint", "Bullet design", "Design", "Numbering"]);
 const widePanel = (panel: string | null) => !!panel && WIDE_PANELS.has(panel);
 
 /** the droplet a paint button wears over its current colour */
@@ -360,12 +361,28 @@ const RADIUS_GLYPH = (
   </svg>
 );
 
-/** the bullet-design icon: a numbered disc with a sparkle */
+/** elegant design icon: layered diamond + sparkle — the "design" glyph */
 const DESIGN_GLYPH = (
   <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true">
-    <circle cx="8.6" cy="11.4" r="5.9" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    <path d="M8.6 8.4v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    <path d="m16.6 1.6.75 2 2 .75-2 .75-.75 2-.75-2-2-.75 2-.75z" fill="currentColor" />
+    <path d="M10 2.6 16.4 9 10 17.4 3.6 9 10 2.6Z" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinejoin="round" />
+    <path d="M10 6.2 13.2 9 10 12.2 6.8 9 10 6.2Z" fill="currentColor" opacity="0.88" />
+    <path d="M15.9 1.1c.38 1.05 1 1.68 2.05 2.06-1.05.38-1.67 1-2.05 2.06C15.52 4.17 14.9 3.55 13.85 3.17c1.05-.38 1.67-1 2.05-2.06Z" fill="currentColor" />
+  </svg>
+);
+
+/** keep the old name as alias for any external reference */
+const ELEGANT_DESIGN_GLYPH = DESIGN_GLYPH;
+
+/** numbering option icon: "1. 2. 3." list with a subtle accent */
+const NUMBERING_GLYPH = (
+  <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true">
+    <circle cx="3.6" cy="4.2" r="1.2" fill="currentColor" />
+    <path d="M7.2 4.2h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.9" />
+    <circle cx="3.6" cy="9.2" r="1.2" fill="currentColor" opacity="0.75" />
+    <path d="M7.2 9.2h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
+    <circle cx="3.6" cy="14.2" r="1.2" fill="currentColor" opacity="0.55" />
+    <path d="M7.2 14.2h6.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.55" />
+    <path d="M15.2 11.8h2.8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.9" />
   </svg>
 );
 
@@ -1148,12 +1165,25 @@ export default function ContextToolbar(p: Props) {
   );
 
   /**
+   * Numbering — the focused gallery for the question bullet's own numbering
+   * presets (bullet points · numbering formats · number + arrow compounds),
+   * so the marker's reading can be changed without hunting inside the full
+   * design card.
+   */
+  if (panel === "Numbering" && optLine("questionBullet")) content = (
+    <QuestionBulletNumberingPanel theme={theme} setTheme={p.patchTheme} />
+  );
+
+  /**
    * Bullet design — the one card that decides how the marker looks: the
    * bullet point presets (classic bullets, numbering, the one-click looks),
    * the shapes (every silhouette alone), and the shape effects, each
    * previewed with the deck's own theme.
+   *
+   * The new elegant name is "Design" — the old "Bullet design" is kept as
+   * an alias so existing decks, tests and deep-links keep working.
    */
-  if (panel === "Bullet design" && optLine("questionBullet")) content = (
+  if ((panel === "Bullet design" || panel === "Design") && optLine("questionBullet")) content = (
     <BulletDesignPanel theme={theme} setTheme={p.patchTheme} />
   );
   /**
@@ -1234,8 +1264,9 @@ export default function ContextToolbar(p: Props) {
         "ctx-pop",
         popPos ? "ctx-pop-floating" : "ctx-pop-docked",
         widePanel(panel) && "ctx-pop-wide",
-        panel === "Bullet design" && "ctx-pop-xl",
+        (panel === "Bullet design" || panel === "Design") && "ctx-pop-xl",
         (panel === "TextColor" || panel === "Paint") && "ctx-pop-color",
+        panel === "Numbering" && "ctx-pop-wide",
       )}
       style={
         popPos
@@ -1243,7 +1274,7 @@ export default function ContextToolbar(p: Props) {
             {
               left: popPos.x,
               top: popPos.y,
-              width: panel === "Bullet design" ? 430 : widePanel(panel) ? 380 : popPos.w,
+              width: panel === "Bullet design" || panel === "Design" ? 430 : widePanel(panel) ? 380 : popPos.w,
               maxHeight: Math.max(140, vhNow() - popPos.y - 8),
             }
           : // docked: right edge of the window, just under the top bar, growing
@@ -1252,7 +1283,7 @@ export default function ContextToolbar(p: Props) {
               top: topBarH + DOCK_GAP,
               right: DOCK_INSET,
               maxHeight: `calc(100vh - ${topBarH + DOCK_GAP + 10}px)`,
-              ...(panel === "Bullet design" ? { width: 430 } : widePanel(panel) ? { width: 380 } : {}),
+              ...(panel === "Bullet design" || panel === "Design" ? { width: 430 } : widePanel(panel) ? { width: 380 } : {}),
             }
       }
     >
@@ -1530,12 +1561,13 @@ export default function ContextToolbar(p: Props) {
               onAuto: () => p.patchTheme({ bulletBorder: "", bulletBorderGradient: undefined }),
               onNone: () => p.patchTheme({ bulletBorder: BULLET_COLOR_NONE, bulletBorderGradient: undefined }),
             })}
+            {toggle("Numbering", NUMBERING_GLYPH)}
             {toggle("Border style", <BorderStyleIcon style={theme.bulletBorderStyle ?? "auto"} size={16} />)}
             {toggle("Border radius", RADIUS_GLYPH)}
             {toggle("Border weight", <WeightIcon size={16} />)}
             {toggle("Transparency", <TransparencyIcon size={16} />)}
             {toggle("Bullet position", <span aria-hidden="true">✥</span>)}
-            {toggle("Bullet design", DESIGN_GLYPH)}
+            {toggle("Design", DESIGN_GLYPH)}
             {sep()}
             {button(<span aria-hidden="true">👁</span>, () => p.patchTheme({ showBullet: !theme.showBullet }), theme.showBullet, "Show / hide the number bullet")}
           </>
