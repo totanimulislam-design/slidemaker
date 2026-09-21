@@ -22,7 +22,10 @@ import type { NumberBorderStyle } from "./types";
  * big design tools keep reaching for — the classic rimmed disc, the
  * chalk-dashed circle, the crimson capsule, the die-cut sticker, the neon
  * tube, the gold rosette, the midnight-and-gold card, the material / 3-D
- * badge — collected from those conventions rather than from any one product.
+ * badge — and the **Infographic** row the stock libraries are full of: flat
+ * directional pointers, line markers, gradient orbs, target rings and petal
+ * badges. Every look is an original combination of the marker's own channels,
+ * collected from those conventions rather than copied from any one product.
  */
 
 export type BulletStyleGroup =
@@ -35,7 +38,8 @@ export type BulletStyleGroup =
   | "Medal & seal"
   | "Dark & gold"
   | "3-D & depth"
-  | "Hand drawn";
+  | "Hand drawn"
+  | "Infographic";
 
 export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
   "Geometric",
@@ -48,6 +52,7 @@ export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
   "Dark & gold",
   "3-D & depth",
   "Hand drawn",
+  "Infographic",
 ];
 
 /** the marker channels one style writes */
@@ -787,6 +792,121 @@ export const BULLET_STYLES: BulletStyle[] = [
     bulletEffect: "lift",
     bulletEffectIntensity: 40,
   }),
+
+  /* ------------------------------------------------------------ infographic -- */
+  style("gradientOrb", "Gradient orb", "Infographic", "A violet-to-pink orb with a white rim", {
+    numberStyle: "circle",
+    bulletFillGradient: grad(135, "#8b5cf6", "#ec4899"),
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "gloss",
+    bulletEffectIntensity: 55,
+  }),
+  style("lineCircle", "Line circle", "Infographic", "No fill — a clean white line ring", {
+    numberStyle: "ring",
+    bulletFill: "transparent",
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2.5,
+    bulletEffect: "float",
+    bulletEffectIntensity: 35,
+  }),
+  style("blockPointer", "Block pointer", "Infographic", "A flat block arrow in sky blue", {
+    numberStyle: "blockRight",
+    bulletFillGradient: grad(90, "#38bdf8", "#1d4ed8"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "lift",
+    bulletEffectIntensity: 45,
+  }),
+  style("diamondList", "Diamond list", "Infographic", "A flat teal diamond with a white rim", {
+    numberStyle: "diamond",
+    bulletFill: "#14b8a6",
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("markerDown", "Marker down", "Infographic", "An amber triangle pointing down, hard shadow", {
+    numberStyle: "triangleDown",
+    bulletFillGradient: grad(180, "#fbbf24", "#d97706"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "pop",
+    bulletEffectColor: "#92400e",
+    bulletEffectIntensity: 30,
+  }),
+  style("candyStripe", "Candy stripe", "Infographic", "White stripes over a pink capsule", {
+    numberStyle: "pill",
+    bulletFill: "#ec4899",
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "stripes",
+    bulletEffectColor: "#ffffff",
+    bulletEffectIntensity: 30,
+  }),
+  style("glossyOrb", "Glossy orb", "Infographic", "A lit indigo sphere with a gloss", {
+    numberStyle: "disc",
+    bulletFillGradient: radial(34, 28, "#c7d2fe", "#4f46e5"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "gloss",
+    bulletEffectIntensity: 60,
+  }),
+  style("magentaRing", "Magenta ring", "Infographic", "No fill — a glowing magenta tube rim", {
+    numberStyle: "ring",
+    bulletFill: "transparent",
+    bulletBorder: "#f0abfc",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 3,
+    bulletEffect: "neon",
+    bulletEffectColor: "#e879f9",
+    bulletEffectIntensity: 60,
+  }),
+  style("targetRings", "Target rings", "Infographic", "A bullseye in the deck's own accent", {
+    numberStyle: "target",
+    bulletEffect: "lift",
+    bulletEffectIntensity: 45,
+  }),
+  style("starSticker", "Star sticker", "Infographic", "A yellow star with a pale sticker outline", {
+    numberStyle: "star",
+    bulletFill: "#facc15",
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "sticker",
+    bulletEffectColor: "#ffffff",
+    bulletEffectIntensity: 55,
+  }),
+  style("ribbonTab", "Ribbon tab", "Infographic", "A rose award ribbon with a white rim", {
+    numberStyle: "ribbon",
+    bulletFillGradient: grad(160, "#fb7185", "#be123c"),
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("petalBadge", "Petal badge", "Infographic", "A six-petal flower that glows pink", {
+    numberStyle: "flower",
+    bulletFillGradient: grad(150, "#f9a8d4", "#db2777"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "glow",
+    bulletEffectColor: "#f9a8d4",
+    bulletEffectIntensity: 40,
+  }),
+  style("halfDome", "Half dome", "Infographic", "A half-circle marker in sunset orange", {
+    numberStyle: "dome",
+    bulletFillGradient: grad(180, "#fdba74", "#ea580c"),
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "innerShadow",
+    bulletEffectIntensity: 40,
+  }),
 ];
 
 export const BULLET_STYLE_BY_ID = new Map(BULLET_STYLES.map((s) => [s.id, s]));
@@ -820,3 +940,4 @@ export function bulletStyleOf(theme: ThemeSettings): string {
 export function bulletStylePatch(preset: BulletStyle): Partial<ThemeSettings> {
   return { ...preset.patch, bulletStylePreset: preset.id } as Partial<ThemeSettings>;
 }
+

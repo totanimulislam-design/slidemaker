@@ -24,8 +24,12 @@ export type { NumberBorderStyle } from "./types";
  * paint derives from `theme.accent`. It opens with the two families the
  * **Bullet point presets** tab lists — the classic **bullet points** (dot,
  * hollow dot, square, dash, arrowhead, check…), which stand in for the number
- * the way a list bullet does, and the **numbering** presets ("7." · "(7)" ·
- * "Q7" · "07"), which keep the number and add its punctuation — followed by
+ * the way a list bullet does, grown into the full stock-set rows teachers
+ * reach for — the outline geometry set, the directional pointers, the
+ * compound pairs (… · : · » · ✓✓ · → · ☑ · ◎) and the finished dots (pie,
+ * half, stripes, gloss, rings) — and the **numbering** presets ("7." · "(7)" ·
+ * "Q7" · "07" · "[7]" · "No.7" · "G" · "VII"), which keep the number and add
+ * its punctuation — followed by
  * the marker **shapes** the *Shape* tab lists (`NUMBER_SHAPES`): round & soft,
  * cards & chips, polygons, arrows, seals & stars, callouts, flowchart, the
  * sticker pack and the marks. Picking a shape changes the silhouette only; the
@@ -41,11 +45,24 @@ export type { NumberBorderStyle } from "./types";
 
 export type NumberStyle =
   /* classic bullet points — the list bullets every slide tool's "Bullets"
-     preset row offers (they replace the number, like a bullet does) */
+     preset row offers (they replace the number, like a bullet does): the
+     solid dots, the outline set, the arrows & pointers, the compound pairs
+     (…, :, », ✓✓, →, ☑, ◎) and the finished ones (pie, stripes, gloss) */
   | "dot" | "hollowDot" | "squareDot" | "hollowSquare" | "diamondDot" | "triangleDot"
   | "dash" | "arrowhead" | "chevron" | "check" | "starDot"
+  | "hollowDiamond" | "hollowTriangle" | "hollowStar" | "hexagonDot" | "hollowHexagon"
+  | "pentagonDot" | "octagonDot" | "ovalDot" | "softSquareDot" | "plusDot" | "hollowPlus"
+  | "crossDot" | "asteriskDot" | "sparkleDot" | "crescentDot" | "sunDot" | "flowerDot" | "cloverDot"
+  | "blockArrowDot" | "triangleUpDot" | "triangleDownDot" | "triangleLeftDot" | "turnArrowDot"
+  | "pinDot" | "flagDot" | "boltDot" | "heartDot" | "hollowHeart" | "shieldDot" | "bookmarkDot"
+  | "tagDot" | "pillDot" | "dropDot" | "leafDot"
+  | "colonDot" | "ellipsisDot" | "dotsColumn" | "doubleChevron" | "doubleCheck" | "equalsDot"
+  | "checkboxDot" | "radioDot" | "arrowLineDot" | "plusRingDot"
+  | "pieDot" | "halfDot" | "stripedDot" | "glossDot" | "bullseyeDot" | "barDot" | "slashDot"
+  | "scribbleDot" | "brushDot"
   /* numbering presets — the number with its own punctuation, no shape */
   | "numDot" | "numParen" | "numParens" | "numColon" | "numZero" | "numQ" | "numHash" | "numBar"
+  | "numBrackets" | "numBraces" | "numDash" | "numNo" | "numAlpha" | "numRoman"
   | "circle" | "ring" | "glow" | "gradient" | "square" | "rounded"
   | "diamond" | "hexagon" | "kite" | "star" | "burst" | "shield"
   | "ribbon" | "banner" | "pill" | "bracket" | "underline" | "bar"
@@ -132,6 +149,13 @@ export interface NumberStyleDef {
    * ("7." · "(7)" · "Q7" · "07") and no shape at all
    */
   format?: (number: string) => string;
+  /**
+   * satellite glyphs for a compound bullet (… · : · » · ✓✓ · → · ☑ · ◎):
+   * extra polygons in the same 0–100 box, painted with the body's own
+   * resolved paint as marks over it, so a picked fill, a gradient and the
+   * transparency channel cover them together with the main glyph
+   */
+  extras?: [number, number][][];
 }
 
 export const NUMBER_STYLE_CATEGORIES: { id: NumberStyleCategory; label: string }[] = [
@@ -321,6 +345,80 @@ function tornBand(zigs: number, amp: number): [number, number][] {
   return out;
 }
 
+/** a small disc centred at (cx, cy) — the dot family is built from these */
+function dotAt(cx: number, cy: number, r: number, n = 22): [number, number][] {
+  const out: [number, number][] = [];
+  for (let k = 0; k < n; k++) {
+    const a = (k * 2 * Math.PI) / n;
+    out.push([r1(cx + r * Math.cos(a)), r1(cy + r * Math.sin(a))]);
+  }
+  return out;
+}
+
+/** an ellipse centred at (cx, cy) */
+function ellipse(cx: number, cy: number, rx: number, ry: number, n = 24): [number, number][] {
+  const out: [number, number][] = [];
+  for (let k = 0; k < n; k++) {
+    const a = (k * 2 * Math.PI) / n;
+    out.push([r1(cx + rx * Math.cos(a)), r1(cy + ry * Math.sin(a))]);
+  }
+  return out;
+}
+
+/** move a silhouette, shrink one into the middle of the bullet box, or scale one into any box */
+function shiftPts(points: [number, number][], dx: number, dy: number): [number, number][] {
+  return points.map(([x, y]) => [r1(x + dx), r1(y + dy)]);
+}
+function shrinkPts(points: [number, number][], s: number): [number, number][] {
+  return points.map(([x, y]) => [r1(x * s + 50 - 50 * s), r1(y * s + 50 - 50 * s)]);
+}
+function xformPts(points: [number, number][], sx: number, sy: number, dx: number, dy: number): [number, number][] {
+  return points.map(([x, y]) => [r1(x * sx + dx), r1(y * sy + dy)]);
+}
+
+/** a crescent moon opening to the right — the outer arc bulging left, the inner arc scooping back */
+function crescent(): [number, number][] {
+  const out: [number, number][] = [];
+  for (let k = 0; k <= 16; k++) {
+    const a = ((90 + (k * 180) / 16) * Math.PI) / 180;
+    out.push([r1(50 + 27 * Math.cos(a)), r1(50 + 27 * Math.sin(a))]);
+  }
+  for (let k = 16; k >= 0; k--) {
+    const a = ((90 + (k * 180) / 16) * Math.PI) / 180;
+    out.push([r1(58 + 21 * Math.cos(a)), r1(50 + 21 * Math.sin(a))]);
+  }
+  return out;
+}
+
+/**
+ * A hand-drawn wobble circle — the sketched bullet. The wobble is a fixed
+ * wave, never random, so the board, the thumbnails and the exports all paint
+ * the same ring.
+ */
+function wobble(cx: number, cy: number, r: number, wob: number, n = 26, seed = 0): [number, number][] {
+  const out: [number, number][] = [];
+  for (let k = 0; k < n; k++) {
+    const a = (k * 2 * Math.PI) / n;
+    const w = 1 + wob * Math.sin(3 * a + seed) * Math.cos(2 * a - seed / 2);
+    out.push([r1(cx + r * w * Math.cos(a)), r1(cy + r * w * Math.sin(a))]);
+  }
+  return out;
+}
+
+/** a horizontal capsule through (x1, cy)–(x2, cy) */
+function stadium(x1: number, x2: number, cy: number, r: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let k = 0; k <= 10; k++) {
+    const a = Math.PI / 2 + (k * Math.PI) / 10;
+    out.push([r1(x1 + r * Math.cos(a)), r1(cy + r * Math.sin(a))]);
+  }
+  for (let k = 0; k <= 10; k++) {
+    const a = -Math.PI / 2 + (k * Math.PI) / 10;
+    out.push([r1(x2 + r * Math.cos(a)), r1(cy + r * Math.sin(a))]);
+  }
+  return out;
+}
+
 /* hand-authored silhouettes, in the same 0–100 box */
 const DROP: [number, number][] = [[50, 2], [61, 24], [74, 42], [83, 58], [86, 70], [80, 84], [66, 94], [50, 97], [34, 94], [20, 84], [14, 70], [17, 58], [26, 42], [39, 24]];
 const LEAF: [number, number][] = [[4, 96], [12, 58], [30, 28], [56, 8], [94, 2], [90, 40], [72, 70], [44, 90]];
@@ -394,7 +492,8 @@ const EXPLOSION: [number, number][] = jagged([50, 40, 48, 36, 50, 42, 46, 38, 50
  * they sit on the question's first line exactly where a disc would — the
  * round dot, its hollow twin, the square, the diamond, the triangle, the dash,
  * the arrowhead, the chevron, the check mark and the star every slide tool's
- * bullet row offers.
+ * bullet row offers — grown into the full stock-set rows: outline geometry,
+ * directional pointers, compound pairs and finished dots.
  */
 const DOT: [number, number][] = poly(36, 22);
 const SQUARE_DOT: [number, number][] = [[30, 30], [70, 30], [70, 70], [30, 70]];
@@ -405,11 +504,64 @@ const ARROWHEAD: [number, number][] = [[24, 22], [80, 50], [24, 78], [37, 50]];
 const CHEVRON: [number, number][] = [[34, 20], [47, 20], [75, 50], [47, 80], [34, 80], [62, 50]];
 const CHECK: [number, number][] = [[14, 54], [27, 41], [42, 56], [74, 22], [87, 35], [42, 80]];
 const STAR_DOT: [number, number][] = starPoints(5, 28, 12);
+/* the outline & geometric row */
+const HEXAGON_DOT: [number, number][] = poly(6, 27);
+const PENTAGON_DOT: [number, number][] = poly(5, 28);
+const OCTAGON_DOT: [number, number][] = poly(8, 27, -67.5);
+const OVAL_DOT: [number, number][] = ellipse(50, 50, 28, 18);
+const SOFTSQUARE_DOT: [number, number][] = [[36, 28], [64, 28], [72, 36], [72, 64], [64, 72], [36, 72], [28, 64], [28, 36]];
+const PLUS_DOT: [number, number][] = [[43, 24], [57, 24], [57, 43], [76, 43], [76, 57], [57, 57], [57, 76], [43, 76], [43, 57], [24, 57], [24, 43], [43, 43]];
+const CROSS_DOT: [number, number][] = [[50, 39], [63, 25], [75, 37], [61, 50], [75, 63], [63, 75], [50, 61], [37, 75], [25, 63], [39, 50], [25, 37], [37, 25]];
+const ASTERISK_DOT: [number, number][] = starPoints(8, 28, 9);
+const SPARKLE_DOT: [number, number][] = [[50, 20], [56, 44], [80, 50], [56, 56], [50, 80], [44, 56], [20, 50], [44, 44]];
+const CRESCENT_DOT: [number, number][] = crescent();
+const SUN_DOT: [number, number][] = starPoints(12, 28, 19);
+const FLOWER_DOT: [number, number][] = lobes(5, 20, 8, 8);
+const CLOVER_DOT: [number, number][] = lobes(4, 20, 8, 10);
+/* the arrows & pointers row */
+const THICK_ARROW: [number, number][] = [[18, 38], [56, 38], [56, 26], [84, 50], [56, 74], [56, 62], [18, 62]];
+const TRIANGLE_UP_DOT: [number, number][] = [[50, 24], [76, 74], [24, 74]];
+const TRIANGLE_DOWN_DOT: [number, number][] = [[24, 26], [76, 26], [50, 76]];
+const TRIANGLE_LEFT_DOT: [number, number][] = [[23, 50], [69, 25], [69, 75]];
+const TURN_ARROW: [number, number][] = [[20, 60], [56, 60], [56, 46], [48, 46], [64, 24], [80, 46], [72, 46], [72, 76], [20, 76]];
+const PIN_DOT: [number, number][] = [[50, 82], [44, 62], [34, 54], [30, 44], [32, 34], [40, 27], [50, 25], [60, 27], [68, 34], [70, 44], [66, 54], [56, 62]];
+const FLAG_DOT: [number, number][] = [[30, 20], [37, 20], [74, 31], [37, 43], [37, 80], [30, 80]];
+const BOLT_DOT: [number, number][] = [[56, 22], [38, 50], [48, 50], [43, 78], [63, 46], [52, 46], [60, 22]];
+const HEART_DOT: [number, number][] = [[50, 76], [36, 62], [26, 52], [24, 42], [30, 33], [40, 32], [46, 38], [50, 43], [54, 38], [60, 32], [70, 33], [76, 42], [74, 52], [64, 62]];
+const SHIELD_DOT: [number, number][] = [[50, 24], [66, 30], [66, 52], [50, 74], [34, 52], [34, 30]];
+const BOOKMARK_DOT: [number, number][] = [[36, 26], [64, 26], [64, 74], [50, 64], [36, 74]];
+const TAG_DOT: [number, number][] = [[28, 32], [58, 32], [72, 50], [58, 68], [28, 68]];
+const PILL_DOT: [number, number][] = stadium(38, 62, 50, 12);
+const DROP_DOT: [number, number][] = shrinkPts(DROP, 0.5);
+const LEAF_DOT: [number, number][] = shrinkPts(LEAF, 0.55);
+/* dividers and sketches */
+const BAR_DOT: [number, number][] = [[44, 24], [56, 24], [56, 76], [44, 76]];
+const SLASH_DOT: [number, number][] = [[60, 22], [70, 22], [40, 78], [30, 78]];
+const SCRIBBLE_DOT: [number, number][] = wobble(50, 50, 24, 0.08);
+const BRUSH_DOT: [number, number][] = wobble(50, 50, 22, 0.14, 22, 1.3);
 
 /* a hollow bullet: no body of its own — only the line the design draws */
 const hollow = (): CSSProperties => ({ background: "transparent" });
 /* a hollow frame: a tinted centre inside the bold line the design draws */
 const hollowFrame = (accent: string): CSSProperties => ({ background: withAlpha(accent, 0.14) });
+
+/* stock-set finishes for the small glyphs: pie slices, halves, stripes, gloss, rings */
+const piePaint = (accent: string): CSSProperties => ({
+  background: `conic-gradient(from 0deg, ${accent} 0 32%, ${withAlpha(accent, 0.22)} 32% 100%)`,
+});
+const halfPaint = (accent: string): CSSProperties => ({
+  background: `linear-gradient(90deg, ${accent} 0 50%, ${withAlpha(accent, 0.22)} 50% 100%)`,
+});
+const stripePaint = (accent: string, size: number): CSSProperties => {
+  const band = Math.max(2.5, r1(size * 0.07));
+  return { background: `repeating-linear-gradient(135deg, ${accent} 0 ${band}px, ${shade(accent, 0.45)} ${band}px ${r1(band * 2)}px)` };
+};
+const glossDotPaint = (accent: string): CSSProperties => ({
+  background: `radial-gradient(circle at 32% 28%, #ffffff 0 18%, ${accent} 62%)`,
+});
+const bullseyeDotPaint = (accent: string): CSSProperties => ({
+  background: `radial-gradient(circle at 50% 50%, ${accent} 0 20%, #ffffff 20% 40%, ${accent} 40% 100%)`,
+});
 
 /**
  * "01": a leading zero in the number's own script, so a Bengali "৭" becomes
@@ -426,6 +578,31 @@ export function zeroPadNumber(number: string): string {
   const n = number.trim();
   for (const [re, zero] of ZERO_OF) if (re.test(n)) return zero + n;
   return number;
+}
+
+/**
+ * "7" → "VII" for the Latin digits; anything else (Bengali, already
+ * formatted…) is left alone, so the preset never mangles a number it
+ * doesn't understand.
+ */
+export function toRomanNumeral(number: string): string {
+  const n = /^\d+$/.test(number.trim()) ? parseInt(number.trim(), 10) : NaN;
+  if (!Number.isFinite(n) || n < 1 || n > 3999) return number;
+  const table: [number, string][] = [
+    [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"],
+    [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
+  ];
+  let rest = n;
+  let out = "";
+  for (const [v, s] of table) while (rest >= v) { out += s; rest -= v; }
+  return out;
+}
+
+/** "1" → "A" … "26" → "Z"; anything else is left alone */
+export function toAlphaLabel(number: string): string {
+  const n = /^\d+$/.test(number.trim()) ? parseInt(number.trim(), 10) : NaN;
+  if (!Number.isFinite(n) || n < 1 || n > 26) return number;
+  return String.fromCharCode(64 + n);
 }
 
 /* a paint every "flat" design can share: no gloss, no rim, just the colour */
@@ -467,6 +644,67 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "check", label: "Check mark", category: "bullets", hint: "A check-mark bullet — no number", points: CHECK },
   { id: "starDot", label: "Small star", category: "bullets", hint: "A star bullet — no number", points: STAR_DOT },
 
+  /* --- bullet points: the outline & geometric row --------------------------- */
+  { id: "hollowDiamond", label: "Hollow diamond", category: "bullets", hint: "An open diamond bullet — no number", points: DIAMOND_DOT, line: 0.07, lineColor: (a) => a, paint: hollow },
+  { id: "hollowTriangle", label: "Hollow triangle", category: "bullets", hint: "An open triangle bullet — no number", points: TRIANGLE_DOT, line: 0.07, lineColor: (a) => a, paint: hollow },
+  { id: "hollowStar", label: "Hollow star", category: "bullets", hint: "An open star bullet — no number", points: STAR_DOT, line: 0.06, lineColor: (a) => a, paint: hollow },
+  { id: "hexagonDot", label: "Small hexagon", category: "bullets", hint: "A hexagon bullet — no number", points: HEXAGON_DOT },
+  { id: "hollowHexagon", label: "Hollow hexagon", category: "bullets", hint: "An open hexagon bullet — no number", points: HEXAGON_DOT, line: 0.07, lineColor: (a) => a, paint: hollow },
+  { id: "pentagonDot", label: "Small pentagon", category: "bullets", hint: "A pentagon bullet — no number", points: PENTAGON_DOT },
+  { id: "octagonDot", label: "Small octagon", category: "bullets", hint: "An octagon bullet — no number", points: OCTAGON_DOT },
+  { id: "ovalDot", label: "Small oval", category: "bullets", hint: "An oval bullet — no number", points: OVAL_DOT },
+  { id: "softSquareDot", label: "Soft square", category: "bullets", hint: "A square with cut corners — no number", points: SOFTSQUARE_DOT },
+  { id: "plusDot", label: "Small plus", category: "bullets", hint: "A plus bullet — no number", points: PLUS_DOT },
+  { id: "hollowPlus", label: "Hollow plus", category: "bullets", hint: "An open plus bullet — no number", points: PLUS_DOT, line: 0.06, lineColor: (a) => a, paint: hollow },
+  { id: "crossDot", label: "Cross", category: "bullets", hint: "An × bullet — no number", points: CROSS_DOT },
+  { id: "asteriskDot", label: "Asterisk", category: "bullets", hint: "An eight-spoke asterisk — no number", points: ASTERISK_DOT },
+  { id: "sparkleDot", label: "Small sparkle", category: "bullets", hint: "A four-point glint — no number", points: SPARKLE_DOT },
+  { id: "crescentDot", label: "Crescent", category: "bullets", hint: "A crescent moon — no number", points: CRESCENT_DOT },
+  { id: "sunDot", label: "Small sun", category: "bullets", hint: "A twelve-ray sun — no number", points: SUN_DOT },
+  { id: "flowerDot", label: "Small flower", category: "bullets", hint: "A five-petal flower — no number", points: FLOWER_DOT },
+  { id: "cloverDot", label: "Small clover", category: "bullets", hint: "A four-leaf clover — no number", points: CLOVER_DOT },
+
+  /* --- bullet points: arrows & pointers ------------------------------------- */
+  { id: "blockArrowDot", label: "Block arrow", category: "bullets", hint: "A block arrow pointing at the question — no number", points: THICK_ARROW },
+  { id: "triangleUpDot", label: "Small triangle ▲", category: "bullets", hint: "A triangle pointing up — no number", points: TRIANGLE_UP_DOT },
+  { id: "triangleDownDot", label: "Small triangle ▼", category: "bullets", hint: "A triangle pointing down — no number", points: TRIANGLE_DOWN_DOT },
+  { id: "triangleLeftDot", label: "Small triangle ◀", category: "bullets", hint: "A triangle pointing left — no number", points: TRIANGLE_LEFT_DOT },
+  { id: "turnArrowDot", label: "Turn arrow", category: "bullets", hint: "An elbow arrow turning upward — no number", points: TURN_ARROW },
+  { id: "pinDot", label: "Small pin", category: "bullets", hint: "A map-pin bullet — no number", points: PIN_DOT },
+  { id: "flagDot", label: "Small flag", category: "bullets", hint: "A flag bullet — no number", points: FLAG_DOT },
+  { id: "boltDot", label: "Small bolt", category: "bullets", hint: "A lightning-flash bullet — no number", points: BOLT_DOT },
+  { id: "heartDot", label: "Small heart", category: "bullets", hint: "A heart bullet — no number", points: HEART_DOT },
+  { id: "hollowHeart", label: "Hollow heart", category: "bullets", hint: "An open heart bullet — no number", points: HEART_DOT, line: 0.06, lineColor: (a) => a, paint: hollow },
+  { id: "shieldDot", label: "Small shield", category: "bullets", hint: "A shield bullet — no number", points: SHIELD_DOT },
+  { id: "bookmarkDot", label: "Small bookmark", category: "bullets", hint: "A bookmark bullet — no number", points: BOOKMARK_DOT },
+  { id: "tagDot", label: "Small tag", category: "bullets", hint: "A price-tag bullet — no number", points: TAG_DOT },
+  { id: "pillDot", label: "Small pill", category: "bullets", hint: "A capsule bullet — no number", points: PILL_DOT },
+  { id: "dropDot", label: "Small drop", category: "bullets", hint: "A teardrop bullet — no number", points: DROP_DOT },
+  { id: "leafDot", label: "Small leaf", category: "bullets", hint: "A leaf bullet — no number", points: LEAF_DOT },
+
+  /* --- bullet points: compound pairs (two glyphs, one bullet) --------------- */
+  { id: "colonDot", label: "Colon", category: "bullets", hint: "Two dots, one above the other — no number", points: dotAt(50, 30, 11), extras: [dotAt(50, 70, 11)] },
+  { id: "ellipsisDot", label: "Ellipsis", category: "bullets", hint: "Three dots in a row — no number", points: dotAt(24, 50, 10), extras: [dotAt(50, 50, 10), dotAt(76, 50, 10)] },
+  { id: "dotsColumn", label: "Vertical dots", category: "bullets", hint: "Three dots in a column — no number", points: dotAt(50, 24, 10), extras: [dotAt(50, 50, 10), dotAt(50, 76, 10)] },
+  { id: "doubleChevron", label: "Double chevron", category: "bullets", hint: "Two chevrons, like » — no number", points: CHEVRON, extras: [shiftPts(CHEVRON, -22, 0)] },
+  { id: "doubleCheck", label: "Double check", category: "bullets", hint: "Two check marks side by side — no number", points: shiftPts(CHECK, 10, 0), extras: [shiftPts(CHECK, -12, 0)] },
+  { id: "equalsDot", label: "Equals", category: "bullets", hint: "Two bars, like = — no number", points: [[20, 32], [80, 32], [80, 40], [20, 40]], extras: [[[20, 60], [80, 60], [80, 68], [20, 68]]] },
+  { id: "checkboxDot", label: "Checkbox", category: "bullets", hint: "A check inside an open square — no number", points: SQUARE_DOT, line: 0.07, lineColor: (a) => a, paint: hollow, extras: [xformPts(CHECK, 0.47, 0.47, 26.3, 26)] },
+  { id: "radioDot", label: "Radio button", category: "bullets", hint: "A dot inside an open ring — no number", points: DOT, line: 0.07, lineColor: (a) => a, paint: hollow, extras: [dotAt(50, 50, 10)] },
+  { id: "arrowLineDot", label: "Line arrow", category: "bullets", hint: "A shaft with an arrowhead, like → — no number", points: [[16, 44], [54, 44], [54, 56], [16, 56]], extras: [shiftPts(ARROWHEAD, 8, 0)] },
+  { id: "plusRingDot", label: "Ringed plus", category: "bullets", hint: "A plus inside an open ring — no number", points: DOT, line: 0.07, lineColor: (a) => a, paint: hollow, extras: [xformPts(PLUS_DOT, 0.55, 0.55, 22.5, 22.5)] },
+
+  /* --- bullet points: finishes, dividers and sketches ----------------------- */
+  { id: "pieDot", label: "Pie dot", category: "bullets", hint: "A pie-chart dot — no number", points: DOT, paint: piePaint },
+  { id: "halfDot", label: "Half dot", category: "bullets", hint: "A half-filled dot — no number", points: DOT, paint: halfPaint },
+  { id: "stripedDot", label: "Striped dot", category: "bullets", hint: "A candy-striped dot — no number", points: DOT, paint: stripePaint },
+  { id: "glossDot", label: "Glossy dot", category: "bullets", hint: "A glossy sphere dot — no number", points: DOT, paint: glossDotPaint },
+  { id: "bullseyeDot", label: "Bullseye dot", category: "bullets", hint: "A ringed target dot — no number", points: DOT, paint: bullseyeDotPaint },
+  { id: "barDot", label: "Small bar", category: "bullets", hint: "A vertical bar — no number", points: BAR_DOT },
+  { id: "slashDot", label: "Slash", category: "bullets", hint: "A diagonal slash — no number", points: SLASH_DOT },
+  { id: "scribbleDot", label: "Scribble ring", category: "bullets", hint: "A hand-drawn wobble ring — no number", points: SCRIBBLE_DOT, line: 0.06, lineColor: (a) => a, paint: hollow },
+  { id: "brushDot", label: "Brush dot", category: "bullets", hint: "A hand-drawn ink blob — no number", points: BRUSH_DOT },
+
   /* --- numbering: the number with its own punctuation, no shape ------------ */
   { id: "numDot", label: "1.", category: "numbering", hint: "The number with a full stop — 1. 2. 3.", format: (n) => `${n}.`, aspect: 1.1, font: 0.46 },
   { id: "numParen", label: "1)", category: "numbering", hint: "The number with a closing bracket — 1) 2) 3)", format: (n) => `${n})`, aspect: 1.1, font: 0.46 },
@@ -476,6 +714,12 @@ export const NUMBER_STYLES: NumberStyleDef[] = [
   { id: "numQ", label: "Q1", category: "numbering", hint: "Q before the number — Q1 Q2 Q3", format: (n) => `Q${n}`, aspect: 1.4, font: 0.46 },
   { id: "numHash", label: "#1", category: "numbering", hint: "A hash before the number — #1 #2 #3", format: (n) => `#${n}`, aspect: 1.3, font: 0.46 },
   { id: "numBar", label: "1 |", category: "numbering", hint: "The number with an upright divider — 1 | 2 | 3 |", format: (n) => `${n} |`, aspect: 1.35, font: 0.46 },
+  { id: "numBrackets", label: "[1]", category: "numbering", hint: "The number in square brackets — [1] [2] [3]", format: (n) => `[${n}]`, aspect: 1.45, font: 0.46 },
+  { id: "numBraces", label: "{1}", category: "numbering", hint: "The number in braces — {1} {2} {3}", format: (n) => `{${n}}`, aspect: 1.45, font: 0.46 },
+  { id: "numDash", label: "1-", category: "numbering", hint: "The number with a dash — 1- 2- 3-", format: (n) => `${n}-`, aspect: 1.15, font: 0.46 },
+  { id: "numNo", label: "No.1", category: "numbering", hint: "No. before the number — No.1 No.2 No.3", format: (n) => `No.${n}`, aspect: 1.7, font: 0.42 },
+  { id: "numAlpha", label: "A", category: "numbering", hint: "A letter for the number — A B C (Latin digits 1–26)", format: toAlphaLabel, aspect: 1.1, font: 0.46 },
+  { id: "numRoman", label: "I", category: "numbering", hint: "A Roman numeral — I II III (Latin digits 1–3999)", format: toRomanNumeral, aspect: 1.3, font: 0.42 },
 
   /* --- round & soft ------------------------------------------------------ */
   { id: "circle", label: "Circle", category: "curve", hint: "Classic disc with a hairline rim — the default", line: 0.07, radius: "50%" },
@@ -669,6 +913,16 @@ const BLANK: NumberStyle[] = [
   "underline", "bar", "none",
   "dot", "hollowDot", "squareDot", "hollowSquare", "diamondDot", "triangleDot",
   "dash", "arrowhead", "chevron", "check", "starDot",
+  "hollowDiamond", "hollowTriangle", "hollowStar", "hexagonDot", "hollowHexagon",
+  "pentagonDot", "octagonDot", "ovalDot", "softSquareDot", "plusDot", "hollowPlus",
+  "crossDot", "asteriskDot", "sparkleDot", "crescentDot", "sunDot", "flowerDot", "cloverDot",
+  "blockArrowDot", "triangleUpDot", "triangleDownDot", "triangleLeftDot", "turnArrowDot",
+  "pinDot", "flagDot", "boltDot", "heartDot", "hollowHeart", "shieldDot", "bookmarkDot",
+  "tagDot", "pillDot", "dropDot", "leafDot",
+  "colonDot", "ellipsisDot", "dotsColumn", "doubleChevron", "doubleCheck", "equalsDot",
+  "checkboxDot", "radioDot", "arrowLineDot", "plusRingDot",
+  "pieDot", "halfDot", "stripedDot", "glossDot", "bullseyeDot", "barDot", "slashDot",
+  "scribbleDot", "brushDot",
 ];
 export const showsNumber = (id: NumberStyle) => !BLANK.includes(id);
 
@@ -1108,6 +1362,28 @@ export function renderNumberStyle(
   const nudge = nudgeOf(theme);
   if (nudge) style.transform = nudge;
 
+  /* a compound bullet's satellites: each extra polygon becomes a mark cut to
+     its own shape, painted with the body's own resolved paint — so a picked
+     fill, a gradient and the transparency channel cover the whole bullet
+     together. "None" paints nothing anywhere, satellites included. */
+  let marks = draft.marks;
+  if (def.extras?.length && normalizeBulletColor(theme.bulletFill) !== BULLET_COLOR_NONE) {
+    const bg =
+      typeof surface.background === "string" && surface.background !== "" && surface.background !== "transparent"
+        ? surface.background
+        : typeof surface.backgroundImage === "string" && surface.backgroundImage !== ""
+          ? surface.backgroundImage
+          : accent;
+    const satellites: CSSProperties[] = def.extras.map((pts) => ({
+      position: "absolute",
+      inset: 0,
+      clipPath: `polygon(${pts.map(([x, y]) => `${x}% ${y}%`).join(", ")})`,
+      background: bg,
+      ...(surface.opacity !== undefined ? { opacity: surface.opacity } : {}),
+    }));
+    marks = [...(marks ?? []), ...satellites];
+  }
+
   /* how the silhouette is cut, so an effect's own passes follow it */
   const clip: NumberClip = {};
   if (surface.borderRadius !== undefined) clip.borderRadius = String(surface.borderRadius);
@@ -1136,7 +1412,7 @@ export function renderNumberStyle(
     color: draft.color,
     aspect: draft.aspect,
     outline,
-    marks: draft.marks,
+    marks,
     clip: Object.keys(clip).length ? clip : undefined,
     effect,
   };
