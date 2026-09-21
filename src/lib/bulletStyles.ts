@@ -60,7 +60,8 @@ export type BulletStyleGroup =
   | "Infographic"
   | "Arrow directions"
   | "Number + arrow"
-  | "Triangle flags";
+  | "Triangle flags"
+  | "Stickers & icons";
 
 export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
   "Geometric",
@@ -77,6 +78,7 @@ export const BULLET_STYLE_GROUPS: BulletStyleGroup[] = [
   "Arrow directions",
   "Number + arrow",
   "Triangle flags",
+  "Stickers & icons",
 ];
 
 /** the marker channels one style writes */
@@ -1380,6 +1382,168 @@ export const BULLET_STYLES: BulletStyle[] = [
     bulletBorderWeight: 1.5,
     bulletEffect: "bevel",
     bulletEffectIntensity: 45,
+  }),
+
+  /* ---------------------------------------------------- stickers & icons --
+     The sticker & icon silhouettes from the shape library — pin, bell, book,
+     bulb, trophy, rocket, flame, crown, lock, flask, grad cap, heart pin —
+     each dressed as a one-click look. These were missing from the bullet
+     point presets even though the silhouettes existed in `lib/numberStyles`,
+     so they are added here as the new \"Stickers & icons\" row the Bullet
+     design card shows. Adding another sticker is one `style(...)` call:
+     pick a `numberStyle` id from `NUMBER_SHAPES`, a fill (solid or gradient),
+     a rim and an effect. */
+
+  style("stickerPinCrimson", "Pin point", "Stickers & icons", "A map-pin in crimson with a white rim, softly shadowed", {
+    numberStyle: "pin",
+    bulletFillGradient: grad(170, "#fb7185", "#be123c"),
+    bulletBorder: "#fff1f2",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("stickerBellAmber", "Bell note", "Stickers & icons", "An amber bell that glows — a reminder marker", {
+    numberStyle: "bell",
+    bulletFillGradient: grad(160, "#fde68a", "#d97706"),
+    bulletBorder: "#fffbeb",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "glow",
+    bulletEffectColor: "#fcd34d",
+    bulletEffectIntensity: 45,
+  }),
+  style("stickerBookSteel", "Book stack", "Stickers & icons", "A steel-blue open book with a white rim", {
+    numberStyle: "book",
+    bulletFillGradient: grad(180, "#93c5fd", "#1e3a8a"),
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 42,
+  }),
+  style("stickerBulbIdea", "Idea bulb", "Stickers & icons", "A yellow bulb lit from above with a glossy sheen", {
+    numberStyle: "bulb",
+    bulletFillGradient: radial(34, 26, "#fef08a", "#ca8a04"),
+    bulletBorder: "#fffbeb",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "glow",
+    bulletEffectColor: "#fde047",
+    bulletEffectIntensity: 50,
+  }),
+  style("stickerTrophyGold", "Trophy gold", "Stickers & icons", "A gold trophy with a bevelled edge", {
+    numberStyle: "trophy",
+    bulletFillGradient: grad(180, "#fff1b8", "#facc15", "#b45309"),
+    bulletBorder: "#78350f",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "bevel",
+    bulletEffectIntensity: 55,
+  }),
+  style("stickerRocketSky", "Rocket launch", "Stickers & icons", "A sky-to-indigo rocket, lifted", {
+    numberStyle: "rocket",
+    bulletFillGradient: grad(150, "#7dd3fc", "#4338ca"),
+    bulletBorder: "#e0f2fe",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 45,
+  }),
+  style("stickerFlameOrange", "Flame hot", "Stickers & icons", "A sunset flame with a soft halo", {
+    numberStyle: "flame",
+    bulletFillGradient: grad(170, "#fb923c", "#dc2626"),
+    bulletBorder: "#ffedd5",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "halo",
+    bulletEffectColor: "#f97316",
+    bulletEffectIntensity: 50,
+  }),
+  style("stickerCrownViolet", "Crown royal", "Stickers & icons", "A violet crown with a gold rim and a soft shadow", {
+    numberStyle: "crown",
+    bulletFillGradient: grad(160, "#c084fc", "#6b21a8"),
+    bulletBorder: "#fbbf24",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "shadow",
+    bulletEffectIntensity: 42,
+  }),
+  style("stickerLockSlate", "Lock secure", "Stickers & icons", "A slate padlock with a gold double rim", {
+    numberStyle: "lock",
+    bulletFill: "#334155",
+    bulletBorder: "#fbbf24",
+    bulletBorderStyle: "double",
+    bulletBorderWeight: 3,
+    bulletEffect: "innerShadow",
+    bulletEffectIntensity: 40,
+  }),
+  style("stickerFlaskTeal", "Flask lab", "Stickers & icons", "A teal lab flask with a pale rim that glows", {
+    numberStyle: "flask",
+    bulletFillGradient: grad(150, "#2dd4bf", "#0f766e"),
+    bulletBorder: "#ccfbf1",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "glow",
+    bulletEffectColor: "#5eead4",
+    bulletEffectIntensity: 40,
+  }),
+  style("stickerGradCapNavy", "Grad cap", "Stickers & icons", "A navy graduation cap with a gold rim, material finish", {
+    numberStyle: "gradCap",
+    bulletFill: "#0f2a5f",
+    bulletBorder: "#ffd633",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "material",
+    bulletEffectColor: "#fbbf24",
+    bulletEffectIntensity: 45,
+  }),
+  style("stickerHeartPin", "Heart pin", "Stickers & icons", "A rose heart pin with a pale sticker outline", {
+    numberStyle: "heart",
+    bulletFillGradient: grad(160, "#f472b6", "#be185d"),
+    bulletBorder: "",
+    bulletBorderStyle: "none",
+    bulletEffect: "sticker",
+    bulletEffectColor: "#ffffff",
+    bulletEffectIntensity: 50,
+  }),
+  style("stickerArchBloom", "Arch bloom", "Stickers & icons", "A tombstone arch in teal and emerald, lifted", {
+    numberStyle: "arch",
+    bulletFillGradient: grad(180, "#5eead4", "#0f766e"),
+    bulletBorder: "#ccfbf1",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "lift",
+    bulletEffectIntensity: 40,
+  }),
+  style("stickerOvalSoft", "Oval soft", "Stickers & icons", "A soft lavender oval with a glossy top", {
+    numberStyle: "oval",
+    bulletFillGradient: grad(150, "#e0e7ff", "#a5b4fc"),
+    bulletBorder: "#ffffff",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 2,
+    bulletEffect: "gloss",
+    bulletEffectIntensity: 50,
+  }),
+  style("stickerDiamondGem", "Diamond gem", "Stickers & icons", "A cut gem in emerald with a material sheen", {
+    numberStyle: "gem",
+    bulletFillGradient: grad(170, "#6ee7b7", "#047857"),
+    bulletBorder: "#d1fae5",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "material",
+    bulletEffectColor: "#34d399",
+    bulletEffectIntensity: 45,
+  }),
+  style("stickerStarBurst", "Starburst pop", "Stickers & icons", "A sunburst in amber with a hard pop shadow", {
+    numberStyle: "sunburst",
+    bulletFillGradient: grad(150, "#fde047", "#f59e0b"),
+    bulletBorder: "#78350f",
+    bulletBorderStyle: "solid",
+    bulletBorderWeight: 1.5,
+    bulletEffect: "pop",
+    bulletEffectColor: "#78350f",
+    bulletEffectIntensity: 35,
   }),
 ];
 
