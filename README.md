@@ -130,7 +130,7 @@ panel holds **only the features its tile names**:
 
 | Deck | Header | Question | Options | Slide & insert |
 | --- | --- | --- | --- | --- |
-| **Design** (theme presets, base colours, shared fonts) | Title text | Question bullet (markers · styles · effects · channels · position) | Option bullet (marker shape/colour/plate) | Footnote |
+| **Design** (theme presets, base colours, shared fonts) | Title text | Question bullet (bullet point presets · shapes · effects · channels · position) | Option bullet (marker shape/colour/plate) | Footnote |
 |  | Title background | Q bullet text | Opt bullet text | Slide background (board colour too) |
 |  | Badge 1 · Badge 2 · Badge 3 · Logo | Question text | Option text (choices + rows/layout/gap) | Slide frame |
 |  |  |  | **Answer key** | **Layout** (element positions) |
@@ -340,7 +340,7 @@ button per channel and each opening a card that holds **that channel only**:
 | **Border weight** — three rules and one slider | the outline's thickness, 0 = no line; **auto** back to the design's own | `bulletBorderWeight` |
 | **Transparency** — one slider | the marker's **body** — **100 = fully visible**, and the number never fades | `bulletOpacity` |
 | **Position** | a horizontal / vertical nudge of the whole marker (the number travels with its shape), and **Bullet is a separate movable element** for free placement — X / Y / width / height / rotation open right there | `bulletNudgeX` · `bulletNudgeY` · `bulletSeparate` |
-| **Bullet design** | the marker's studio: *Markers & stickers* · *Shape style* · *Shape effects* (below), plus its **size** and **base colour** | `numberStyle` · `bulletSize` · `accent` · `bulletStylePreset` · `bulletEffect` … |
+| **Bullet design** | the marker's studio: *Bullet point presets* · *Shape* · *Shape effects* (below), plus its **size** and **base colour** | `numberStyle` · `bulletSize` · `accent` · `bulletStylePreset` · `bulletEffect` … |
 
 **Fill** and **Border** are the only buttons on the line that spell their name
 out, because a shape's paint has four states to show — *auto*, *none*, a solid
@@ -354,8 +354,17 @@ mesh with up to eight stops), with **Auto** and **None** above it.
 One card, three tabs, every tile a live preview painted by the same renderer as
 the board:
 
-- **Markers & stickers** — 75 silhouettes plus *None*, in six groups, with the
-  marker's **size** (20 – 160 px) and **base colour** every design derives from:
+- **Bullet point presets** — 94 presets plus *None*, in eight groups, with the
+  marker's **size** (20 – 160 px) and **base colour** every design derives from.
+  The list opens with the two families a bullet row is expected to hold:
+  **Bullet points** (Dot · Hollow dot · Small square · Hollow square · Small
+  diamond · Small triangle · Dash · Arrowhead · Chevron · Check mark · Small
+  star) — the classic list bullets, drawn small in the middle of a full-size
+  box so they sit on the question's first line where a disc would, and standing
+  in for the number the way a bullet does — and **Numbering** (1. · 1) · (1) ·
+  1: · 01 · Q1 · #1 · 1 |), which keep the number and add its punctuation with
+  no shape at all (the leading zero of *01* comes in the number's own script,
+  so ৭ becomes ০৭). Then every marker silhouette:
   **Round & soft** (Circle · Ring · Coin · Squircle · Arch · Blob · Gradient ·
   Glow · Flat disc · Double ring · Dotted ring · Bullseye · Wavy rim · Teardrop ·
   Leaf · Cloud), **Cards & chips** (Square · Rounded · Pill · Cut corner ·
@@ -370,12 +379,18 @@ the board:
   shapes a quiz, a workbook or an exam paper wears the world over — discs,
   app-icon squircles, notched cards, coins, seals, ribbons, tags, badges and the
   sticker family — drawn from generic shape families rather than copied from any
-  one product. Wide designs get a box wider than it is tall; *Marks* that are a
-  rule rather than a shape, and *None*, drop the number.
-- **Shape style** — 54 one-click looks that write the whole marker at once
-  (design · fill · line · corners · transparency · effect), in eight families:
+  one product. Wide designs get a box wider than it is tall; the *Bullet
+  points*, the *Marks* that are a rule rather than a shape, and *None*, drop
+  the number.
+- **Shape** — 73 one-click shapes that write the whole marker at once
+  (silhouette · fill · line · corners · transparency · effect), in ten
+  families. The shape-led ones come first: *Geometric* (Hex tile · Octagon stop
+  · Diamond stud · Pentagon badge · Triangle flag · Violet kite · Plinth · Arrow
+  step · Slant stripe · Plus block · Speech bubble · Bookmark) and *Organic*
+  (Soft cloud · Aqua drop · Coral blob · Mint sparkle · Rose heart · Sky bubble
+  · Wavy sun), each silhouette dressed in the paint it is usually seen in; then
   *Exam classic*, *Soft & minimal*, *Bold sticker*, *Neon & glow*, *Medal &
-  seal*, *Dark & gold*, *3-D & depth* and *Hand drawn*. A style stays claimed
+  seal*, *Dark & gold*, *3-D & depth* and *Hand drawn*. A shape stays claimed
   only while every channel still matches it — fine-tune one and the card reports
   **custom** instead (`lib/bulletStyles.ts`).
 - **Shape effects** — 36 effects plus *None*, the set an object can wear in a

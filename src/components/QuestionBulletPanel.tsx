@@ -9,8 +9,8 @@ import { Btn, PanelHead, Toggle } from "./ui";
 /**
  * Navigation ▸ "Question bullet".
  *
- * The marker's own body: whether it is drawn, the design card (silhouette ·
- * one-click shape styles · shape effects, with its size and base colour) and
+ * The marker's own body: whether it is drawn, the design card (bullet point
+ * presets · one-click shapes · shape effects, with its size and base colour) and
  * the shape channels the toolbar reaches one button each — fill, outline, its
  * style, corners, weight, transparency — plus where the marker sits. The number
  * painted *inside* it has its own destination ("Text inside question bullet").
@@ -54,7 +54,7 @@ export default function QuestionBulletPanel({ theme: T, slide, setTheme, patchLa
 
       <Toggle label="Show question bullet" checked={T.showBullet} onChange={(v) => setTheme({ showBullet: v })} />
 
-      {/* the design card: silhouette, one-click styles and shape effects */}
+      {/* the design card: bullet point presets, one-click shapes and shape effects */}
       <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
         <BulletDesignPanel theme={T} setTheme={setTheme} />
       </div>
