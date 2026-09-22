@@ -1,4 +1,4 @@
-import type { BannerBorderStyle, BannerSettings, Gradient } from "./types";
+import { BANNER_AUTO_FRAME_HEIGHT, type BannerBorderStyle, type BannerSettings, type Gradient } from "./types";
 import { withAlpha } from "./color";
 
 /** the stage every deck is designed on (Slide.tsx) — the plate's px speak in it */
@@ -24,7 +24,7 @@ export const clampOpacity = (v: number | undefined, fallback = 1): number =>
 /** `+ 12px` / `- 12px` — a signed nudge inside a calc() */
 const nudge = (v: number) => (v < 0 ? `- ${Math.abs(v)}px` : `+ ${v}px`);
 
-/** the plate's box — free when the teacher sized it, else the heading text's own room */
+/** the plate's box — free when the teacher sized it, else the title frame's own room */
 export function plateRect(b: BannerSettings): Pick<React.CSSProperties, "left" | "top" | "width" | "height"> {
   const x = b.pos?.x ?? 0;
   const y = b.pos?.y ?? 0;
@@ -249,9 +249,9 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
       }
     : { color: titleColor, textShadow: shadows.join(", ") || undefined };
 
-  // the wrapper hugs the heading text (Slide.tsx paints it `width: fit-content`),
-  // so this inner air is the plate's closest room: a chip around the glyphs,
-  // never a header bar reaching the brand line or the badge
+  // Slide.tsx gives the title plate a stable frame. The frame is intentionally
+  // independent of the glyph width and height, so changing title font size
+  // changes only the text, not the built-in plate.
   return { box, border: borderLine, halo, text, padding: "6px 0" };
 }
 
@@ -281,11 +281,13 @@ export function measureBannerPlate(): { w: number; h: number } | null {
 export function bannerSizeNow(b: BannerSettings, titleSize = 54, titleWidthPct = 57): { w: number; h: number } {
   const measured = measureBannerPlate();
   if (measured) return measured;
-  // no canvas to measure (the plate hugs the heading text, so only the real
-  // DOM knows its width) — fall back to the title's whole room as an upper bound
-  const w = Math.round((BOARD_W * (titleWidthPct + 2 * b.padX)) / 100);
-  const line = titleSize * 1.25 + 12;
-  const h = Math.round((line * (100 + 2 * b.padY)) / 100);
+  // no canvas to measure — automatic plates use the title element's stable
+  // frame, not the current glyph metrics. Keep this fallback in sync with the
+  // editor so the size panel does not jump when the title size changes.
+  void titleSize;
+  const frameW = Math.round((BOARD_W * titleWidthPct) / 100);
+  const w = Math.round(frameW * (1 + (2 * b.padX) / 100));
+  const h = Math.round(BANNER_AUTO_FRAME_HEIGHT * (1 + (2 * b.padY) / 100));
   return { w: Math.max(40, w), h: Math.max(24, h) };
 }
 

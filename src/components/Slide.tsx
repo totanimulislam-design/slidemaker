@@ -22,7 +22,7 @@ import { ELEMENT_DEFAULT_Z } from "../lib/layers";
 import { bannerCss } from "../lib/banner";
 import { backgroundLayers } from "../lib/background";
 import type { BackgroundSettings } from "../lib/types";
-import { DEFAULT_BADGE_PLATE, DEFAULT_BANNER, DEFAULT_FRAME, isPlainPageChrome } from "../lib/types";
+import { BANNER_AUTO_FRAME_HEIGHT, DEFAULT_BADGE_PLATE, DEFAULT_BANNER, DEFAULT_FRAME, isPlainPageChrome } from "../lib/types";
 import { computeFrameCss } from "../lib/frameDesigns";
 import { resolveFrameImageSrc } from "../lib/frameImages";
 import { boxesOverlap } from "../lib/groups";
@@ -881,15 +881,22 @@ function SlideBase({
                 {...handlers("title")}
                 style={boxStyle("title", { position: "absolute" })}
               >
-                {/* the plate's wrapper hugs the glyphs (fit-content), not the
-                    title's whole room — so the plate is a chip around the text
-                    itself and can never run under the brand line or the badge.
-                    The auto margins keep the hug faithful to the box's align. */}
+                {/* The built-in plate uses the title element's stable frame,
+                    rather than a fit-content wrapper around the glyphs. This
+                    keeps its width and height fixed when the title font size
+                    changes, while also giving the default plate a broader
+                    horizontal footprint. */}
                 <div
                   style={{
                     position: "relative",
                     padding: css.padding,
-                    width: "fit-content",
+                    boxSizing: "border-box",
+                    width: header.showBanner && bset.shape !== "none" ? "100%" : "fit-content",
+                    ...(header.showBanner && bset.shape !== "none" && bset.size?.h === undefined
+                      ? { height: BANNER_AUTO_FRAME_HEIGHT }
+                      : {}),
+                    display: header.showBanner && bset.shape !== "none" ? "flex" : undefined,
+                    alignItems: header.showBanner && bset.shape !== "none" ? "center" : undefined,
                     ...(L.title.align === "left"
                       ? { marginRight: "auto" }
                       : L.title.align === "right"
@@ -911,6 +918,7 @@ function SlideBase({
                         fontWeight: 800,
                         lineHeight: 1.25,
                         whiteSpace: "nowrap",
+                        width: header.showBanner && bset.shape !== "none" ? "100%" : undefined,
                         ...css.text,
                       }),
                       // the text's own nudge: the banner behind it stays put

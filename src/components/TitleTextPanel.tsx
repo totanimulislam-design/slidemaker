@@ -1,5 +1,5 @@
 import type { Box, DeckHeader, ElementId, ThemeSettings } from "../lib/types";
-import { DEFAULT_BANNER } from "../lib/types";
+import { BANNER_AUTO_FRAME_HEIGHT, DEFAULT_BANNER } from "../lib/types";
 import { TEXT_GRADIENT_PRESETS, bannerCss } from "../lib/banner";
 import { boxStack, clearBoxFont, elementInk, setElementInk } from "../lib/boxFonts";
 import GradientEditor from "./GradientEditor";
@@ -39,7 +39,18 @@ export default function TitleTextPanel({ theme, header, setTheme, setHeader, pat
       {/* --------------------------------- live preview ---------------------- */}
       <div className="overflow-hidden rounded-xl border border-white/10" style={{ background: theme.board }}>
         <div className="flex items-center justify-center px-6 py-7">
-          <div style={{ position: "relative", padding: css.padding, width: "fit-content", margin: "0 auto" }}>
+          <div
+            style={{
+              position: "relative",
+              padding: css.padding,
+              boxSizing: "border-box",
+              width: header.showBanner && b.shape !== "none" ? "min(100%, 320px)" : "fit-content",
+              ...(header.showBanner && b.shape !== "none" && b.size?.h === undefined ? { height: BANNER_AUTO_FRAME_HEIGHT } : {}),
+              display: header.showBanner && b.shape !== "none" ? "flex" : undefined,
+              alignItems: header.showBanner && b.shape !== "none" ? "center" : undefined,
+              margin: "0 auto",
+            }}
+          >
             {header.showBanner && css.halo && <div style={css.halo} />}
             {header.showBanner && <div className={b.shimmer ? "banner-shimmer" : undefined} style={css.box} />}
             {header.showBanner && css.border && <div style={css.border} />}
@@ -50,6 +61,7 @@ export default function TitleTextPanel({ theme, header, setTheme, setHeader, pat
                 fontSize: Math.round(size * 0.56),
                 fontWeight: 800,
                 whiteSpace: "nowrap",
+                width: header.showBanner && b.shape !== "none" ? "100%" : undefined,
                 lineHeight: 1.25,
                 ...css.text,
               }}
