@@ -881,7 +881,22 @@ function SlideBase({
                 {...handlers("title")}
                 style={boxStyle("title", { position: "absolute" })}
               >
-                <div style={{ position: "relative", padding: css.padding }}>
+                {/* the plate's wrapper hugs the glyphs (fit-content), not the
+                    title's whole room — so the plate is a chip around the text
+                    itself and can never run under the brand line or the badge.
+                    The auto margins keep the hug faithful to the box's align. */}
+                <div
+                  style={{
+                    position: "relative",
+                    padding: css.padding,
+                    width: "fit-content",
+                    ...(L.title.align === "left"
+                      ? { marginRight: "auto" }
+                      : L.title.align === "right"
+                        ? { marginLeft: "auto" }
+                        : { margin: "0 auto" }),
+                  }}
+                >
                   {header.showBanner && css.halo && <div style={css.halo} />}
                   {/* the plate's body; its own outline rides a second layer under the text */}
                   {header.showBanner && (
