@@ -40,6 +40,8 @@ import type { NumberStyle } from "./numberStyles";
 import type { OptionBulletShape, OptionBulletTreatment } from "./optionBulletShapes";
 import type { OptionStyle } from "./optionStyles";
 import {
+  BANNER_PAD_X,
+  BANNER_PAD_Y,
   cloneBanner,
   cloneBadgePlate,
   cloneFrame,
@@ -266,7 +268,7 @@ const BASE_KIT: Kit = {
   bannerHalo: 0,
   bannerBorder: false,
   bannerBorderWidth: 2,
-  bannerPadY: 26,
+  bannerPadY: BANNER_PAD_Y,
   titleSize: 54,
   titleWeight: 700,
   titleCase: false,
@@ -405,7 +407,7 @@ const FAMILY_KIT: Record<DesignFamilyId, Partial<Kit>> = {
     bannerGradient: false,
     bannerGlow: 0,
     bannerRadius: 4,
-    bannerPadY: 18,
+    bannerPadY: 10,
     titleSize: 48,
     titleFamily: "Roboto Condensed",
     titleCase: true,
@@ -879,7 +881,8 @@ function themeOf(p: Palette, k: Kit): Partial<ThemeSettings> {
     opacity: 1,
     glow: k.bannerGlow,
     halo: k.bannerHalo,
-    padX: 6,
+    // the plate sits as close to the heading as the plate's own default does
+    padX: BANNER_PAD_X,
     padY: k.bannerPadY,
     radius: k.bannerRadius,
     // a design is the plate's WHOLE look: the outline names every one of its
