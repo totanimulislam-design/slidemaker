@@ -445,8 +445,64 @@ export default function ShapeLayer({
     }
 
     if (g.kind === "resize") {
-      let { x0: x, y0: y, w0: w, h0: h } = g;
       const hnd = g.handle;
+      const me = shapes.find((x) => x.id === g.id);
+      const rot = me?.rot ?? 0;
+
+      // A rotated shape resizes along its own (unrotated) axes: the handles sit
+      // on the rotated selection frame, so raw board-axis deltas would grow the
+      // box sideways and the handle under the pointer would leave it.
+      if (rot !== 0) {
+        const rad = (rot * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const w0px = (g.w0 / 100) * b.width;
+        const h0px = (g.h0 / 100) * b.height;
+        // centre of the box as the drag started, in screen px
+        const cx = b.left + ((g.x0 + g.w0 / 2) / 100) * b.width;
+        const cy = b.top + ((g.y0 + g.h0 / 2) / 100) * b.height;
+        // pointer relative to that centre, rotated into the shape's local frame
+        const px = e.clientX - cx;
+        const py = e.clientY - cy;
+        const lx = px * cos + py * sin;
+        const ly = -px * sin + py * cos;
+        // +1 = the east/south edge moves, -1 = the west/north edge
+        const sx = hnd.includes("e") ? 1 : hnd.includes("w") ? -1 : 0;
+        const sy = hnd.includes("s") ? 1 : hnd.includes("n") ? -1 : 0;
+        let w = sx !== 0 ? ((sx * lx + w0px / 2) / b.width) * 100 : g.w0;
+        let h = sy !== 0 ? ((sy * ly + h0px / 2) / b.height) * 100 : g.h0;
+
+        // corner handles keep the aspect ratio: always for images (Shift frees
+        // them), only with Shift for other shapes
+        const keepRatio = hnd.length === 2 && (me?.kind === "image" ? !e.shiftKey : e.shiftKey);
+        if (keepRatio) {
+          const byW = Math.abs(w - g.w0) >= Math.abs(h - g.h0) * g.ratio;
+          if (byW) h = w / g.ratio;
+          else w = h * g.ratio;
+        }
+
+        // never collapse; the opposite edge(s) stay anchored, so a clamped size
+        // simply holds at that edge — no x/y rewrite is needed
+        w = Math.max(1, w);
+        h = Math.max(0.3, h);
+
+        // new centre = old centre + half the size change, in the local frame:
+        // the opposite edge(s) never move, and the dragged edge lands under the
+        // pointer
+        const ux = (sx * (w - g.w0) * b.width) / 200;
+        const uy = (sy * (h - g.h0) * b.height) / 200;
+        const ncx = cx + ux * cos - uy * sin;
+        const ncy = cy + ux * sin + uy * cos;
+        onChange?.(g.id, {
+          x: r1(((ncx - b.left) / b.width) * 100 - w / 2),
+          y: r1(((ncy - b.top) / b.height) * 100 - h / 2),
+          w: r1(w),
+          h: r1(h),
+        });
+        return;
+      }
+
+      let { x0: x, y0: y, w0: w, h0: h } = g;
 
       if (hnd.includes("e")) w = g.w0 + dx;
       if (hnd.includes("s")) h = g.h0 + dy;
@@ -461,7 +517,6 @@ export default function ShapeLayer({
 
       // corner handles keep the aspect ratio: always for images (Shift frees
       // them), only with Shift for other shapes
-      const me = shapes.find((x) => x.id === g.id);
       const keepRatio = hnd.length === 2 && (me?.kind === "image" ? !e.shiftKey : e.shiftKey);
       if (keepRatio) {
         const byW = Math.abs(w - g.w0) >= Math.abs(h - g.h0) * g.ratio;

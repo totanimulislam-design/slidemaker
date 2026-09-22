@@ -485,6 +485,89 @@ test("resize handle: a real drag still resizes", () => {
   );
 });
 
+test("rotated shape: resize follows the shape's own axes", () => {
+  // give the shape a real rotation first, the same way a user would
+  selectShape(SHAPE.id);
+  const rh = rotateHandle();
+  if (!rh) {
+    record("rotated shape exposes a rotate handle", false, "no rotate handle");
+    return;
+  }
+  const rc = centre(rh);
+  down(rh, rc);
+  held(asWin, { x: rc.x + 140, y: rc.y + 120 });
+  up(asWin, { x: rc.x + 140, y: rc.y + 120 });
+  const rot = at(SHAPE.id).rot;
+  if (rot === 0) {
+    record("rotated shape: rotation was applied", false, "rotate drag had no effect");
+    return;
+  }
+  clearWrites();
+
+  // the resize must happen in the shape's LOCAL frame: drag "se" along the
+  // local +x/+y diagonal (+64px × +96px in local units → +5% × +13.33%)
+  const s0 = { ...at(SHAPE.id) };
+  const B = { left: 100, top: 50, width: 1280, height: 720 }; // the test board (dom-env)
+  const rad = (rot * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const c0 = { x: B.left + ((s0.x + s0.w / 2) / 100) * B.width, y: B.top + ((s0.y + s0.h / 2) / 100) * B.height };
+  const w0 = (s0.w / 100) * B.width;
+  const h0 = (s0.h / 100) * B.height;
+  // where the se handle really sits on screen — it lives on the rotated frame
+  const se = { x: c0.x + (w0 / 2) * cos - (h0 / 2) * sin, y: c0.y + (w0 / 2) * sin + (h0 / 2) * cos };
+  // that local +64/+96 move, expressed in board space
+  const d = { x: 64 * cos - 96 * sin, y: 64 * sin + 96 * cos };
+  const h = shapeHandle("se");
+  if (!h) {
+    record("rotated shape exposes the se handle", false, "no se handle");
+    return;
+  }
+  down(h, { x: se.x, y: se.y });
+  held(asWin, { x: se.x + d.x / 2, y: se.y + d.y / 2 });
+  held(asWin, { x: se.x + d.x, y: se.y + d.y });
+  up(asWin, { x: se.x + d.x, y: se.y + d.y });
+  const after = at(SHAPE.id);
+  const w1 = w0 + 64; // local px
+  const h1 = h0 + 96;
+  const w1p = (w1 / B.width) * 100; // board %
+  const h1p = (h1 / B.height) * 100;
+  const nc = {
+    x: c0.x + ((w1 - w0) / 2) * cos - ((h1 - h0) / 2) * sin,
+    y: c0.y + ((w1 - w0) / 2) * sin + ((h1 - h0) / 2) * cos,
+  };
+  const ex = ((nc.x - B.left) / B.width) * 100 - w1p / 2;
+  const ey = ((nc.y - B.top) / B.height) * 100 - h1p / 2;
+  record(
+    "size grew along the shape's local axes",
+    shapeWrites() >= 2 && Math.abs(after.w - w1p) < 0.2 && Math.abs(after.h - h1p) < 0.2,
+    `${s0.w}×${s0.h} → ${after.w}×${after.h} (expected ≈${w1p.toFixed(2)}×${h1p.toFixed(2)})`,
+  );
+  record(
+    "box position kept the opposite corner in place",
+    Math.abs(after.x - ex) < 0.25 && Math.abs(after.y - ey) < 0.25,
+    `${s0.x},${s0.y} → ${after.x},${after.y} (expected ≈${ex.toFixed(2)},${ey.toFixed(2)})`,
+  );
+  // the dragged handle must land under the pointer…
+  const ac = { x: B.left + ((after.x + after.w / 2) / 100) * B.width, y: B.top + ((after.y + after.h / 2) / 100) * B.height };
+  const aw = (after.w / 100) * B.width;
+  const ah = (after.h / 100) * B.height;
+  const seNew = { x: ac.x + (aw / 2) * cos - (ah / 2) * sin, y: ac.y + (aw / 2) * sin + (ah / 2) * cos };
+  record(
+    "dragged handle tracks the pointer",
+    Math.abs(seNew.x - (se.x + d.x)) < 3 && Math.abs(seNew.y - (se.y + d.y)) < 3,
+    `handle at ${seNew.x.toFixed(1)},${seNew.y.toFixed(1)} pointer at ${(se.x + d.x).toFixed(1)},${(se.y + d.y).toFixed(1)}`,
+  );
+  // …and the opposite (nw) corner must not move at all
+  const nw0 = { x: c0.x - (w0 / 2) * cos + (h0 / 2) * sin, y: c0.y - (w0 / 2) * sin - (h0 / 2) * cos };
+  const nwNew = { x: ac.x - (aw / 2) * cos + (ah / 2) * sin, y: ac.y - (aw / 2) * sin - (ah / 2) * cos };
+  record(
+    "opposite corner did not move",
+    Math.abs(nwNew.x - nw0.x) < 3 && Math.abs(nwNew.y - nw0.y) < 3,
+    `nw ${nw0.x.toFixed(1)},${nw0.y.toFixed(1)} → ${nwNew.x.toFixed(1)},${nwNew.y.toFixed(1)}`,
+  );
+});
+
 test("rotate handle: click keeps rotation, drag rotates", () => {
   selectShape(SHAPE.id);
   const rot = rotateHandle();
