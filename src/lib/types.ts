@@ -462,7 +462,7 @@ export interface BannerSettings {
  * size. The title plate is laid out against the title element's own box (not
  * the glyphs), so changing the title font cannot resize the built-in plate.
  */
-export const BANNER_PAD_X = 10;
+export const BANNER_PAD_X = 7;
 export const BANNER_PAD_Y = 8;
 
 /**
