@@ -52,6 +52,7 @@ export default function TitleTextPanel({ theme, header, setTheme, setHeader, pat
             }}
           >
             {header.showBanner && css.halo && <div style={css.halo} />}
+            {header.showBanner && css.layers.map((l, i) => <div key={`banner-layer-${i}`} data-banner-layer={i} style={l} />)}
             {header.showBanner && <div className={b.shimmer ? "banner-shimmer" : undefined} style={css.box} />}
             {header.showBanner && css.border && <div style={css.border} />}
             <div

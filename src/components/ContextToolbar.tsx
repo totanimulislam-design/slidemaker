@@ -271,6 +271,30 @@ export function mergedLinesFor(
   return lines.some((id) => MERGED_LINE[id].element === element) ? lines : null;
 }
 
+/**
+ * The stylish silhouettes as marks — the same cut the plate wears on the board,
+ * drawn in the 18 × 16 box the toolbar's icon lives in.
+ */
+const SHAPE_MARK_POLY: Partial<Record<BannerShape, string>> = {
+  hex: "1.6,8 4.8,3.4 13.2,3.4 16.4,8 13.2,12.6 4.8,12.6",
+  notch: "4.4,3.4 16.4,3.4 16.4,9.8 13.6,12.6 1.6,12.6 1.6,6.2",
+  chevron: "1.6,3.4 12.4,3.4 16.4,8 12.4,12.6 1.6,12.6",
+  swallow: "1.6,3.4 16.4,3.4 13,8 16.4,12.6 1.6,12.6",
+  slant: "5,3.4 16.4,3.4 13,12.6 1.6,12.6",
+};
+
+/** the tab and the arch: rounded on top, flat along the bottom */
+const SHAPE_MARK_PATH: Partial<Record<BannerShape, string>> = {
+  tab: "M1.6 12.6 V6.2 A2.8 2.8 0 0 1 4.4 3.4 H13.6 A2.8 2.8 0 0 1 16.4 6.2 V12.6 Z",
+  arch: "M1.6 12.6 V8 A7.4 7.4 0 0 1 16.4 8 V12.6 Z",
+};
+
+/** the multilayer silhouettes: the plate plus the layers peeking out behind it */
+const SHAPE_MARK_LAYERS: BannerShape[] = ["stack", "frame", "accent", "offsetLine", "longShadow", "gradStack"];
+
+/** the multilayer gradient silhouettes: one plate, several stacked paints */
+const SHAPE_MARK_GRADIENT: BannerShape[] = ["sheen", "split", "gloss", "stripes"];
+
 /** the title plate as a little mark — its current silhouette, worn by the bar */
 function ShapeGlyph({ shape }: { shape: BannerShape }) {
   return (
@@ -289,6 +313,36 @@ function ShapeGlyph({ shape }: { shape: BannerShape }) {
         </>
       ) : shape === "underline" ? (
         <rect x="1.6" y="10.4" width="14.8" height="2.8" rx="1.4" fill="currentColor" />
+      ) : SHAPE_MARK_POLY[shape] ? (
+        <polygon points={SHAPE_MARK_POLY[shape]} fill="currentColor" fillOpacity="0.24" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      ) : SHAPE_MARK_PATH[shape] ? (
+        <path d={SHAPE_MARK_PATH[shape]} fill="currentColor" fillOpacity="0.24" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      ) : SHAPE_MARK_LAYERS.includes(shape) ? (
+        <>
+          {/* the layers behind, then the plate itself on top */}
+          <rect x="4.4" y="5.6" width="12" height="7.6" rx="2" fill="currentColor" fillOpacity="0.16" />
+          <rect x="3" y="4.5" width="12" height="7.6" rx="2" fill="currentColor" fillOpacity="0.28" />
+          <rect x="1.6" y="3.4" width="12" height="7.6" rx="2" fill="currentColor" fillOpacity="0.5" stroke="currentColor" strokeWidth="1.2" />
+          {shape === "accent" ? <rect x="1.6" y="3.4" width="3.2" height="7.6" rx="2" fill="currentColor" /> : null}
+        </>
+      ) : SHAPE_MARK_GRADIENT.includes(shape) ? (
+        <>
+          <rect x="1.6" y="3.4" width="14.8" height="9.2" rx="2.8" fill="currentColor" fillOpacity="0.24" stroke="currentColor" strokeWidth="1.4" />
+          {/* the second paint, laid over the first — the stack the plate wears */}
+          <path
+            d={
+              shape === "sheen"
+                ? "M6.4 3.6 3.4 12.4h2.6l3-8.8z"
+                : shape === "split"
+                  ? "M9 3.6v8.8h5.4a2 2 0 0 0 2-2V5.6a2 2 0 0 0-2-2z"
+                  : shape === "gloss"
+                    ? "M3.4 4.4h11.2v2.6H3.4z"
+                    : "M3.6 3.6h1.6l-2 8.8H1.6zM8 3.6h1.6l-2 8.8H6zM12.4 3.6H14l-2 8.8h-1.6z"
+            }
+            fill="currentColor"
+            fillOpacity="0.55"
+          />
+        </>
       ) : (
         <rect
           x="1.6"
@@ -1195,8 +1249,11 @@ export default function ContextToolbar(p: Props) {
    * The title background line — one button per channel, in the order a plate is
    * dressed:
    *
-   *   Design presets   thirty-two complete looks, painted as they will be
-   *   Shape            the silhouettes, as pictures
+   *   Design presets   fifty-one complete looks in ten groups, painted as
+   *                    they will be — the last three groups are the shape
+   *                    styles: Stylish shapes · Multilayer shapes ·
+   *                    Multilayer gradient
+   *   Shape            the silhouettes in five families, as pictures
    *   Effects          softness · halo · shimmer
    *   Fill             the body's paint: solid or gradient
    *   Border           the outline's paint

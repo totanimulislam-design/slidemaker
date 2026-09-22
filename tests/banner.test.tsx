@@ -68,7 +68,14 @@ const plateLine = () => titleBox()?.querySelector<HTMLElement>("[data-banner-lin
 const glyphs = () =>
   Array.from(titleBox()?.querySelectorAll<HTMLElement>("div") ?? []).find((d) => !!d.style.fontSize) ?? null;
 const halo = () =>
-  Array.from(titleBox()?.querySelectorAll<HTMLElement>("div") ?? []).find((d) => !!d.style.filter) ?? null;
+  Array.from(titleBox()?.querySelectorAll<HTMLElement>("div") ?? []).find((d) => !!d.style.filter && !d.hasAttribute("data-banner-layer")) ?? null;
+/**
+ * The plate's own extra layers — the multilayer silhouettes paint one or two
+ * plates of their own *behind* the body, each on a div of its own.
+ */
+const plateLayers = () => Array.from(titleBox()?.querySelectorAll<HTMLElement>("[data-banner-layer]") ?? []);
+/** how many paints a background string stacks, one per `…-gradient(` */
+const paints = (s: string) => (s.match(/gradient\(/g) ?? []).length;
 
 const styleOf = (el: HTMLElement | null) => el?.getAttribute("style") ?? "";
 
@@ -194,6 +201,41 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     pass: plate()?.style.width === "630px" && box(plate()?.style.left ?? "", "calc(50% + 0px - 315px)", "calc(50% - 315px)"),
     detail: `w ${plate()?.style.width ?? ""} · left ${plate()?.style.left ?? ""}`,
   });
+  /* ---- the shape styles: three groups of their own at the end of the card --- */
+  const SHAPE_STYLE_GROUPS = ["Stylish shapes", "Multilayer shapes", "Multilayer gradient"];
+  out.push({
+    name: "the gallery is filed in groups, the last three being the shape styles — Stylish shapes · Multilayer shapes · Multilayer gradient",
+    pass:
+      SHAPE_STYLE_GROUPS.every((g) => !!pop()?.querySelector(`[data-banner-preset-group="${g}"]`)) &&
+      SHAPE_STYLE_GROUPS.every((g) => (pop()?.querySelectorAll(`[data-banner-preset-group="${g}"] button[aria-label^="Banner preset: "]`)?.length ?? 0) >= 5) &&
+      presetTiles().length >= 45,
+    detail: `${presetTiles().length} presets · ${pop()?.querySelectorAll("[data-banner-preset-group]").length ?? 0} groups · ${SHAPE_STYLE_GROUPS.map((g) => `${g.split(" ")[0]} ${pop()?.querySelectorAll(`[data-banner-preset-group="${g}"] button`)?.length ?? 0}`).join(" / ")}`,
+  });
+  click(popButton("Banner preset: Gold double frame"));
+  out.push({
+    name: "a multilayer preset reaches the slide as layers of its own behind the plate — and still dresses the 630px chip",
+    pass:
+      plateLayers().length === 1 &&
+      styleOf(plateLayers()[0] ?? null).includes("scale(") &&
+      plate()?.style.width === "630px" &&
+      (plate()?.style.boxShadow ?? "").includes("inset"),
+    detail: `${plateLayers().length} layer · ${plateLayers()[0]?.style.transform ?? ""} · inset ${!!(plate()?.style.boxShadow ?? "").includes("inset")}`,
+  });
+  click(popButton("Banner preset: Sheen royal"));
+  out.push({
+    name: "a multilayer gradient preset stacks two paints on the one body — a sheen over the look's own gradient",
+    pass: paints(plate()?.style.background ?? "") === 2 && (plate()?.style.background ?? "").includes("115deg"),
+    detail: (plate()?.style.background ?? "").slice(0, 58),
+  });
+  // back to the pill the rest of the suite dresses — and the outline back off,
+  // since the multilayer look above brought one with it and the Border card's
+  // own test below switches the line on from off
+  click(popButton("Banner preset: Royal blue pill"));
+  closePop();
+  openCard("Banner border");
+  click(
+    Array.from(pop()?.querySelectorAll<HTMLElement>("button") ?? []).find((b) => (b.textContent ?? "").includes("Outline the plate")),
+  );
   closePop();
 
   /* ------------------------------- shape ----------------------------------- */
@@ -202,9 +244,18 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     name: "Shapes lists every silhouette as a picture, with the one in use marked",
     pass:
       pop()?.getAttribute("data-pop-panel") === "Banner shape" &&
-      (pop()?.querySelectorAll('[role="listbox"][aria-label="Banner shape"] [role="option"]').length ?? 0) === 7 &&
+      (pop()?.querySelectorAll('[role="listbox"][aria-label="Banner shape"] [role="option"]').length ?? 0) === 24 &&
       popButton("Banner shape: Pill")?.getAttribute("aria-selected") === "true",
     detail: String(pop()?.querySelectorAll('[role="listbox"][aria-label="Banner shape"] [role="option"]').length),
+  });
+  out.push({
+    name: "…filed in five families — Plates · Stylish shapes · Multilayer shapes · Multilayer gradient · Marks",
+    pass: ["Plates", "Stylish shapes", "Multilayer shapes", "Multilayer gradient", "Marks"].every((g) =>
+      (pop()?.textContent ?? "").includes(g),
+    ),
+    detail: ["Plates", "Stylish shapes", "Multilayer shapes", "Multilayer gradient", "Marks"]
+      .filter((g) => (pop()?.textContent ?? "").includes(g))
+      .join(" › "),
   });
   click(popButton("Banner shape: Rounded"));
   out.push({
@@ -218,7 +269,119 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     pass: (plate()?.style.clipPath ?? "").includes("16px") && !(plate()?.style.clipPath ?? "").includes("22px"),
     detail: plate()?.style.clipPath ?? "",
   });
+
+  /* ---- stylish shapes: one plate, cut to another silhouette --------------- */
+  click(popButton("Banner shape: Hexagon"));
+  out.push({
+    name: "a stylish silhouette cuts the plate to its own shape — the hexagon's tips, on the slide",
+    pass: (plate()?.style.clipPath ?? "").startsWith("polygon(0% 50%") && (plate()?.style.borderRadius ?? "") === "",
+    detail: plate()?.style.clipPath ?? "",
+  });
+  const hexCss = bannerCss({ ...DEFAULT_BANNER, shape: "hex", border: { enabled: true, color: "#ffffff", width: 2 } }, "#ffffff");
+  out.push({
+    name: "…and the outline's own layer wears the very same cut, so a border follows the tips instead of running off them",
+    pass: !!hexCss.border && hexCss.border.clipPath === hexCss.box.clipPath && !!hexCss.border.clipPath,
+    detail: String(hexCss.border?.clipPath ?? "").slice(0, 48),
+  });
+  const cutFamilies = ["Cut corners", "Chevron", "Swallowtail", "Slant"];
+  out.push({
+    name: "every cut silhouette brings its own polygon — cut corners · chevron · swallowtail · slant",
+    pass:
+      cutFamilies.every((label) => !!popButton(`Banner shape: ${label}`)) &&
+      (["notch", "chevron", "swallow", "slant"] as const).every(
+        (s) => (bannerCss({ ...DEFAULT_BANNER, shape: s }, "#ffffff").box.clipPath ?? "").startsWith("polygon("),
+      ),
+    detail: (["notch", "chevron", "swallow", "slant"] as const)
+      .map((s) => `${s} ${String(bannerCss({ ...DEFAULT_BANNER, shape: s }, "#ffffff").box.clipPath ?? "").slice(8, 26)}…`)
+      .join(" · "),
+  });
+  click(popButton("Banner shape: Tab"));
+  out.push({
+    name: "a tab rounds the top edge only — and an arch is a full half-round on top, flat along the bottom",
+    pass:
+      plate()?.style.borderRadius === "14px 14px 0 0" &&
+      bannerCss({ ...DEFAULT_BANNER, shape: "arch" }, "#ffffff").box.borderRadius === "999px 999px 0 0",
+    detail: `${plate()?.style.borderRadius ?? ""} · arch ${String(bannerCss({ ...DEFAULT_BANNER, shape: "arch" }, "#ffffff").box.borderRadius)}`,
+  });
+
+  /* ---- multilayer shapes: the plate plus painted plates of its own -------- */
+  click(popButton("Banner shape: Stack"));
+  out.push({
+    name: "a multilayer silhouette paints plates of its own on the slide — two layers behind the body",
+    pass:
+      plateLayers().length === 2 &&
+      plateLayers().every((l) => (l.style.transform ?? "").includes("translate(")) &&
+      plateLayers().every((l) => (l.style.background ?? "").length > 0),
+    detail: `${plateLayers().length} layers · ${plateLayers().map((l) => l.style.transform).join(" / ")}`,
+  });
+  out.push({
+    name: "…and they ride *behind* the body, so the plate's own paint and its outline still win",
+    pass: (() => {
+      const stack = Array.from(titleBox()?.querySelectorAll<HTMLElement>("[data-banner-layer], [data-banner-plate]") ?? []);
+      const body = stack.findIndex((el) => el.hasAttribute("data-banner-plate"));
+      return stack.length === 3 && body === stack.length - 1;
+    })(),
+    detail: `${plateLayers().length} layers then the body`,
+  });
+  const accentClip = String(bannerCss({ ...DEFAULT_BANNER, shape: "accent" }, "#ffffff").layers[0]?.clipPath ?? "");
+  out.push({
+    name: "the accent block is cut as a percentage of the plate, with its corner spelled in px — CSS a browser will not throw away",
+    pass: accentClip.startsWith("inset(0 84% 0 0 round ") && /round \d+(\.\d+)?px/.test(accentClip),
+    detail: accentClip,
+  });
+  out.push({
+    name: "each multilayer silhouette brings its own layers — stack · double frame · accent block · offset line · long shadow",
+    pass: (["stack", "frame", "accent", "offsetLine", "longShadow"] as const).every(
+      (s) => bannerCss({ ...DEFAULT_BANNER, shape: s }, "#ffffff").layers.length >= 1,
+    ),
+    detail: (["stack", "frame", "accent", "offsetLine", "longShadow"] as const)
+      .map((s) => `${s} ${bannerCss({ ...DEFAULT_BANNER, shape: s }, "#ffffff").layers.length}`)
+      .join(" · "),
+  });
+  out.push({
+    name: "the layers follow the shape's transparency and leave when the shape does",
+    pass:
+      bannerCss({ ...DEFAULT_BANNER, shape: "stack", opacity: 0.4 }, "#ffffff").layers.every((l) => l.opacity === 0.4) &&
+      bannerCss({ ...DEFAULT_BANNER, shape: "stack" }, "#ffffff").layers.length ===
+        bannerCss({ ...DEFAULT_BANNER, shape: "none" }, "#ffffff").layers.length + 2 &&
+      bannerCss({ ...DEFAULT_BANNER, shape: "none" }, "#ffffff").layers.length === 0,
+    detail: `opacity 0.4 on every layer · none paints 0 layers`,
+  });
+
+  /* ---- multilayer gradient: one plate, several stacked paints -------------- */
+  click(popButton("Banner shape: Sheen"));
+  out.push({
+    name: "a multilayer gradient stacks a second paint on the one body — a band of light over the deck's own gradient",
+    pass: paints(plate()?.style.background ?? "") === 2 && (plate()?.style.background ?? "").includes("115deg"),
+    detail: (plate()?.style.background ?? "").slice(0, 58),
+  });
+  // the deck's own gradient switched on, so the body's paint is a gradient the
+  // second layer can be stacked over
+  const gradPlate = { ...DEFAULT_BANNER, gradient: { ...DEFAULT_BANNER.gradient, enabled: true } };
+  out.push({
+    name: "each gradient layer brings its own second paint — sheen · split · gloss · stripes",
+    pass: (["sheen", "split", "gloss", "stripes"] as const).every(
+      (s) => paints(String(bannerCss({ ...gradPlate, shape: s }, "#ffffff").box.background ?? "")) === 2,
+    ),
+    detail: (["sheen", "split", "gloss", "stripes"] as const)
+      .map((s) => `${s} ${paints(String(bannerCss({ ...gradPlate, shape: s }, "#ffffff").box.background ?? ""))} paints`)
+      .join(" · "),
+  });
+  click(popButton("Banner shape: Stacked"));
+  out.push({
+    name: "the stacked gradient plate paints three plates, each wearing a gradient of its own",
+    pass:
+      plateLayers().length === 2 &&
+      plateLayers().every((l) => (l.style.background ?? "").includes("linear-gradient(")) &&
+      paints(plate()?.style.background ?? "") === 1,
+    detail: `${plateLayers().length} gradient layers under a gradient body`,
+  });
   click(popButton("Banner shape: Rounded"));
+  out.push({
+    name: "back to a single-body silhouette and the extra layers are gone",
+    pass: plateLayers().length === 0 && paints(plate()?.style.background ?? "") === 1,
+    detail: `${plateLayers().length} layers`,
+  });
   closePop();
 
   /* ------------------------------ effects ---------------------------------- */
