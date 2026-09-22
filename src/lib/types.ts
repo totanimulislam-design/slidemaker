@@ -475,6 +475,14 @@ export const BANNER_AUTO_FRAME_HEIGHT = 72;
 /** the plate's own default corner radius, matched to its tighter box */
 export const BANNER_RADIUS = 14;
 
+/**
+ * The title background shape's width, in px of the 1280 × 720 stage. The plate
+ * paints at exactly this box, centred on the heading — free of the title text's
+ * own width, so the plate keeps its size whatever the heading says or which
+ * font it wears. Height stays automatic: the 72 px line frame plus its padding.
+ */
+export const BANNER_WIDTH = 630;
+
 export const DEFAULT_BANNER: BannerSettings = {
   shape: "glow",
   color: "#1f5fd0",
@@ -493,6 +501,9 @@ export const DEFAULT_BANNER: BannerSettings = {
   padX: BANNER_PAD_X,
   padY: BANNER_PAD_Y,
   radius: BANNER_RADIUS,
+  // the plate's width is fixed from the start (see BANNER_WIDTH); only the
+  // height still grows with the heading's line
+  size: { w: BANNER_WIDTH },
   border: { enabled: false, color: "#ffd633", width: 2, style: "solid", opacity: 1 },
   textGradient: {
     enabled: false,
