@@ -557,8 +557,20 @@ export type BannerBorderStyle = "solid" | "dashed" | "dotted" | "double" | "none
 
 /* ------------------------------------- the Effects card of the plate ------ */
 
-/** the eight shadows a plate can carry — one at a time, dressed by the card */
-export type BannerShadowKind = "drop" | "soft" | "hard" | "long" | "inner" | "floating" | "offset" | "colored";
+/** the twelve shadows a plate can carry — one at a time, dressed by the card */
+export type BannerShadowKind =
+  | "drop"
+  | "soft"
+  | "hard"
+  | "long"
+  | "inner"
+  | "floating"
+  | "offset"
+  | "colored"
+  | "double"
+  | "surround"
+  | "layered"
+  | "cast";
 
 export interface BannerShadowFx {
   kind: BannerShadowKind;
@@ -575,8 +587,20 @@ export interface BannerShadowFx {
   color: string;
 }
 
-/** the eight lights a plate can carry — one at a time */
-export type BannerGlowKind = "outer" | "inner" | "neon" | "soft" | "highlight" | "reflection" | "shine" | "gloss";
+/** the twelve lights a plate can carry — one at a time */
+export type BannerGlowKind =
+  | "outer"
+  | "inner"
+  | "neon"
+  | "soft"
+  | "highlight"
+  | "reflection"
+  | "shine"
+  | "gloss"
+  | "backlight"
+  | "spotlight"
+  | "aurora"
+  | "rimLight";
 
 export interface BannerGlowFx {
   kind: BannerGlowKind;
@@ -585,7 +609,7 @@ export interface BannerGlowFx {
   color: string;
 }
 
-/** the nine depths a plate can wear — one at a time */
+/** the twelve depths a plate can wear — one at a time */
 export type BannerDepthKind =
   | "extrusion"
   | "bevel"
@@ -595,7 +619,10 @@ export type BannerDepthKind =
   | "raised"
   | "pressed"
   | "depth"
-  | "perspective";
+  | "perspective"
+  | "layered3d"
+  | "tilt"
+  | "pop";
 
 export interface BannerDepthFx {
   kind: BannerDepthKind;
@@ -605,7 +632,7 @@ export interface BannerDepthFx {
   angle: number;
 }
 
-/** the eight modern finishes a plate can wear — one at a time */
+/** the twelve modern finishes a plate can wear — one at a time */
 export type BannerModernKind =
   | "glass"
   | "frosted"
@@ -614,7 +641,11 @@ export type BannerModernKind =
   | "clearGlass"
   | "noise"
   | "softGradient"
-  | "mesh";
+  | "mesh"
+  | "holographic"
+  | "metallic"
+  | "duotone"
+  | "softUi";
 
 export interface BannerModernFx {
   kind: BannerModernKind;
@@ -651,7 +682,7 @@ export interface BannerShapeFx {
   flipV: boolean;
 }
 
-/** the ten decorations a plate can wear — one at a time */
+/** the fourteen decorations a plate can wear — one at a time */
 export type BannerDecorKind =
   | "innerHighlight"
   | "outerHighlight"
@@ -662,7 +693,11 @@ export type BannerDecorKind =
   | "edgeDarkening"
   | "vignette"
   | "texture"
-  | "pattern";
+  | "pattern"
+  | "dots"
+  | "grid"
+  | "stitch"
+  | "sunburst";
 
 export interface BannerDecorFx {
   kind: BannerDecorKind;

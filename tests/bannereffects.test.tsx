@@ -3,7 +3,7 @@
  *
  * The "Banner effects" button of the Title background line opens the plate's
  * Effects card: its own softness · halo · shimmer lead, and then one section
- * per effect group — Shadow Effects (eight shadows, each dressed by X · Y ·
+ * per effect group — Shadow Effects (twelve shadows, each dressed by X · Y ·
  * Blur · Spread · Opacity · Colour), Glow & Light, Depth / 3D, Modern Effects,
  * Shape Effects and Decorative Effects. One effect wears at a time in each
  * group ("None" takes it off); the shape's distortions stack. These tests walk
@@ -126,9 +126,9 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
 
   /* the shadow group's tiles, one per effect, plus the None that takes it off */
   out.push({
-    name: "Shadow Effects holds its eight shadows as tiles — Drop · Soft · Hard · Long · Inner · Floating · Offset · Colored",
+    name: "Shadow Effects holds its twelve shadows as tiles — Drop · Soft · Hard · Long · Inner · Floating · Offset · Colored · Double · Surround · Layered · Cast",
     pass:
-      ["Drop Shadow", "Soft Shadow", "Hard Shadow", "Long Shadow", "Inner Shadow", "Floating Shadow", "Offset Shadow", "Colored Shadow"]
+      ["Drop Shadow", "Soft Shadow", "Hard Shadow", "Long Shadow", "Inner Shadow", "Floating Shadow", "Offset Shadow", "Colored Shadow", "Double Shadow", "Surround Shadow", "Layered Shadows", "Cast Shadow"]
         .every((l) => !!popButton(`Banner shadow: ${l}`)) && !!popButton("Banner shadow: None"),
     detail: Array.from(pop()?.querySelectorAll('[data-banner-fx-group="shadow"] [role="option"]') ?? [])
       .map((b) => b.getAttribute("aria-label")?.replace("Banner shadow: ", ""))
@@ -202,6 +202,33 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     pass: shadowOf() === "12px 12px 0px 0px rgba(0, 0, 0, 0.7)",
     detail: shadowOf(),
   });
+  click(popButton("Banner shadow: Double Shadow"));
+  out.push({
+    name: "Double Shadow throws a hard copy on each of two opposite sides — X · Y walk both at once",
+    pass: shadowOf() === "10px 10px 0px 0px rgba(0, 0, 0, 0.6), -10px -10px 0px 0px rgba(0, 0, 0, 0.45)",
+    detail: shadowOf(),
+  });
+  click(popButton("Banner shadow: Surround Shadow"));
+  out.push({
+    name: "Surround Shadow falls evenly all around the plate",
+    pass: shadowOf() === "0px 0px 24px 8px rgba(0, 0, 0, 0.5)",
+    detail: shadowOf(),
+  });
+  click(popButton("Banner shadow: Layered Shadows"));
+  out.push({
+    name: "Layered Shadows stack three fall-offs, each one further and fainter",
+    pass: (shadowOf().match(/rgba\(/g) ?? []).length === 3,
+    detail: shadowOf(),
+  });
+  click(popButton("Banner shadow: Cast Shadow"));
+  out.push({
+    name: "Cast Shadow is thrown onto the board — a soft ellipse skewed away, on a layer of its own",
+    pass:
+      plateLayers().length === 1 &&
+      (plateLayers()[0]?.style.background ?? "").includes("radial-gradient") &&
+      (plateLayers()[0]?.style.transform ?? "").includes("skewX("),
+    detail: `${plateLayers().length} layer · ${(plateLayers()[0]?.style.transform ?? "").slice(0, 44)}`,
+  });
   click(popButton("Banner shadow: None"));
   out.push({
     name: "…and None takes the whole shadow off",
@@ -251,6 +278,36 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     pass: shadowOf() === "",
     detail: `before ${glowFull.slice(0, 40)} · after clean`,
   });
+  click(popButton("Banner glow: Backlight"));
+  out.push({
+    name: "Backlight blooms a strong light from behind the plate, on a layer of its own",
+    pass:
+      plateLayers().length === 1 &&
+      (plateLayers()[0]?.style.background ?? "").includes("radial-gradient") &&
+      (plateLayers()[0]?.style.transform ?? "").includes("scale("),
+    detail: `${plateLayers().length} layer · ${(plateLayers()[0]?.style.transform ?? "").slice(0, 24)}`,
+  });
+  click(popButton("Banner glow: Spotlight"));
+  out.push({
+    name: "Spotlight falls on the plate from above, as an overlay above the body",
+    pass: overlays().length === 1 && (overlays()[0]?.style.background ?? "").includes("radial-gradient"),
+    detail: (overlays()[0]?.style.background ?? "").slice(0, 48),
+  });
+  click(popButton("Banner glow: Aurora"));
+  out.push({
+    name: "Aurora shifts the light through several hues across the body",
+    pass:
+      (overlays()[0]?.style.background ?? "").includes("linear-gradient") &&
+      ((overlays()[0]?.style.background ?? "").match(/rgba\(/g) ?? []).length >= 4,
+    detail: (overlays()[0]?.style.background ?? "").slice(0, 52),
+  });
+  click(popButton("Banner glow: Rim Light"));
+  out.push({
+    name: "Rim Light hugs the edge with a bright hairline and a little bloom",
+    pass: shadowOf().startsWith("inset 0 0 0 1px") && (shadowOf().match(/rgba\(/g) ?? []).length === 2,
+    detail: shadowOf(),
+  });
+  click(popButton("Banner glow: None"));
 
   /* -------------------------------- depth / 3D ----------------------------- */
   click(popButton("Banner depth: Bevel"));
@@ -283,6 +340,24 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     pass:
       (plate()?.style.transform ?? "").includes("perspective(") && (plate()?.style.transform ?? "").includes("rotateX("),
     detail: plate()?.style.transform ?? "",
+  });
+  click(popButton("Banner depth: Layered 3D"));
+  out.push({
+    name: "Layered 3D steps three slabs out behind the body",
+    pass: plateLayers().length === 3 && plateLayers().every((l) => (l.style.transform ?? "").includes("translateY(")),
+    detail: `${plateLayers().length} slabs`,
+  });
+  click(popButton("Banner depth: Tilt"));
+  out.push({
+    name: "Tilt tips the plate on its vertical axis",
+    pass: (plate()?.style.transform ?? "").includes("perspective(") && (plate()?.style.transform ?? "").includes("rotateY("),
+    detail: plate()?.style.transform ?? "",
+  });
+  click(popButton("Banner depth: Pop Out"));
+  out.push({
+    name: "Pop Out lifts the plate toward the reader — a scale on the body, a soft lift below",
+    pass: (plate()?.style.transform ?? "").includes("scale(") && shadowOf().includes("rgba(0, 0, 0,"),
+    detail: `${plate()?.style.transform} · ${shadowOf().slice(0, 30)}`,
   });
   click(popButton("Banner depth: None"));
   out.push({
@@ -327,6 +402,33 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     pass: overlays().length === 0,
     detail: `${overlays().length} overlays`,
   });
+  click(popButton("Banner modern: Holographic"));
+  out.push({
+    name: "Holographic lays an iridescent sheen across the body",
+    pass: ((overlays()[0]?.style.background ?? "").match(/rgba\(/g) ?? []).length >= 5,
+    detail: (overlays()[0]?.style.background ?? "").slice(0, 52),
+  });
+  click(popButton("Banner modern: Metallic"));
+  out.push({
+    name: "Metallic brushes the body — fine bands under a chrome sheen",
+    pass:
+      (overlays()[0]?.style.background ?? "").includes("repeating-linear-gradient(90deg") &&
+      (overlays()[0]?.style.background ?? "").includes("linear-gradient(180deg"),
+    detail: (overlays()[0]?.style.background ?? "").slice(0, 52),
+  });
+  click(popButton("Banner modern: Duotone"));
+  out.push({
+    name: "Duotone splits the tint in two across one diagonal",
+    pass: (overlays()[0]?.style.background ?? "").includes("linear-gradient(120deg"),
+    detail: (overlays()[0]?.style.background ?? "").slice(0, 52),
+  });
+  click(popButton("Banner modern: Soft UI"));
+  out.push({
+    name: "Soft UI raises the card — a light shadow up-left, a dark one down-right",
+    pass: shadowOf().includes("rgba(255, 255, 255,") && shadowOf().includes("rgba(0, 0, 0,"),
+    detail: shadowOf(),
+  });
+  click(popButton("Banner modern: None"));
 
   /* ------------------------------ shape effects ---------------------------- */
   /* the factory deck wears the soft glow silhouette, whose edge the shape effects
@@ -446,6 +548,32 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
   out.push({
     name: "Pattern Overlay weaves a fine diagonal over the paint",
     pass: (overlays()[0]?.style.background ?? "").includes("repeating-linear-gradient(45deg"),
+    detail: (overlays()[0]?.style.background ?? "").slice(0, 52),
+  });
+  click(popButton("Banner decor: Polka Dots"));
+  out.push({
+    name: "Polka Dots scatter even round dots over the paint",
+    pass: (overlays()[0]?.style.background ?? "").includes("radial-gradient") && (overlays()[0]?.style.backgroundSize ?? "") !== "",
+    detail: `${(overlays()[0]?.style.background ?? "").slice(0, 40)} · ${overlays()[0]?.style.backgroundSize}`,
+  });
+  click(popButton("Banner decor: Grid Lines"));
+  out.push({
+    name: "Grid Lines weave a fine square grid over the paint",
+    pass:
+      (overlays()[0]?.style.background ?? "").includes("repeating-linear-gradient(0deg") &&
+      (overlays()[0]?.style.background ?? "").includes("repeating-linear-gradient(90deg"),
+    detail: (overlays()[0]?.style.background ?? "").slice(0, 52),
+  });
+  click(popButton("Banner decor: Stitched Edge"));
+  out.push({
+    name: "Stitched Edge runs a dashed stitch just inside the rim",
+    pass: (overlays()[0]?.style.outline ?? "").includes("dashed"),
+    detail: overlays()[0]?.style.outline ?? "",
+  });
+  click(popButton("Banner decor: Sunburst Rays"));
+  out.push({
+    name: "Sunburst Rays radiate fine rays from the middle of the plate",
+    pass: (overlays()[0]?.style.background ?? "").includes("repeating-conic-gradient"),
     detail: (overlays()[0]?.style.background ?? "").slice(0, 52),
   });
   click(popButton("Banner decor: None"));

@@ -19,6 +19,7 @@ import {
   type Gradient,
 } from "./types";
 import { shade, withAlpha } from "./color";
+import { rotateHue } from "./textEffects";
 
 /* ---------------------------------------------------- silhouette families */
 
@@ -782,7 +783,7 @@ export interface BannerEffectDef<K extends string> {
   hint: string;
 }
 
-/** the eight shadows the Effects card files under *Shadow Effects* */
+/** the twelve shadows the Effects card files under *Shadow Effects* */
 export const BANNER_SHADOW_EFFECTS: BannerEffectDef<BannerShadowKind>[] = [
   { kind: "drop", label: "Drop Shadow", hint: "A single shadow cast below the plate" },
   { kind: "soft", label: "Soft Shadow", hint: "A wide, low-contrast fall-off" },
@@ -792,6 +793,10 @@ export const BANNER_SHADOW_EFFECTS: BannerEffectDef<BannerShadowKind>[] = [
   { kind: "floating", label: "Floating Shadow", hint: "A ground shadow — the plate lifts off the board" },
   { kind: "offset", label: "Offset Shadow", hint: "A solid duplicate, stepped down and right" },
   { kind: "colored", label: "Colored Shadow", hint: "The shadow wears a colour of its own" },
+  { kind: "double", label: "Double Shadow", hint: "Two hard copies — one on each of two opposite sides" },
+  { kind: "surround", label: "Surround Shadow", hint: "An even, soft shadow all around the plate" },
+  { kind: "layered", label: "Layered Shadows", hint: "Three shadows stacked, each one further and fainter" },
+  { kind: "cast", label: "Cast Shadow", hint: "A shadow thrown onto the board, skewed away from the plate" },
 ];
 
 /** what each shadow kind starts from — the six controls walk from here */
@@ -804,9 +809,13 @@ export const BANNER_SHADOW_DEFAULTS: Record<BannerShadowKind, Omit<BannerShadowF
   floating: { x: 0, y: 24, blur: 36, spread: 12, opacity: 45, color: "#000000" },
   offset: { x: 12, y: 12, blur: 0, spread: 0, opacity: 70, color: "#000000" },
   colored: { x: 0, y: 10, blur: 28, spread: 0, opacity: 40, color: "#1f5fd0" },
+  double: { x: 10, y: 10, blur: 0, spread: 0, opacity: 60, color: "#000000" },
+  surround: { x: 0, y: 0, blur: 24, spread: 8, opacity: 50, color: "#000000" },
+  layered: { x: 0, y: 12, blur: 18, spread: 0, opacity: 45, color: "#000000" },
+  cast: { x: 14, y: 20, blur: 0, spread: 0, opacity: 45, color: "#000000" },
 };
 
-/** the eight lights under *Glow & Light* */
+/** the twelve lights under *Glow & Light* */
 export const BANNER_GLOW_EFFECTS: BannerEffectDef<BannerGlowKind>[] = [
   { kind: "outer", label: "Outer Glow", hint: "Light blooming round the plate's edge" },
   { kind: "inner", label: "Inner Glow", hint: "Light blooming from the plate's inside" },
@@ -816,11 +825,15 @@ export const BANNER_GLOW_EFFECTS: BannerEffectDef<BannerGlowKind>[] = [
   { kind: "reflection", label: "Light Reflection", hint: "A thin streak of light across the body" },
   { kind: "shine", label: "Shine", hint: "A broad sheen sweeping the body" },
   { kind: "gloss", label: "Gloss", hint: "The polished top half, hard edge and all" },
+  { kind: "backlight", label: "Backlight", hint: "A strong light rising from behind the plate" },
+  { kind: "spotlight", label: "Spotlight", hint: "A cone of light falling on the plate from above" },
+  { kind: "aurora", label: "Aurora", hint: "Soft light shifting through several hues" },
+  { kind: "rimLight", label: "Rim Light", hint: "A bright hairline hugging the plate's edge" },
 ];
 
 export const BANNER_GLOW_DEFAULT: Omit<BannerGlowFx, "kind"> = { intensity: 55, color: "#ffffff" };
 
-/** the nine depths under *Depth / 3D* */
+/** the twelve depths under *Depth / 3D* */
 export const BANNER_DEPTH_EFFECTS: BannerEffectDef<BannerDepthKind>[] = [
   { kind: "extrusion", label: "3D Extrusion", hint: "A slab standing straight behind the body" },
   { kind: "bevel", label: "Bevel", hint: "A lit edge and a shaded one" },
@@ -831,11 +844,14 @@ export const BANNER_DEPTH_EFFECTS: BannerEffectDef<BannerDepthKind>[] = [
   { kind: "pressed", label: "Pressed / Inset", hint: "Pushed in, shadowed inside" },
   { kind: "depth", label: "Depth", hint: "An extrusion run deep" },
   { kind: "perspective", label: "Perspective", hint: "The plate tipped back in space" },
+  { kind: "layered3d", label: "Layered 3D", hint: "Three slabs stepping out behind the body" },
+  { kind: "tilt", label: "Tilt", hint: "The plate tipped on its vertical axis" },
+  { kind: "pop", label: "Pop Out", hint: "The plate lifted toward the reader, a touch larger" },
 ];
 
 export const BANNER_DEPTH_DEFAULT: Omit<BannerDepthFx, "kind"> = { intensity: 50, angle: 0 };
 
-/** the eight finishes under *Modern Effects* */
+/** the twelve finishes under *Modern Effects* */
 export const BANNER_MODERN_EFFECTS: BannerEffectDef<BannerModernKind>[] = [
   { kind: "glass", label: "Glassmorphism", hint: "A translucent pane over the board" },
   { kind: "frosted", label: "Frosted Glass", hint: "A heavier frost, more blur" },
@@ -845,11 +861,15 @@ export const BANNER_MODERN_EFFECTS: BannerEffectDef<BannerModernKind>[] = [
   { kind: "noise", label: "Noise / Grain", hint: "Film grain laid over the body" },
   { kind: "softGradient", label: "Soft Gradient Overlay", hint: "Light to shade, diagonally" },
   { kind: "mesh", label: "Mesh Gradient", hint: "Colour blobs melted into the body" },
+  { kind: "holographic", label: "Holographic", hint: "An iridescent sheen shifting across the body" },
+  { kind: "metallic", label: "Metallic", hint: "Brushed metal — fine bands under a chrome sheen" },
+  { kind: "duotone", label: "Duotone", hint: "Two tones of the tint, split on one diagonal" },
+  { kind: "softUi", label: "Soft UI", hint: "The soft raised card — a light and a dark shadow" },
 ];
 
 export const BANNER_MODERN_DEFAULT: Omit<BannerModernFx, "kind"> = { intensity: 55, color: "#ffffff", blur: 8 };
 
-/** the ten decorations under *Decorative Effects* */
+/** the fourteen decorations under *Decorative Effects* */
 export const BANNER_DECOR_EFFECTS: BannerEffectDef<BannerDecorKind>[] = [
   { kind: "innerHighlight", label: "Inner Highlight", hint: "Light washing down from the top edge" },
   { kind: "outerHighlight", label: "Outer Highlight", hint: "A bright ring around the plate" },
@@ -861,6 +881,10 @@ export const BANNER_DECOR_EFFECTS: BannerEffectDef<BannerDecorKind>[] = [
   { kind: "vignette", label: "Vignette", hint: "The corners darken toward the middle" },
   { kind: "texture", label: "Texture Overlay", hint: "Grain laid over the paint" },
   { kind: "pattern", label: "Pattern Overlay", hint: "A fine diagonal weave" },
+  { kind: "dots", label: "Polka Dots", hint: "Even round dots scattered over the paint" },
+  { kind: "grid", label: "Grid Lines", hint: "A fine square grid over the paint" },
+  { kind: "stitch", label: "Stitched Edge", hint: "A dashed stitch running inside the rim" },
+  { kind: "sunburst", label: "Sunburst Rays", hint: "Fine rays radiating from the middle" },
 ];
 
 export const BANNER_DECOR_DEFAULT: Omit<BannerDecorFx, "kind"> = { intensity: 50, color: "#ffffff" };
@@ -980,6 +1004,14 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
     const i = Math.max(0, Math.min(100, fx.depth.intensity));
     transform += `perspective(${Math.round(900 - i * 5)}px) rotateX(${(i * 0.3).toFixed(1)}deg)`;
   }
+  if (fx.depth && fx.depth.kind === "tilt") {
+    const i = Math.max(0, Math.min(100, fx.depth.intensity));
+    transform += `perspective(${Math.round(900 - i * 5)}px) rotateY(${-(i * 0.25).toFixed(1)}deg)`;
+  }
+  if (fx.depth && fx.depth.kind === "pop") {
+    const i = Math.max(0, Math.min(100, fx.depth.intensity));
+    transform += `scale(${(1 + i * 0.0016).toFixed(3)})`;
+  }
   if (t.rotation) transform += ` rotate(${t.rotation}deg)`;
   if (t.skew) transform += ` skewX(${t.skew}deg)`;
   if (t.distortion) transform += ` scaleX(${(1 + t.distortion / 200).toFixed(3)})`;
@@ -1030,6 +1062,32 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
         break;
       case "offset":
         shadows.push(`${s.x}px ${s.y}px 0px ${s.spread}px ${c}`);
+        break;
+      // two hard copies on opposite sides — X · Y walk both at once
+      case "double":
+        shadows.push(
+          `${s.x}px ${s.y}px ${s.blur}px ${s.spread}px ${c}`,
+          `${-s.x}px ${-s.y}px ${s.blur}px ${s.spread}px ${withAlpha(s.color, Math.round(fxA(s.opacity) * 0.75 * 1000) / 1000)}`,
+        );
+        break;
+      // an even fall-off all round the plate — Blur is its reach, Spread its ring
+      case "surround":
+        shadows.push(`0px 0px ${s.blur}px ${s.spread}px ${c}`);
+        break;
+      // three fall-offs stacked on the same direction, each one further and fainter
+      case "layered": {
+        const seg = (k: number, o: number) =>
+          `${Math.round(s.x * k)}px ${Math.round(s.y * k)}px ${Math.round(s.blur * k)}px ${s.spread}px ${withAlpha(s.color, fxA(s.opacity) * o)}`;
+        shadows.push(seg(0.33, 0.45), seg(0.66, 0.68), seg(1, 0.9));
+        break;
+      }
+      // a shadow thrown onto the board — a soft ellipse, skewed away from the plate
+      case "cast":
+        backLayer({
+          background: `radial-gradient(ellipse at center, ${c} 0%, ${withAlpha(s.color, 0)} 72%)`,
+          borderRadius: 999,
+          transform: `${pre}translate(${Math.round(s.x * 0.5)}px, ${Math.max(4, Math.round(s.y * 0.6))}px) scaleY(0.45) skewX(-16deg)`,
+        });
         break;
       default:
         shadows.push(`${s.x}px ${s.y}px ${s.blur}px ${s.spread}px ${c}`);
@@ -1084,6 +1142,38 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
         overLayer({
           background: `linear-gradient(180deg, ${withAlpha(c, 0.25 + 0.6 * a)} 0%, ${withAlpha(c, 0.06 + 0.18 * a)} 46%, ${withAlpha(c, 0)} 47%)`,
         });
+        break;
+      // a strong light rising from BEHIND the plate — its own layer, scaled out
+      case "backlight":
+        backLayer({
+          background: `radial-gradient(ellipse at center, ${withAlpha(c, 0.22 + 0.55 * a)} 0%, ${withAlpha(c, 0)} 72%)`,
+          transform: `${pre}scale(${(1.1 + 0.16 * a).toFixed(3)})`,
+        });
+        break;
+      // a cone of light falling on the plate from above its top edge
+      case "spotlight":
+        overLayer({
+          background: `radial-gradient(ellipse 92% 84% at 50% -16%, ${withAlpha(c, 0.16 + 0.6 * a)} 0%, ${withAlpha(
+            c,
+            0.03 + 0.12 * a,
+          )} 52%, ${withAlpha(c, 0)} 72%)`,
+        });
+        break;
+      // soft light shifting through the colour's own neighbours round the wheel
+      case "aurora":
+        overLayer({
+          background: `linear-gradient(${100 + Math.round(i * 0.2)}deg, ${withAlpha(rotateHue(c, -40), 0.1 + 0.3 * a)} 0%, ${withAlpha(
+            c,
+            0.12 + 0.34 * a,
+          )} 34%, ${withAlpha(rotateHue(c, 45), 0.1 + 0.3 * a)} 66%, ${withAlpha(rotateHue(c, 100), 0.06 + 0.24 * a)} 100%)`,
+        });
+        break;
+      // a crisp bright hairline hugging the edge, with a little bloom behind it
+      case "rimLight":
+        shadows.push(
+          `inset 0 0 0 1px ${withAlpha(c, 0.35 + 0.6 * a)}`,
+          `0 0 ${Math.round(2 + i * 0.12)}px ${withAlpha(c, 0.2 + 0.5 * a)}`,
+        );
         break;
     }
   }
@@ -1164,6 +1254,35 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
       case "perspective":
         /* its paint is the transform, built above */
         break;
+      // three slabs stepping out behind the body, each a shade lighter as it nears
+      case "layered3d":
+        backLayer({
+          background: withAlpha(shade(base, -0.62), 0.34),
+          transform: `${pre}translateY(${(9 + i * 0.36).toFixed(1)}px)`,
+        });
+        backLayer({
+          background: withAlpha(shade(base, -0.46), 0.52),
+          transform: `${pre}translateY(${(6 + i * 0.24).toFixed(1)}px)`,
+        });
+        backLayer({
+          background: withAlpha(shade(base, -0.3), 0.72),
+          transform: `${pre}translateY(${(3 + i * 0.12).toFixed(1)}px)`,
+        });
+        shadows.push(`0 ${Math.round(3 + i * 0.14)}px ${Math.round(4 + i * 0.3)}px ${dark(0.2 + 0.38 * a)}`);
+        break;
+      case "tilt":
+        /* its turn is the transform, built above — the shadow sells the lift */
+        shadows.push(
+          `${Math.round(4 + i * 0.14)}px ${Math.round(5 + i * 0.16)}px ${Math.round(8 + i * 0.32)}px ${dark(0.22 + 0.4 * a)}`,
+        );
+        break;
+      case "pop":
+        /* its growth is the transform, built above — a soft double lift below */
+        shadows.push(
+          `0 ${Math.round(5 + i * 0.2)}px ${Math.round(12 + i * 0.5)}px ${dark(0.16 + 0.36 * a)}`,
+          `0 ${Math.round(2 + i * 0.08)}px ${Math.round(4 + i * 0.16)}px ${dark(0.14 + 0.3 * a)}`,
+        );
+        break;
     }
   }
 
@@ -1228,6 +1347,51 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
       case "mesh":
         overLayer({ background: meshBg(c, a) });
         break;
+      // an iridescent sheen — pink, cyan, gold and violet walking one diagonal
+      case "holographic":
+        overLayer({
+          background: `linear-gradient(115deg, ${withAlpha("#ff7ad9", 0.1 + 0.3 * a)} 0%, ${withAlpha(
+            "#7af0ff",
+            0.1 + 0.3 * a,
+          )} 28%, ${withAlpha("#fff3a0", 0.08 + 0.26 * a)} 52%, ${withAlpha("#b28bff", 0.1 + 0.3 * a)} 76%, ${withAlpha(
+            "#7af0ff",
+            0.08 + 0.24 * a,
+          )} 100%)`,
+        });
+        break;
+      // brushed metal — a chrome sheen over fine horizontal bands
+      case "metallic":
+        overLayer({
+          background: `linear-gradient(180deg, ${withAlpha("#ffffff", 0.28 + 0.4 * a)} 0%, ${withAlpha(
+            "#ffffff",
+            0.04,
+          )} 30%, ${withAlpha("#000000", 0.1 + 0.28 * a)} 50%, ${withAlpha("#ffffff", 0.14 + 0.3 * a)} 64%, ${withAlpha(
+            "#000000",
+            0.08 + 0.22 * a,
+          )} 100%), repeating-linear-gradient(90deg, ${withAlpha("#ffffff", 0.05 + 0.15 * a)} 0 1px, ${withAlpha(
+            "#000000",
+            0.04 + 0.12 * a,
+          )} 1px 2px, ${withAlpha("#ffffff", 0)} 2px 4px)`,
+        });
+        break;
+      // the tint's two tones — light and deep — split on one diagonal
+      case "duotone":
+        overLayer({
+          background: `linear-gradient(120deg, ${withAlpha(c, 0.22 + 0.48 * a)} 0%, ${withAlpha(c, 0.05 + 0.14 * a)} 48%, ${withAlpha(
+            shade(c, -0.5),
+            0.22 + 0.48 * a,
+          )} 100%)`,
+        });
+        break;
+      // the soft raised card — a light shadow up-left, a dark one down-right
+      case "softUi": {
+        const off = Math.max(2, Math.round(i * 0.12));
+        shadows.push(
+          `${-off}px ${-off}px ${off * 2}px ${withAlpha("#ffffff", 0.12 + 0.4 * a)}`,
+          `${off}px ${off}px ${off * 2}px ${withAlpha("#000000", 0.16 + 0.44 * a)}`,
+        );
+        break;
+      }
     }
   }
 
@@ -1282,6 +1446,38 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
         overLayer({
           background: `repeating-linear-gradient(45deg, ${withAlpha(c, 0.12 + 0.45 * a)} 0 2px, ${withAlpha(c, 0)} 2px 9px)`,
           opacity: shapeOpacity * (0.5 + 0.5 * a),
+        });
+        break;
+      // even round dots scattered over the paint
+      case "dots":
+        overLayer({
+          background: `radial-gradient(${withAlpha(c, 0.2 + 0.62 * a)} 1.4px, ${withAlpha(c, 0)} 1.6px)`,
+          backgroundSize: "12px 12px",
+        });
+        break;
+      // a fine square grid woven over the paint
+      case "grid":
+        overLayer({
+          background: `repeating-linear-gradient(0deg, ${withAlpha(c, 0.14 + 0.5 * a)} 0 1px, ${withAlpha(
+            c,
+            0,
+          )} 1px 14px), repeating-linear-gradient(90deg, ${withAlpha(c, 0.14 + 0.5 * a)} 0 1px, ${withAlpha(c, 0)} 1px 14px)`,
+        });
+        break;
+      // a dashed stitch running just inside the rim
+      case "stitch":
+        overLayer({
+          outline: `2px dashed ${withAlpha(c, 0.3 + 0.65 * a)}`,
+          outlineOffset: "-6px",
+        });
+        break;
+      // fine rays radiating from the middle of the plate
+      case "sunburst":
+        overLayer({
+          background: `repeating-conic-gradient(from 0deg at 50% 50%, ${withAlpha(c, 0.08 + 0.4 * a)} 0deg 8deg, ${withAlpha(
+            c,
+            0,
+          )} 8deg 16deg)`,
         });
         break;
     }
