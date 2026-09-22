@@ -50,6 +50,33 @@ export function plateRadius(b: BannerSettings): number | undefined {
   return undefined;
 }
 
+/**
+ * The glow's reach inside the plate's own box. The plate is a wide, flat chip,
+ * so the light is an oval a touch wider than it is tall — and because it is
+ * written in % of the plate, it keeps that proportion at any size.
+ */
+export const GLOW_ELLIPSE = "ellipse 56% 62% at 50% 50%";
+
+/**
+ * How deep the ribbon's ends are cut in, in px of the board. The plate is a
+ * tight chip now, so the notch is cut to match — and once the teacher has sized
+ * the plate by hand the cut follows the height instead of holding a fixed
+ * depth, so a short plate still reads as a ribbon and not as an arrow.
+ */
+export const RIBBON_NOTCH = 16;
+
+export function ribbonNotch(b: BannerSettings): number {
+  const h = b.size?.h;
+  if (typeof h !== "number" || !Number.isFinite(h)) return RIBBON_NOTCH;
+  return Math.max(6, Math.min(RIBBON_NOTCH, Math.round(h * 0.28)));
+}
+
+/** the ribbon's silhouette — one string, painted by the body and the outline alike */
+export const ribbonClipPath = (b: BannerSettings): string => {
+  const d = ribbonNotch(b);
+  return `polygon(0 0, 100% 0, calc(100% - ${d}px) 50%, 100% 100%, 0 100%, ${d}px 50%)`;
+};
+
 /** the rule under the title (the "underline" silhouette) has a shape of its own */
 function ruleRect(b: BannerSettings): Pick<React.CSSProperties, "left" | "bottom" | "width" | "height"> {
   const x = b.pos?.x ?? 0;
@@ -142,13 +169,13 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
         ...plateRect(b),
         background: stops
           ? `${stops}`
-          : `radial-gradient(ellipse 52% 58% at 50% 50%, ${base} 0%, ${withAlpha(base, 0.75)} ${inner}%, ${withAlpha(base, 0)} ${outer}%)`,
+          : `radial-gradient(${GLOW_ELLIPSE}, ${base} 0%, ${withAlpha(base, 0.75)} ${inner}%, ${withAlpha(base, 0)} ${outer}%)`,
         // when a gradient is used we fade it with a mask instead so the colours still show
         WebkitMaskImage: stops
-          ? `radial-gradient(ellipse 52% 58% at 50% 50%, #000 0%, rgba(0,0,0,.8) ${inner}%, transparent ${outer}%)`
+          ? `radial-gradient(${GLOW_ELLIPSE}, #000 0%, rgba(0,0,0,.8) ${inner}%, transparent ${outer}%)`
           : undefined,
         maskImage: stops
-          ? `radial-gradient(ellipse 52% 58% at 50% 50%, #000 0%, rgba(0,0,0,.8) ${inner}%, transparent ${outer}%)`
+          ? `radial-gradient(${GLOW_ELLIPSE}, #000 0%, rgba(0,0,0,.8) ${inner}%, transparent ${outer}%)`
           : undefined,
       };
       break;
@@ -158,7 +185,7 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
         ...common,
         ...plateRect(b),
         background: fill,
-        clipPath: "polygon(0 0, 100% 0, calc(100% - 22px) 50%, 100% 100%, 0 100%, 22px 50%)",
+        clipPath: ribbonClipPath(b),
       };
       break;
     case "underline":
@@ -192,7 +219,7 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
         border: `${b.border.width}px ${bannerBorderStyle(b)} ${withAlpha(b.border.color, clampOpacity(b.border.opacity))}`,
         borderRadius: radius,
         boxSizing: "border-box",
-        clipPath: b.shape === "ribbon" ? "polygon(0 0, 100% 0, calc(100% - 22px) 50%, 100% 100%, 0 100%, 22px 50%)" : undefined,
+        clipPath: b.shape === "ribbon" ? ribbonClipPath(b) : undefined,
       }
     : undefined;
 
@@ -277,7 +304,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
     banner: {
       shape: "pill",
       gradient: { enabled: true, type: "linear", angle: 90, stops: [{ color: "#0f3fb8", at: 0 }, { color: "#3b7bff", at: 100 }] },
-      opacity: 1, padX: 7, padY: 20, halo: 20,
+      opacity: 1, padX: 4, padY: 11, halo: 20,
     },
   },
   {
@@ -286,7 +313,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
     banner: {
       shape: "ribbon",
       gradient: { enabled: true, type: "linear", angle: 180, stops: [{ color: "#ffd35a", at: 0 }, { color: "#e0a800", at: 55 }, { color: "#b8860b", at: 100 }] },
-      opacity: 1, padX: 9, padY: 22, halo: 15,
+      opacity: 1, padX: 4, padY: 12, halo: 15,
       border: { enabled: false, color: "#fff", width: 1 },
     },
   },
@@ -297,7 +324,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
       shape: "rounded",
       radius: 14,
       gradient: { enabled: true, type: "linear", angle: 90, stops: [{ color: "#7c3aed", at: 0 }, { color: "#06b6d4", at: 100 }] },
-      opacity: 0.95, padX: 6, padY: 22, halo: 45,
+      opacity: 0.95, padX: 3, padY: 12, halo: 45,
       border: { enabled: true, color: "#e9d5ff", width: 1.5 },
       textGlow: 60,
     },
@@ -318,13 +345,13 @@ export const BANNER_PRESETS: BannerPreset[] = [
     banner: {
       shape: "pill",
       gradient: { enabled: true, type: "linear", angle: 90, stops: [{ color: "#f97316", at: 0 }, { color: "#ec4899", at: 100 }] },
-      padX: 8, padY: 20, halo: 30,
+      padX: 4, padY: 11, halo: 30,
     },
   },
   {
     name: "Underline",
     swatch: "linear-gradient(90deg,transparent 0 40%,#ffd633 40% 60%,transparent 60%)",
-    banner: { shape: "underline", color: "#ffd633", radius: 14, padX: 2, padY: 20, halo: 0, gradient: { ...DEFAULT_GRADIENT(), enabled: false } },
+    banner: { shape: "underline", color: "#ffd633", radius: 14, padX: 1, padY: 11, halo: 0, gradient: { ...DEFAULT_GRADIENT(), enabled: false } },
   },
   {
     name: "Minimal (none)",
@@ -346,8 +373,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       glow: 75,
       halo: 35,
       gradient: noGrad(),
-      padX: 8,
-      padY: 24,
+      padX: 4,
+      padY: 13,
       border: { enabled: false, color: "#ffffff", width: 1 },
       textGradient: lin(180, ["#fff2a8", 0], ["#ffb800", 100]),
       textGlow: 25,
@@ -361,8 +388,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       shape: "pill",
       gradient: lin(90, ["#4c1d95", 0], ["#6d28d9", 100]),
       opacity: 1,
-      padX: 8,
-      padY: 22,
+      padX: 4,
+      padY: 12,
       halo: 30,
       border: { enabled: true, color: "#ffffff", width: 2, style: "dashed", opacity: 0.85 },
       textGradient: lin(180, ["#ffffff", 0], ["#e9d5ff", 100]),
@@ -378,8 +405,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 12,
       gradient: lin(180, ["#0b1026", 0], ["#1e1b4b", 100]),
       opacity: 1,
-      padX: 7,
-      padY: 24,
+      padX: 4,
+      padY: 13,
       halo: 20,
       border: { enabled: true, color: "#ffd633", width: 2, style: "solid", opacity: 0.9 },
       textGradient: lin(180, ["#fff2a8", 0], ["#fbbf24", 100]),
@@ -401,8 +428,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       glow: 70,
       halo: 20,
       gradient: noGrad(),
-      padX: 8,
-      padY: 24,
+      padX: 4,
+      padY: 13,
       border: { enabled: false, color: "#ffffff", width: 1 },
       textGradient: lin(180, ["#ffffff", 0], ["#cbd5e1", 100]),
       textGlow: 25,
@@ -417,8 +444,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 10,
       gradient: lin(180, ["#c2711d", 0], ["#a05a15", 100]),
       opacity: 1,
-      padX: 7,
-      padY: 26,
+      padX: 4,
+      padY: 14,
       halo: 0,
       border: { enabled: false, color: "#ffffff", width: 1 },
       textGradient: lin(180, ["#fff7ed", 0], ["#ffedd5", 100]),
@@ -434,8 +461,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 12,
       gradient: lin(180, ["#faf3e3", 0], ["#efe4cb", 100]),
       opacity: 1,
-      padX: 7,
-      padY: 24,
+      padX: 4,
+      padY: 13,
       halo: 0,
       border: { enabled: true, color: "#b3611f", width: 2, style: "solid", opacity: 0.9 },
       textGradient: lin(180, ["#9a3412", 0], ["#7c2d12", 100]),
@@ -456,8 +483,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 18,
       gradient: lin(180, ["#0a1f44", 0], ["#123a6b", 100]),
       opacity: 1,
-      padX: 8,
-      padY: 26,
+      padX: 4,
+      padY: 14,
       halo: 30,
       border: { enabled: true, color: "#38bdf8", width: 1.5, style: "solid", opacity: 0.7 },
       textGradient: lin(180, ["#e0f2fe", 0], ["#7dd3fc", 100]),
@@ -472,8 +499,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       shape: "pill",
       gradient: lin(90, ["#082032", 0], ["#0e3a53", 100]),
       opacity: 1,
-      padX: 8,
-      padY: 22,
+      padX: 4,
+      padY: 12,
       halo: 25,
       border: { enabled: true, color: "#7dd3fc", width: 2, style: "dashed", opacity: 0.8 },
       textGradient: lin(180, ["#f0f9ff", 0], ["#bae6fd", 100]),
@@ -489,8 +516,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 6,
       gradient: lin(180, ["#f8fafc", 0], ["#cbd5e1", 100]),
       opacity: 1,
-      padX: 6,
-      padY: 22,
+      padX: 3,
+      padY: 12,
       halo: 0,
       border: { enabled: true, color: "#0f766e", width: 2, style: "solid", opacity: 0.9 },
       textGradient: lin(90, ["#0f766e", 0], ["#0d9488", 100]),
@@ -511,8 +538,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 4,
       gradient: lin(90, ["#00357e", 0], ["#0057b8", 100]),
       opacity: 1,
-      padX: 8,
-      padY: 24,
+      padX: 4,
+      padY: 13,
       halo: 0,
       border: { enabled: true, color: "#f7941d", width: 3, style: "solid", opacity: 1 },
       textGradient: lin(180, ["#ffffff", 0], ["#e0e7ff", 100]),
@@ -527,8 +554,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       shape: "pill",
       gradient: lin(90, ["#00418f", 0], ["#005bbf", 100]),
       opacity: 1,
-      padX: 8,
-      padY: 22,
+      padX: 4,
+      padY: 12,
       halo: 15,
       border: { enabled: true, color: "#f7941d", width: 4, style: "double", opacity: 1 },
       textGradient: lin(180, ["#ffffff", 0], ["#fff7ed", 100]),
@@ -543,8 +570,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       shape: "pill",
       gradient: lin(90, ["#38bdf8", 0], ["#0284c7", 100]),
       opacity: 1,
-      padX: 8,
-      padY: 22,
+      padX: 4,
+      padY: 12,
       halo: 25,
       border: { enabled: false, color: "#ffffff", width: 1 },
       textGradient: lin(180, ["#ffffff", 0], ["#f0f9ff", 100]),
@@ -565,8 +592,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 4,
       gradient: lin(90, ["#fde047", 0], ["#facc15", 100]),
       opacity: 1,
-      padX: 5,
-      padY: 18,
+      padX: 2,
+      padY: 10,
       halo: 0,
       border: { enabled: false, color: "#ffffff", width: 1 },
       textGradient: lin(180, ["#1e3a8a", 0], ["#172554", 100]),
@@ -581,8 +608,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       shape: "ribbon",
       gradient: lin(90, ["#be123c", 0], ["#9f1239", 100]),
       opacity: 1,
-      padX: 9,
-      padY: 22,
+      padX: 4,
+      padY: 12,
       halo: 15,
       border: { enabled: false, color: "#ffffff", width: 1 },
       textGradient: lin(180, ["#fff1f2", 0], ["#ffe4e6", 100]),
@@ -598,8 +625,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 8,
       gradient: lin(180, ["#dc2626", 0], ["#b91c1c", 100]),
       opacity: 1,
-      padX: 7,
-      padY: 24,
+      padX: 4,
+      padY: 13,
       halo: 10,
       border: { enabled: true, color: "#ffffff", width: 2, style: "solid", opacity: 0.85 },
       textGradient: lin(180, ["#ffffff", 0], ["#fef2f2", 100]),
@@ -619,8 +646,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       shape: "pill",
       gradient: lin(90, ["#064e3b", 0], ["#047857", 100]),
       opacity: 1,
-      padX: 8,
-      padY: 22,
+      padX: 4,
+      padY: 12,
       halo: 15,
       border: { enabled: true, color: "#a7f3d0", width: 2, style: "dashed", opacity: 0.8 },
       textGradient: lin(180, ["#ecfdf5", 0], ["#a7f3d0", 100]),
@@ -635,8 +662,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       shape: "pill",
       gradient: lin(90, ["#7f1d1d", 0], ["#991b1b", 100]),
       opacity: 1,
-      padX: 8,
-      padY: 22,
+      padX: 4,
+      padY: 12,
       halo: 20,
       border: { enabled: true, color: "#ffd633", width: 2, style: "solid", opacity: 0.95 },
       textGradient: lin(180, ["#fff2a8", 0], ["#fbbf24", 100]),
@@ -652,8 +679,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 10,
       gradient: lin(180, ["#0b0b0f", 0], ["#15151c", 100]),
       opacity: 1,
-      padX: 7,
-      padY: 24,
+      padX: 4,
+      padY: 13,
       halo: 10,
       border: { enabled: true, color: "#ffd633", width: 4, style: "double", opacity: 1 },
       textGradient: lin(180, ["#fde68a", 0], ["#f59e0b", 100]),
@@ -670,8 +697,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       glow: 80,
       halo: 20,
       gradient: noGrad(),
-      padX: 8,
-      padY: 24,
+      padX: 4,
+      padY: 13,
       border: { enabled: false, color: "#ffffff", width: 1 },
       textGradient: lin(180, ["#ffffff", 0], ["#ccfbf1", 100]),
       textGlow: 20,
@@ -686,8 +713,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       color: "#f59e0b",
       gradient: lin(90, ["#f59e0b", 0], ["#ef4444", 100]),
       radius: 14,
-      padX: 3,
-      padY: 20,
+      padX: 2,
+      padY: 11,
       halo: 15,
       border: { enabled: false, color: "#ffffff", width: 1 },
       textGradient: lin(180, ["#fff7ed", 0], ["#fdba74", 100]),
@@ -703,8 +730,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 14,
       gradient: lin(90, ["#164e63", 0], ["#0e7490", 100]),
       opacity: 0.35,
-      padX: 7,
-      padY: 24,
+      padX: 4,
+      padY: 13,
       halo: 0,
       border: { enabled: true, color: "#22d3ee", width: 2, style: "solid", opacity: 0.95 },
       textGradient: lin(90, ["#a5f3fc", 0], ["#22d3ee", 100]),
@@ -719,8 +746,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       shape: "pill",
       gradient: lin(90, ["#581c87", 0], ["#7e22ce", 100]),
       opacity: 1,
-      padX: 8,
-      padY: 22,
+      padX: 4,
+      padY: 12,
       halo: 40,
       border: { enabled: false, color: "#ffffff", width: 1 },
       textGradient: lin(180, ["#f5f3ff", 0], ["#ddd6fe", 100]),
@@ -735,8 +762,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       shape: "pill",
       gradient: lin(90, ["#fb923c", 0], ["#e11d48", 100]),
       opacity: 1,
-      padX: 8,
-      padY: 22,
+      padX: 4,
+      padY: 12,
       halo: 20,
       border: { enabled: false, color: "#ffffff", width: 1 },
       textGradient: lin(180, ["#fff7ed", 0], ["#ffe4e6", 100]),
@@ -752,8 +779,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
       radius: 8,
       gradient: lin(180, ["#e2e8f0", 0], ["#cbd5e1", 100]),
       opacity: 1,
-      padX: 6,
-      padY: 22,
+      padX: 3,
+      padY: 12,
       halo: 0,
       border: { enabled: true, color: "#64748b", width: 1.5, style: "solid", opacity: 0.9 },
       textGradient: lin(180, ["#0f172a", 0], ["#334155", 100]),

@@ -138,6 +138,21 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     detail: labels.slice(0, ORDER.length + 1).join(" › "),
   });
 
+  /* ------------------------- the factory plate's box ------------------------ */
+  const auto0 = { left: plate()?.style.left ?? "", top: plate()?.style.top ?? "", w: plate()?.style.width ?? "", h: plate()?.style.height ?? "" };
+  // a CSS engine may fold `calc(100% + 6%)` down to `calc(106%)` — both spellings
+  // are the same box, so the plate is read with its whitespace folded away
+  const box = (v: string, ...forms: string[]) => forms.some((f) => v.replace(/\s+/g, "") === f.replace(/\s+/g, ""));
+  out.push({
+    name: "the factory plate is a tight chip: 3% of room either side and 14% above and below the heading",
+    pass:
+      box(auto0.left, "calc(-3% + 0px)") &&
+      box(auto0.top, "calc(-14% + 0px)") &&
+      box(auto0.w, "calc(100% + 6%)", "calc(106%)") &&
+      box(auto0.h, "calc(100% + 28%)", "calc(128%)"),
+    detail: `${auto0.w} × ${auto0.h} at ${auto0.left} / ${auto0.top}`,
+  });
+
   /* ------------------------------ presets ---------------------------------- */
   openCard("Design presets");
   const presetTiles = () => Array.from(pop()?.querySelectorAll<HTMLElement>('button[aria-label^="Banner preset: "]') ?? []);
@@ -169,10 +184,17 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   });
   click(popButton("Banner shape: Rounded"));
   out.push({
-    name: "picking a silhouette repaints the plate's corners",
-    pass: plate()?.style.borderRadius === "18px",
+    name: "picking a silhouette repaints the plate's corners — at the tighter plate's own radius",
+    pass: plate()?.style.borderRadius === "14px",
     detail: plate()?.style.borderRadius ?? "",
   });
+  click(popButton("Banner shape: Ribbon"));
+  out.push({
+    name: "the ribbon's notched ends are cut shallower to match the shorter plate",
+    pass: (plate()?.style.clipPath ?? "").includes("16px") && !(plate()?.style.clipPath ?? "").includes("22px"),
+    detail: plate()?.style.clipPath ?? "",
+  });
+  click(popButton("Banner shape: Rounded"));
   closePop();
 
   /* ------------------------------ effects ---------------------------------- */

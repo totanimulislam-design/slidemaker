@@ -272,6 +272,15 @@ opacity, halo, padding and on/off; each **badge line** its own typeface, colour
 (with *auto* back to the shared brand colour), size and visibility; the
 **options trio** keeps marker shape / row style / numbering / fonts as before.
 
+The plate itself is a **tight chip under the heading**, not a header bar: left
+untouched it leaves `3 %` of the title box either side and `14 %` above and
+below (`BANNER_PAD_X` / `BANNER_PAD_Y` in `src/lib/types.ts` — the Design
+gallery and all 32 banner presets sit at the same room), with a `14 px` corner
+radius, a glow oval sized to the flat box and a ribbon whose notched ends are
+cut `16 px` deep (`RIBBON_NOTCH`, shallower still on a plate sized by hand).
+**Banner size** and **Banner position** still paint any px box on the board, so
+a teacher who wants the old room can have it back with two sliders.
+
 Two rules keep the stack honest:
 
 - **A line's controls write through its own part.** Aligning from the Question

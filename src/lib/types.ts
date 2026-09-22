@@ -457,6 +457,19 @@ export interface BannerSettings {
   shimmer: boolean;
 }
 
+/**
+ * The room the plate leaves around the heading when the teacher has not sized
+ * it by hand, in % of the title box: the plate is a tight chip under the
+ * heading, not a header bar — a little air either side, a little above and
+ * below, and nothing more. One place for both numbers, so the plate, the
+ * design presets and the Design gallery all agree on how close it sits.
+ */
+export const BANNER_PAD_X = 3;
+export const BANNER_PAD_Y = 14;
+
+/** the plate's own default corner radius, matched to its tighter box */
+export const BANNER_RADIUS = 14;
+
 export const DEFAULT_BANNER: BannerSettings = {
   shape: "glow",
   color: "#1f5fd0",
@@ -472,9 +485,9 @@ export const DEFAULT_BANNER: BannerSettings = {
   opacity: 1,
   glow: 65,
   halo: 0,
-  padX: 6,
-  padY: 26,
-  radius: 18,
+  padX: BANNER_PAD_X,
+  padY: BANNER_PAD_Y,
+  radius: BANNER_RADIUS,
   border: { enabled: false, color: "#ffd633", width: 2, style: "solid", opacity: 1 },
   textGradient: {
     enabled: false,
