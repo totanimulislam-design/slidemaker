@@ -1,10 +1,11 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { BannerBorderStyle, BannerSettings, BannerShape, Gradient, ThemeSettings } from "../lib/types";
-import { DEFAULT_BANNER } from "../lib/types";
+import { BANNER_WIDTH, DEFAULT_BANNER } from "../lib/types";
 import {
   BANNER_PRESETS,
   bannerCss,
   bannerHasLine,
+  bannerPlateWidth,
   bannerPresetPatch,
   bannerSizeNow,
   bannerBorderStyle,
@@ -560,14 +561,17 @@ export function BannerSizePanel({ theme, banner, setBanner }: BannerProps) {
   const auto = bannerSizeNow(banner, theme.titleSize ?? 54, theme.layout?.title?.w ?? 57);
   const w = banner.size?.w;
   const h = banner.size?.h;
-  const shownW = Math.min(w ?? auto.w, rangeMax(SIZE_MAX_W, w));
+  /** the width the plate paints at right now — the teacher's px, else 630 */
+  const nowW = bannerPlateWidth(banner);
+  const shownW = Math.min(nowW, rangeMax(SIZE_MAX_W, w));
   const shownH = Math.min(h ?? auto.h, rangeMax(SIZE_MAX_H, h));
   const maxW = rangeMax(SIZE_MAX_W, w);
   const maxH = rangeMax(SIZE_MAX_H, h);
+  const factory = nowW === BANNER_WIDTH && h === undefined;
   return (
     <div className="space-y-3" data-banner-size="">
-      <Cap hint={w === undefined && h === undefined ? `auto · ${auto.w}×${auto.h}px` : "free size"}>Banner size</Cap>
-      <Field label="Left ↔ right" hint={w === undefined ? "auto — fits the heading" : `${w}px`}>
+      <Cap hint={factory ? `its own box · ${nowW}×${auto.h}px` : "free size"}>Banner size</Cap>
+      <Field label="Left ↔ right" hint={w === undefined ? `${nowW}px — the shape's own width` : `${w}px`}>
         <Slider
           value={r1(shownW)}
           min={0}
@@ -589,16 +593,14 @@ export function BannerSizePanel({ theme, banner, setBanner }: BannerProps) {
       </Field>
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] leading-relaxed text-slate-500">
-          Free size is px on the 1280 × 720 board and grows both ways from the middle, so the heading stays centred on its plate.
-          Nothing clamps it — the plate may run past the board's own edge.
+          The shape is {BANNER_WIDTH}px across on the 1280 × 720 board and stays there whatever the heading says — the bar
+          paints any other width, in px, growing both ways from the middle so the heading stays centred on its plate.
+          Nothing clamps it: the plate may run past the board's own edge.
         </p>
-        <AutoBtn on={w === undefined && h === undefined} onClick={() => setBanner({ size: undefined })} label="Banner size: back to fitting the heading" />
+        <AutoBtn on={factory} onClick={() => setBanner({ size: { w: BANNER_WIDTH } })} label={`Banner size: back to the ${BANNER_WIDTH}px shape`} />
       </div>
       <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
-        <Cap hint="while the size is auto">Room around the heading</Cap>
-        <Field label="Width padding" hint={`${banner.padX}%`}>
-          <Slider min={0} max={40} value={banner.padX} onChange={(v) => setBanner({ padX: v })} ariaLabel="Banner width padding (%)" />
-        </Field>
+        <Cap hint="while the height is auto">Room above and below the heading</Cap>
         <Field label="Height padding" hint={`${banner.padY}%`}>
           <Slider min={0} max={80} value={banner.padY} onChange={(v) => setBanner({ padY: v })} ariaLabel="Banner height padding (%)" />
         </Field>

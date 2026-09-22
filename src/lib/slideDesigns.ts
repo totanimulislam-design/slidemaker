@@ -42,6 +42,7 @@ import type { OptionStyle } from "./optionStyles";
 import {
   BANNER_PAD_X,
   BANNER_PAD_Y,
+  BANNER_WIDTH,
   cloneBanner,
   cloneBadgePlate,
   cloneFrame,
@@ -887,14 +888,16 @@ function themeOf(p: Palette, k: Kit): Partial<ThemeSettings> {
     radius: k.bannerRadius,
     // a design is the plate's WHOLE look: the outline names every one of its
     // channels (so a hand-tuned style cannot follow it onto the next design),
-    // and the free size and place are handed back to auto
+    // and the plate's place is handed back to auto
     border: {
       ...cloneBanner().border,
       enabled: k.bannerBorder,
       color: k.bannerBorderInk ?? titleInk,
       width: k.bannerBorderWidth,
     },
-    size: undefined,
+    // the plate's width is not a look: every design paints the same 630 px chip
+    // (BANNER_WIDTH), centred on the heading, with the height hugging the line
+    size: { w: BANNER_WIDTH },
     pos: undefined,
     textGradient: k.titleGradient ? lin(180, shade(titleInk, 0.35), titleInk) : noGradient(),
     textGlow: k.titleGlow,

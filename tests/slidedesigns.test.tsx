@@ -412,6 +412,7 @@ export async function runSlideDesignTests(): Promise<CaseResult[]> {
     ring: frameRing()?.style.background ?? "",
     plate: titlePlate()?.style.background ?? "",
     plateRadius: titlePlate()?.style.borderRadius ?? "",
+    plateWidth: titlePlate()?.style.width ?? "",
     titleInk: titleText()?.style.color ?? "",
     stemInk: stemText()?.style.color ?? "",
     stemSize: stemText()?.style.fontSize ?? "",
@@ -437,6 +438,12 @@ export async function runSlideDesignTests(): Promise<CaseResult[]> {
     name: "…and the title: its plate and its glyphs both change",
     pass: painted.plate !== before.plate && !!painted.plate && painted.titleInk === `rgb(${rgb(t.titleColor)})`,
     detail: `plate ${painted.plate.slice(0, 40)} · radius ${painted.plateRadius} · ink ${painted.titleInk}`,
+  });
+
+  out.push({
+    name: "…and the plate keeps the shape's own width — every design paints the 630px chip, none resizes it",
+    pass: painted.plateWidth === "630px",
+    detail: `w ${painted.plateWidth}`,
   });
 
   out.push({

@@ -16,7 +16,8 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import App from "../src/App";
-import { DEFAULT_LOGO } from "../src/lib/types";
+import { bannerCss } from "../src/lib/banner";
+import { DEFAULT_BANNER, DEFAULT_LOGO } from "../src/lib/types";
 
 type Win = Window & typeof globalThis;
 const win = window as unknown as Win;
@@ -143,6 +144,10 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   // a CSS engine may fold `calc(100% + 6%)` down to `calc(106%)` — both spellings
   // are the same box, so the plate is read with its whitespace folded away
   const box = (v: string, ...forms: string[]) => forms.some((f) => v.replace(/\s+/g, "") === f.replace(/\s+/g, ""));
+  // …and it folds the px terms of `calc(50% + 180px - 315px)` into one number,
+  // so a move is read as the sum of its px, not as a substring of its spelling
+  const pxSum = (v: string) =>
+    Array.from(v.matchAll(/([-+]?\s*[\d.]+)px/g)).reduce((s, m) => s + Number(m[1].replace(/\s+/g, "")), 0);
   out.push({
     name: "the factory plate is a 630px-wide chip centred on the heading, free of the glyphs' own width, with 8% of the line above and below",
     pass:
@@ -151,6 +156,20 @@ export async function runBannerTests(): Promise<CaseResult[]> {
       auto0.w === "630px" &&
       box(auto0.h, "calc(100% + 16%)", "calc(116%)"),
     detail: `${auto0.w} × ${auto0.h} at ${auto0.left} / ${auto0.top}`,
+  });
+
+  /* ------- the 630px width is the shape's own, not one look among many ----- */
+  const legacy = bannerCss({ ...DEFAULT_BANNER, size: { h: 200 } }, "#ffffff").box;
+  out.push({
+    name: "a deck saved before the width was fixed — a hand-set height and no width — still paints the 630px chip",
+    pass: legacy.width === "630px",
+    detail: `w ${String(legacy.width)} · h ${String(legacy.height)}`,
+  });
+  const thumb = bannerCss({ ...DEFAULT_BANNER, size: undefined }, "#ffffff").box;
+  out.push({
+    name: "…while the small previews, which ask for no size at all, still hug their own box",
+    pass: box(String(thumb.width), "calc(100% + 14%)", "calc(114%)"),
+    detail: `w ${String(thumb.width)}`,
   });
 
   /* ------------------------------ presets ---------------------------------- */
@@ -169,6 +188,11 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     name: "one click paints that look: a gradient pill, rounded to a full capsule",
     pass: styleOf(plate()).includes("linear-gradient") && plate()?.style.borderRadius === "999px",
     detail: `${styleOf(plate()).slice(0, 46)} · radius ${plate()?.style.borderRadius}`,
+  });
+  out.push({
+    name: "…and the shape stays 630px across — a preset dresses the plate, it never resizes it",
+    pass: plate()?.style.width === "630px" && box(plate()?.style.left ?? "", "calc(50% + 0px - 315px)", "calc(50% - 315px)"),
+    detail: `w ${plate()?.style.width ?? ""} · left ${plate()?.style.left ?? ""}`,
   });
   closePop();
 
@@ -331,8 +355,8 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   out.push({
     name: "the nudge moves the plate alone: X right, Y down, and the heading stays exactly where it was",
     pass:
-      (plate()?.style.left ?? "").includes("180px") &&
-      (plate()?.style.top ?? "").includes("90px") &&
+      pxSum(plate()?.style.left ?? "") - pxSum(placedAuto.left) === 180 &&
+      pxSum(plate()?.style.top ?? "") - pxSum(placedAuto.top) === -90 &&
       (plate()?.style.left ?? "") !== placedAuto.left &&
       (plate()?.style.top ?? "") !== placedAuto.top &&
       (glyphs()?.getAttribute("style") ?? "") === glyphBefore,
@@ -355,6 +379,17 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     name: "a free size paints the plate at exactly that px box — wider than the board when asked, and still centred on the heading",
     pass: plate()?.style.width === "1600px" && plate()?.style.height === "300px" && (plate()?.style.left ?? "").includes("calc("),
     detail: `w ${plate()?.style.width} · h ${plate()?.style.height} · left ${plate()?.style.left ?? ""} · top ${plate()?.style.top ?? ""}`,
+  });
+  const sizeDefault = pop()?.querySelector<HTMLElement>('button[aria-label="Banner size: back to the 630px shape"]') ?? null;
+  click(sizeDefault);
+  out.push({
+    name: "the size card's own button hands the shape back its 630px width, with the height hugging the line again",
+    pass:
+      plate()?.style.width === "630px" &&
+      (plate()?.style.height ?? "").includes("%") &&
+      !(plate()?.style.height ?? "").includes("300px") &&
+      Number(widthInput?.value) === 630,
+    detail: `w ${plate()?.style.width ?? ""} · h ${plate()?.style.height ?? ""} · bar ${widthInput?.value ?? ""}`,
   });
   closePop();
 
