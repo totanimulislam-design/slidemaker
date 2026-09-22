@@ -477,8 +477,8 @@ interface PaintCtx {
   onNone?: () => void;
 }
 
-/** the pop-ups that need the wide card (a colour grid, a design gallery) */
-const WIDE_PANELS = new Set(["TextColor", "Paint", "Bullet design", "Design", "Numbering"]);
+/** the pop-ups that need the wide card (a colour grid, a design gallery, the effects' tile groups) */
+const WIDE_PANELS = new Set(["TextColor", "Paint", "Bullet design", "Design", "Numbering", "Banner effects"]);
 const widePanel = (panel: string | null) => !!panel && WIDE_PANELS.has(panel);
 
 /** the droplet a paint button wears over its current colour */
@@ -1289,7 +1289,11 @@ export default function ContextToolbar(p: Props) {
    *                    Modern · Curved & Wave · Organic / Decorative ·
    *                    Decorative / Highlight · Premium / Special) plus the
    *                    original paint families — as pictures
-   *   Effects          softness · halo · shimmer
+   *   Effects          softness · halo · shimmer, and the six effect
+   *                    groups: Shadow Effects (eight, on X · Y · Blur ·
+   *                    Spread · Opacity · Colour) · Glow & Light ·
+   *                    Depth / 3D · Modern Effects · Shape Effects ·
+   *                    Decorative Effects
    *   Fill             the body's paint: solid or gradient
    *   Border           the outline's paint
    *   Border radius    the corners, one slider with no ceiling

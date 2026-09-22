@@ -1,4 +1,23 @@
-import { BANNER_AUTO_FRAME_HEIGHT, BANNER_WIDTH, type BannerBorderStyle, type BannerSettings, type BannerShape, type Gradient } from "./types";
+import {
+  BANNER_AUTO_FRAME_HEIGHT,
+  BANNER_WIDTH,
+  DEFAULT_BANNER_EFFECTS,
+  type BannerBorderStyle,
+  type BannerDecorFx,
+  type BannerDecorKind,
+  type BannerDepthFx,
+  type BannerDepthKind,
+  type BannerEffects,
+  type BannerGlowFx,
+  type BannerGlowKind,
+  type BannerModernFx,
+  type BannerModernKind,
+  type BannerSettings,
+  type BannerShape,
+  type BannerShadowFx,
+  type BannerShadowKind,
+  type Gradient,
+} from "./types";
 import { shade, withAlpha } from "./color";
 
 /* ---------------------------------------------------- silhouette families */
@@ -734,6 +753,543 @@ export function plateMask(b: BannerSettings): string | undefined {
   return maskUrl(`<path d='${d}' fill='black'${rule}/>`);
 }
 
+/* ------------------------------------------- the plate's effects ---------- */
+
+/** 0–100 → 0–1, clamped, never NaN */
+const fxA = (v: number) => clampOpacity(v / 100);
+
+/**
+ * The effects a plate wears, merged with the factory set. Decks saved before
+ * the Effects card carried no `effects` at all — and a preset or a partial
+ * write may leave one group missing — so every group reads back to its own
+ * default rather than `undefined`.
+ */
+export function bannerEffectsOf(b: BannerSettings): BannerEffects {
+  const e = b.effects;
+  return {
+    shadow: e?.shadow,
+    glow: e?.glow,
+    depth: e?.depth,
+    modern: e?.modern,
+    decor: e?.decor,
+    shape: { ...DEFAULT_BANNER_EFFECTS.shape, ...(e?.shape ?? {}) },
+  };
+}
+
+export interface BannerEffectDef<K extends string> {
+  kind: K;
+  label: string;
+  hint: string;
+}
+
+/** the eight shadows the Effects card files under *Shadow Effects* */
+export const BANNER_SHADOW_EFFECTS: BannerEffectDef<BannerShadowKind>[] = [
+  { kind: "drop", label: "Drop Shadow", hint: "A single shadow cast below the plate" },
+  { kind: "soft", label: "Soft Shadow", hint: "A wide, low-contrast fall-off" },
+  { kind: "hard", label: "Hard Shadow", hint: "A sharp shadow, no blur at all" },
+  { kind: "long", label: "Long Shadow", hint: "A diagonal streak running out of the plate" },
+  { kind: "inner", label: "Inner Shadow", hint: "The shadow falls inside the plate" },
+  { kind: "floating", label: "Floating Shadow", hint: "A ground shadow — the plate lifts off the board" },
+  { kind: "offset", label: "Offset Shadow", hint: "A solid duplicate, stepped down and right" },
+  { kind: "colored", label: "Colored Shadow", hint: "The shadow wears a colour of its own" },
+];
+
+/** what each shadow kind starts from — the six controls walk from here */
+export const BANNER_SHADOW_DEFAULTS: Record<BannerShadowKind, Omit<BannerShadowFx, "kind">> = {
+  drop: { x: 0, y: 8, blur: 24, spread: 0, opacity: 50, color: "#000000" },
+  soft: { x: 0, y: 14, blur: 48, spread: 0, opacity: 35, color: "#000000" },
+  hard: { x: 10, y: 10, blur: 0, spread: 0, opacity: 60, color: "#000000" },
+  long: { x: 18, y: 18, blur: 0, spread: 60, opacity: 55, color: "#000000" },
+  inner: { x: 0, y: 6, blur: 14, spread: 0, opacity: 45, color: "#000000" },
+  floating: { x: 0, y: 24, blur: 36, spread: 12, opacity: 45, color: "#000000" },
+  offset: { x: 12, y: 12, blur: 0, spread: 0, opacity: 70, color: "#000000" },
+  colored: { x: 0, y: 10, blur: 28, spread: 0, opacity: 40, color: "#1f5fd0" },
+};
+
+/** the eight lights under *Glow & Light* */
+export const BANNER_GLOW_EFFECTS: BannerEffectDef<BannerGlowKind>[] = [
+  { kind: "outer", label: "Outer Glow", hint: "Light blooming round the plate's edge" },
+  { kind: "inner", label: "Inner Glow", hint: "Light blooming from the plate's inside" },
+  { kind: "neon", label: "Neon Glow", hint: "A bright tube with a wide bloom" },
+  { kind: "soft", label: "Soft Glow", hint: "A wide, even halo of light" },
+  { kind: "highlight", label: "Highlight", hint: "Daylight laid along the top edge" },
+  { kind: "reflection", label: "Light Reflection", hint: "A thin streak of light across the body" },
+  { kind: "shine", label: "Shine", hint: "A broad sheen sweeping the body" },
+  { kind: "gloss", label: "Gloss", hint: "The polished top half, hard edge and all" },
+];
+
+export const BANNER_GLOW_DEFAULT: Omit<BannerGlowFx, "kind"> = { intensity: 55, color: "#ffffff" };
+
+/** the nine depths under *Depth / 3D* */
+export const BANNER_DEPTH_EFFECTS: BannerEffectDef<BannerDepthKind>[] = [
+  { kind: "extrusion", label: "3D Extrusion", hint: "A slab standing straight behind the body" },
+  { kind: "bevel", label: "Bevel", hint: "A lit edge and a shaded one" },
+  { kind: "emboss", label: "Emboss", hint: "A soft, raised edge" },
+  { kind: "innerBevel", label: "Inner Bevel", hint: "The recessed edge, carved in" },
+  { kind: "outerBevel", label: "Outer Bevel", hint: "The raised edge, cast outward" },
+  { kind: "raised", label: "Raised", hint: "A gentle lift off the board" },
+  { kind: "pressed", label: "Pressed / Inset", hint: "Pushed in, shadowed inside" },
+  { kind: "depth", label: "Depth", hint: "An extrusion run deep" },
+  { kind: "perspective", label: "Perspective", hint: "The plate tipped back in space" },
+];
+
+export const BANNER_DEPTH_DEFAULT: Omit<BannerDepthFx, "kind"> = { intensity: 50, angle: 0 };
+
+/** the eight finishes under *Modern Effects* */
+export const BANNER_MODERN_EFFECTS: BannerEffectDef<BannerModernKind>[] = [
+  { kind: "glass", label: "Glassmorphism", hint: "A translucent pane over the board" },
+  { kind: "frosted", label: "Frosted Glass", hint: "A heavier frost, more blur" },
+  { kind: "acrylic", label: "Acrylic", hint: "A tinted, softly blurred panel" },
+  { kind: "blurBg", label: "Blur Background", hint: "Only the board behind, blurred" },
+  { kind: "clearGlass", label: "Transparent Glass", hint: "A bright rim, barely tinted" },
+  { kind: "noise", label: "Noise / Grain", hint: "Film grain laid over the body" },
+  { kind: "softGradient", label: "Soft Gradient Overlay", hint: "Light to shade, diagonally" },
+  { kind: "mesh", label: "Mesh Gradient", hint: "Colour blobs melted into the body" },
+];
+
+export const BANNER_MODERN_DEFAULT: Omit<BannerModernFx, "kind"> = { intensity: 55, color: "#ffffff", blur: 8 };
+
+/** the ten decorations under *Decorative Effects* */
+export const BANNER_DECOR_EFFECTS: BannerEffectDef<BannerDecorKind>[] = [
+  { kind: "innerHighlight", label: "Inner Highlight", hint: "Light washing down from the top edge" },
+  { kind: "outerHighlight", label: "Outer Highlight", hint: "A bright ring around the plate" },
+  { kind: "outlineGlow", label: "Outline Glow", hint: "The edge glowing in its own colour" },
+  { kind: "gradientShadow", label: "Gradient Shadow", hint: "A shadow that fades from one tone to another" },
+  { kind: "colorShadow", label: "Color Shadow", hint: "A hard shadow in a colour of its own" },
+  { kind: "edgeHighlight", label: "Edge Highlight", hint: "A hairline brightening the rim" },
+  { kind: "edgeDarkening", label: "Edge Darkening", hint: "A shadowed rim, pressed in" },
+  { kind: "vignette", label: "Vignette", hint: "The corners darken toward the middle" },
+  { kind: "texture", label: "Texture Overlay", hint: "Grain laid over the paint" },
+  { kind: "pattern", label: "Pattern Overlay", hint: "A fine diagonal weave" },
+];
+
+export const BANNER_DECOR_DEFAULT: Omit<BannerDecorFx, "kind"> = { intensity: 50, color: "#ffffff" };
+
+/**
+ * The paint a plate's effects add on top of its silhouette — everything the
+ * Effects card of the Title background line can turn on, folded into the
+ * channels `bannerCss` already knows how to paint:
+ *
+ *   shadows   box-shadow segments on the body itself (outer or inset)
+ *   back      layers of its own behind the body (streaks, slabs)
+ *   over      overlays above the body, under the heading
+ *   transform the depth and shape transforms the body, its layers and its
+ *             overlays all wear together
+ *   radius    the body's corner radius, when a shape effect says otherwise
+ *   mask      the body's edge, when a shape effect cuts it (wave · curve · slant)
+ *
+ * A group that is off paints nothing, so an untouched deck renders exactly as
+ * it always did.
+ */
+export interface BannerEffectPaint {
+  shadows: string[];
+  back: React.CSSProperties[];
+  over: React.CSSProperties[];
+  transform: string;
+  radius: number | string | undefined;
+  mask: string | undefined;
+}
+
+const EMPTY_FX: BannerEffectPaint = { shadows: [], back: [], over: [], transform: "", radius: undefined, mask: undefined };
+
+/** the film grain the Noise / Grain and the Texture Overlay wear, as a data-URL */
+const NOISE_BG = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n' x='0' y='0'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(#n)' opacity='0.5'/></svg>`,
+)}")`;
+
+/** the mesh gradient's colour blobs — soft radials over a diagonal base */
+function meshBg(color: string, a: number): string {
+  const spots = ["22% 22%", "80% 16%", "86% 82%", "14% 84%", "55% 48%"];
+  const tints = [
+    withAlpha("#ffffff", 0.2 + 0.5 * a),
+    withAlpha(shade(color, 0.35), 0.2 + 0.5 * a),
+    withAlpha(shade(color, -0.25), 0.18 + 0.4 * a),
+    withAlpha("#ffffff", 0.12 + 0.3 * a),
+    withAlpha(shade(color, 0.1), 0.18 + 0.4 * a),
+  ];
+  const blobs = spots.map((p, n) => `radial-gradient(ellipse 58% 48% at ${p}, ${tints[n]} 0%, transparent 72%)`);
+  return `${blobs.join(", ")}, linear-gradient(120deg, ${withAlpha(color, 0.15 + 0.3 * a)} 0%, ${withAlpha(
+    shade(color, -0.2),
+    0.12 + 0.25 * a,
+  )} 100%)`;
+}
+
+/** a wave along each long edge, in the mask's own 100 × 40 box */
+function waveMaskPath(v: number): string {
+  const a = (Math.max(0, Math.min(100, v)) / 100) * 2.8;
+  const n = 24;
+  const top: string[] = [];
+  const bot: string[] = [];
+  for (let i = 0; i <= n; i++) {
+    const x = (100 * i) / n;
+    top.push(`${i ? "L" : "M"}${x.toFixed(2)} ${(3 + a * Math.sin((Math.PI * 6 * i) / n)).toFixed(2)}`);
+  }
+  for (let i = n; i >= 0; i--) {
+    const x = (100 * i) / n;
+    bot.push(`L${x.toFixed(2)} ${(37 - a * Math.sin((Math.PI * 6 * i) / n)).toFixed(2)}`);
+  }
+  return `${top.join(" ")} ${bot.join(" ")} Z`;
+}
+
+/** a curved band — both long edges arch the same way, like the curved banner */
+function curveMaskPath(v: number): string {
+  const a = (Math.max(0, Math.min(100, v)) / 100) * 6;
+  const e = (4 + a * 0.4).toFixed(2);
+  const f = (34 + a * 0.4).toFixed(2);
+  return `M0 ${e} Q 50 ${(4 - a).toFixed(2)} 100 ${e} L 100 ${f} Q 50 ${(34 + a).toFixed(2)} 0 ${f} Z`;
+}
+
+/** the whole plate sheared — a parallelogram cut, like the slant's cousin */
+function slantMaskPath(v: number): string {
+  const s = (Math.max(0, Math.min(100, v)) / 100) * 14;
+  return `M${s.toFixed(2)} 0 L100 0 L${(100 - s).toFixed(2)} 40 L0 40 Z`;
+}
+
+export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffectPaint {
+  const fx = bannerEffectsOf(b);
+  const shapeOpacity = clampOpacity(b.opacity);
+  const shadows: string[] = [];
+  const back: React.CSSProperties[] = [];
+  const over: React.CSSProperties[] = [];
+
+  const common: React.CSSProperties = { position: "absolute", pointerEvents: "none" };
+  const geo = b.shape === "underline" ? ruleRect(b) : plateRect(b);
+  const t = fx.shape;
+  /** the shape effects' own corners, else the silhouette's */
+  const fxRadius: number | string | undefined =
+    t.independent && t.cornerTL + t.cornerTR + t.cornerBR + t.cornerBL > 0
+      ? `${t.cornerTL}px ${t.cornerTR}px ${t.cornerBR}px ${t.cornerBL}px`
+      : t.radius > 0
+        ? `${t.radius}px`
+        : undefined;
+  const radius = fxRadius ?? plateRadius(b);
+  const clip = plateClipPath(b);
+  /** the shape effects cut the edge where the silhouette does not — wave wins, then curve, then slant */
+  const mask =
+    t.wave > 0
+      ? maskUrl(`<path d='${waveMaskPath(t.wave)}' fill='black'/>`)
+      : t.curve > 0
+        ? maskUrl(`<path d='${curveMaskPath(t.curve)}' fill='black'/>`)
+        : t.slant > 0
+          ? maskUrl(`<path d='${slantMaskPath(t.slant)}' fill='black'/>`)
+          : undefined;
+
+  /** the one transform the body, its extra layers and its overlays all wear */
+  let transform = "";
+  if (fx.depth && fx.depth.kind === "perspective") {
+    const i = Math.max(0, Math.min(100, fx.depth.intensity));
+    transform += `perspective(${Math.round(900 - i * 5)}px) rotateX(${(i * 0.3).toFixed(1)}deg)`;
+  }
+  if (t.rotation) transform += ` rotate(${t.rotation}deg)`;
+  if (t.skew) transform += ` skewX(${t.skew}deg)`;
+  if (t.distortion) transform += ` scaleX(${(1 + t.distortion / 200).toFixed(3)})`;
+  if (t.flipH) transform += " scaleX(-1)";
+  if (t.flipV) transform += " scaleY(-1)";
+  const pre = transform ? `${transform} ` : "";
+
+  /** a layer of its own behind the body — the plate's own box, its own silhouette */
+  const backLayer = (extra: React.CSSProperties) =>
+    back.push({
+      ...common,
+      ...geo,
+      borderRadius: radius,
+      clipPath: clip,
+      opacity: shapeOpacity,
+      ...extra,
+    });
+  /** an overlay above the body, under the heading — the very same box and cut */
+  const overLayer = (extra: React.CSSProperties) =>
+    over.push({
+      ...common,
+      ...geo,
+      borderRadius: radius,
+      clipPath: clip,
+      maskImage: mask,
+      WebkitMaskImage: mask,
+      transform: transform || undefined,
+      opacity: shapeOpacity,
+      ...extra,
+    });
+
+  /* ------------------------------- shadows --------------------------------- */
+  const s = fx.shadow;
+  if (s) {
+    const c = withAlpha(s.color, fxA(s.opacity));
+    switch (s.kind) {
+      case "inner":
+        shadows.push(`inset ${s.x}px ${s.y}px ${s.blur}px ${s.spread}px ${c}`);
+        break;
+      case "long":
+        backLayer({
+          background: `linear-gradient(135deg, ${c} ${Math.max(0, 100 - s.spread)}%, ${withAlpha(s.color, 0)} 100%)`,
+          transform: `${pre}translate(${s.x}px, ${s.y}px)`,
+        });
+        break;
+      case "floating":
+        shadows.push(`0 ${s.y}px ${s.blur}px ${-Math.abs(s.spread)}px ${c}`);
+        break;
+      case "offset":
+        shadows.push(`${s.x}px ${s.y}px 0px ${s.spread}px ${c}`);
+        break;
+      default:
+        shadows.push(`${s.x}px ${s.y}px ${s.blur}px ${s.spread}px ${c}`);
+    }
+  }
+
+  /* --------------------------- glow & light -------------------------------- */
+  const g = fx.glow;
+  if (g) {
+    const i = Math.max(0, Math.min(100, g.intensity));
+    const a = i / 100;
+    const c = g.color;
+    switch (g.kind) {
+      case "inner":
+        shadows.push(`inset 0 0 ${Math.round(6 + i * 0.5)}px ${withAlpha(c, 0.2 + 0.65 * a)}`);
+        break;
+      case "outer":
+        shadows.push(
+          `0 0 ${Math.round(6 + i * 0.5)}px ${withAlpha(c, 0.25 + 0.55 * a)}`,
+          `0 0 ${Math.round(16 + i)}px ${withAlpha(c, 0.1 + 0.3 * a)}`,
+        );
+        break;
+      case "neon":
+        shadows.push(
+          `0 0 2px ${withAlpha(c, Math.min(1, 0.55 + a))}`,
+          `0 0 ${Math.round(6 + i * 0.4)}px ${withAlpha(c, 0.8)}`,
+          `0 0 ${Math.round(18 + i * 0.9)}px ${withAlpha(c, 0.4)}`,
+        );
+        break;
+      case "soft":
+        shadows.push(`0 0 ${Math.round(12 + i * 0.8)}px ${Math.round(2 + i * 0.15)}px ${withAlpha(c, 0.18 + 0.5 * a)}`);
+        break;
+      case "highlight":
+        overLayer({
+          background: `linear-gradient(180deg, ${withAlpha(c, 0.15 + 0.7 * a)} 0%, ${withAlpha(c, 0.03 + 0.18 * a)} 38%, ${withAlpha(c, 0)} 62%)`,
+        });
+        break;
+      case "reflection":
+        overLayer({
+          background: `linear-gradient(115deg, ${withAlpha(c, 0)} 34%, ${withAlpha(c, 0.25 + 0.6 * a)} 47%, ${withAlpha(c, 0)} 60%)`,
+        });
+        break;
+      case "shine":
+        overLayer({
+          background: `linear-gradient(115deg, ${withAlpha(c, 0)} 26%, ${withAlpha(c, 0.3 + 0.65 * a)} 45%, ${withAlpha(
+            c,
+            0.04 + 0.15 * a,
+          )} 58%, ${withAlpha(c, 0)} 74%)`,
+        });
+        break;
+      case "gloss":
+        overLayer({
+          background: `linear-gradient(180deg, ${withAlpha(c, 0.25 + 0.6 * a)} 0%, ${withAlpha(c, 0.06 + 0.18 * a)} 46%, ${withAlpha(c, 0)} 47%)`,
+        });
+        break;
+    }
+  }
+
+  /* ------------------------------ depth / 3D -------------------------------- */
+  const d = fx.depth;
+  if (d) {
+    const i = Math.max(0, Math.min(100, d.intensity));
+    const a = i / 100;
+    const rad = (((d.angle ?? 0) % 360) * Math.PI) / 180;
+    const sx = Math.sin(rad);
+    const cy = Math.cos(rad);
+    const white = (al: number) => withAlpha("#ffffff", al);
+    const dark = (al: number) => withAlpha("#000000", al);
+    switch (d.kind) {
+      case "extrusion":
+        backLayer({
+          background: shade(base, -0.45),
+          transform: `${pre}translateY(${(3 + i * 0.16).toFixed(1)}px)`,
+        });
+        shadows.push(`0 ${Math.round(2 + i * 0.1)}px ${Math.round(2 + i * 0.25)}px ${dark(0.2 + 0.35 * a)}`);
+        break;
+      case "depth":
+        backLayer({
+          background: withAlpha(shade(base, -0.62), 0.75),
+          transform: `${pre}translateY(${(6 + i * 0.4).toFixed(1)}px)`,
+        });
+        backLayer({
+          background: shade(base, -0.42),
+          transform: `${pre}translateY(${(3 + i * 0.2).toFixed(1)}px)`,
+        });
+        shadows.push(`0 ${Math.round(3 + i * 0.15)}px ${Math.round(3 + i * 0.3)}px ${dark(0.25 + 0.4 * a)}`);
+        break;
+      case "bevel": {
+        const s0 = Math.max(1, Math.round(i * 0.06));
+        shadows.push(
+          `inset ${(-sx * s0).toFixed(1)}px ${(cy * s0).toFixed(1)}px 0 ${white(0.25 + 0.5 * a)}`,
+          `inset ${(sx * s0).toFixed(1)}px ${(-cy * s0).toFixed(1)}px 0 ${dark(0.15 + 0.45 * a)}`,
+        );
+        break;
+      }
+      case "emboss": {
+        const s0 = Math.max(1, Math.round(i * 0.05));
+        shadows.push(
+          `inset ${(-sx * s0).toFixed(1)}px ${(cy * s0).toFixed(1)}px ${s0}px ${white(0.15 + 0.4 * a)}`,
+          `inset ${(sx * s0).toFixed(1)}px ${(-cy * s0).toFixed(1)}px ${s0}px ${dark(0.12 + 0.35 * a)}`,
+        );
+        break;
+      }
+      case "innerBevel": {
+        const s0 = Math.max(1, Math.round(i * 0.06));
+        shadows.push(
+          `inset ${(-sx * s0).toFixed(1)}px ${(cy * s0).toFixed(1)}px 0 ${dark(0.2 + 0.5 * a)}`,
+          `inset ${(sx * s0).toFixed(1)}px ${(-cy * s0).toFixed(1)}px 0 ${white(0.15 + 0.4 * a)}`,
+        );
+        break;
+      }
+      case "outerBevel": {
+        const s0 = Math.max(1, Math.round(i * 0.06));
+        shadows.push(
+          `${(sx * s0).toFixed(1)}px ${(-cy * s0).toFixed(1)}px 0 ${white(0.3 + 0.5 * a)}`,
+          `${(-sx * s0).toFixed(1)}px ${(cy * s0).toFixed(1)}px 0 ${dark(0.2 + 0.5 * a)}`,
+        );
+        break;
+      }
+      case "raised":
+        shadows.push(
+          `0 ${Math.round(1 + i * 0.08)}px ${Math.round(2 + i * 0.2)}px ${dark(0.2 + 0.4 * a)}`,
+          `inset 0 1px 0 ${white(0.2 + 0.4 * a)}`,
+        );
+        break;
+      case "pressed":
+        shadows.push(
+          `inset 0 ${Math.round(1 + i * 0.06)}px ${Math.round(2 + i * 0.18)}px ${dark(0.25 + 0.5 * a)}`,
+          `inset 0 ${-Math.round(1 + i * 0.06)}px 0 ${white(0.12 + 0.3 * a)}`,
+        );
+        break;
+      case "perspective":
+        /* its paint is the transform, built above */
+        break;
+    }
+  }
+
+  /* ----------------------------- modern effects ---------------------------- */
+  const m = fx.modern;
+  if (m) {
+    const i = Math.max(0, Math.min(100, m.intensity));
+    const a = i / 100;
+    const c = m.color;
+    const blur = Math.max(0, m.blur ?? 0);
+    const bf = (v: string): React.CSSProperties => ({ backdropFilter: v, WebkitBackdropFilter: v });
+    switch (m.kind) {
+      case "glass":
+        overLayer({
+          background: `linear-gradient(120deg, ${withAlpha("#ffffff", 0.12 + 0.4 * a)} 0%, ${withAlpha(
+            "#ffffff",
+            0.02 + 0.08 * a,
+          )} 55%, ${withAlpha("#ffffff", 0.08 + 0.18 * a)} 100%)`,
+          border: `1px solid ${withAlpha("#ffffff", 0.25 + 0.4 * a)}`,
+          boxSizing: "border-box",
+          ...bf(`blur(${Math.round(1 + blur * 0.4)}px) saturate(1.25)`),
+        });
+        break;
+      case "frosted":
+        overLayer({
+          background: `linear-gradient(180deg, ${withAlpha(c, 0.18 + 0.45 * a)} 0%, ${withAlpha(c, 0.06 + 0.2 * a)} 100%)`,
+          border: `1px solid ${withAlpha("#ffffff", 0.15 + 0.3 * a)}`,
+          boxSizing: "border-box",
+          ...bf(`blur(${Math.round(2 + blur * 0.8)}px)`),
+        });
+        break;
+      case "acrylic":
+        overLayer({
+          background: `linear-gradient(120deg, ${withAlpha(c, 0.15 + 0.4 * a)} 0%, ${withAlpha(c, 0.04 + 0.15 * a)} 100%)`,
+          ...bf(`blur(${Math.round(1 + blur * 0.4)}px)`),
+        });
+        break;
+      case "blurBg":
+        overLayer(bf(`blur(${Math.round(1 + blur)}px)`));
+        break;
+      case "clearGlass":
+        overLayer({
+          background: `linear-gradient(120deg, ${withAlpha("#ffffff", 0.08 + 0.25 * a)} 0%, ${withAlpha(
+            "#ffffff",
+            0.02 + 0.06 * a,
+          )} 100%)`,
+          border: `1px solid ${withAlpha("#ffffff", 0.35 + 0.4 * a)}`,
+          boxSizing: "border-box",
+        });
+        break;
+      case "noise":
+        overLayer({ backgroundImage: NOISE_BG, backgroundSize: "140px 140px", opacity: shapeOpacity * (0.25 + 0.75 * a) });
+        break;
+      case "softGradient":
+        overLayer({
+          background: `linear-gradient(120deg, ${withAlpha("#ffffff", 0.1 + 0.35 * a)} 0%, ${withAlpha("#ffffff", 0)} 45%, ${withAlpha(
+            "#000000",
+            0.05 + 0.25 * a,
+          )} 100%)`,
+        });
+        break;
+      case "mesh":
+        overLayer({ background: meshBg(c, a) });
+        break;
+    }
+  }
+
+  /* --------------------------- decorative effects -------------------------- */
+  const dc = fx.decor;
+  if (dc) {
+    const i = Math.max(0, Math.min(100, dc.intensity));
+    const a = i / 100;
+    const c = dc.color;
+    switch (dc.kind) {
+      case "innerHighlight":
+        overLayer({
+          background: `linear-gradient(180deg, ${withAlpha(c, 0.15 + 0.6 * a)} 0%, ${withAlpha(c, 0)} 55%)`,
+        });
+        break;
+      case "outerHighlight":
+        shadows.push(
+          `0 0 0 ${Math.max(1, Math.round(i * 0.05))}px ${withAlpha(c, 0.25 + 0.5 * a)}`,
+          `0 0 ${Math.round(4 + i * 0.3)}px ${withAlpha(c, 0.2 + 0.4 * a)}`,
+        );
+        break;
+      case "outlineGlow":
+        shadows.push(`0 0 ${Math.round(2 + i * 0.25)}px ${Math.max(1, Math.round(i * 0.08))}px ${withAlpha(c, 0.3 + 0.6 * a)}`);
+        break;
+      case "gradientShadow":
+        backLayer({
+          background: `linear-gradient(180deg, ${withAlpha(c, Math.min(1, 0.35 + 0.65 * a))} 0%, ${withAlpha(
+            shade(c, -0.35),
+            Math.max(0, 0.15 + 0.5 * a),
+          )} 100%)`,
+          transform: `${pre}translateY(${(6 + i * 0.12).toFixed(1)}px)`,
+        });
+        break;
+      case "colorShadow":
+        shadows.push(`${Math.round(6 + i * 0.06)}px ${Math.round(8 + i * 0.08)}px 0 0 ${withAlpha(c, 0.25 + 0.7 * a)}`);
+        break;
+      case "edgeHighlight":
+        shadows.push(`inset 0 0 0 ${Math.max(1, Math.round(i * 0.04))}px ${withAlpha(c, 0.2 + 0.65 * a)}`);
+        break;
+      case "edgeDarkening":
+        shadows.push(`inset 0 0 ${Math.round(3 + i * 0.15)}px ${Math.max(1, Math.round(i * 0.05))}px ${withAlpha(c, 0.2 + 0.6 * a)}`);
+        break;
+      case "vignette":
+        overLayer({
+          background: `radial-gradient(ellipse at center, ${withAlpha(c, 0)} 52%, ${withAlpha(c, 0.15 + 0.7 * a)} 100%)`,
+        });
+        break;
+      case "texture":
+        overLayer({ backgroundImage: NOISE_BG, backgroundSize: "140px 140px", opacity: shapeOpacity * (0.3 + 0.7 * a) });
+        break;
+      case "pattern":
+        overLayer({
+          background: `repeating-linear-gradient(45deg, ${withAlpha(c, 0.12 + 0.45 * a)} 0 2px, ${withAlpha(c, 0)} 2px 9px)`,
+          opacity: shapeOpacity * (0.5 + 0.5 * a),
+        });
+        break;
+    }
+  }
+
+  return { shadows, back, over, transform, radius: fxRadius, mask };
+}
+
 /**
  * The body's paint. Most silhouettes wear the fill alone; the **multilayer
  * gradient** family stacks a second paint over it — a diagonal band of light, a
@@ -1020,9 +1576,11 @@ export interface BannerCss {
   /**
    * The plate's own extra layers — the multilayer silhouettes (stacked plates,
    * double frame, accent block, offset outline, long shadow) and the stacked
-   * gradient plate. They are painted **behind** `box` and **under** the
-   * heading, in the order given, and they fade with the shape's own
-   * transparency. Empty for every single-body silhouette.
+   * gradient plate, plus the effect layers the Effects card paints (the long
+   * shadow's streak, the 3D's slabs, the gradient shadow). They are painted
+   * **behind** `box` and **under** the heading, in the order given, and they
+   * fade with the shape's own transparency. Empty for every single-body
+   * silhouette wearing no effects.
    */
   layers: React.CSSProperties[];
   /**
@@ -1032,6 +1590,13 @@ export interface BannerCss {
   border?: React.CSSProperties;
   /** extra glow layer under the box, optional */
   halo?: React.CSSProperties;
+  /**
+   * The Effects card's overlays — glass, noise, the gloss and the sheen, the
+   * mesh and the vignette — painted **above** the body and the line, **under**
+   * the heading. Each wears the body's own box and silhouette, so the
+   * overlay follows the free size, the nudge and the cut exactly.
+   */
+  overlays: React.CSSProperties[];
   /** styles applied to the title text */
   text: React.CSSProperties;
   /** inner padding on the title wrapper so the banner fits around the text */
@@ -1095,6 +1660,9 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
   const base = baseColor(b.gradient, b.color);
   const shapeOpacity = clampOpacity(b.opacity);
   const radius = plateRadius(b);
+  /** the Effects card's paint, folded into the body's channels below */
+  const fx = b.shape === "none" ? EMPTY_FX : bannerEffectsPaint(b, base);
+  const fxShadow = fx.shadows.length ? fx.shadows.join(", ") : undefined;
   const common: React.CSSProperties = {
     position: "absolute",
     pointerEvents: "none",
@@ -1111,24 +1679,34 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
       const inner = 30 + (100 - g) * 0.3; // where the fade starts
       const outer = 55 + g * 0.35; // where it reaches transparent
       const stops = b.gradient.enabled ? gradientCss({ ...b.gradient, type: "linear" }, b.color) : undefined;
+      const fade =
+        stops && `radial-gradient(${GLOW_ELLIPSE}, #000 0%, rgba(0,0,0,.8) ${inner}%, transparent ${outer}%)`;
       box = {
         ...common,
         ...plateRect(b),
         background: stops
           ? `${stops}`
           : `radial-gradient(${GLOW_ELLIPSE}, ${base} 0%, ${withAlpha(base, 0.75)} ${inner}%, ${withAlpha(base, 0)} ${outer}%)`,
-        // when a gradient is used we fade it with a mask instead so the colours still show
-        WebkitMaskImage: stops
-          ? `radial-gradient(${GLOW_ELLIPSE}, #000 0%, rgba(0,0,0,.8) ${inner}%, transparent ${outer}%)`
-          : undefined,
-        maskImage: stops
-          ? `radial-gradient(${GLOW_ELLIPSE}, #000 0%, rgba(0,0,0,.8) ${inner}%, transparent ${outer}%)`
-          : undefined,
+        // when a gradient is used we fade it with a mask instead so the colours still show —
+        // and a shape effect that cuts the edge (wave · curve · slant) wins over the fade
+        WebkitMaskImage: fx.mask ?? fade,
+        maskImage: fx.mask ?? fade,
+        boxShadow: fxShadow,
+        transform: fx.transform || undefined,
       };
       break;
     }
     case "underline":
-      box = { ...common, ...ruleRect(b), background: fill, borderRadius: 999 };
+      box = {
+        ...common,
+        ...ruleRect(b),
+        background: fill,
+        borderRadius: fx.radius ?? 999,
+        maskImage: fx.mask,
+        WebkitMaskImage: fx.mask,
+        boxShadow: fxShadow,
+        transform: fx.transform || undefined,
+      };
       break;
     default: {
       /**
@@ -1137,32 +1715,40 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
        * is one body on the plate's own box, and they differ in four channels
        * only: the corners (`plateRadius`), the cut (`plateClipPath`), the mask
        * (`plateMask`, the smooth silhouettes) and the paint (`platePaint`, one
-       * fill or a stack of gradients).
+       * fill or a stack of gradients) — plus whatever the Effects card has
+       * turned on: its shadows join the body's own, its corners and its edge
+       * cut win over the silhouette's, and its transform dresses the whole
+       * stack (the body, its layers and its overlays) together.
        */
       box = {
         ...common,
         ...plateRect(b),
         ...platePaint(b, fill),
-        borderRadius: radius,
+        borderRadius: fx.radius ?? radius,
         clipPath: plateClipPath(b),
         // the smooth silhouettes (waves, domes, blobs, strokes) wear their cut
         // as a mask — the outline's layer wears the very same one below
-        maskImage: plateMask(b),
-        WebkitMaskImage: plateMask(b),
+        maskImage: fx.mask ?? plateMask(b),
+        WebkitMaskImage: fx.mask ?? plateMask(b),
         // the double frame keeps a hairline inside itself and the long-shadow
         // plate its own soft fall — both on the body, so neither fights the
-        // outline's own layer
-        boxShadow: plateShadow(b, base),
+        // outline's own layer — and the effects' shadows ride the same body
+        boxShadow: [plateShadow(b, base), fxShadow].filter(Boolean).join(", ") || undefined,
+        transform: fx.transform || undefined,
       };
     }
   }
 
   /**
    * The plate's own extra layers — empty for a single-body silhouette, two or
-   * three painted plates for the multilayer ones. They sit behind the body, so
-   * the body's paint and its outline always win.
+   * three painted plates for the multilayer ones, and the effect layers (the
+   * long shadow's streak, the 3D's slabs, the gradient shadow) ride on the
+   * same back. They sit behind the body, so the body's paint and its outline
+   * always win.
    */
-  const layers = b.shape === "none" ? [] : bannerLayers(b, base);
+  const layers = b.shape === "none" ? [] : [...bannerLayers(b, base), ...fx.back];
+  /** the Effects card's overlays — above the body, under the heading */
+  const overlays = b.shape === "none" ? [] : fx.over;
 
   const halo: React.CSSProperties | undefined =
     b.halo > 0 && b.shape !== "none"
@@ -1232,7 +1818,7 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
   // Slide.tsx gives the title plate a stable frame. The frame is intentionally
   // independent of the glyph width and height, so changing title font size
   // changes only the text, not the built-in plate.
-  return { box, layers, border: borderLine, halo, text, padding: "6px 0" };
+  return { box, layers, border: borderLine, halo, overlays, text, padding: "6px 0" };
 }
 
 /**

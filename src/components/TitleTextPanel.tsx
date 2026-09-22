@@ -55,6 +55,7 @@ export default function TitleTextPanel({ theme, header, setTheme, setHeader, pat
             {header.showBanner && css.layers.map((l, i) => <div key={`banner-layer-${i}`} data-banner-layer={i} style={l} />)}
             {header.showBanner && <div className={b.shimmer ? "banner-shimmer" : undefined} style={css.box} />}
             {header.showBanner && css.border && <div style={css.border} />}
+            {header.showBanner && css.overlays.map((l, i) => <div key={`banner-overlay-${i}`} style={l} />)}
             <div
               style={{
                 position: "relative",
