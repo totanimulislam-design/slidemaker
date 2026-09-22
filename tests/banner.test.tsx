@@ -244,26 +244,34 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     name: "Shapes lists every silhouette as a picture, with the one in use marked",
     pass:
       pop()?.getAttribute("data-pop-panel") === "Banner shape" &&
-      (pop()?.querySelectorAll('[role="listbox"][aria-label="Banner shape"] [role="option"]').length ?? 0) === 24 &&
+      (pop()?.querySelectorAll('[role="listbox"][aria-label="Banner shape"] [role="option"]').length ?? 0) === 65 &&
       popButton("Banner shape: Pill")?.getAttribute("aria-selected") === "true",
     detail: String(pop()?.querySelectorAll('[role="listbox"][aria-label="Banner shape"] [role="option"]').length),
   });
+  const GROUPS = [
+    "Basic & Clean",
+    "Banner Style",
+    "Modern",
+    "Curved & Wave",
+    "Organic / Decorative",
+    "Plates",
+    "Stylish shapes",
+    "Multilayer shapes",
+    "Multilayer gradient",
+    "Marks",
+  ];
   out.push({
-    name: "…filed in five families — Plates · Stylish shapes · Multilayer shapes · Multilayer gradient · Marks",
-    pass: ["Plates", "Stylish shapes", "Multilayer shapes", "Multilayer gradient", "Marks"].every((g) =>
-      (pop()?.textContent ?? "").includes(g),
-    ),
-    detail: ["Plates", "Stylish shapes", "Multilayer shapes", "Multilayer gradient", "Marks"]
-      .filter((g) => (pop()?.textContent ?? "").includes(g))
-      .join(" › "),
+    name: "…filed in ten groups — the shape library (Basic & Clean · Banner Style · Modern · Curved & Wave · Organic / Decorative) plus the original paint families",
+    pass: GROUPS.every((g) => (pop()?.textContent ?? "").includes(g)),
+    detail: GROUPS.filter((g) => (pop()?.textContent ?? "").includes(g)).join(" › "),
   });
-  click(popButton("Banner shape: Rounded"));
+  click(popButton("Banner shape: Rounded Rectangle"));
   out.push({
     name: "picking a silhouette repaints the plate's corners — at the tighter plate's own radius",
     pass: plate()?.style.borderRadius === "14px",
     detail: plate()?.style.borderRadius ?? "",
   });
-  click(popButton("Banner shape: Ribbon"));
+  click(popButton("Banner shape: Ribbon Banner"));
   out.push({
     name: "the ribbon's notched ends are cut shallower to match the shorter plate",
     pass: (plate()?.style.clipPath ?? "").includes("16px") && !(plate()?.style.clipPath ?? "").includes("22px"),
@@ -283,9 +291,9 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     pass: !!hexCss.border && hexCss.border.clipPath === hexCss.box.clipPath && !!hexCss.border.clipPath,
     detail: String(hexCss.border?.clipPath ?? "").slice(0, 48),
   });
-  const cutFamilies = ["Cut corners", "Chevron", "Swallowtail", "Slant"];
+  const cutFamilies = ["Notched Banner", "Chevron", "Swallowtail", "Slanted Banner"];
   out.push({
-    name: "every cut silhouette brings its own polygon — cut corners · chevron · swallowtail · slant",
+    name: "every cut silhouette brings its own polygon — notched banner · chevron · swallowtail · slanted banner",
     pass:
       cutFamilies.every((label) => !!popButton(`Banner shape: ${label}`)) &&
       (["notch", "chevron", "swallow", "slant"] as const).every(
@@ -304,8 +312,67 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     detail: `${plate()?.style.borderRadius ?? ""} · arch ${String(bannerCss({ ...DEFAULT_BANNER, shape: "arch" }, "#ffffff").box.borderRadius)}`,
   });
 
+  /* ---- the shape library: the new silhouettes ------------------------------ */
+  click(popButton("Banner shape: Wave Banner"));
+  const waveMask = plate()?.style.maskImage ?? "";
+  const waveCss = bannerCss({ ...DEFAULT_BANNER, shape: "waveBanner", border: { enabled: true, color: "#ffffff", width: 2 } }, "#ffffff");
+  out.push({
+    name: "a masked silhouette carries its cut as a mask — the wave banner's waves, and the outline wears the very same mask",
+    pass:
+      waveMask.startsWith('url("data:image/svg+xml') &&
+      (plate()?.style.clipPath ?? "") === "" &&
+      !!waveCss.border &&
+      waveCss.border.maskImage === waveCss.box.maskImage &&
+      !!waveCss.border.maskImage,
+    detail: `${waveMask.slice(0, 40)}… · line shares the mask ${waveCss.border?.maskImage === waveCss.box.maskImage}`,
+  });
+  click(popButton("Banner shape: Circle Plate"));
+  const circleH = plate()?.style.height ?? "";
+  out.push({
+    name: "the round silhouettes paint a taller box — the circle plate's height is the line frame stretched by its own factor",
+    pass: box(circleH, "calc((100% + 22%) * 2.2)", "calc(268.4%)") && (plate()?.style.borderRadius ?? "") === "50% / 100%",
+    detail: `h ${circleH} · radius ${plate()?.style.borderRadius ?? ""}`,
+  });
+  click(popButton("Banner shape: Capsule"));
+  out.push({
+    name: "the capsule is a true oval — 50% of the width, 100% of the height, so the ends taper",
+    pass: (plate()?.style.borderRadius ?? "") === "50% / 100%" && (plate()?.style.height ?? "").includes("%"),
+    detail: `radius ${plate()?.style.borderRadius ?? ""} · h ${plate()?.style.height ?? ""}`,
+  });
+  click(popButton("Banner shape: Cut-Corner Banner"));
+  const octClip = plate()?.style.clipPath ?? "";
+  out.push({
+    name: "the cut-corner banner bevels all four corners — an eight-point polygon",
+    pass: octClip.startsWith("polygon(") && (octClip.match(/calc\(/g) ?? []).length === 4 && octClip.split(",").length === 8,
+    detail: octClip,
+  });
+  click(popButton("Banner shape: Folded Banner"));
+  out.push({
+    name: "the folded banner's tails paint behind the body — two darker plates, notched, stepped down and out",
+    pass:
+      plateLayers().length === 2 &&
+      plateLayers().every((l) => (l.style.transform ?? "").includes("translate(") && (l.style.transform ?? "").includes("%")) &&
+      plateLayers().every((l) => (l.style.clipPath ?? "").startsWith("polygon(")),
+    detail: `${plateLayers().length} tails · ${plateLayers().map((l) => l.style.transform).join(" / ")}`,
+  });
+  click(popButton("Banner shape: Scroll Banner"));
+  out.push({
+    name: "the scroll's rolled ends ride in the gap the parchment's cut leaves — two light pills behind the body",
+    pass:
+      plateLayers().length === 2 &&
+      plateLayers().every((l) => (l.style.clipPath ?? "").startsWith("inset(") && (l.style.clipPath ?? "").includes("round")) &&
+      (plate()?.style.clipPath ?? "").startsWith("inset(3% 7% 3% 7% round"),
+    detail: `body ${plate()?.style.clipPath ?? ""} · ${plateLayers().length} rollers`,
+  });
+  click(popButton("Banner shape: Classic Banner"));
+  out.push({
+    name: "the classic bar keeps its own tight corner and its embossed rules — on the body, not a layer",
+    pass: (plate()?.style.borderRadius ?? "") === "8px" && (plate()?.style.boxShadow ?? "").includes("inset 0 3px 0"),
+    detail: `radius ${plate()?.style.borderRadius ?? ""} · shadow ${String(plate()?.style.boxShadow ?? "").slice(0, 44)}`,
+  });
+
   /* ---- multilayer shapes: the plate plus painted plates of its own -------- */
-  click(popButton("Banner shape: Stack"));
+  click(popButton("Banner shape: Layered Banner"));
   out.push({
     name: "a multilayer silhouette paints plates of its own on the slide — two layers behind the body",
     pass:
@@ -376,7 +443,7 @@ export async function runBannerTests(): Promise<CaseResult[]> {
       paints(plate()?.style.background ?? "") === 1,
     detail: `${plateLayers().length} gradient layers under a gradient body`,
   });
-  click(popButton("Banner shape: Rounded"));
+  click(popButton("Banner shape: Rounded Rectangle"));
   out.push({
     name: "back to a single-body silhouette and the extra layers are gone",
     pass: plateLayers().length === 0 && paints(plate()?.style.background ?? "") === 1,

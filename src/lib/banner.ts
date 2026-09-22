@@ -4,42 +4,110 @@ import { shade, withAlpha } from "./color";
 /* ---------------------------------------------------- silhouette families */
 
 /**
- * The five families the plate's silhouettes are sorted into — the picker's own
- * headings, and the rule that decides *how* a plate is painted:
+ * The ten families the plate's silhouettes are sorted into — the picker's own
+ * headings, and the rule that decides *how* a plate is painted. The first five
+ * are the shape library (ten silhouettes each); the last five are the original
+ * paint families:
  *
- *   plate     one body, corners only (glow · pill · rounded · box)
- *   stylish   one body cut to another silhouette — a clip-path, or corners on
- *             two edges only (ribbon · hexagon · cut corners · chevron ·
- *             swallowtail · slant · tab · arch)
- *   layered   the body **plus** extra painted layers of its own behind it
- *             (stack · frame · accent · offset outline · long shadow)
- *   gradient  the body painted from **several stacked gradients**, one plate
- *             reading as several (sheen · split · gloss · stripes) or several
- *             plates each with a gradient of its own (stacked gradient)
- *   mark      a rule instead of a plate (underline · none)
+ *   basic       the clean plates — rounded rectangles, soft corners, capsules,
+ *               ovals and the curved band
+ *   bannerStyle the classic banner cuts — ribbon, points, notches, the folded
+ *               ribbon, the scroll and the badge
+ *   modern      the contemporary cuts — slant, diagonal, angle, skew, the
+ *               layered and offset cards, the split and the floating plate
+ *   curve       the curved silhouettes — waves, arch, dome, concave, convex,
+ *               the swoosh and the curved ribbon
+ *   organic     the freehand shapes — blobs, the cloud, the brush and paint
+ *               strokes and the highlight
+ *   plate       one body, corners only (glow · box)
+ *   stylish     one body cut to another silhouette — a clip-path, or corners
+ *               on two edges only (hexagon · chevron · swallowtail · tab)
+ *   layered     the body **plus** extra painted layers of its own behind it
+ *               (double frame · accent block · long shadow)
+ *   gradient    the body painted from **several stacked gradients**, one plate
+ *               reading as several (sheen · gloss · stripes) or several plates
+ *               each with a gradient of its own (stacked gradient)
+ *   mark        a rule instead of a plate (underline · none)
  */
-export type BannerShapeFamily = "plate" | "stylish" | "layered" | "gradient" | "mark";
+export type BannerShapeFamily =
+  | "basic"
+  | "bannerStyle"
+  | "modern"
+  | "curve"
+  | "organic"
+  | "plate"
+  | "stylish"
+  | "layered"
+  | "gradient"
+  | "mark";
 
 export const BANNER_SHAPE_FAMILY: Record<BannerShape, BannerShapeFamily> = {
+  /* basic & clean */
+  rounded: "basic",
+  softRounded: "basic",
+  capsule: "basic",
+  pill: "basic",
+  ovalPlate: "basic",
+  circlePlate: "basic",
+  halfRound: "basic",
+  curvedRect: "basic",
+  softSquare: "basic",
+  ellipseBanner: "basic",
+  /* banner style */
+  classicBanner: "bannerStyle",
+  titleBanner: "bannerStyle",
+  ribbon: "bannerStyle",
+  pointedBanner: "bannerStyle",
+  doubleEndedBanner: "bannerStyle",
+  notch: "bannerStyle",
+  cutCorner: "bannerStyle",
+  foldedBanner: "bannerStyle",
+  scrollBanner: "bannerStyle",
+  badgeBanner: "bannerStyle",
+  /* modern */
+  slant: "modern",
+  diagonalBanner: "modern",
+  angledBanner: "modern",
+  asymmetricBanner: "modern",
+  skewedRect: "modern",
+  stack: "modern",
+  offsetLine: "modern",
+  split: "modern",
+  floatingPlate: "modern",
+  geoPlate: "modern",
+  /* curved & wave */
+  waveBanner: "curve",
+  curvedBanner: "curve",
+  wavyStrip: "curve",
+  arch: "curve",
+  domeBanner: "curve",
+  concaveBanner: "curve",
+  convexBanner: "curve",
+  swoosh: "curve",
+  curvedRibbon: "curve",
+  wavePlate: "curve",
+  /* organic / decorative */
+  organicBlob: "organic",
+  abstractBlob: "organic",
+  wavyBlob: "organic",
+  roundedBlob: "organic",
+  cloudShape: "organic",
+  brushStroke: "organic",
+  paintStroke: "organic",
+  highlightBlob: "organic",
+  organicPlate: "organic",
+  abstractPlate: "organic",
+  /* the original paint families */
   glow: "plate",
-  pill: "plate",
   rect: "plate",
-  rounded: "plate",
-  ribbon: "stylish",
   hex: "stylish",
-  notch: "stylish",
   chevron: "stylish",
   swallow: "stylish",
-  slant: "stylish",
   tab: "stylish",
-  arch: "stylish",
-  stack: "layered",
   frame: "layered",
   accent: "layered",
-  offsetLine: "layered",
   longShadow: "layered",
   sheen: "gradient",
-  split: "gradient",
   gloss: "gradient",
   stripes: "gradient",
   gradStack: "gradient",
@@ -55,7 +123,53 @@ export const BANNER_SHAPE_IDS = Object.keys(BANNER_SHAPE_FAMILY) as BannerShape[
  * the corner radius has nothing to say about them.
  */
 export const isClippedShape = (shape: BannerShape): boolean =>
-  shape === "ribbon" || shape === "hex" || shape === "notch" || shape === "chevron" || shape === "swallow" || shape === "slant";
+  shape === "ribbon" ||
+  shape === "hex" ||
+  shape === "notch" ||
+  shape === "chevron" ||
+  shape === "swallow" ||
+  shape === "slant" ||
+  shape === "titleBanner" ||
+  shape === "pointedBanner" ||
+  shape === "doubleEndedBanner" ||
+  shape === "cutCorner" ||
+  shape === "diagonalBanner" ||
+  shape === "angledBanner" ||
+  shape === "asymmetricBanner" ||
+  shape === "skewedRect" ||
+  shape === "geoPlate" ||
+  shape === "scrollBanner";
+
+/**
+ * The silhouettes whose body is *masked* — a smooth silhouette (waves, domes,
+ * blobs, strokes) that a corner radius or a clip polygon cannot say. The mask
+ * is an SVG that stretches to the plate's own box, so it keeps its curves at
+ * 630 px on the board and at thumbnail scale in the picker.
+ */
+const MASKED_SHAPES: ReadonlySet<BannerShape> = new Set<BannerShape>([
+  "curvedRect",
+  "waveBanner",
+  "curvedBanner",
+  "wavyStrip",
+  "domeBanner",
+  "concaveBanner",
+  "convexBanner",
+  "swoosh",
+  "curvedRibbon",
+  "wavePlate",
+  "organicBlob",
+  "abstractBlob",
+  "wavyBlob",
+  "roundedBlob",
+  "cloudShape",
+  "brushStroke",
+  "paintStroke",
+  "highlightBlob",
+  "organicPlate",
+  "abstractPlate",
+]);
+
+export const isMaskedShape = (shape: BannerShape): boolean => MASKED_SHAPES.has(shape);
 
 
 /** the stage every deck is designed on (Slide.tsx) — the plate's px speak in it */
@@ -101,45 +215,136 @@ export const bannerPlateWidth = (b: BannerSettings): number => b.size?.w ?? BANN
 const paintedWidth = (b: BannerSettings): number | undefined => b.size?.w ?? (b.size ? BANNER_WIDTH : undefined);
 
 /**
+ * How much taller a silhouette paints its own automatic box than the line
+ * frame it sits on. Most silhouettes are wide, flat chips — factor 1, the line
+ * frame plus its padding. The round and the freehand ones read wrong squeezed
+ * to that flat box, so they stretch it: the circle and the oval go tall, the
+ * blobs and the cloud go round, and the strokes go slim. A free height always
+ * wins — the factor only talks while the height is automatic.
+ */
+export function plateHeightFactor(shape: BannerShape): number {
+  switch (shape) {
+    case "circlePlate":
+      return 2.2;
+    case "domeBanner":
+      return 1.8;
+    case "cloudShape":
+      return 1.7;
+    case "ovalPlate":
+      return 1.6;
+    case "ellipseBanner":
+      return 1.5;
+    case "roundedBlob":
+      return 1.5;
+    case "swoosh":
+      return 1.5;
+    case "organicBlob":
+      return 1.4;
+    case "wavyBlob":
+      return 1.4;
+    case "highlightBlob":
+      return 1.4;
+    case "abstractBlob":
+      return 1.35;
+    case "softSquare":
+      return 1.35;
+    case "organicPlate":
+      return 1.25;
+    case "abstractPlate":
+      return 1.2;
+    case "wavyStrip":
+      return 0.95;
+    case "brushStroke":
+      return 0.9;
+    case "paintStroke":
+      return 0.9;
+    default:
+      return 1;
+  }
+}
+
+/**
  * The plate's box. Width and height are read the same way: a px box when the
  * teacher sized it, the plate's own automatic box otherwise — automatic width
  * being the 630 px chip (`paintedWidth`), automatic height the line frame plus
- * its padding.
+ * its padding, and for the round and freehand silhouettes that automatic box
+ * stretched by their own factor (`plateHeightFactor`), re-centred on the line.
  */
 export function plateRect(b: BannerSettings): Pick<React.CSSProperties, "left" | "top" | "width" | "height"> {
   const x = b.pos?.x ?? 0;
   const y = b.pos?.y ?? 0;
   const w = paintedWidth(b);
   const h = b.size?.h;
+  const f = plateHeightFactor(b.shape);
+  const autoH = `100% + ${2 * b.padY}%`;
   return {
     // free size is centred on the title (where the plate already sits), so
     // resizing grows both ways and the glyphs stay in the middle of the plate
     // the nudge stays a term of its own, so a plate can be read (and tested) as
     // "centred, then moved" instead of one folded number
     left: w === undefined ? `calc(-${b.padX}% ${nudge(x)})` : `calc(50% ${nudge(x)} ${nudge(-w / 2)})`,
-    top: h === undefined ? `calc(-${b.padY}% ${nudge(y)})` : `calc(50% ${nudge(y)} ${nudge(-h / 2)})`,
+    top:
+      h === undefined
+        ? f === 1
+          ? `calc(-${b.padY}% ${nudge(y)})`
+          : `calc((100% - (${autoH}) * ${f}) / 2 ${nudge(y)})`
+        : `calc(50% ${nudge(y)} ${nudge(-h / 2)})`,
     width: w === undefined ? `calc(100% + ${2 * b.padX}%)` : `${w}px`,
-    height: h === undefined ? `calc(100% + ${2 * b.padY}%)` : `${h}px`,
+    height: h === undefined ? (f === 1 ? `calc(${autoH})` : `calc((${autoH}) * ${f})`) : `${h}px`,
   };
 }
 
 /**
  * The plate's corner radius for the silhouette in use. A number for the
  * silhouettes that round all four corners, a CSS string for the ones that round
- * two edges only (tab, arch), and nothing at all for the cut silhouettes —
- * their corners are cut by a clip-path, so a radius would have nothing to say.
+ * two edges only (tab, half-round) or all four to a full oval (capsule, oval,
+ * circle, ellipse banner), and nothing at all for the cut and the masked
+ * silhouettes — their corners are cut by a clip-path or a mask, so a radius
+ * would have nothing to say.
  */
 export function plateRadius(b: BannerSettings): number | string | undefined {
-  if (b.shape === "pill") return 999;
-  if (b.shape === "underline") return 999;
-  // a tab is rounded along the top and square along the bottom, an arch is a
-  // full half-round on top — both keep the plate's own radius for the curve
-  if (b.shape === "tab") return `${b.radius}px ${b.radius}px 0 0`;
-  if (b.shape === "arch") return "999px 999px 0 0";
-  if (isClippedShape(b.shape)) return undefined;
+  switch (b.shape) {
+    case "pill":
+    case "badgeBanner":
+    case "underline":
+      return 999;
+    // a tab is rounded along the top and square along the bottom, an arch is a
+    // full half-round on top, a half-round the other way round — the tab and
+    // the arch keep the plate's own radius for the curve
+    case "tab":
+      return `${b.radius}px ${b.radius}px 0 0`;
+    case "arch":
+      return "999px 999px 0 0";
+    case "halfRound":
+      return `0 0 ${b.radius}px ${b.radius}px`;
+    // the soft silhouettes round past the plate's own corner — much wider, so
+    // a 14 px corner on a 31 px plate reads as a card, not as a bar
+    case "softRounded":
+      return Math.max(30, Math.round(b.radius * 2.2));
+    case "softSquare":
+      return Math.max(18, Math.round(b.radius * 1.4));
+    // a true oval — the corners carry 50% of the width and 100% of the height,
+    // so the plate is an ellipse at any box and the outline follows it
+    case "capsule":
+    case "ovalPlate":
+    case "circlePlate":
+    case "ellipseBanner":
+      return "50% / 100%";
+    // the classic bar keeps its own tight corner whatever the slider says
+    case "classicBanner":
+      return 8;
+  }
+  if (isClippedShape(b.shape) || isMaskedShape(b.shape)) return undefined;
   if (b.shape === "rounded" || b.shape === "glow") return b.radius;
-  // the multilayer and gradient plates are cards: they take the corner as set
-  if (BANNER_SHAPE_FAMILY[b.shape] === "layered" || BANNER_SHAPE_FAMILY[b.shape] === "gradient") return b.radius;
+  // the modern cards (layered · offset · split · floating) and the folded
+  // ribbon's body are cards: they take the corner as set
+  if (
+    b.shape === "foldedBanner" ||
+    BANNER_SHAPE_FAMILY[b.shape] === "layered" ||
+    BANNER_SHAPE_FAMILY[b.shape] === "gradient" ||
+    BANNER_SHAPE_FAMILY[b.shape] === "modern"
+  )
+    return b.radius;
   return undefined;
 }
 
@@ -208,9 +413,99 @@ export function plateClipPath(b: BannerSettings): string | undefined {
     // a parallelogram: both ends leaning
     case "slant":
       return `polygon(${t}px 0, 100% 0, calc(100% - ${t}px) 100%, 0 100%)`;
+    // a square body with a colour strip riding its leading end — the strip is
+    // a layer of its own behind the body, so the body is cut back from it
+    case "titleBanner":
+      return "inset(0 0 0 14% round 0 12px 12px 0)";
+    // a tag with a long, sharp point at its trailing end — deeper than the
+    // chevron's tip, so the two read apart
+    case "pointedBanner": {
+      const p = Math.round(t * 1.8);
+      return `polygon(0 0, calc(100% - ${p}px) 0, 100% 50%, calc(100% - ${p}px) 100%, 0 100%)`;
+    }
+    // a bookmark: a shallow point at each end
+    case "doubleEndedBanner":
+      return `polygon(${d}px 0, calc(100% - ${d}px) 0, 100% 50%, calc(100% - ${d}px) 100%, ${d}px 100%, 0 50%)`;
+    // all four corners bevelled — the notched banner's square cousin
+    case "cutCorner":
+      return `polygon(${d}px 0, calc(100% - ${d}px) 0, 100% ${d}px, 100% calc(100% - ${d}px), calc(100% - ${d}px) 100%, ${d}px 100%, 0 calc(100% - ${d}px), 0 ${d}px)`;
+    // one straight edge diagonal: the left side leans, the right stays square
+    case "diagonalBanner":
+      return "polygon(0 0, 100% 0, 100% 100%, 12% 100%)";
+    // one corner cut on the long bias — the plate's own tip, run deep
+    case "angledBanner": {
+      const a = Math.round(t * 2.2);
+      return `polygon(0 0, calc(100% - ${a}px) 0, 100% ${a}px, 100% 100%, 0 100%)`;
+    }
+    // taller at the start, stepping in to the end
+    case "asymmetricBanner":
+      return "polygon(0 0, 100% 10%, 100% 90%, 0 100%)";
+    // a shallow lean — the slant's cousin, cut to the ribbon's notch
+    case "skewedRect":
+      return `polygon(${d}px 0, 100% 0, calc(100% - ${d}px) 100%, 0 100%)`;
+    // two opposite corners bevelled deep — the notched banner's mirror, with
+    // its own inner rule
+    case "geoPlate":
+      return `polygon(0 0, calc(100% - ${t}px) 0, 100% ${t}px, 100% 100%, ${t}px 100%, 0 calc(100% - ${t}px))`;
+    // the parchment, cut in from its rolled ends — the rollers are layers
+    // behind it, painted in the gap the cut leaves
+    case "scrollBanner":
+      return "inset(3% 7% 3% 7% round 6px)";
     default:
       return undefined;
   }
+}
+
+/**
+ * The masked silhouettes' own cut, as one CSS mask-image string. The mask is
+ * an SVG drawn in a 100 × 40 box — the plate's own ratio — with
+ * `preserveAspectRatio="none"`, so it stretches to whatever box the plate
+ * paints at: the curves hold at 630 px on the board, in the 320 px preview and
+ * at thumbnail scale in the picker alike. A data-URL, so the export carries
+ * it with the plate and no request goes out for it.
+ */
+const MASK_PATHS: Partial<Record<BannerShape, string>> = {
+  /* basic & clean — the curved band */
+  curvedRect: "M0 16 Q 50 2 100 16 L 100 26 Q 50 40 0 26 Z",
+  /* curved & wave — bands bent on their long edges */
+  waveBanner: "M0 10 C 15 2 30 2 45 10 C 60 18 75 18 100 10 L 100 30 C 85 38 70 38 55 30 C 40 22 25 22 0 30 Z",
+  curvedBanner: "M0 18 Q 50 4 100 18 L 100 36 L 0 36 Z",
+  wavyStrip: "M0 10 C 15 -2.5 30 -2.5 50 10 C 65 17.5 80 17.5 100 10 L 100 30 C 80 42.5 65 42.5 50 30 C 30 22.5 15 22.5 0 30 Z",
+  domeBanner: "M0 34 C 2 12 24 2 50 2 C 76 2 98 12 100 34 L 100 40 L 0 40 Z",
+  concaveBanner: "M0 8 Q 50 22 100 8 L 100 32 Q 50 18 0 32 Z",
+  convexBanner: "M0 10 Q 50 -4 100 10 L 100 30 Q 50 44 0 30 Z",
+  swoosh: "M0 14 C 24 4 52 10 100 32 C 74 30 40 36 0 32 Z",
+  curvedRibbon: "M0 12 C 16 2 32 2 50 12 C 68 22 84 22 100 12 L 100 26 C 84 36 68 36 50 26 C 32 16 16 16 0 26 Z",
+  wavePlate: "M0 2 L 100 2 L 100 24 C 88 32 76 22 62 27 C 48 32 36 24 22 29 C 14 32 6 30 0 27 Z",
+  /* organic / decorative — the freehand silhouettes */
+  organicBlob: "M18 5 C 34 1 58 1 74 5 C 89 9 98 15 95 24 C 92 33 75 38 57 36 C 41 40 20 38 10 31 C 1 24 3 10 18 5 Z",
+  abstractBlob: "M12 8 L 40 2 L 66 8 L 98 14 L 90 30 L 62 38 L 28 36 L 4 26 Z",
+  wavyBlob: "M16 7 C 20 2 28 6 34 3 C 40 0 48 6 54 3 C 60 0 68 6 74 3 C 80 0 90 6 92 14 C 96 20 92 28 84 32 C 78 36 70 30 62 36 C 54 40 44 32 36 38 C 28 40 16 34 12 26 C 8 20 12 12 16 7 Z",
+  roundedBlob: "M30 2 C 55 2 80 4 90 14 C 99 23 98 31 86 35 C 68 40 30 40 16 35 C 3 30 1 20 10 12 C 16 5 20 2 30 2 Z",
+  cloudShape: "M20 32 C 9 32 4 23 12 17 C 9 8 21 2 30 7 C 34 0 48 0 52 6 C 58 0 70 2 72 8 C 82 4 92 10 90 18 C 98 22 94 31 84 32 Z",
+  brushStroke: "M0 15 C 14 9 30 7 46 9 C 62 11 78 10 100 15 C 80 19 64 22 48 22 C 32 23 14 21 0 24 C 2 21 2 18 0 15 Z",
+  paintStroke: "M0 10 C 16 6 30 8 44 12 C 62 14 84 16 100 20 C 84 24 62 26 44 28 C 30 32 16 34 0 30 Z",
+  organicPlate: "M8 12 C 22 4 42 2 60 4 C 78 5 92 8 96 16 C 99 23 94 30 82 33 C 64 37 38 38 22 35 C 10 33 2 28 4 20 C 5 16 6 14 8 12 Z",
+  abstractPlate: "M6 6 L 58 0 L 100 10 L 94 32 L 40 40 L 0 30 Z",
+};
+
+/** the highlight blob's soft edge — the same blob, feathered by a blur */
+const HIGHLIGHT_MASK_PATH =
+  "M25 4 C 50 0 75 4 88 14 C 98 22 92 32 76 36 C 56 41 30 40 16 32 C 4 25 2 14 10 8 C 14 5 18 4 25 4 Z";
+
+const maskUrl = (inner: string): string =>
+  `url("data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 40' preserveAspectRatio='none'>${inner}</svg>`,
+  )}")`;
+
+/** the masked silhouette in use, as one mask-image string — `undefined` for every other body */
+export function plateMask(b: BannerSettings): string | undefined {
+  if (b.shape === "highlightBlob")
+    return maskUrl(
+      `<defs><filter id='h' x='-30%' y='-30%' width='160%' height='160%'><feGaussianBlur stdDeviation='2.5'/></filter></defs><path d='${HIGHLIGHT_MASK_PATH}' fill='black' filter='url(#h)'/>`,
+    );
+  const d = MASK_PATHS[b.shape];
+  return d ? maskUrl(`<path d='${d}' fill='black'/>`) : undefined;
 }
 
 /**
@@ -237,8 +532,13 @@ export function platePaint(b: BannerSettings, fill: string): Pick<React.CSSPrope
   }
 }
 
-/** how many paints the body itself carries — 1 for an ordinary plate, 2 for a gradient layer */
-export const platePaintLayers = (b: BannerSettings): number => (BANNER_SHAPE_FAMILY[b.shape] === "gradient" && b.shape !== "gradStack" ? 2 : 1);
+/**
+ * how many paints the body itself carries — 1 for an ordinary plate, 2 for a
+ * gradient layer (the split banner files under modern now, but still stacks its
+ * hard diagonal over its own gradient)
+ */
+export const platePaintLayers = (b: BannerSettings): number =>
+  BANNER_SHAPE_FAMILY[b.shape] === "gradient" && b.shape !== "gradStack" || b.shape === "split" ? 2 : 1;
 
 /**
  * The plate's own extra layers, painted **behind** its body and **under** the
@@ -317,6 +617,66 @@ export function bannerLayers(b: BannerSettings, base: string): React.CSSProperti
           transform: "translate(2.5%, 19%)",
         },
       ];
+    // the title banner's own colour strip, riding the plate's leading end and
+    // running a hair past its top and bottom — the body is cut back from it
+    case "titleBanner":
+      return [{ ...common, ...rect, background: withAlpha(shade(base, -0.38), 1), clipPath: "inset(-6% 86% -6% 0 round 999px)" }];
+    // the folded ribbon's two tails, darker than the body and stepped down and
+    // out from its ends, each with a notch cut in its inner edge
+    case "foldedBanner":
+      return [
+        {
+          ...common,
+          ...rect,
+          background: withAlpha(shade(base, -0.4), 1),
+          clipPath: "polygon(0 0, 36% 0, 27% 50%, 36% 100%, 0 100%)",
+          transform: "translate(-6%, 18%)",
+        },
+        {
+          ...common,
+          ...rect,
+          background: withAlpha(shade(base, -0.4), 1),
+          clipPath: "polygon(64% 0, 100% 0, 100% 100%, 64% 100%, 73% 50%)",
+          transform: "translate(6%, 18%)",
+        },
+      ];
+    // the curved ribbon's tails — the folded ribbon's own, under a wavy body
+    case "curvedRibbon":
+      return [
+        {
+          ...common,
+          ...rect,
+          background: withAlpha(shade(base, -0.4), 1),
+          clipPath: "polygon(0 0, 36% 0, 27% 50%, 36% 100%, 0 100%)",
+          transform: "translate(-6%, 20%)",
+        },
+        {
+          ...common,
+          ...rect,
+          background: withAlpha(shade(base, -0.4), 1),
+          clipPath: "polygon(64% 0, 100% 0, 100% 100%, 64% 100%, 73% 50%)",
+          transform: "translate(6%, 20%)",
+        },
+      ];
+    // the scroll's two rolled ends — a light shade of the parchment, standing
+    // a hair past its top and bottom in the gap the body's cut leaves
+    case "scrollBanner":
+      return [
+        { ...common, ...rect, background: withAlpha(shade(base, 0.45), 1), clipPath: "inset(-5% 89% -5% 1% round 999px)" },
+        { ...common, ...rect, background: withAlpha(shade(base, 0.45), 1), clipPath: "inset(-5% 1% -5% 89% round 999px)" },
+      ];
+    // the floating plate's ground shadow — a soft ellipse, squashed, a step
+    // below the card
+    case "floatingPlate":
+      return [
+        {
+          ...common,
+          ...rect,
+          background: "radial-gradient(ellipse at center, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 70%)",
+          borderRadius: 999,
+          transform: "translateY(30%) scaleY(0.35)",
+        },
+      ];
     default:
       return [];
   }
@@ -389,6 +749,37 @@ export interface BannerCss {
 }
 
 /**
+ * The shadows a body carries on *itself* — the double frame's inner hairline
+ * and the long shadow's soft fall, the classic bar's embossed top and bottom
+ * rules, the badge's double ring, the oval and circle plates' rims, the
+ * geometric plate's inner rule and the floating card's lift off the board.
+ * Everything else the silhouette paints rides a layer of its own, so none of
+ * these fights the outline's layer.
+ */
+export function plateShadow(b: BannerSettings, base: string): string | undefined {
+  switch (b.shape) {
+    case "frame":
+      return `inset 0 0 0 2px ${withAlpha(shade(base, 0.7), 0.42)}`;
+    case "longShadow":
+      return "0 12px 28px -14px rgba(0,0,0,.65)";
+    case "classicBanner":
+      return `inset 0 3px 0 ${withAlpha(shade(base, 0.55), 0.9)}, inset 0 -3px 0 ${withAlpha(shade(base, -0.3), 0.55)}`;
+    case "badgeBanner":
+      return `inset 0 0 0 2px ${withAlpha(shade(base, 0.85), 0.9)}, inset 0 0 0 6px ${withAlpha(shade(base, -0.35), 0.5)}`;
+    case "ovalPlate":
+      return `inset 0 0 0 2px ${withAlpha(shade(base, 0.8), 0.75)}`;
+    case "circlePlate":
+      return `inset 0 0 0 2px ${withAlpha(shade(base, 0.85), 0.9)}, inset 0 0 0 5px ${withAlpha(shade(base, -0.3), 0.4)}`;
+    case "geoPlate":
+      return `inset 0 0 0 2px ${withAlpha(shade(base, 0.75), 0.6)}`;
+    case "floatingPlate":
+      return "0 16px 30px -12px rgba(0,0,0,0.6), 0 5px 12px -6px rgba(0,0,0,0.45)";
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Builds all the CSS for a banner. Keeps everything inline so html-to-image,
  * thumbnails and the presenter render it identically.
  *
@@ -438,12 +829,12 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
       break;
     default: {
       /**
-       * Every other silhouette — the plates (pill · rounded · box), the stylish
-       * cuts (ribbon · hexagon · cut corners · chevron · swallowtail · slant ·
-       * tab · arch), the multilayer plates and the multilayer gradient plates —
-       * is one body on the plate's own box, and they differ in three channels
-       * only: the corners (`plateRadius`), the cut (`plateClipPath`) and the
-       * paint (`platePaint`, one fill or a stack of gradients).
+       * Every other silhouette — the plates, the shape library (basic · banner
+       * style · modern · curved & wave · organic) and the multilayer plates —
+       * is one body on the plate's own box, and they differ in four channels
+       * only: the corners (`plateRadius`), the cut (`plateClipPath`), the mask
+       * (`plateMask`, the smooth silhouettes) and the paint (`platePaint`, one
+       * fill or a stack of gradients).
        */
       box = {
         ...common,
@@ -451,15 +842,14 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
         ...platePaint(b, fill),
         borderRadius: radius,
         clipPath: plateClipPath(b),
+        // the smooth silhouettes (waves, domes, blobs, strokes) wear their cut
+        // as a mask — the outline's layer wears the very same one below
+        maskImage: plateMask(b),
+        WebkitMaskImage: plateMask(b),
         // the double frame keeps a hairline inside itself and the long-shadow
         // plate its own soft fall — both on the body, so neither fights the
         // outline's own layer
-        boxShadow:
-          b.shape === "frame"
-            ? `inset 0 0 0 2px ${withAlpha(shade(base, 0.7), 0.42)}`
-            : b.shape === "longShadow"
-              ? "0 12px 28px -14px rgba(0,0,0,.65)"
-              : undefined,
+        boxShadow: plateShadow(b, base),
       };
     }
   }
@@ -495,8 +885,12 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
         borderRadius: radius,
         boxSizing: "border-box",
         // the outline follows the cut silhouette — the ribbon's notch, the
-        // hexagon's tips, the chevron's arrow — not a rectangle around it
+        // hexagon's tips, the chevron's arrow — and the masked silhouette
+        // clips it to the very same mask, so the line stays inside the wave
+        // or the blob instead of running off its curve
         clipPath: plateClipPath(b),
+        maskImage: plateMask(b),
+        WebkitMaskImage: plateMask(b),
       }
     : undefined;
 
@@ -571,7 +965,10 @@ export function bannerSizeNow(b: BannerSettings, titleSize = 54, titleWidthPct =
   void titleSize;
   void titleWidthPct;
   const w = bannerPlateWidth(b);
-  const h = Math.round(BANNER_AUTO_FRAME_HEIGHT * (1 + (2 * b.padY) / 100));
+  // and the automatic height is the line frame plus its padding — stretched by
+  // the silhouette's own factor when it paints a taller box (circle, oval,
+  // blobs, cloud), so the slider starts where the plate really is
+  const h = Math.round(BANNER_AUTO_FRAME_HEIGHT * (1 + (2 * b.padY) / 100) * plateHeightFactor(b.shape));
   return { w: Math.max(40, w), h: Math.max(24, h) };
 }
 
