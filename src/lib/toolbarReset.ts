@@ -87,10 +87,10 @@ function resetTitleBg(theme: ThemeSettings): ToolbarResetPatch {
       titleBanner: fresh.color,
       banner: {
         ...fresh,
-        // named even though the fresh plate carries none: the merge that writes
-        // this patch keeps whatever the old object had, so the free size and the
-        // nudge have to be handed back to auto explicitly
-        size: undefined,
+        // the fresh plate carries the factory width (BANNER_WIDTH, 630px), so
+        // the spread above hands the free width back to it — and any hand-set
+        // height with it; only the nudge is named here, because the merge that
+        // writes this patch keeps whatever the old object had
         pos: undefined,
         textGradient: banner.textGradient,
         textGlow: banner.textGlow,

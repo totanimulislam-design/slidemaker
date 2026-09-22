@@ -11,7 +11,7 @@
  * radius, style and weight), the two transparencies are line bars that reach
  * the plate and the line separately, the size and the position are free px on
  * the board, the eye takes the plate away, and Default hands the plate back its
- * auto size and place.
+ * factory size (a 630px-wide chip) and place.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -144,11 +144,11 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   // are the same box, so the plate is read with its whitespace folded away
   const box = (v: string, ...forms: string[]) => forms.some((f) => v.replace(/\s+/g, "") === f.replace(/\s+/g, ""));
   out.push({
-    name: "the factory plate is a tight chip around the heading itself: 10% of the text's own width either side and 8% of the line above and below",
+    name: "the factory plate is a 630px-wide chip centred on the heading, free of the glyphs' own width, with 8% of the line above and below",
     pass:
-      box(auto0.left, "calc(-10% + 0px)") &&
-      box(auto0.top, "calc(-8% + 0px)") &&
-      box(auto0.w, "calc(100% + 20%)", "calc(120%)") &&
+      box(auto0.left, "calc(50% + 0px - 315px)", "calc(50% - 315px)") &&
+      box(auto0.top, "calc(-8% + 0px)", "calc(-8%)") &&
+      auto0.w === "630px" &&
       box(auto0.h, "calc(100% + 16%)", "calc(116%)"),
     detail: `${auto0.w} × ${auto0.h} at ${auto0.left} / ${auto0.top}`,
   });
@@ -376,7 +376,7 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   click(line()?.querySelector<HTMLElement>("[data-toolbar-default]"));
   const fresh = styleOf(plate());
   out.push({
-    name: "Default hands the plate back its auto size and place — no px box, no nudge, no line",
+    name: "Default hands the plate back its factory size and place — the 630px chip, no nudge, no line",
     pass:
       !fresh.includes("1600px") &&
       !fresh.includes("-90px") &&

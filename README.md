@@ -272,16 +272,16 @@ opacity, halo, padding and on/off; each **badge line** its own typeface, colour
 (with *auto* back to the shared brand colour), size and visibility; the
 **options trio** keeps marker shape / row style / numbering / fonts as before.
 
-The plate itself is a **tight chip around the heading text**, not a header bar:
-its box hugs the glyphs themselves, so a short heading gets a short plate that
-never runs under the brand line or the badge. Left untouched it leaves `10 %` of
-the heading's own width either side and `8 %` of the line's box above and
-below (`BANNER_PAD_X` / `BANNER_PAD_Y` in `src/lib/types.ts` — the Design
-gallery and all 32 banner presets sit at the same room), with a `14 px` corner
-radius, a glow oval sized to the flat box and a ribbon whose notched ends are
-cut `16 px` deep (`RIBBON_NOTCH`, shallower still on a plate sized by hand).
-**Banner size** and **Banner position** still paint any px box on the board, so
-a teacher who wants the old room can have it back with two sliders.
+The plate itself is a **chip behind the heading**, not a header bar: its width
+is fixed at `630 px` of the 1280 × 720 stage (`BANNER_WIDTH` in
+`src/lib/types.ts`) and stays there whatever the heading says or which font it
+wears, always centred on the title, while its height still hugs the line — `8 %`
+of the line's box above and below (`BANNER_PAD_Y` in `src/lib/types.ts`), with a
+`14 px` corner radius, a glow oval sized to the flat box and a ribbon whose
+notched ends are cut `16 px` deep (`RIBBON_NOTCH`, shallower still on a plate
+sized by hand). **Banner size** and **Banner position** still paint any px box
+on the board, so a teacher who wants another width can have it with two sliders
+(and the size's *Auto* button hands the width back to the heading's own room).
 
 Two rules keep the stack honest:
 
