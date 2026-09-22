@@ -50,6 +50,7 @@ const suites = [
   ["every colour control (the picker stays open, and the colour reaches the slide)", "colors.test.tsx", "runColorTests"],
   ["question bullet (bullet point presets · shapes · effects, shape fill · border colour/style/radius/weight · transparency · position)", "questionbullet.test.tsx", "runQuestionBulletTests"],
   ["title background (the plate behind the heading: preset groups incl. the stylish · multilayer · multilayer-gradient shape styles · 92 silhouettes in thirteen groups — the shape library (Basic & Clean · Banner Style · Cut & Corner · Modern · Curved & Wave · Organic / Decorative · Decorative / Highlight · Premium / Special) plus the original paint families · effects · fill · border colour/style/radius/weight · transparency · free size · free position · show/hide · default)", "banner.test.tsx", "runBannerTests"],
+  ["banner effects (the plate's Effects card: shadow effects on X · Y · Blur · Spread · Opacity · Colour · glow & light · depth / 3D · modern effects · shape effects · decorative effects — one per group, the shape's distortions stacked)", "bannereffects.test.tsx", "runBannerFxTests"],
   ["slide designs (the Design gallery: 100+ complete looks — badges · title · plate · bullet · stem · options · markers · rows · board · frame)", "slidedesigns.test.tsx", "runSlideDesignTests"],
 ];
 

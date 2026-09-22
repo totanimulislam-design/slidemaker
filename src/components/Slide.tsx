@@ -913,6 +913,9 @@ function SlideBase({
                     <div data-banner-plate="" className={bset.shimmer ? "banner-shimmer" : undefined} style={css.box} />
                   )}
                   {header.showBanner && css.border && <div data-banner-line="" style={css.border} />}
+                  {/* the effects' overlays — above the body and the line, under the heading */}
+                  {header.showBanner &&
+                    css.overlays.map((l, i) => <div key={`banner-overlay-${i}`} data-banner-overlay={i} style={l} />)}
                   <div
                     style={{
                       ...boxFontCss(theme, "title", {

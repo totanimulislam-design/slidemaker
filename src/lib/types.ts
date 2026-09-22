@@ -555,6 +555,156 @@ export interface Gradient {
  */
 export type BannerBorderStyle = "solid" | "dashed" | "dotted" | "double" | "none";
 
+/* ------------------------------------- the Effects card of the plate ------ */
+
+/** the eight shadows a plate can carry — one at a time, dressed by the card */
+export type BannerShadowKind = "drop" | "soft" | "hard" | "long" | "inner" | "floating" | "offset" | "colored";
+
+export interface BannerShadowFx {
+  kind: BannerShadowKind;
+  /** px of the board, signed — left/right */
+  x: number;
+  /** px of the board, signed — up/down */
+  y: number;
+  /** px */
+  blur: number;
+  /** px — the shadow grows outward (0 = its own size) */
+  spread: number;
+  /** 0–100 */
+  opacity: number;
+  color: string;
+}
+
+/** the eight lights a plate can carry — one at a time */
+export type BannerGlowKind = "outer" | "inner" | "neon" | "soft" | "highlight" | "reflection" | "shine" | "gloss";
+
+export interface BannerGlowFx {
+  kind: BannerGlowKind;
+  /** 0–100 */
+  intensity: number;
+  color: string;
+}
+
+/** the nine depths a plate can wear — one at a time */
+export type BannerDepthKind =
+  | "extrusion"
+  | "bevel"
+  | "emboss"
+  | "innerBevel"
+  | "outerBevel"
+  | "raised"
+  | "pressed"
+  | "depth"
+  | "perspective";
+
+export interface BannerDepthFx {
+  kind: BannerDepthKind;
+  /** 0–100 */
+  intensity: number;
+  /** the light's direction in degrees — 0 is straight above, clockwise */
+  angle: number;
+}
+
+/** the eight modern finishes a plate can wear — one at a time */
+export type BannerModernKind =
+  | "glass"
+  | "frosted"
+  | "acrylic"
+  | "blurBg"
+  | "clearGlass"
+  | "noise"
+  | "softGradient"
+  | "mesh";
+
+export interface BannerModernFx {
+  kind: BannerModernKind;
+  /** 0–100 */
+  intensity: number;
+  color: string;
+  /** the backdrop blur the glass family wears, px */
+  blur: number;
+}
+
+/** the shape's own distortion channels — sliders and flips, all independent */
+export interface BannerShapeFx {
+  /** 0 = the plate's own corners; px otherwise */
+  radius: number;
+  /** the four corners in px, worn when `independent` */
+  cornerTL: number;
+  cornerTR: number;
+  cornerBR: number;
+  cornerBL: number;
+  independent: boolean;
+  /** −100..100 — squash the plate to a stretch */
+  distortion: number;
+  /** 0–100 — a wave along each long edge */
+  wave: number;
+  /** 0–100 — a curved band */
+  curve: number;
+  /** 0–100 — shear the whole plate */
+  slant: number;
+  /** degrees, −45..45 */
+  skew: number;
+  /** degrees, −180..180 */
+  rotation: number;
+  flipH: boolean;
+  flipV: boolean;
+}
+
+/** the ten decorations a plate can wear — one at a time */
+export type BannerDecorKind =
+  | "innerHighlight"
+  | "outerHighlight"
+  | "outlineGlow"
+  | "gradientShadow"
+  | "colorShadow"
+  | "edgeHighlight"
+  | "edgeDarkening"
+  | "vignette"
+  | "texture"
+  | "pattern";
+
+export interface BannerDecorFx {
+  kind: BannerDecorKind;
+  /** 0–100 */
+  intensity: number;
+  color: string;
+}
+
+/**
+ * Everything the plate's **Effects** card dresses. One light effect per group
+ * (shadow · glow · depth · modern · decoration) and the shape's distortion
+ * channels on their own. `undefined` in a group means the group is off.
+ */
+export interface BannerEffects {
+  shadow?: BannerShadowFx;
+  glow?: BannerGlowFx;
+  depth?: BannerDepthFx;
+  modern?: BannerModernFx;
+  shape: BannerShapeFx;
+  decor?: BannerDecorFx;
+}
+
+/** the factory effects — everything off, the shape wearing its own body */
+export const DEFAULT_BANNER_EFFECTS: BannerEffects = {
+  shape: {
+    radius: 0,
+    cornerTL: 0,
+    cornerTR: 0,
+    cornerBR: 0,
+    cornerBL: 0,
+    independent: false,
+    distortion: 0,
+    wave: 0,
+    curve: 0,
+    slant: 0,
+    skew: 0,
+    rotation: 0,
+    flipH: false,
+    flipV: false,
+  },
+};
+
 export interface BannerSettings {
   shape: BannerShape;
   /** solid colour (used when gradient is disabled) */
@@ -601,6 +751,8 @@ export interface BannerSettings {
   textShadow: boolean;
   /** subtle animated shimmer in presenter mode (not exported) */
   shimmer: boolean;
+  /** the plate's own effects — the Effects card of the Title background line */
+  effects?: BannerEffects;
 }
 
 /**
@@ -670,6 +822,7 @@ export const DEFAULT_BANNER: BannerSettings = {
   textGlow: 25,
   textShadow: true,
   shimmer: false,
+  effects: DEFAULT_BANNER_EFFECTS,
 };
 
 export const cloneBanner = (b: BannerSettings = DEFAULT_BANNER): BannerSettings =>

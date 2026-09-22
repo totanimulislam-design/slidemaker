@@ -2,9 +2,20 @@ import type { CSSProperties, ReactNode } from "react";
 import type { BannerBorderStyle, BannerSettings, BannerShape, Gradient, ThemeSettings } from "../lib/types";
 import { BANNER_WIDTH, DEFAULT_BANNER } from "../lib/types";
 import {
+  BANNER_DECOR_DEFAULT,
+  BANNER_DECOR_EFFECTS,
+  BANNER_DEPTH_DEFAULT,
+  BANNER_DEPTH_EFFECTS,
+  BANNER_GLOW_DEFAULT,
+  BANNER_GLOW_EFFECTS,
+  BANNER_MODERN_DEFAULT,
+  BANNER_MODERN_EFFECTS,
   BANNER_PRESETS,
   BANNER_PRESET_GROUPS,
+  BANNER_SHADOW_DEFAULTS,
+  BANNER_SHADOW_EFFECTS,
   bannerCss,
+  bannerEffectsOf,
   bannerHasLine,
   bannerPlateWidth,
   bannerPresetPatch,
@@ -16,10 +27,12 @@ import {
   isMaskedShape,
   plateHeightFactor,
   platePaintLayers,
+  type BannerEffectDef,
   type BannerPreset,
   type BannerPresetGroup,
   type BannerShapeFamily,
 } from "../lib/banner";
+import type { BannerEffects, BannerShapeFx } from "../lib/types";
 import { withAlpha } from "../lib/color";
 import GradientEditor from "./GradientEditor";
 import { ColorField, Field, Slider, Toggle } from "./ui";
@@ -41,7 +54,12 @@ import { cn } from "../utils/cn";
  *                     Special), then the original paint
  *                     families (plates · stylish cuts ·
  *                     multilayer · multilayer gradient · marks)
- *   Effects           softness (glow) · outer halo · shimmer
+ *   Effects           softness (glow) · outer halo · shimmer,
+ *                     and the six effect groups — Shadow Effects
+ *                     (eight shadows on X · Y · Blur · Spread ·
+ *                     Opacity · Colour), Glow & Light, Depth / 3D,
+ *                     Modern Effects, Shape Effects and Decorative
+ *                     Effects                              `effects`
  *   Fill colour       solid + gradient                          `color` · `gradient`
  *   Border colour     the outline's paint                       `border.color`
  *   Border style      solid · dashed · dotted · double · none    `border.style`
@@ -597,9 +615,146 @@ export function BannerShapePanel({ theme, banner, setBanner }: BannerProps) {
 /*  Effects                                                            */
 /* ------------------------------------------------------------------ */
 
-export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
+/** the little mark each effect group's tiles wear — one per group, not per effect */
+function FxMark({ group }: { group: "shadow" | "glow" | "depth" | "modern" | "decor" }) {
+  switch (group) {
+    case "shadow":
+      return (
+        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
+          <rect x="2.5" y="2" width="13" height="8" rx="2" fill="currentColor" opacity="0.35" />
+          <rect x="5.5" y="5.5" width="13" height="8" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        </svg>
+      );
+    case "glow":
+      return (
+        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
+          <defs>
+            <radialGradient id="fxmark-glow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.85" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <ellipse cx="10" cy="8" rx="9" ry="7" fill="url(#fxmark-glow)" />
+          <rect x="4" y="4.5" width="12" height="7" rx="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+        </svg>
+      );
+    case "depth":
+      return (
+        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
+          <rect x="3" y="8" width="13" height="6" rx="1.6" fill="currentColor" opacity="0.4" />
+          <rect x="3" y="3" width="13" height="6" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.3" />
+          <path d="M6.5 9V6.2M10 9V6.2M13.5 9V6.2" stroke="currentColor" strokeWidth="0.9" opacity="0.7" />
+        </svg>
+      );
+    case "modern":
+      return (
+        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
+          <rect x="3" y="3" width="14" height="10" rx="2.4" fill="currentColor" opacity="0.2" />
+          <rect x="3" y="3" width="14" height="10" rx="2.4" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M6 13 12 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+          <path d="M9.5 13 14.5 4.8" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
+        </svg>
+      );
+    case "decor":
+      return (
+        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
+          <rect x="3" y="3.5" width="14" height="9" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <path
+            d="M15.4 1c.3.95.95 1.6 1.9 1.9-.95.3-1.6.95-1.9 1.9-.3-.95-.95-1.6-1.9-1.9.95-.3 1.6-.95 1.9-1.9Z"
+            fill="currentColor"
+          />
+        </svg>
+      );
+  }
+}
+
+/** one group's tiles: the "None" tile plus one tile per effect, as pictures */
+function FxTiles<K extends string>({
+  prefix,
+  defs,
+  active,
+  onPick,
+  onClear,
+  mark,
+}: {
+  prefix: string;
+  defs: BannerEffectDef<K>[];
+  active: K | undefined;
+  onPick: (kind: K) => void;
+  onClear: () => void;
+  mark: ReactNode;
+}) {
+  const tile = (selected: boolean) =>
+    cn(
+      "flex min-h-[48px] flex-col items-center justify-center gap-1 rounded-lg border px-1 py-1.5 text-center transition-colors",
+      selected ? "border-amber-400 bg-amber-400/15 text-amber-200" : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/25",
+    );
   return (
-    <div className="space-y-3" data-banner-effects="">
+    <div className="grid grid-cols-3 gap-1.5" role="listbox" aria-label={prefix}>
+      <button
+        type="button"
+        role="option"
+        aria-selected={active === undefined}
+        aria-label={`${prefix}: None`}
+        title="Turn this group off"
+        onClick={onClear}
+        className={tile(active === undefined)}
+      >
+        <span className="text-[12px]" aria-hidden="true">
+          ∅
+        </span>
+        <span className="text-[9px] font-medium leading-tight">None</span>
+      </button>
+      {defs.map((d) => (
+        <button
+          key={d.kind}
+          type="button"
+          role="option"
+          aria-selected={active === d.kind}
+          aria-label={`${prefix}: ${d.label}`}
+          title={d.hint}
+          onClick={() => onPick(d.kind)}
+          className={tile(active === d.kind)}
+        >
+          <span aria-hidden="true">{mark}</span>
+          <span className="text-[9px] font-medium leading-tight">{d.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The plate's **Effects** card — the "Banner effects" button of the Title
+ * background line. The plate's own softness, halo and shimmer lead, and then
+ * one section per effect group, each with its effects as tiles (one at a time,
+ * "None" takes it off) and the controls of the effect on:
+ *
+ *   Shadow Effects     eight shadows, each dressed by X · Y · Blur · Spread ·
+ *                      Opacity · Colour
+ *   Glow & Light       eight lights, each by intensity and colour
+ *   Depth / 3D         nine depths, each by intensity and the light's angle
+ *   Modern Effects     eight finishes, each by intensity, tint and blur
+ *   Shape Effects      the corners (shared or four of their own) and the
+ *                      plate's own distortions — stretch, wave, curve, slant,
+ *                      skew, rotation and the two flips
+ *   Decorative Effects ten decorations, each by intensity and colour
+ *
+ * Every channel falls back to off, so an untouched deck renders exactly as it
+ * always did.
+ */
+export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
+  const fx = bannerEffectsOf(banner);
+  const setFx = (patch: Partial<BannerEffects>) => setBanner({ effects: { ...fx, ...patch } });
+  const setShape = (patch: Partial<BannerShapeFx>) => setBanner({ effects: { ...fx, shape: { ...fx.shape, ...patch } } });
+  const s = fx.shadow;
+  const g = fx.glow;
+  const d = fx.depth;
+  const m = fx.modern;
+  const dc = fx.decor;
+  const t = fx.shape;
+  return (
+    <div className="space-y-4" data-banner-effects="">
       <Cap hint={banner.shape === "glow" ? "the glow's softness" : "glow silhouettes only"}>Effects</Cap>
       <Field label="Softness" hint={`${banner.glow}`}>
         <div className={cn(banner.shape !== "glow" && "opacity-50")}>
@@ -610,9 +765,225 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
         <Slider min={0} max={100} value={banner.halo} onChange={(v) => setBanner({ halo: v })} ariaLabel="Banner halo" />
       </Field>
       <Toggle label="Shimmer animation (screen only)" checked={banner.shimmer} onChange={(v) => setBanner({ shimmer: v })} />
+
+      {/* ---------------------------- shadow effects ------------------------ */}
+      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="shadow">
+        <Cap hint={s ? BANNER_SHADOW_EFFECTS.find((e) => e.kind === s.kind)?.label : "off"}>Shadow Effects</Cap>
+        <FxTiles
+          prefix="Banner shadow"
+          defs={BANNER_SHADOW_EFFECTS}
+          active={s?.kind}
+          onPick={(kind) => setFx({ shadow: { kind, ...BANNER_SHADOW_DEFAULTS[kind] } })}
+          onClear={() => setFx({ shadow: undefined })}
+          mark={<FxMark group="shadow" />}
+        />
+        {s && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              <Field label="X">
+                <Slider min={-200} max={200} step={1} value={s.x} onChange={(v) => setFx({ shadow: { ...s, x: v } })} ariaLabel="Banner fx: shadow X (px)" />
+              </Field>
+              <Field label="Y">
+                <Slider min={-200} max={200} step={1} value={s.y} onChange={(v) => setFx({ shadow: { ...s, y: v } })} ariaLabel="Banner fx: shadow Y (px)" />
+              </Field>
+              <Field label="Blur">
+                <Slider min={0} max={120} step={1} value={s.blur} onChange={(v) => setFx({ shadow: { ...s, blur: v } })} ariaLabel="Banner fx: shadow blur (px)" />
+              </Field>
+              <Field label="Spread">
+                <Slider min={-60} max={120} step={1} value={s.spread} onChange={(v) => setFx({ shadow: { ...s, spread: v } })} ariaLabel="Banner fx: shadow spread (px)" />
+              </Field>
+              <Field label="Opacity %">
+                <Slider min={0} max={100} step={1} value={s.opacity} onChange={(v) => setFx({ shadow: { ...s, opacity: v } })} ariaLabel="Banner fx: shadow opacity (%)" />
+              </Field>
+            </div>
+            <ColorField
+              label="Shadow colour"
+              value={s.color}
+              fallback="#000000"
+              presets={["#000000", "#1f5fd0", "#7c3aed", "#b91c1c", "#059669", "#b45309"]}
+              onChange={(v) => setFx({ shadow: { ...s, color: v || "#000000" } })}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ----------------------------- glow & light ------------------------- */}
+      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="glow">
+        <Cap hint={g ? BANNER_GLOW_EFFECTS.find((e) => e.kind === g.kind)?.label : "off"}>Glow &amp; Light</Cap>
+        <FxTiles
+          prefix="Banner glow"
+          defs={BANNER_GLOW_EFFECTS}
+          active={g?.kind}
+          onPick={(kind) => setFx({ glow: { kind, ...BANNER_GLOW_DEFAULT } })}
+          onClear={() => setFx({ glow: undefined })}
+          mark={<FxMark group="glow" />}
+        />
+        {g && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Intensity" hint={`${g.intensity}`}>
+              <Slider min={0} max={100} step={1} value={g.intensity} onChange={(v) => setFx({ glow: { ...g, intensity: v } })} ariaLabel="Banner fx: glow intensity" />
+            </Field>
+            <ColorField
+              label="Glow colour"
+              value={g.color}
+              fallback="#ffffff"
+              presets={["#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6", "#4ade80"]}
+              onChange={(v) => setFx({ glow: { ...g, color: v || "#ffffff" } })}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ------------------------------ depth / 3D -------------------------- */}
+      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="depth">
+        <Cap hint={d ? BANNER_DEPTH_EFFECTS.find((e) => e.kind === d.kind)?.label : "off"}>Depth / 3D</Cap>
+        <FxTiles
+          prefix="Banner depth"
+          defs={BANNER_DEPTH_EFFECTS}
+          active={d?.kind}
+          onPick={(kind) => setFx({ depth: { kind, ...BANNER_DEPTH_DEFAULT } })}
+          onClear={() => setFx({ depth: undefined })}
+          mark={<FxMark group="depth" />}
+        />
+        {d && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Intensity" hint={`${d.intensity}`}>
+              <Slider min={0} max={100} step={1} value={d.intensity} onChange={(v) => setFx({ depth: { ...d, intensity: v } })} ariaLabel="Banner fx: depth intensity" />
+            </Field>
+            <Field label="Light angle" hint={`${d.angle}°`}>
+              <Slider min={0} max={360} step={5} value={d.angle} onChange={(v) => setFx({ depth: { ...d, angle: v } })} ariaLabel="Banner fx: light angle (deg)" />
+            </Field>
+            <p className="text-[10px] leading-relaxed text-slate-500">
+              0° is light from straight above; walk the angle round and the bevel's lit edge follows it.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ---------------------------- modern effects ------------------------ */}
+      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="modern">
+        <Cap hint={m ? BANNER_MODERN_EFFECTS.find((e) => e.kind === m.kind)?.label : "off"}>Modern Effects</Cap>
+        <FxTiles
+          prefix="Banner modern"
+          defs={BANNER_MODERN_EFFECTS}
+          active={m?.kind}
+          onPick={(kind) => setFx({ modern: { kind, ...BANNER_MODERN_DEFAULT } })}
+          onClear={() => setFx({ modern: undefined })}
+          mark={<FxMark group="modern" />}
+        />
+        {m && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Intensity" hint={`${m.intensity}`}>
+              <Slider min={0} max={100} step={1} value={m.intensity} onChange={(v) => setFx({ modern: { ...m, intensity: v } })} ariaLabel="Banner fx: modern intensity" />
+            </Field>
+            <Field label="Backdrop blur" hint={`${m.blur}px`}>
+              <Slider min={0} max={40} step={1} value={m.blur} onChange={(v) => setFx({ modern: { ...m, blur: v } })} ariaLabel="Banner fx: backdrop blur (px)" />
+            </Field>
+            <ColorField
+              label="Modern tint"
+              value={m.color}
+              fallback="#ffffff"
+              presets={["#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f"]}
+              onChange={(v) => setFx({ modern: { ...m, color: v || "#ffffff" } })}
+            />
+            <p className="text-[10px] leading-relaxed text-slate-500">
+              The glass family blurs the board through the plate in the browser; exports carry the tint and the rim
+              instead.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ----------------------------- shape effects ------------------------ */}
+      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="shape">
+        <Cap
+          hint={
+            t.independent
+              ? "four corners of their own"
+              : t.radius > 0
+                ? `${t.radius}px`
+                : "the plate's own body"
+          }
+        >
+          Shape Effects
+        </Cap>
+        <Field label="Corner radius" hint={t.radius > 0 ? `${t.radius}px` : "the plate's own"}>
+          <Slider min={0} max={120} step={1} value={t.radius} onChange={(v) => setShape({ radius: v })} ariaLabel="Banner fx: corner radius (px)" />
+        </Field>
+        <Toggle label="Independent corner radius" checked={t.independent} onChange={(v) => setShape({ independent: v })} />
+        {t.independent && (
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Top left" hint={`${t.cornerTL}px`}>
+              <Slider min={0} max={120} step={1} value={t.cornerTL} onChange={(v) => setShape({ cornerTL: v })} ariaLabel="Banner fx: corner top-left (px)" />
+            </Field>
+            <Field label="Top right" hint={`${t.cornerTR}px`}>
+              <Slider min={0} max={120} step={1} value={t.cornerTR} onChange={(v) => setShape({ cornerTR: v })} ariaLabel="Banner fx: corner top-right (px)" />
+            </Field>
+            <Field label="Bottom right" hint={`${t.cornerBR}px`}>
+              <Slider min={0} max={120} step={1} value={t.cornerBR} onChange={(v) => setShape({ cornerBR: v })} ariaLabel="Banner fx: corner bottom-right (px)" />
+            </Field>
+            <Field label="Bottom left" hint={`${t.cornerBL}px`}>
+              <Slider min={0} max={120} step={1} value={t.cornerBL} onChange={(v) => setShape({ cornerBL: v })} ariaLabel="Banner fx: corner bottom-left (px)" />
+            </Field>
+          </div>
+        )}
+        <Field label="Shape distortion" hint={t.distortion ? `${t.distortion > 0 ? "+" : ""}${t.distortion}` : "even"}>
+          <Slider min={-100} max={100} step={1} value={t.distortion} onChange={(v) => setShape({ distortion: v })} ariaLabel="Banner fx: shape distortion" />
+        </Field>
+        <Field label="Wave amount" hint={t.wave ? `${t.wave}` : "straight edges"}>
+          <Slider min={0} max={100} step={1} value={t.wave} onChange={(v) => setShape({ wave: v })} ariaLabel="Banner fx: wave amount" />
+        </Field>
+        <Field label="Curve amount" hint={t.curve ? `${t.curve}` : "straight edges"}>
+          <Slider min={0} max={100} step={1} value={t.curve} onChange={(v) => setShape({ curve: v })} ariaLabel="Banner fx: curve amount" />
+        </Field>
+        <Field label="Slant amount" hint={t.slant ? `${t.slant}` : "no shear"}>
+          <Slider min={0} max={100} step={1} value={t.slant} onChange={(v) => setShape({ slant: v })} ariaLabel="Banner fx: slant amount" />
+        </Field>
+        <Field label="Skew" hint={`${t.skew}°`}>
+          <Slider min={-45} max={45} step={1} value={t.skew} onChange={(v) => setShape({ skew: v })} ariaLabel="Banner fx: skew (deg)" />
+        </Field>
+        <Field label="Rotation" hint={`${t.rotation}°`}>
+          <Slider min={-180} max={180} step={1} value={t.rotation} onChange={(v) => setShape({ rotation: v })} ariaLabel="Banner fx: rotation (deg)" />
+        </Field>
+        <Toggle label="Flip horizontal" checked={t.flipH} onChange={(v) => setShape({ flipH: v })} />
+        <Toggle label="Flip vertical" checked={t.flipV} onChange={(v) => setShape({ flipV: v })} />
+        <p className="text-[10px] leading-relaxed text-slate-500">
+          Wave, curve and slant each cut the plate's edge — the one you turn on last wins. The rest stack: rotate, then
+          skew, then stretch, then the flips.
+        </p>
+      </div>
+
+      {/* -------------------------- decorative effects ---------------------- */}
+      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="decor">
+        <Cap hint={dc ? BANNER_DECOR_EFFECTS.find((e) => e.kind === dc.kind)?.label : "off"}>Decorative Effects</Cap>
+        <FxTiles
+          prefix="Banner decor"
+          defs={BANNER_DECOR_EFFECTS}
+          active={dc?.kind}
+          onPick={(kind) => setFx({ decor: { kind, ...BANNER_DECOR_DEFAULT } })}
+          onClear={() => setFx({ decor: undefined })}
+          mark={<FxMark group="decor" />}
+        />
+        {dc && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Intensity" hint={`${dc.intensity}`}>
+              <Slider min={0} max={100} step={1} value={dc.intensity} onChange={(v) => setFx({ decor: { ...dc, intensity: v } })} ariaLabel="Banner fx: decorative intensity" />
+            </Field>
+            <ColorField
+              label="Decorative colour"
+              value={dc.color}
+              fallback="#ffffff"
+              presets={["#ffffff", "#000000", "#ffd633", "#22d3ee", "#f472b6", "#94a3b8"]}
+              onChange={(v) => setFx({ decor: { ...dc, color: v || "#ffffff" } })}
+            />
+          </div>
+        )}
+      </div>
+
       <p className="text-[10px] leading-relaxed text-slate-500">
         The halo grows outward from the plate itself, whatever size it is. Shimmer is a presenter-only sheen and is never
-        exported.
+        exported. One effect wears at a time in each group; the shape's distortions stack, and every group falls back to
+        off, so the plate never wears more than the teacher put on it.
       </p>
     </div>
   );
