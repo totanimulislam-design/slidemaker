@@ -459,13 +459,16 @@ export interface BannerSettings {
 
 /**
  * The room the plate leaves around the heading when the teacher has not sized
- * it by hand, in % of the title box: the plate is a tight chip under the
- * heading, not a header bar — a little air either side, a little above and
- * below, and nothing more. One place for both numbers, so the plate, the
- * design presets and the Design gallery all agree on how close it sits.
+ * it by hand. The plate's box is the heading text's own box — the plate's
+ * wrapper hugs the glyphs, not the whole title room — so a short heading gets
+ * a short plate that can never run under the brand line or the badge. Both
+ * numbers read against that hugged box: `BANNER_PAD_X` is a % of the heading's
+ * own width (a little air either side), `BANNER_PAD_Y` a % of the line's box
+ * above and below. One place for both numbers, so the plate, the design
+ * presets and the Design gallery all agree on how close it sits.
  */
-export const BANNER_PAD_X = 3;
-export const BANNER_PAD_Y = 14;
+export const BANNER_PAD_X = 5;
+export const BANNER_PAD_Y = 10;
 
 /** the plate's own default corner radius, matched to its tighter box */
 export const BANNER_RADIUS = 14;

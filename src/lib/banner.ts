@@ -24,7 +24,7 @@ export const clampOpacity = (v: number | undefined, fallback = 1): number =>
 /** `+ 12px` / `- 12px` — a signed nudge inside a calc() */
 const nudge = (v: number) => (v < 0 ? `- ${Math.abs(v)}px` : `+ ${v}px`);
 
-/** the plate's box — free when the teacher sized it, else the title's own room */
+/** the plate's box — free when the teacher sized it, else the heading text's own room */
 export function plateRect(b: BannerSettings): Pick<React.CSSProperties, "left" | "top" | "width" | "height"> {
   const x = b.pos?.x ?? 0;
   const y = b.pos?.y ?? 0;
@@ -249,7 +249,10 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
       }
     : { color: titleColor, textShadow: shadows.join(", ") || undefined };
 
-  return { box, border: borderLine, halo, text, padding: "10px 0" };
+  // the wrapper hugs the heading text (Slide.tsx paints it `width: fit-content`),
+  // so this inner air is the plate's closest room: a chip around the glyphs,
+  // never a header bar reaching the brand line or the badge
+  return { box, border: borderLine, halo, text, padding: "8px 0" };
 }
 
 /**
@@ -278,8 +281,10 @@ export function measureBannerPlate(): { w: number; h: number } | null {
 export function bannerSizeNow(b: BannerSettings, titleSize = 54, titleWidthPct = 57): { w: number; h: number } {
   const measured = measureBannerPlate();
   if (measured) return measured;
+  // no canvas to measure (the plate hugs the heading text, so only the real
+  // DOM knows its width) — fall back to the title's whole room as an upper bound
   const w = Math.round((BOARD_W * (titleWidthPct + 2 * b.padX)) / 100);
-  const line = titleSize * 1.25 + 20;
+  const line = titleSize * 1.25 + 16;
   const h = Math.round((line * (100 + 2 * b.padY)) / 100);
   return { w: Math.max(40, w), h: Math.max(24, h) };
 }
