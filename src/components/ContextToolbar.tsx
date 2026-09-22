@@ -281,19 +281,46 @@ const SHAPE_MARK_POLY: Partial<Record<BannerShape, string>> = {
   chevron: "1.6,3.4 12.4,3.4 16.4,8 12.4,12.6 1.6,12.6",
   swallow: "1.6,3.4 16.4,3.4 13,8 16.4,12.6 1.6,12.6",
   slant: "5,3.4 16.4,3.4 13,12.6 1.6,12.6",
+  /* the cuts, the bursts and the seals added later — the same silhouette the
+     plate wears, drawn in the mark's own 18 × 16 box */
+  tailBanner: "1.6,5.2 4,5.2 4,3.4 14,3.4 14,5.2 16.4,5.2 16.4,12.6 14,9.8 14,12.6 4,12.6 4,9.8 1.6,12.6",
+  singleCut: "1.6,3.4 16.4,3.4 12.6,12.6 1.6,12.6",
+  doubleCut: "4.6,3.4 13.4,3.4 16.4,6.2 16.4,12.6 1.6,12.6 1.6,6.2",
+  diagonalCut: "1.6,3.4 16.4,5.6 16.4,12.6 1.6,10.4",
+  chamferedBanner: "5.2,3.4 12.8,3.4 16.4,6.6 16.4,9.4 12.8,12.6 5.2,12.6 1.6,9.4 1.6,6.6",
+  octagonBanner: "4.4,3.4 13.6,3.4 16.4,6.2 16.4,9.8 13.6,12.6 4.4,12.6 1.6,9.8 1.6,6.2",
+  trapezoidBanner: "4,3.4 14,3.4 16.4,12.6 1.6,12.6",
+  steppedBanner: "1.6,3.4 6.6,3.4 6.6,5.2 11.4,5.2 11.4,7 16.4,7 16.4,12.6 11.4,12.6 11.4,10.8 6.6,10.8 6.6,9 1.6,9",
+  emblemPlate: "1.6,3.4 16.4,3.4 16.4,9 9,12.8 1.6,9",
+  burstPlate:
+    "9.0,3.4 10.7,4.8 13.3,4.3 13.4,6.0 16.0,6.6 14.5,8.0 16.0,9.4 13.4,10.0 13.3,11.7 10.7,11.2 9.0,12.6 7.3,11.2 4.7,11.7 4.6,10.0 2.0,9.4 3.5,8.0 2.0,6.6 4.6,6.0 4.7,4.3 7.3,4.8",
+  sealBadge:
+    "16.9,8.0 16.1,8.7 15.2,9.2 15.4,10.0 15.4,10.8 14.1,11.1 12.8,11.2 12.3,11.9 11.4,12.6 10.1,12.3 9.0,12.0 7.9,12.3 6.6,12.6 5.7,11.9 5.2,11.2 3.9,11.1 2.6,10.8 2.6,10.0 2.8,9.2 1.9,8.7 1.1,8.0 1.9,7.3 2.8,6.8 2.6,6.0 2.6,5.2 3.9,4.9 5.2,4.8 5.7,4.1 6.6,3.4 7.9,3.7 9.0,4.0 10.1,3.7 11.4,3.4 12.3,4.1 12.8,4.8 14.1,4.9 15.4,5.2 15.4,6.0 15.2,6.8 16.1,7.3 16.9,8.0",
 };
 
-/** the tab and the arch: rounded on top, flat along the bottom */
+/** the tab and the arch: rounded on top, flat along the bottom — and the ticket */
 const SHAPE_MARK_PATH: Partial<Record<BannerShape, string>> = {
   tab: "M1.6 12.6 V6.2 A2.8 2.8 0 0 1 4.4 3.4 H13.6 A2.8 2.8 0 0 1 16.4 6.2 V12.6 Z",
   arch: "M1.6 12.6 V8 A7.4 7.4 0 0 1 16.4 8 V12.6 Z",
+  ticketBanner:
+    "M3.2 3.6 H14.8 A1.6 1.6 0 0 1 16.4 5.2 V6.6 A1.4 1.4 0 0 0 16.4 9.4 V10.8 A1.6 1.6 0 0 1 14.8 12.4 H3.2 A1.6 1.6 0 0 1 1.6 10.8 V9.4 A1.4 1.4 0 0 0 1.6 6.6 V5.2 A1.6 1.6 0 0 1 3.2 3.6 Z",
 };
 
 /** the multilayer silhouettes: the plate plus the layers peeking out behind it */
-const SHAPE_MARK_LAYERS: BannerShape[] = ["stack", "frame", "accent", "offsetLine", "longShadow", "gradStack"];
+const SHAPE_MARK_LAYERS: BannerShape[] = [
+  "stack",
+  "frame",
+  "accent",
+  "offsetLine",
+  "longShadow",
+  "gradStack",
+  "tripleLayer",
+  "plate3d",
+  "doubleRibbon",
+];
 
 /** the multilayer gradient silhouettes: one plate, several stacked paints */
-const SHAPE_MARK_GRADIENT: BannerShape[] = ["sheen", "split", "gloss", "stripes"];
+const SHAPE_MARK_GRADIENT: BannerShape[] = ["sheen", "split", "gloss", "stripes", "glassPlate", "sunburstPlate"];
 
 /** the title plate as a little mark — its current silhouette, worn by the bar */
 function ShapeGlyph({ shape }: { shape: BannerShape }) {
@@ -337,7 +364,11 @@ function ShapeGlyph({ shape }: { shape: BannerShape }) {
                   ? "M9 3.6v8.8h5.4a2 2 0 0 0 2-2V5.6a2 2 0 0 0-2-2z"
                   : shape === "gloss"
                     ? "M3.4 4.4h11.2v2.6H3.4z"
-                    : "M3.6 3.6h1.6l-2 8.8H1.6zM8 3.6h1.6l-2 8.8H6zM12.4 3.6H14l-2 8.8h-1.6z"
+                    : shape === "glassPlate"
+                      ? "M3.2 4 7.8 4 4.6 12 2.4 12z"
+                      : shape === "sunburstPlate"
+                        ? "M9 3.8 9.8 6.4 12.7 5 11 7.3 14.2 8 11 8.7 12.7 11 9.8 9.6 9 12.2 8.2 9.6 5.3 11 7 8.7 3.8 8 7 7.3 5.3 5 8.2 6.4z"
+                        : "M3.6 3.6h1.6l-2 8.8H1.6zM8 3.6h1.6l-2 8.8H6zM12.4 3.6H14l-2 8.8h-1.6z"
             }
             fill="currentColor"
             fillOpacity="0.55"
@@ -1253,10 +1284,11 @@ export default function ContextToolbar(p: Props) {
    *                    they will be — the last three groups are the shape
    *                    styles: Stylish shapes · Multilayer shapes ·
    *                    Multilayer gradient
-   *   Shape            the silhouettes in ten groups — the shape library
-   *                    (Basic & Clean · Banner Style · Modern · Curved &
-   *                    Wave · Organic / Decorative) plus the original paint
-   *                    families — as pictures
+   *   Shape            the silhouettes in thirteen groups — the shape
+   *                    library (Basic & Clean · Banner Style · Cut & Corner ·
+   *                    Modern · Curved & Wave · Organic / Decorative ·
+   *                    Decorative / Highlight · Premium / Special) plus the
+   *                    original paint families — as pictures
    *   Effects          softness · halo · shimmer
    *   Fill             the body's paint: solid or gradient
    *   Border           the outline's paint

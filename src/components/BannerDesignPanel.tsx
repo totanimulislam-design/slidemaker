@@ -33,13 +33,14 @@ import { cn } from "../utils/cn";
  *                     groups — the last three are the shape
  *                     styles: Stylish shapes · Multilayer
  *                     shapes · Multilayer gradient
- *   Shape             the silhouettes in ten groups           BANNER_SHAPE_GROUPS
+ *   Shape             the silhouettes in thirteen groups      BANNER_SHAPE_GROUPS
  *                     — the shape library (Basic & Clean ·
- *                     Banner Style · Modern · Curved & Wave ·
- *                     Organic / Decorative, ten silhouettes
- *                     each), then the original paint families
- *                     (plates · stylish cuts · multilayer ·
- *                     multilayer gradient · marks)
+ *                     Banner Style · Cut & Corner · Modern ·
+ *                     Curved & Wave · Organic / Decorative ·
+ *                     Decorative / Highlight · Premium /
+ *                     Special), then the original paint
+ *                     families (plates · stylish cuts ·
+ *                     multilayer · multilayer gradient · marks)
  *   Effects           softness (glow) · outer halo · shimmer
  *   Fill colour       solid + gradient                          `color` · `gradient`
  *   Border colour     the outline's paint                       `border.color`
@@ -115,16 +116,22 @@ export interface BannerShapeDef {
 }
 
 /**
- * Every silhouette the plate can wear, in the ten groups the picker's own
- * headings name. The first five are the shape library — **Basic & Clean**,
- * **Banner Style**, **Modern**, **Curved & Wave** and **Organic / Decorative**,
- * ten silhouettes each; a shape that already lives in one of the last five
- * groups (pill, rounded, ribbon, notch, slant, stack, offset line, split, arch)
- * files under its library group instead, under the library's name. The last
- * five are the original paint families: plates, the stylish cuts, the
- * multilayer plates, the multilayer gradient plates, and the marks.
- * `BANNER_SHAPES` below is this same list flattened, for anything that wants
- * the whole set at once.
+ * Every silhouette the plate can wear, in the thirteen groups the picker's own
+ * headings name. The first eight are the shape library — **Basic & Clean**,
+ * **Banner Style**, **Cut & Corner**, **Modern**, **Curved & Wave**, **Organic /
+ * Decorative**, **Decorative / Highlight** and **Premium / Special**; a shape
+ * that already lives in one of the last five groups (pill, rounded, ribbon,
+ * notch, slant, stack, offset line, split, arch) files under its library group
+ * instead, under the library's name — and so does a shape the library already
+ * had under another name: the hexagonal banner is the **Hexagon** of the
+ * stylish cuts, the parallelogram banner the **Slanted Banner**, the skewed
+ * banner the **Skewed Rectangle**, the angled-corner banner the **Angled
+ * Banner**, the soft organic plate the **Organic Title Plate**, the shadow
+ * banner the **Long shadow**, the border frame plate the **Double frame** and
+ * the underline shape the **Underline** mark. The last five groups are the
+ * original paint families: plates, the stylish cuts, the multilayer plates, the
+ * multilayer gradient plates, and the marks. `BANNER_SHAPES` below is this same
+ * list flattened, for anything that wants the whole set at once.
  */
 export const BANNER_SHAPE_GROUPS: { family: BannerShapeFamily; name: string; hint: string; shapes: BannerShapeDef[] }[] = [
   {
@@ -159,6 +166,21 @@ export const BANNER_SHAPE_GROUPS: { family: BannerShapeFamily; name: string; hin
       { id: "foldedBanner", label: "Folded Banner", hint: "A ribbon with folded tails behind it" },
       { id: "scrollBanner", label: "Scroll Banner", hint: "A parchment with rolled ends" },
       { id: "badgeBanner", label: "Badge Banner", hint: "A pill with a double inner ring" },
+      { id: "tailBanner", label: "Tail Banner", hint: "A banner with a forked tail at each end" },
+      { id: "flagBanner", label: "Flag Banner", hint: "A flag fluttering — wavy edges and a forked free end" },
+    ],
+  },
+  {
+    family: "cut",
+    name: "Cut & Corner",
+    hint: "The corner cuts — one cut, two, a shear, a chamfer, the octagon and the trapezoid",
+    shapes: [
+      { id: "singleCut", label: "Single-Cut Banner", hint: "One end cut on the bias, the leading edge square" },
+      { id: "doubleCut", label: "Double-Cut Banner", hint: "Two cuts, both on the top edge — the bottom stays square" },
+      { id: "diagonalCut", label: "Diagonal-Cut Banner", hint: "The whole plate sheared — both long edges on one diagonal" },
+      { id: "chamferedBanner", label: "Chamfered Banner", hint: "All four corners chamfered deep" },
+      { id: "octagonBanner", label: "Octagonal Banner", hint: "Eight sides, proportioned for a wide plate" },
+      { id: "trapezoidBanner", label: "Trapezoid Banner", hint: "Narrow across the top, wide across the bottom" },
     ],
   },
   {
@@ -166,16 +188,17 @@ export const BANNER_SHAPE_GROUPS: { family: BannerShapeFamily; name: string; hin
     name: "Modern",
     hint: "The contemporary cuts — angles, layers and cards",
     shapes: [
-      { id: "slant", label: "Slanted Banner", hint: "A parallelogram — both ends leaning" },
+      { id: "slant", label: "Slanted Banner", hint: "A parallelogram banner — both ends leaning" },
       { id: "diagonalBanner", label: "Diagonal Banner", hint: "One diagonal edge, the other straight" },
-      { id: "angledBanner", label: "Angled Banner", hint: "One corner cut on the long bias" },
+      { id: "angledBanner", label: "Angled Banner", hint: "One corner cut on the long bias — the angled-corner banner" },
       { id: "asymmetricBanner", label: "Asymmetric Banner", hint: "Taller at the start, stepping in to the end" },
-      { id: "skewedRect", label: "Skewed Rectangle", hint: "A shallow lean — the slant's cousin" },
+      { id: "skewedRect", label: "Skewed Rectangle", hint: "A shallow lean — the skewed banner, the slant's cousin" },
       { id: "stack", label: "Layered Banner", hint: "Three plates, each peeking out from behind the last" },
       { id: "offsetLine", label: "Offset Banner", hint: "The outline drawn again and offset — the sketch look" },
       { id: "split", label: "Split Banner", hint: "The gradient cut in two by one hard diagonal" },
       { id: "floatingPlate", label: "Floating Title Plate", hint: "A card lifted off the board on its own shadow" },
       { id: "geoPlate", label: "Geometric Title Plate", hint: "Two opposite corners bevelled, with an inner rule" },
+      { id: "steppedBanner", label: "Stepped Banner", hint: "Both long edges step down — a staircase band" },
     ],
   },
   {
@@ -208,8 +231,40 @@ export const BANNER_SHAPE_GROUPS: { family: BannerShapeFamily; name: string; hin
       { id: "brushStroke", label: "Brush Stroke", hint: "A dry brush laid flat under the heading" },
       { id: "paintStroke", label: "Paint Stroke", hint: "A thick head tapering to a thin tail" },
       { id: "highlightBlob", label: "Highlight Blob", hint: "A soft-edged blob — the highlighter look" },
-      { id: "organicPlate", label: "Organic Title Plate", hint: "An organic plate, flat enough to carry type" },
+      { id: "organicPlate", label: "Organic Title Plate", hint: "An organic plate, flat enough to carry type — the soft organic plate" },
       { id: "abstractPlate", label: "Abstract Title Plate", hint: "An irregular facet plate" },
+      { id: "asymmetricBlob", label: "Asymmetric Blob", hint: "A blob weighted to one side — a heavy lobe, a tight tail" },
+      { id: "liquidShape", label: "Liquid Shape", hint: "A pour — a band with drips along its lower edge" },
+      { id: "amoebaShape", label: "Amoeba Shape", hint: "An amoeba — a blob reaching out in pseudopods" },
+      { id: "freeformBlob", label: "Freeform Blob", hint: "A freehand blob — drawn, not built" },
+    ],
+  },
+  {
+    family: "decor",
+    name: "Decorative / Highlight",
+    hint: "The highlighter's own marks — strokes, splashes and bursts",
+    shapes: [
+      { id: "markerStroke", label: "Marker Stroke", hint: "A chisel marker laid across — hard ends, a flat body" },
+      { id: "highlightStrip", label: "Highlight Strip", hint: "A highlighter strip running the whole width" },
+      { id: "swooshHighlight", label: "Swoosh Highlight", hint: "A tapered sweep with a feathered edge" },
+      { id: "splashShape", label: "Splash Shape", hint: "A paint splash with droplets round it" },
+      { id: "burstPlate", label: "Burst Plate", hint: "A burst of twelve deep rays round the heading" },
+      { id: "sunburstPlate", label: "Sunburst Plate", hint: "A card under a sunburst of fine rays" },
+    ],
+  },
+  {
+    family: "premium",
+    name: "Premium / Special",
+    hint: "The dressed plates — ribbons, layers, glass, tickets, seals",
+    shapes: [
+      { id: "doubleRibbon", label: "Double Ribbon", hint: "A notched ribbon with two darker tails behind it" },
+      { id: "tripleLayer", label: "Triple Layer Banner", hint: "Four plates — three stepping out behind the body" },
+      { id: "plate3d", label: "3D Title Plate", hint: "A card on an extruded edge, bevelled top and bottom" },
+      { id: "glassPlate", label: "Glass Title Plate", hint: "A pane of glass — a bright corner sheen over a frost" },
+      { id: "outlineBanner", label: "Outline Banner", hint: "A hollow plate — the fill paints a ring, the middle stays clear" },
+      { id: "ticketBanner", label: "Ticket Banner", hint: "A ticket, bitten at its two dashed perforations" },
+      { id: "sealBadge", label: "Seal Badge", hint: "A notary's seal — the edge cut in a ring of small arcs" },
+      { id: "emblemPlate", label: "Emblem Plate", hint: "An emblem — square shoulders, a point at the bottom centre" },
     ],
   },
   {
@@ -226,7 +281,7 @@ export const BANNER_SHAPE_GROUPS: { family: BannerShapeFamily; name: string; hin
     name: "Stylish shapes",
     hint: "One plate, cut to another silhouette — the outline follows the cut",
     shapes: [
-      { id: "hex", label: "Hexagon", hint: "A badge with a point at each end" },
+      { id: "hex", label: "Hexagon", hint: "A hexagonal banner — a badge with a point at each end" },
       { id: "chevron", label: "Chevron", hint: "Square at the start, an arrow tip at the end" },
       { id: "swallow", label: "Swallowtail", hint: "A flag with a V cut into its trailing end" },
       { id: "tab", label: "Tab", hint: "Rounded along the top, square along the bottom" },
@@ -237,9 +292,9 @@ export const BANNER_SHAPE_GROUPS: { family: BannerShapeFamily; name: string; hin
     name: "Multilayer shapes",
     hint: "The plate plus painted layers of its own behind it",
     shapes: [
-      { id: "frame", label: "Double frame", hint: "A second plate behind, and a hairline inside the first" },
+      { id: "frame", label: "Double frame", hint: "A second plate behind, and a hairline inside the first — the border frame plate" },
       { id: "accent", label: "Accent block", hint: "A colour block riding on the plate's leading end" },
-      { id: "longShadow", label: "Long shadow", hint: "The plate with its own long diagonal shadow" },
+      { id: "longShadow", label: "Long shadow", hint: "The plate with its own long diagonal shadow — the shadow banner" },
     ],
   },
   {
@@ -258,7 +313,7 @@ export const BANNER_SHAPE_GROUPS: { family: BannerShapeFamily; name: string; hin
     name: "Marks",
     hint: "A rule instead of a plate — or nothing at all",
     shapes: [
-      { id: "underline", label: "Underline", hint: "A rule under the heading only" },
+      { id: "underline", label: "Underline", hint: "A rule under the heading only — the underline shape" },
       { id: "none", label: "None", hint: "No plate at all" },
     ],
   },
@@ -527,11 +582,12 @@ export function BannerShapePanel({ theme, banner, setBanner }: BannerProps) {
         ])}
       </div>
       <p className="text-[10px] leading-relaxed text-slate-500">
-        The first five groups are the shape library — <b>Basic &amp; Clean</b>, <b>Banner Style</b>, <b>Modern</b>, <b>Curved
-        &amp; Wave</b> and <b>Organic / Decorative</b>, ten silhouettes each. <b>Glow</b> is a soft light and <b>Underline</b> a
-        rule under the heading; everything else is a real plate an outline can follow — the cut silhouettes are sliced by a
-        clip-path, the curved and the freehand ones by a mask that keeps their waves and blobs, the <b>multilayer</b> ones paint
-        plates of their own behind the body, and the <b>multilayer gradient</b> ones stack several paints on the one body.
+        The first eight groups are the shape library — <b>Basic &amp; Clean</b>, <b>Banner Style</b>, <b>Cut &amp; Corner</b>,{" "}
+        <b>Modern</b>, <b>Curved &amp; Wave</b>, <b>Organic / Decorative</b>, <b>Decorative / Highlight</b> and{" "}
+        <b>Premium / Special</b>. <b>Glow</b> is a soft light and <b>Underline</b> a rule under the heading; everything else
+        is a real plate an outline can follow — the cut silhouettes are sliced by a clip-path, the curved and the freehand
+        ones by a mask that keeps their waves and blobs, the <b>multilayer</b> ones paint plates of their own behind the
+        body, and the <b>multilayer gradient</b> ones stack several paints on the one body.
       </p>
     </div>
   );

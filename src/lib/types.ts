@@ -389,22 +389,31 @@ export const cloneLayout = (l: LayoutMap = DEFAULT_LAYOUT): LayoutMap =>
 /* ------------------------------------------------------------ banner */
 
 /**
- * The title plate's silhouette, in ten families (`BANNER_SHAPE_FAMILY` in
- * `src/lib/banner.ts` says which one each id belongs to). The first five are
- * the shape library — **Basic & Clean**, **Banner Style**, **Modern**,
- * **Curved & Wave** and **Organic / Decorative**, ten silhouettes each — and
- * the last five are the original paint families:
+ * The title plate's silhouette, in thirteen families (`BANNER_SHAPE_FAMILY` in
+ * `src/lib/banner.ts` says which one each id belongs to). The first eight are
+ * the shape library — **Basic & Clean**, **Banner Style**, **Cut & Corner**,
+ * **Modern**, **Curved & Wave**, **Organic / Decorative**, **Decorative /
+ * Highlight** and **Premium / Special** — and the last five are the original
+ * paint families:
  *
  *   basic       the clean plates — rounded rectangles, soft corners, capsules,
  *               ovals, the curved band
  *   bannerStyle the classic banner cuts — ribbon, points, notches, the folded
- *               and the scroll, the badge
+ *               and the scroll, the badge, the tail and the flag
+ *   cut         the corner cuts — one cut, two, a diagonal shear, a chamfer,
+ *               the octagon and the trapezoid
  *   modern      the contemporary cuts — slant, diagonal, angle, skew, the
- *               layered and offset cards, the split, the floating plate
+ *               layered and offset cards, the split, the floating plate, the
+ *               stepped band
  *   curve       the curved silhouettes — waves, arch, dome, concave, convex,
  *               the swoosh, the curved ribbon
- *   organic     the freehand shapes — blobs, the cloud, the brush and paint
- *               strokes, the highlight
+ *   organic     the freehand shapes — blobs (asymmetric, liquid, amoeba,
+ *               freeform), the cloud, the brush and paint strokes, the
+ *               highlight
+ *   decor       the highlighter's own marks — marker and highlight strips, the
+ *               swoosh highlight, the splash, the burst and sunburst plates
+ *   premium     the dressed plates — double ribbon, triple layer, the 3D,
+ *               glass, outline and ticket plates, the seal and the emblem
  *   plates      one body, corners only — glow · box
  *   stylish     one body cut to another silhouette — hexagon, chevron,
  *               swallowtail, tab
@@ -437,6 +446,15 @@ export type BannerShape =
   | "foldedBanner"
   | "scrollBanner"
   | "badgeBanner"
+  | "tailBanner"
+  | "flagBanner"
+  /* cut & corner */
+  | "singleCut"
+  | "doubleCut"
+  | "diagonalCut"
+  | "chamferedBanner"
+  | "octagonBanner"
+  | "trapezoidBanner"
   /* modern */
   | "slant"
   | "diagonalBanner"
@@ -448,6 +466,7 @@ export type BannerShape =
   | "split"
   | "floatingPlate"
   | "geoPlate"
+  | "steppedBanner"
   /* curved & wave */
   | "waveBanner"
   | "curvedBanner"
@@ -470,6 +489,26 @@ export type BannerShape =
   | "highlightBlob"
   | "organicPlate"
   | "abstractPlate"
+  | "asymmetricBlob"
+  | "liquidShape"
+  | "amoebaShape"
+  | "freeformBlob"
+  /* decorative / highlight */
+  | "markerStroke"
+  | "highlightStrip"
+  | "swooshHighlight"
+  | "splashShape"
+  | "burstPlate"
+  | "sunburstPlate"
+  /* premium / special */
+  | "doubleRibbon"
+  | "tripleLayer"
+  | "plate3d"
+  | "glassPlate"
+  | "outlineBanner"
+  | "ticketBanner"
+  | "sealBadge"
+  | "emblemPlate"
   /* plates */
   | "glow"
   | "rect"

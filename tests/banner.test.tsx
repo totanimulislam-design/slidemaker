@@ -244,16 +244,19 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     name: "Shapes lists every silhouette as a picture, with the one in use marked",
     pass:
       pop()?.getAttribute("data-pop-panel") === "Banner shape" &&
-      (pop()?.querySelectorAll('[role="listbox"][aria-label="Banner shape"] [role="option"]').length ?? 0) === 65 &&
+      (pop()?.querySelectorAll('[role="listbox"][aria-label="Banner shape"] [role="option"]').length ?? 0) === 92 &&
       popButton("Banner shape: Pill")?.getAttribute("aria-selected") === "true",
     detail: String(pop()?.querySelectorAll('[role="listbox"][aria-label="Banner shape"] [role="option"]').length),
   });
   const GROUPS = [
     "Basic & Clean",
     "Banner Style",
+    "Cut & Corner",
     "Modern",
     "Curved & Wave",
     "Organic / Decorative",
+    "Decorative / Highlight",
+    "Premium / Special",
     "Plates",
     "Stylish shapes",
     "Multilayer shapes",
@@ -261,9 +264,40 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     "Marks",
   ];
   out.push({
-    name: "…filed in ten groups — the shape library (Basic & Clean · Banner Style · Modern · Curved & Wave · Organic / Decorative) plus the original paint families",
+    name: "…filed in thirteen groups — the shape library (Basic & Clean · Banner Style · Cut & Corner · Modern · Curved & Wave · Organic / Decorative · Decorative / Highlight · Premium / Special) plus the original paint families",
     pass: GROUPS.every((g) => (pop()?.textContent ?? "").includes(g)),
     detail: GROUPS.filter((g) => (pop()?.textContent ?? "").includes(g)).join(" › "),
+  });
+  /* the eighty-name catalogue: every shape a teacher may go looking for is a
+     tile of its own, or an alias in a tile's hint where the library already had
+     it under another name */
+  const CATALOGUE = [
+    /* 1 basic / clean */ "Rounded Rectangle", "Soft Rounded Rectangle", "Capsule", "Pill", "Oval Plate", "Circle Plate",
+    "Ellipse Banner", "Curved Rectangle", "Half-Rounded Rectangle", "Soft Square",
+    /* 2 classic banners */ "Classic Banner", "Ribbon Banner", "Pointed Banner", "Double-Ended Banner", "Notched Banner",
+    "Folded Banner", "Scroll Banner", "Badge Banner", "Tail Banner", "Flag Banner",
+    /* 3 cut & corner */ "Cut-Corner Banner", "Double-Cut Banner", "Single-Cut Banner", "Diagonal-Cut Banner",
+    "Angled-Corner Banner", "Chamfered Banner", "Hexagonal Banner", "Octagonal Banner", "Trapezoid Banner",
+    "Parallelogram Banner",
+    /* 4 modern / geometric */ "Slanted Banner", "Diagonal Banner", "Skewed Banner", "Asymmetric Banner",
+    "Geometric Title Plate", "Offset Banner", "Split Banner", "Layered Banner", "Floating Title Plate", "Stepped Banner",
+    /* 5 curved / wave */ "Wave Banner", "Curved Banner", "Wavy Strip", "Wave Plate", "Arch Banner", "Dome Banner",
+    "Swoosh", "Curved Ribbon", "Concave Banner", "Convex Banner",
+    /* 6 organic / blob */ "Organic Blob", "Abstract Blob", "Wavy Blob", "Rounded Blob", "Asymmetric Blob", "Cloud Shape",
+    "Soft Organic Plate", "Liquid Shape", "Amoeba Shape", "Freeform Blob",
+    /* 7 decorative / highlight */ "Brush Stroke", "Paint Stroke", "Marker Stroke", "Highlight Strip", "Highlight Blob",
+    "Underline Shape", "Swoosh Highlight", "Splash Shape", "Burst Plate", "Sunburst Plate",
+    /* 8 premium / special */ "Double Ribbon", "Triple Layer Banner", "Shadow Banner", "3D Title Plate", "Glass Title Plate",
+    "Outline Banner", "Border Frame Plate", "Ticket Banner", "Seal Badge", "Emblem Plate",
+  ];
+  const tileText = () =>
+    Array.from(pop()?.querySelectorAll<HTMLElement>('[role="listbox"][aria-label="Banner shape"] [role="option"]') ?? [])
+      .map((t) => `${t.getAttribute("aria-label") ?? ""} ${t.getAttribute("title") ?? ""}`.toLowerCase())
+      .join("\n");
+  out.push({
+    name: "…and the whole eighty-name catalogue is findable — each as its own tile, or as an alias in a tile's hint",
+    pass: CATALOGUE.every((n) => tileText().includes(n.toLowerCase())),
+    detail: CATALOGUE.filter((n) => !tileText().includes(n.toLowerCase())).join(", ") || `${CATALOGUE.length} names`,
   });
   click(popButton("Banner shape: Rounded Rectangle"));
   out.push({
@@ -370,6 +404,108 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     pass: (plate()?.style.borderRadius ?? "") === "8px" && (plate()?.style.boxShadow ?? "").includes("inset 0 3px 0"),
     detail: `radius ${plate()?.style.borderRadius ?? ""} · shadow ${String(plate()?.style.boxShadow ?? "").slice(0, 44)}`,
   });
+
+  /* ---- the silhouettes added later: cut & corner --------------------------- */
+  click(popButton("Banner shape: Single-Cut Banner"));
+  out.push({
+    name: "the cut & corner group brings its own cuts — single · double · diagonal · chamfered · octagon · trapezoid",
+    pass:
+      (plate()?.style.clipPath ?? "").startsWith("polygon(0 0, 100% 0,") &&
+      (["singleCut", "doubleCut", "diagonalCut", "chamferedBanner", "octagonBanner", "trapezoidBanner"] as const).every(
+        (s) => (bannerCss({ ...DEFAULT_BANNER, shape: s }, "#ffffff").box.clipPath ?? "").startsWith("polygon("),
+      ),
+    detail: (["singleCut", "doubleCut", "diagonalCut", "chamferedBanner", "octagonBanner", "trapezoidBanner"] as const)
+      .map((s) => `${s} ${(String(bannerCss({ ...DEFAULT_BANNER, shape: s }, "#ffffff").box.clipPath ?? "").match(/,/g) ?? []).length + 1} pts`)
+      .join(" · "),
+  });
+  const chamClip = String(bannerCss({ ...DEFAULT_BANNER, shape: "chamferedBanner" }, "#ffffff").box.clipPath ?? "");
+  out.push({
+    name: "a deep bevel caps itself at the plate's own height, so a short plate still closes",
+    pass: chamClip.includes("min(") && chamClip.includes("38%"),
+    detail: chamClip.slice(0, 60),
+  });
+  click(popButton("Banner shape: Stepped Banner"));
+  out.push({
+    name: "the stepped banner is a staircase — both long edges step down in three",
+    pass: (plate()?.style.clipPath ?? "").split(",").length === 12,
+    detail: plate()?.style.clipPath ?? "",
+  });
+
+  /* ---- the silhouettes added later: the masked freehand ones --------------- */
+  click(popButton("Banner shape: Flag Banner"));
+  const flagMask = plate()?.style.maskImage ?? "";
+  out.push({
+    name: "the new freehand silhouettes wear masks like the old ones — the flag, the blobs, the strokes, the splash, the seal, the ticket",
+    pass:
+      flagMask.startsWith('url("data:image/svg+xml') &&
+      (["flagBanner", "asymmetricBlob", "liquidShape", "amoebaShape", "freeformBlob", "markerStroke", "highlightStrip", "swooshHighlight", "splashShape", "sealBadge", "ticketBanner"] as const).every(
+        (s) => (bannerCss({ ...DEFAULT_BANNER, shape: s }, "#ffffff").box.maskImage ?? "").startsWith('url("data:image/svg+xml'),
+      ),
+    detail: `${(bannerCss({ ...DEFAULT_BANNER, shape: "sealBadge" }, "#ffffff").box.maskImage ?? "").length} chars of seal`,
+  });
+  out.push({
+    name: "the ticket's bites are holes in its mask — the path is filled even-odd, and the outline wears the very same mask",
+    pass: (() => {
+      const css = bannerCss({ ...DEFAULT_BANNER, shape: "ticketBanner", border: { enabled: true, color: "#ffffff", width: 2 } }, "#ffffff");
+      return (css.box.maskImage ?? "").includes("evenodd") && css.border?.maskImage === css.box.maskImage;
+    })(),
+    detail: "evenodd in the mask",
+  });
+  click(popButton("Banner shape: Burst Plate"));
+  out.push({
+    name: "the burst plate is cut to a star — twelve rays written in % of the plate, so they stretch with it",
+    pass: (plate()?.style.clipPath ?? "").startsWith("polygon(") && (plate()?.style.clipPath ?? "").split(",").length === 24,
+    detail: `${(plate()?.style.clipPath ?? "").split(",").length} points`,
+  });
+
+  /* ---- the silhouettes added later: the premium plates -------------------- */
+  click(popButton("Banner shape: Double Ribbon"));
+  out.push({
+    name: "the double ribbon is the ribbon's cut with two tails of its own behind it",
+    pass:
+      plateLayers().length === 2 &&
+      plateLayers().every((l) => (l.style.clipPath ?? "").startsWith("polygon(")) &&
+      (plate()?.style.clipPath ?? "").includes("50%"),
+    detail: `${plateLayers().length} tails · ${plateLayers().map((l) => l.style.transform).join(" / ")}`,
+  });
+  click(popButton("Banner shape: Triple Layer Banner"));
+  out.push({
+    name: "the triple layer banner steps three plates out behind the body",
+    pass: plateLayers().length === 3 && plateLayers().every((l) => (l.style.transform ?? "").includes("translate(")),
+    detail: `${plateLayers().length} layers`,
+  });
+  click(popButton("Banner shape: 3D Title Plate"));
+  out.push({
+    name: "the 3D plate stands on an extruded slab of its own silhouette, bevelled top and bottom on the body",
+    pass:
+      plateLayers().length === 2 &&
+      (plate()?.style.boxShadow ?? "").includes("inset 0 2px 0") &&
+      (plateLayers()[0]?.style.transform ?? "").includes("translateY("),
+    detail: `${plateLayers().length} layers · ${String(plate()?.style.boxShadow ?? "").slice(0, 40)}`,
+  });
+  click(popButton("Banner shape: Outline Banner"));
+  out.push({
+    name: "the outline banner is hollow — the body carries no paint, its fill is an inset ring that follows the corners",
+    pass:
+      (plate()?.style.background ?? "").includes("transparent") &&
+      (plate()?.style.boxShadow ?? "").startsWith("inset 0 0 0 4px"),
+    detail: `bg ${plate()?.style.background ?? ""} · ${String(plate()?.style.boxShadow ?? "").slice(0, 30)}`,
+  });
+  {
+    // with the deck's gradient on, the fill is itself a paint the plates stack over
+    const painted = { ...DEFAULT_BANNER, gradient: { ...DEFAULT_BANNER.gradient, enabled: true } };
+    out.push({
+      name: "the glass and the ticket plates stack their paints over the fill — three each, the sunburst two",
+      pass:
+        (["glassPlate", "ticketBanner"] as const).every(
+          (s) => paints(String(bannerCss({ ...painted, shape: s }, "#ffffff").box.background ?? "")) === 3,
+        ) &&
+        paints(String(bannerCss({ ...painted, shape: "sunburstPlate" }, "#ffffff").box.background ?? "")) === 2,
+      detail: (["glassPlate", "ticketBanner", "sunburstPlate"] as const)
+        .map((s) => `${s} ${paints(String(bannerCss({ ...painted, shape: s }, "#ffffff").box.background ?? ""))}`)
+        .join(" · "),
+    });
+  }
 
   /* ---- multilayer shapes: the plate plus painted plates of its own -------- */
   click(popButton("Banner shape: Layered Banner"));
