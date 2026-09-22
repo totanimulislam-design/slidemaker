@@ -274,8 +274,8 @@ opacity, halo, padding and on/off; each **badge line** its own typeface, colour
 
 The plate itself is a **tight chip around the heading text**, not a header bar:
 its box hugs the glyphs themselves, so a short heading gets a short plate that
-never runs under the brand line or the badge. Left untouched it leaves `5 %` of
-the heading's own width either side and `10 %` of the line's box above and
+never runs under the brand line or the badge. Left untouched it leaves `10 %` of
+the heading's own width either side and `8 %` of the line's box above and
 below (`BANNER_PAD_X` / `BANNER_PAD_Y` in `src/lib/types.ts` — the Design
 gallery and all 32 banner presets sit at the same room), with a `14 px` corner
 radius, a glow oval sized to the flat box and a ribbon whose notched ends are

@@ -144,12 +144,12 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   // are the same box, so the plate is read with its whitespace folded away
   const box = (v: string, ...forms: string[]) => forms.some((f) => v.replace(/\s+/g, "") === f.replace(/\s+/g, ""));
   out.push({
-    name: "the factory plate is a tight chip around the heading itself: 5% of the text's own width either side and 10% of the line above and below",
+    name: "the factory plate is a tight chip around the heading itself: 10% of the text's own width either side and 8% of the line above and below",
     pass:
-      box(auto0.left, "calc(-5% + 0px)") &&
-      box(auto0.top, "calc(-10% + 0px)") &&
-      box(auto0.w, "calc(100% + 10%)", "calc(110%)") &&
-      box(auto0.h, "calc(100% + 20%)", "calc(120%)"),
+      box(auto0.left, "calc(-10% + 0px)") &&
+      box(auto0.top, "calc(-8% + 0px)") &&
+      box(auto0.w, "calc(100% + 20%)", "calc(120%)") &&
+      box(auto0.h, "calc(100% + 16%)", "calc(116%)"),
     detail: `${auto0.w} × ${auto0.h} at ${auto0.left} / ${auto0.top}`,
   });
 

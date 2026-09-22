@@ -252,7 +252,7 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
   // the wrapper hugs the heading text (Slide.tsx paints it `width: fit-content`),
   // so this inner air is the plate's closest room: a chip around the glyphs,
   // never a header bar reaching the brand line or the badge
-  return { box, border: borderLine, halo, text, padding: "8px 0" };
+  return { box, border: borderLine, halo, text, padding: "6px 0" };
 }
 
 /**
@@ -284,7 +284,7 @@ export function bannerSizeNow(b: BannerSettings, titleSize = 54, titleWidthPct =
   // no canvas to measure (the plate hugs the heading text, so only the real
   // DOM knows its width) — fall back to the title's whole room as an upper bound
   const w = Math.round((BOARD_W * (titleWidthPct + 2 * b.padX)) / 100);
-  const line = titleSize * 1.25 + 16;
+  const line = titleSize * 1.25 + 12;
   const h = Math.round((line * (100 + 2 * b.padY)) / 100);
   return { w: Math.max(40, w), h: Math.max(24, h) };
 }

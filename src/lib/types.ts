@@ -467,8 +467,8 @@ export interface BannerSettings {
  * above and below. One place for both numbers, so the plate, the design
  * presets and the Design gallery all agree on how close it sits.
  */
-export const BANNER_PAD_X = 5;
-export const BANNER_PAD_Y = 10;
+export const BANNER_PAD_X = 10;
+export const BANNER_PAD_Y = 8;
 
 /** the plate's own default corner radius, matched to its tighter box */
 export const BANNER_RADIUS = 14;
