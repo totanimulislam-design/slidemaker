@@ -37,9 +37,22 @@ export function previewTheme(preset: SlideDesignPreset): ThemeSettings {
 function plateCss(t: ThemeSettings): { plate: CSSProperties; isRule: boolean } {
   const box = bannerCss(t.banner, t.titleColor).box;
   // the miniature lays the plate out itself (a fixed inset), so the stage's own
-  // geometry and the glow's scale are stripped and only the paint is kept
-  const { position: _p, inset: _i, left: _l, right: _r, bottom: _b, top: _t, height: _h, transform: _tf, pointerEvents: _pe, ...rest } =
-    box as CSSProperties & Record<string, unknown>;
+  // geometry and the glow's scale are stripped and only the paint is kept — the
+  // shape's own 630px width among it, which would otherwise win over the inset
+  // and paint a chip wider than the card
+  const {
+    position: _p,
+    inset: _i,
+    left: _l,
+    right: _r,
+    bottom: _b,
+    top: _t,
+    width: _w,
+    height: _h,
+    transform: _tf,
+    pointerEvents: _pe,
+    ...rest
+  } = box as CSSProperties & Record<string, unknown>;
   if (t.banner.shape === "none") return { plate: { display: "none" }, isRule: false };
   return { plate: rest as CSSProperties, isRule: t.banner.shape === "underline" };
 }

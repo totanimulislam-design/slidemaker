@@ -273,15 +273,24 @@ opacity, halo, padding and on/off; each **badge line** its own typeface, colour
 **options trio** keeps marker shape / row style / numbering / fonts as before.
 
 The plate itself is a **chip behind the heading**, not a header bar: its width
-is fixed at `630 px` of the 1280 × 720 stage (`BANNER_WIDTH` in
-`src/lib/types.ts`) and stays there whatever the heading says or which font it
-wears, always centred on the title, while its height still hugs the line — `8 %`
-of the line's box above and below (`BANNER_PAD_Y` in `src/lib/types.ts`), with a
-`14 px` corner radius, a glow oval sized to the flat box and a ribbon whose
-notched ends are cut `16 px` deep (`RIBBON_NOTCH`, shallower still on a plate
-sized by hand). **Banner size** and **Banner position** still paint any px box
-on the board, so a teacher who wants another width can have it with two sliders
-(and the size's *Auto* button hands the width back to the heading's own room).
+is fixed at `630 px` across, horizontally, of the 1280 × 720 stage
+(`BANNER_WIDTH` in `src/lib/types.ts`) and stays there whatever the heading says
+or which font it wears, always centred on the title, while its height still hugs
+the line — `8 %` of the line's box above and below (`BANNER_PAD_Y` in
+`src/lib/types.ts`), with a `14 px` corner radius, a glow oval sized to the flat
+box and a ribbon whose notched ends are cut `16 px` deep (`RIBBON_NOTCH`,
+shallower still on a plate sized by hand).
+
+The `630 px` is the shape's *own* width, not one look among many: nothing that
+dresses the plate resizes it. A fresh deck, any of the thirty-two banner design
+presets (`bannerPresetPatch` in `src/lib/banner.ts`), any of the 128 slide
+designs (`src/lib/slideDesigns.ts`) and the size card's own button all write the
+same `630 px` box — a preset dresses the chip, it never hands the width back to
+the heading's own room. **Banner size** and **Banner position** still paint any
+px box on the board, so a teacher who wants another width can have it with two
+sliders (and the size card's button hands the shape back to `630 px` across,
+with the height hugging the line again). The plate's *height* padding is the one
+room slider left, since the width no longer depends on the heading's box.
 
 Two rules keep the stack honest:
 

@@ -426,7 +426,13 @@ export interface BannerSettings {
   glow: number;
   /** extra glow halo around the banner (any shape) 0–100 */
   halo: number;
-  /** horizontal & vertical plate expansion, in % of the title frame */
+  /**
+   * Plate expansion, in % of the title frame. `padY` is the room above and
+   * below the heading while the plate's height is automatic. `padX` is kept for
+   * decks saved before the plate's width became its own 630 px box
+   * (`BANNER_WIDTH`); a deck whose width is unset — the small previews inside
+   * the panels — still reads it as room left and right.
+   */
   padX: number;
   padY: number;
   /** corner radius for rounded / rect shapes, px */
@@ -476,10 +482,17 @@ export const BANNER_AUTO_FRAME_HEIGHT = 72;
 export const BANNER_RADIUS = 14;
 
 /**
- * The title background shape's width, in px of the 1280 × 720 stage. The plate
- * paints at exactly this box, centred on the heading — free of the title text's
- * own width, so the plate keeps its size whatever the heading says or which
- * font it wears. Height stays automatic: the 72 px line frame plus its padding.
+ * The title background shape's width, in px of the 1280 × 720 stage: **630 px
+ * across**, horizontally. The plate paints at exactly this box, centred on the
+ * heading — free of the title text's own width, so the plate keeps its size
+ * whatever the heading says or which font it wears. Height stays automatic: the
+ * 72 px line frame plus its padding.
+ *
+ * Every path that dresses the plate writes this width rather than handing the
+ * shape back to the heading's own room — a fresh deck, a banner design preset
+ * (`bannerPresetPatch`), a slide design (`lib/slideDesigns`), and the Banner
+ * size card's own button all carry it. Only the *Banner size* bar paints
+ * another width, and only for as long as the teacher leaves it there.
  */
 export const BANNER_WIDTH = 630;
 

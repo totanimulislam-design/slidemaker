@@ -1,4 +1,4 @@
-import { BANNER_AUTO_FRAME_HEIGHT, type BannerBorderStyle, type BannerSettings, type Gradient } from "./types";
+import { BANNER_AUTO_FRAME_HEIGHT, BANNER_WIDTH, type BannerBorderStyle, type BannerSettings, type Gradient } from "./types";
 import { withAlpha } from "./color";
 
 /** the stage every deck is designed on (Slide.tsx) — the plate's px speak in it */
@@ -24,11 +24,35 @@ export const clampOpacity = (v: number | undefined, fallback = 1): number =>
 /** `+ 12px` / `- 12px` — a signed nudge inside a calc() */
 const nudge = (v: number) => (v < 0 ? `- ${Math.abs(v)}px` : `+ ${v}px`);
 
-/** the plate's box — free when the teacher sized it, else the title frame's own room */
+/**
+ * The width a deck's plate paints at, in px of the 1280 × 720 stage: the
+ * teacher's own number when they set one on the Banner size card, and the
+ * factory chip (`BANNER_WIDTH`, 630 px) otherwise. Every path that dresses the
+ * plate — a design preset, a slide design, the size card's own Default button —
+ * writes this width instead of leaving the plate to hug the heading, so the
+ * shape is 630 px across whatever the heading says.
+ */
+export const bannerPlateWidth = (b: BannerSettings): number => b.size?.w ?? BANNER_WIDTH;
+
+/**
+ * The width a plate actually paints at. A deck always carries a free size of
+ * its own, so its plate is the teacher's px or the 630 px chip — including the
+ * decks saved before the width was fixed, which may carry a height and no
+ * width. Only the small previews inside the panels pass no size at all, and
+ * those paint the plate hugging their own thumbnail.
+ */
+const paintedWidth = (b: BannerSettings): number | undefined => b.size?.w ?? (b.size ? BANNER_WIDTH : undefined);
+
+/**
+ * The plate's box. Width and height are read the same way: a px box when the
+ * teacher sized it, the plate's own automatic box otherwise — automatic width
+ * being the 630 px chip (`paintedWidth`), automatic height the line frame plus
+ * its padding.
+ */
 export function plateRect(b: BannerSettings): Pick<React.CSSProperties, "left" | "top" | "width" | "height"> {
   const x = b.pos?.x ?? 0;
   const y = b.pos?.y ?? 0;
-  const w = b.size?.w;
+  const w = paintedWidth(b);
   const h = b.size?.h;
   return {
     // free size is centred on the title (where the plate already sits), so
@@ -81,7 +105,8 @@ export const ribbonClipPath = (b: BannerSettings): string => {
 function ruleRect(b: BannerSettings): Pick<React.CSSProperties, "left" | "bottom" | "width" | "height"> {
   const x = b.pos?.x ?? 0;
   const y = b.pos?.y ?? 0;
-  const w = b.size?.w;
+  // the rule is the plate's width — 630 px across, like every other silhouette
+  const w = paintedWidth(b);
   return {
     left: w === undefined ? `calc(-${b.padX}% ${nudge(x)})` : `calc(50% ${nudge(x - w / 2)})`,
     bottom: `calc(-${Math.max(4, b.padY / 3)}% ${nudge(y)})`,
@@ -276,17 +301,18 @@ export function measureBannerPlate(): { w: number; h: number } | null {
 
 /**
  * The plate's size for a slider that has not been touched yet: the measured
- * canvas when it can be measured, an estimate from the title's own box else.
+ * canvas when it can be measured, the plate's own box else — the 630 px chip
+ * across, and the line frame plus its padding down.
  */
 export function bannerSizeNow(b: BannerSettings, titleSize = 54, titleWidthPct = 57): { w: number; h: number } {
   const measured = measureBannerPlate();
   if (measured) return measured;
-  // no canvas to measure — automatic plates use the title element's stable
-  // frame, not the current glyph metrics. Keep this fallback in sync with the
-  // editor so the size panel does not jump when the title size changes.
+  // no canvas to measure — the plate's width is the factory chip whatever the
+  // heading says or which font it wears, so the slider starts on 630 instead of
+  // jumping when the title size changes. Keep this in sync with the editor.
   void titleSize;
-  const frameW = Math.round((BOARD_W * titleWidthPct) / 100);
-  const w = Math.round(frameW * (1 + (2 * b.padX) / 100));
+  void titleWidthPct;
+  const w = bannerPlateWidth(b);
   const h = Math.round(BANNER_AUTO_FRAME_HEIGHT * (1 + (2 * b.padY) / 100));
   return { w: Math.max(40, w), h: Math.max(24, h) };
 }
@@ -811,12 +837,22 @@ function noGrad(): Gradient {
  * What a design preset writes: its own channels over the current plate, plus
  * the plate's *place* handed back to auto — a preset is a whole look, so a size
  * or nudge left over from the last one must not follow it around.
+ *
+ * The plate's width is the one thing a preset does not touch: it dresses the
+ * 630 px chip, it does not resize it, so the shape stays 630 px across after
+ * any of the thirty-two looks. A width the teacher set by hand survives too,
+ * and the height goes back to hugging the line.
  */
 export function bannerPresetPatch(
   current: BannerSettings,
   preset: BannerPreset,
 ): Partial<BannerSettings> {
-  return { ...JSON.parse(JSON.stringify(current)) as BannerSettings, size: undefined, pos: undefined, ...preset.banner };
+  return {
+    ...JSON.parse(JSON.stringify(current)) as BannerSettings,
+    size: { w: bannerPlateWidth(current) },
+    pos: undefined,
+    ...preset.banner,
+  };
 }
 
 function DEFAULT_GRADIENT(): Gradient {
