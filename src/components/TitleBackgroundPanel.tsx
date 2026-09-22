@@ -1,5 +1,4 @@
-import type { BannerSettings, Box, DeckHeader, ElementId, ThemeSettings } from "../lib/types";
-import { DEFAULT_BANNER, cloneBanner } from "../lib/types";
+import { BANNER_AUTO_FRAME_HEIGHT, DEFAULT_BANNER, cloneBanner, type BannerSettings, type Box, type DeckHeader, type ElementId, type ThemeSettings } from "../lib/types";
 import { bannerCss } from "../lib/banner";
 import {
   BannerBorderPanel,
@@ -58,7 +57,18 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
       {/* --------------------------------- live preview ---------------------- */}
       <div className="overflow-hidden rounded-xl border border-white/10" style={{ background: theme.board }}>
         <div className="flex items-center justify-center px-6 py-7">
-          <div style={{ position: "relative", padding: css.padding, width: "fit-content", margin: "0 auto" }}>
+          <div
+            style={{
+              position: "relative",
+              padding: css.padding,
+              boxSizing: "border-box",
+              width: header.showBanner && b.shape !== "none" ? "min(100%, 320px)" : "fit-content",
+              ...(header.showBanner && b.shape !== "none" && b.size?.h === undefined ? { height: BANNER_AUTO_FRAME_HEIGHT } : {}),
+              display: header.showBanner && b.shape !== "none" ? "flex" : undefined,
+              alignItems: header.showBanner && b.shape !== "none" ? "center" : undefined,
+              margin: "0 auto",
+            }}
+          >
             {header.showBanner && css.halo && <div style={css.halo} />}
             {header.showBanner && <div className={b.shimmer ? "banner-shimmer" : undefined} style={css.box} />}
             {header.showBanner && css.border && <div style={css.border} />}
@@ -69,6 +79,7 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
                 fontSize: 30,
                 fontWeight: 800,
                 whiteSpace: "nowrap",
+                width: header.showBanner && b.shape !== "none" ? "100%" : undefined,
                 lineHeight: 1.25,
                 ...css.text,
               }}

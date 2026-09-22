@@ -426,7 +426,7 @@ export interface BannerSettings {
   glow: number;
   /** extra glow halo around the banner (any shape) 0–100 */
   halo: number;
-  /** horizontal & vertical padding around the title text, in % of the title box */
+  /** horizontal & vertical plate expansion, in % of the title frame */
   padX: number;
   padY: number;
   /** corner radius for rounded / rect shapes, px */
@@ -437,10 +437,10 @@ export interface BannerSettings {
    */
   border: { enabled: boolean; color: string; width: number; style?: BannerBorderStyle; opacity?: number };
   /**
-   * Free plate box in px of the 1280 × 720 stage. Left out, the plate hugs the
-   * title text (its padding); set, the plate is painted at that exact size and
-   * centred on the title — and nothing clamps it, so it may be wider or taller
-   * than the board itself.
+   * Free plate box in px of the 1280 × 720 stage. Left out, the plate uses the
+   * title element's stable frame and its padding; set, the plate is painted at
+   * that exact size and centred on the title — and nothing clamps it, so it may
+   * be wider or taller than the board itself.
    */
   size?: { w?: number; h?: number };
   /**
@@ -458,17 +458,19 @@ export interface BannerSettings {
 }
 
 /**
- * The room the plate leaves around the heading when the teacher has not sized
- * it by hand. The plate's box is the heading text's own box — the plate's
- * wrapper hugs the glyphs, not the whole title room — so a short heading gets
- * a short plate that can never run under the brand line or the badge. Both
- * numbers read against that hugged box: `BANNER_PAD_X` is a % of the heading's
- * own width (a little air either side), `BANNER_PAD_Y` a % of the line's box
- * above and below. One place for both numbers, so the plate, the design
- * presets and the Design gallery all agree on how close it sits.
+ * The default padding used by the title plate when it has no explicit free
+ * size. The title plate is laid out against the title element's own box (not
+ * the glyphs), so changing the title font cannot resize the built-in plate.
  */
 export const BANNER_PAD_X = 10;
 export const BANNER_PAD_Y = 8;
+
+/**
+ * The content frame used by the automatic title plate, in stage pixels. It is
+ * deliberately independent of the title font size: the heading may grow or
+ * shrink inside this frame while the built-in background keeps its own shape.
+ */
+export const BANNER_AUTO_FRAME_HEIGHT = 72;
 
 /** the plate's own default corner radius, matched to its tighter box */
 export const BANNER_RADIUS = 14;
