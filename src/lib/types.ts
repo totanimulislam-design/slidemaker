@@ -389,43 +389,101 @@ export const cloneLayout = (l: LayoutMap = DEFAULT_LAYOUT): LayoutMap =>
 /* ------------------------------------------------------------ banner */
 
 /**
- * The title plate's silhouette, in five families (`BANNER_SHAPE_FAMILY` in
- * `src/lib/banner.ts` says which one each id belongs to):
+ * The title plate's silhouette, in ten families (`BANNER_SHAPE_FAMILY` in
+ * `src/lib/banner.ts` says which one each id belongs to). The first five are
+ * the shape library — **Basic & Clean**, **Banner Style**, **Modern**,
+ * **Curved & Wave** and **Organic / Decorative**, ten silhouettes each — and
+ * the last five are the original paint families:
  *
- *   plates    one body, corners only — glow · pill · rounded · box
- *   stylish   one body cut to another silhouette — hexagon, cut corners,
- *             chevron, swallowtail, slant, tab, arch (plus the ribbon)
- *   multilayer the body **plus** painted layers of its own behind it —
- *             stacked plates, double frame, accent block, offset outline,
- *             long shadow
- *   gradient  the body painted from **several stacked gradients** — sheen,
- *             split, gloss, stripes, and the stacked-gradient plates
- *   marks     a rule instead of a plate — underline · none
+ *   basic       the clean plates — rounded rectangles, soft corners, capsules,
+ *               ovals, the curved band
+ *   bannerStyle the classic banner cuts — ribbon, points, notches, the folded
+ *               and the scroll, the badge
+ *   modern      the contemporary cuts — slant, diagonal, angle, skew, the
+ *               layered and offset cards, the split, the floating plate
+ *   curve       the curved silhouettes — waves, arch, dome, concave, convex,
+ *               the swoosh, the curved ribbon
+ *   organic     the freehand shapes — blobs, the cloud, the brush and paint
+ *               strokes, the highlight
+ *   plates      one body, corners only — glow · box
+ *   stylish     one body cut to another silhouette — hexagon, chevron,
+ *               swallowtail, tab
+ *   multilayer  the body **plus** painted layers of its own behind it — double
+ *               frame, accent block, long shadow
+ *   gradient    the body painted from **several stacked gradients** — sheen,
+ *               gloss, stripes, and the stacked-gradient plates
+ *   marks       a rule instead of a plate — underline · none
  */
 export type BannerShape =
+  /* basic & clean */
+  | "rounded"
+  | "softRounded"
+  | "capsule"
+  | "pill"
+  | "ovalPlate"
+  | "circlePlate"
+  | "halfRound"
+  | "curvedRect"
+  | "softSquare"
+  | "ellipseBanner"
+  /* banner style */
+  | "classicBanner"
+  | "titleBanner"
+  | "ribbon"
+  | "pointedBanner"
+  | "doubleEndedBanner"
+  | "notch"
+  | "cutCorner"
+  | "foldedBanner"
+  | "scrollBanner"
+  | "badgeBanner"
+  /* modern */
+  | "slant"
+  | "diagonalBanner"
+  | "angledBanner"
+  | "asymmetricBanner"
+  | "skewedRect"
+  | "stack"
+  | "offsetLine"
+  | "split"
+  | "floatingPlate"
+  | "geoPlate"
+  /* curved & wave */
+  | "waveBanner"
+  | "curvedBanner"
+  | "wavyStrip"
+  | "arch"
+  | "domeBanner"
+  | "concaveBanner"
+  | "convexBanner"
+  | "swoosh"
+  | "curvedRibbon"
+  | "wavePlate"
+  /* organic / decorative */
+  | "organicBlob"
+  | "abstractBlob"
+  | "wavyBlob"
+  | "roundedBlob"
+  | "cloudShape"
+  | "brushStroke"
+  | "paintStroke"
+  | "highlightBlob"
+  | "organicPlate"
+  | "abstractPlate"
   /* plates */
   | "glow"
-  | "pill"
   | "rect"
-  | "rounded"
   /* stylish — one plate, another silhouette */
-  | "ribbon"
   | "hex"
-  | "notch"
   | "chevron"
   | "swallow"
-  | "slant"
   | "tab"
-  | "arch"
   /* multilayer — the plate plus its own layers */
-  | "stack"
   | "frame"
   | "accent"
-  | "offsetLine"
   | "longShadow"
   /* multilayer gradient — one plate, several paints */
   | "sheen"
-  | "split"
   | "gloss"
   | "stripes"
   | "gradStack"

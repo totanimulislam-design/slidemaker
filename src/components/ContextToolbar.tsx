@@ -1253,7 +1253,10 @@ export default function ContextToolbar(p: Props) {
    *                    they will be — the last three groups are the shape
    *                    styles: Stylish shapes · Multilayer shapes ·
    *                    Multilayer gradient
-   *   Shape            the silhouettes in five families, as pictures
+   *   Shape            the silhouettes in ten groups — the shape library
+   *                    (Basic & Clean · Banner Style · Modern · Curved &
+   *                    Wave · Organic / Decorative) plus the original paint
+   *                    families — as pictures
    *   Effects          softness · halo · shimmer
    *   Fill             the body's paint: solid or gradient
    *   Border           the outline's paint

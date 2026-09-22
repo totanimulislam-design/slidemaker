@@ -330,10 +330,10 @@ previews, the thumbnails and the export.
 | Section | What it does |
 | --- | --- |
 | **Design presets** — 51 looks in 10 groups | *Classic · Broadcast · Chalk & parchment · Teal current · Campus blue · Merit & highlighter · Seminar shelf*, then the three **shape-style** groups: **Stylish shapes** (hex badge, cut corner card, chevron tag, swallowtail flag, slant plate, sky tab, gold arch), **Multilayer shapes** (paper stack, neon stack, gold double frame, mint offset, amber accent card, long shadow blue) and **Multilayer gradient** (sheen royal, split sunset, gloss emerald, striped steel, stacked gradient, maroon sheen). Every tile is a live thumbnail of the plate it paints, and a click dresses the 630 px chip without resizing it |
-| **Shape** — 24 silhouettes in five families | **Plates** (glow, pill, rounded, box); **Stylish shapes** — one plate cut to another silhouette: ribbon, hexagon, cut corners, chevron, swallowtail, slant, tab, arch; **Multilayer shapes** — the plate plus painted plates of its own behind it: stack, double frame, accent block, offset line, long shadow; **Multilayer gradient** — one body painted from several stacked gradients: sheen, split, gloss, stripes, and stacked (three plates, each with a gradient of its own); **Marks** (underline, none). The outline's own layer wears the same clip-path, so a border follows the hexagon's tips and the chevron's arrow |
-| Effects · Fill · Border · radius · style · weight · Transparency · size · position | the glow's softness, the outer halo and the presenter-only shimmer; the body's paint (solid or the shared gradient builder — the multilayer-gradient silhouettes stack a second paint over whatever it is); the outline on a layer of its own; the corners (a cut silhouette keeps its straight edges, tab and arch round the top only); the two transparencies; and the plate's free px box and nudge on the board |
+| **Shape** — 65 silhouettes in ten groups | The **shape library** first — ten silhouettes each: **Basic & Clean** (rounded rectangle, soft rounded rectangle, capsule, pill, oval plate, circle plate, half-rounded rectangle, curved rectangle, soft square, ellipse banner), **Banner Style** (classic, title, ribbon, pointed, double-ended, notched, cut-corner, folded, scroll, badge), **Modern** (slanted, diagonal, angled, asymmetric, skewed rectangle, layered, offset, split, floating title plate, geometric title plate), **Curved & Wave** (wave banner, curved banner, wavy strip, arch, dome, concave, convex, swoosh, curved ribbon, wave plate) and **Organic / Decorative** (organic / abstract / wavy / rounded blob, cloud, brush stroke, paint stroke, highlight blob, organic / abstract title plate) — then the original paint families: **Plates** (glow, box), **Stylish shapes** (hexagon, chevron, swallowtail, tab), **Multilayer shapes** (double frame, accent block, long shadow), **Multilayer gradient** (sheen, gloss, stripes, stacked) and **Marks** (underline, none). A silhouette that already had a home files under its library group instead (pill, rounded, ribbon, notch, slant, stack, offset line, split, arch). The outline's own layer wears the same clip-path *and* the same mask, so a border follows the hexagon's tips, the chevron's arrow and the wave banner's waves |
+| Effects · Fill · Border · radius · style · weight · Transparency · size · position | the glow's softness, the outer halo and the presenter-only shimmer; the body's paint (solid or the shared gradient builder — the multilayer-gradient silhouettes stack a second paint over whatever it is); the outline on a layer of its own; the corners (a cut silhouette keeps its straight edges, a masked silhouette keeps its curves — the mask decides, tab and arch round the top only); the two transparencies; and the plate's free px box and nudge on the board — while the height is automatic, the round and freehand silhouettes (circle, oval, blobs, cloud, strokes…) stretch it by their own factor, so a circle plate reads round without a hand-sized box |
 
-Three rules keep the new silhouettes honest:
+Four rules keep the new silhouettes honest:
 
 - **A multilayer plate paints real layers.** `bannerCss()` returns them in
   `layers`, and the board paints each on its own `div` *behind* the body and
@@ -343,6 +343,12 @@ Three rules keep the new silhouettes honest:
 - **Every offset is a percentage of the plate**, so a stack reads as a stack at
   630 px on the board and at thumbnail scale in the gallery alike — no px
   constant to outgrow a plate sized by hand.
+- **The smooth silhouettes wear a mask, not a clip.** A wave, a dome, a blob or
+  a stroke is one SVG — drawn in a 100 × 40 box with
+  `preserveAspectRatio="none"` — carried as a data-URL `mask-image` on the body
+  and on the outline's own layer alike, so the curve holds at 630 px on the
+  board, in the preview and at thumbnail scale, and the export carries it with
+  the plate without a request going out for it.
 - **Nothing but the halo blurs.** The outer halo is the plate's only filtered
   layer, which keeps the layers readable (and testable) apart from it.
 
