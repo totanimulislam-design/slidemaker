@@ -388,7 +388,50 @@ export const cloneLayout = (l: LayoutMap = DEFAULT_LAYOUT): LayoutMap =>
 
 /* ------------------------------------------------------------ banner */
 
-export type BannerShape = "glow" | "pill" | "rect" | "rounded" | "ribbon" | "underline" | "none";
+/**
+ * The title plate's silhouette, in five families (`BANNER_SHAPE_FAMILY` in
+ * `src/lib/banner.ts` says which one each id belongs to):
+ *
+ *   plates    one body, corners only — glow · pill · rounded · box
+ *   stylish   one body cut to another silhouette — hexagon, cut corners,
+ *             chevron, swallowtail, slant, tab, arch (plus the ribbon)
+ *   multilayer the body **plus** painted layers of its own behind it —
+ *             stacked plates, double frame, accent block, offset outline,
+ *             long shadow
+ *   gradient  the body painted from **several stacked gradients** — sheen,
+ *             split, gloss, stripes, and the stacked-gradient plates
+ *   marks     a rule instead of a plate — underline · none
+ */
+export type BannerShape =
+  /* plates */
+  | "glow"
+  | "pill"
+  | "rect"
+  | "rounded"
+  /* stylish — one plate, another silhouette */
+  | "ribbon"
+  | "hex"
+  | "notch"
+  | "chevron"
+  | "swallow"
+  | "slant"
+  | "tab"
+  | "arch"
+  /* multilayer — the plate plus its own layers */
+  | "stack"
+  | "frame"
+  | "accent"
+  | "offsetLine"
+  | "longShadow"
+  /* multilayer gradient — one plate, several paints */
+  | "sheen"
+  | "split"
+  | "gloss"
+  | "stripes"
+  | "gradStack"
+  /* marks */
+  | "underline"
+  | "none";
 
 export interface GradientStop {
   color: string;

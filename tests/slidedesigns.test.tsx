@@ -21,6 +21,7 @@ import { createRoot, type Root } from "react-dom/client";
 import App from "../src/App";
 import { DEFAULT_LOGO, DEFAULT_THEME, type ThemeSettings } from "../src/lib/types";
 import { BG_PRESETS, designInfo } from "../src/lib/backgroundDesigns";
+import { BANNER_SHAPE_IDS } from "../src/lib/banner";
 import { ALL_FRAME_STYLES } from "../src/lib/frameDesigns";
 import { NUMBER_STYLES } from "../src/lib/numberStyles";
 import { OPTION_BULLET_SHAPES } from "../src/lib/optionBulletShapes";
@@ -70,7 +71,9 @@ const ROW_IDS = new Set(OPTION_STYLES.map((s) => s.id as string));
 const MARKER_IDS = new Set(OPTION_BULLET_SHAPES.map((s) => s.id as string));
 const FRAME_IDS = new Set(ALL_FRAME_STYLES.map((s) => s.id as string));
 const BG_IDS = new Set(BG_PRESETS.map((p) => p.id));
-const BANNER_SHAPES = new Set(["glow", "pill", "rect", "rounded", "ribbon", "underline", "none"]);
+// the silhouettes the plate renderer paints — every id in the family map, so
+// a design naming a shape the renderer does not know is caught here
+const BANNER_SHAPES = new Set<string>(BANNER_SHAPE_IDS);
 
 /* --------------------------------------------------------------- contrast */
 

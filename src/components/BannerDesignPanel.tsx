@@ -3,6 +3,7 @@ import type { BannerBorderStyle, BannerSettings, BannerShape, Gradient, ThemeSet
 import { BANNER_WIDTH, DEFAULT_BANNER } from "../lib/types";
 import {
   BANNER_PRESETS,
+  BANNER_PRESET_GROUPS,
   bannerCss,
   bannerHasLine,
   bannerPlateWidth,
@@ -11,7 +12,11 @@ import {
   bannerBorderStyle,
   canOutline,
   clampOpacity,
+  isClippedShape,
+  platePaintLayers,
   type BannerPreset,
+  type BannerPresetGroup,
+  type BannerShapeFamily,
 } from "../lib/banner";
 import { withAlpha } from "../lib/color";
 import GradientEditor from "./GradientEditor";
@@ -22,8 +27,13 @@ import { cn } from "../utils/cn";
  * The title background plate's own controls — one card per channel, so the
  * toolbar's buttons each open exactly what they name.
  *
- *   Design presets    thirty-two complete looks                BANNER_PRESETS
- *   Shape             glow · pill · rounded · box · ribbon · underline · none
+ *   Design presets    fifty-one complete looks, filed in ten   BANNER_PRESETS
+ *                     groups — the last three are the shape
+ *                     styles: Stylish shapes · Multilayer
+ *                     shapes · Multilayer gradient
+ *   Shape             the silhouettes in five families          BANNER_SHAPE_GROUPS
+ *                     (plates · stylish cuts · multilayer ·
+ *                     multilayer gradient · marks)
  *   Effects           softness (glow) · outer halo · shimmer
  *   Fill colour       solid + gradient                          `color` · `gradient`
  *   Border colour     the outline's paint                       `border.color`
@@ -92,16 +102,82 @@ export function AutoBtn({ on, onClick, label }: { on: boolean; onClick: () => vo
   );
 }
 
-/** the seven silhouettes, as the toolbar's Shapes button and the panels spell them */
-export const BANNER_SHAPES: { id: BannerShape; label: string; hint: string }[] = [
-  { id: "glow", label: "Glow", hint: "A soft radial light behind the heading" },
-  { id: "pill", label: "Pill", hint: "A capsule — fully rounded ends" },
-  { id: "rounded", label: "Rounded", hint: "A card with rounded corners" },
-  { id: "rect", label: "Box", hint: "A plain rectangle" },
-  { id: "ribbon", label: "Ribbon", hint: "A ribbon with notched ends" },
-  { id: "underline", label: "Underline", hint: "A rule under the heading only" },
-  { id: "none", label: "None", hint: "No plate at all" },
+export interface BannerShapeDef {
+  id: BannerShape;
+  label: string;
+  hint: string;
+}
+
+/**
+ * Every silhouette the plate can wear, in the five families the picker's own
+ * headings name — plates, the stylish cuts, the multilayer plates, the
+ * multilayer gradient plates, and the marks. `BANNER_SHAPES` below is this same
+ * list flattened, for anything that wants the whole set at once.
+ */
+export const BANNER_SHAPE_GROUPS: { family: BannerShapeFamily; name: string; hint: string; shapes: BannerShapeDef[] }[] = [
+  {
+    family: "plate",
+    name: "Plates",
+    hint: "One body — the corners are all that changes",
+    shapes: [
+      { id: "glow", label: "Glow", hint: "A soft radial light behind the heading" },
+      { id: "pill", label: "Pill", hint: "A capsule — fully rounded ends" },
+      { id: "rounded", label: "Rounded", hint: "A card with rounded corners" },
+      { id: "rect", label: "Box", hint: "A plain rectangle" },
+    ],
+  },
+  {
+    family: "stylish",
+    name: "Stylish shapes",
+    hint: "One plate, cut to another silhouette — the outline follows the cut",
+    shapes: [
+      { id: "ribbon", label: "Ribbon", hint: "A ribbon with notched ends" },
+      { id: "hex", label: "Hexagon", hint: "A badge with a point at each end" },
+      { id: "notch", label: "Cut corners", hint: "Two corners sliced off, top-left and bottom-right" },
+      { id: "chevron", label: "Chevron", hint: "Square at the start, an arrow tip at the end" },
+      { id: "swallow", label: "Swallowtail", hint: "A flag with a V cut into its trailing end" },
+      { id: "slant", label: "Slant", hint: "A parallelogram — both ends leaning" },
+      { id: "tab", label: "Tab", hint: "Rounded along the top, square along the bottom" },
+      { id: "arch", label: "Arch", hint: "A full arch on top, flat along the bottom" },
+    ],
+  },
+  {
+    family: "layered",
+    name: "Multilayer shapes",
+    hint: "The plate plus painted layers of its own behind it",
+    shapes: [
+      { id: "stack", label: "Stack", hint: "Three plates, each peeking out from behind the last" },
+      { id: "frame", label: "Double frame", hint: "A second plate behind, and a hairline inside the first" },
+      { id: "accent", label: "Accent block", hint: "A colour block riding on the plate's leading end" },
+      { id: "offsetLine", label: "Offset line", hint: "The outline drawn again and offset — the sketch look" },
+      { id: "longShadow", label: "Long shadow", hint: "The plate with its own long diagonal shadow" },
+    ],
+  },
+  {
+    family: "gradient",
+    name: "Multilayer gradient",
+    hint: "One plate painted from several stacked gradients",
+    shapes: [
+      { id: "sheen", label: "Sheen", hint: "The gradient crossed by a diagonal band of light" },
+      { id: "split", label: "Split", hint: "The gradient cut in two by one hard diagonal" },
+      { id: "gloss", label: "Gloss", hint: "The gradient under a gloss along the top edge" },
+      { id: "stripes", label: "Striped", hint: "The gradient under a fine diagonal stripe weave" },
+      { id: "gradStack", label: "Stacked", hint: "Three plates behind, each with a gradient of its own" },
+    ],
+  },
+  {
+    family: "mark",
+    name: "Marks",
+    hint: "A rule instead of a plate — or nothing at all",
+    shapes: [
+      { id: "underline", label: "Underline", hint: "A rule under the heading only" },
+      { id: "none", label: "None", hint: "No plate at all" },
+    ],
+  },
 ];
+
+/** every silhouette, flattened — the toolbar's Shapes button and the panels */
+export const BANNER_SHAPES: BannerShapeDef[] = BANNER_SHAPE_GROUPS.flatMap((g) => g.shapes);
 
 export const BANNER_BORDER_STYLES: { value: BannerBorderStyle; label: string; hint: string; dash?: string }[] = [
   { value: "solid", label: "Solid", hint: "One continuous line" },
@@ -208,6 +284,10 @@ export function PositionIcon({ size = 18 }: { size?: number }) {
 export function BannerPresetTile({ preset, theme, active, onClick }: { preset: BannerPreset; theme: ThemeSettings; active?: boolean; onClick: () => void }) {
   const merged: BannerSettings = { ...DEFAULT_BANNER, ...bannerOf(theme), ...preset.banner, color: preset.banner.color ?? bannerOf(theme).color };
   const css = bannerCss({ ...merged, size: undefined, pos: undefined, halo: 0 }, theme.titleColor);
+  // the thumbnail lays the plate out itself, so the stage's own box is replaced
+  // here — the layers wear the very same replacement, which is why their offsets
+  // are percentages of the plate rather than px of the board
+  const thumb: CSSProperties = { left: "8%", top: "22%", width: "84%", height: "56%" };
   return (
     <button
       type="button"
@@ -222,31 +302,78 @@ export function BannerPresetTile({ preset, theme, active, onClick }: { preset: B
     >
       <span className="relative block h-6 w-full overflow-hidden rounded border border-white/10" style={{ background: theme.board }}>
         {css.halo ? <span className="absolute block" style={{ ...css.halo, left: "8%", top: "-10%", width: "84%", height: "120%", transform: undefined, filter: "none" }} /> : null}
-        <span className="absolute block" style={{ ...css.box, left: "8%", top: "22%", width: "84%", height: "56%" }} />
-        {css.border ? <span className="absolute block" style={{ ...css.border, left: "8%", top: "22%", width: "84%", height: "56%" }} /> : null}
+        {css.layers.map((l, i) => (
+          <span key={i} className="absolute block" data-banner-layer={i} style={{ ...l, ...thumb }} />
+        ))}
+        <span className="absolute block" style={{ ...css.box, ...thumb }} />
+        {css.border ? <span className="absolute block" style={{ ...css.border, ...thumb }} /> : null}
       </span>
       <span className="truncate">{preset.name}</span>
     </button>
   );
 }
 
+/**
+ * Is the plate wearing exactly this look right now? The silhouette has to match,
+ * and then the paint — the preset's gradient, stop for stop, or its solid colour
+ * when it brings no gradient.
+ */
+export function presetActive(banner: BannerSettings, p: BannerPreset): boolean {
+  if (banner.shape !== (p.banner.shape ?? banner.shape)) return false;
+  const want = p.banner.gradient;
+  if (want?.enabled) {
+    const now = banner.gradient;
+    return (
+      now.enabled &&
+      now.type === want.type &&
+      now.angle === want.angle &&
+      now.stops.length === want.stops.length &&
+      now.stops.every((s, i) => s.color === want.stops[i]?.color && s.at === want.stops[i]?.at)
+    );
+  }
+  return !!p.banner.color && p.banner.color === banner.color;
+}
+
+/** what each group heading says next to its own name */
+const PRESET_GROUP_HINT: Record<BannerPresetGroup, string> = {
+  Classic: "the factory looks",
+  Broadcast: "dark stages, gilded type",
+  "Chalk & parchment": "board and paper",
+  "Teal current": "navy on teal",
+  "Campus blue": "lecture header bars",
+  "Merit & highlighter": "admission circuit",
+  "Seminar shelf": "seminar classics",
+  "Stylish shapes": "cut silhouettes",
+  "Multilayer shapes": "plate + layers",
+  "Multilayer gradient": "stacked paints",
+};
+
 export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
+  const inUse = BANNER_PRESETS.find((p) => presetActive(banner, p));
   return (
-    <div className="space-y-2" data-banner-presets="">
-      <Cap hint="a whole look — shape, paint and line">Design presets</Cap>
-      <div className="grid grid-cols-2 gap-1.5">
-        {BANNER_PRESETS.map((p) => (
-          <BannerPresetTile
-            key={p.name}
-            preset={p}
-            theme={theme}
-            active={banner.shape === (p.banner.shape ?? banner.shape) && !!p.banner.color && p.banner.color === banner.color}
-            onClick={() => setBanner(bannerPresetPatch(banner, p))}
-          />
-        ))}
-      </div>
+    <div className="space-y-3" data-banner-presets="">
+      <Cap hint={inUse ? inUse.name : `${BANNER_PRESETS.length} looks · ${BANNER_PRESET_GROUPS.length} groups`}>Design presets</Cap>
+      {BANNER_PRESET_GROUPS.map((g) => {
+        const looks = BANNER_PRESETS.filter((p) => p.group === g);
+        if (!looks.length) return null;
+        return (
+          <div key={g} className="space-y-1.5" data-banner-preset-group={g}>
+            <div className="flex items-baseline justify-between gap-2 border-t border-white/5 pt-1.5">
+              <span className="text-[10px] font-semibold text-slate-300">{g}</span>
+              <span className="text-[9.5px] font-normal text-slate-500">{PRESET_GROUP_HINT[g]}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {looks.map((p) => (
+                <BannerPresetTile key={p.name} preset={p} theme={theme} active={presetActive(banner, p)} onClick={() => setBanner(bannerPresetPatch(banner, p))} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
       <p className="text-[10px] leading-relaxed text-slate-500">
-        A preset repaints the plate and hands its size and place back to auto — the heading itself is never touched.
+        A preset repaints the plate and hands its size and place back to auto — the heading itself is never touched. The last
+        three groups are the <b>shape styles</b>: cut silhouettes, plates with layers of their own, and plates painted from
+        several stacked gradients.
       </p>
     </div>
   );
@@ -277,6 +404,11 @@ function ShapeTile({ shape, banner, theme, chosen, onPick }: { shape: BannerShap
       )}
     >
       <span className="relative block h-7 w-full overflow-hidden rounded bg-[#0b1220]">
+        {/* the multilayer silhouettes' own layers ride behind the body, exactly
+            as they do on the board — the tile paints the real thing, not a mark */}
+        {css.box.display !== "none"
+          ? css.layers.map((l, i) => <span key={i} className="absolute block" data-banner-layer={i} style={{ ...l, ...frame }} />)
+          : null}
         {css.box.display !== "none" ? <span className="absolute block" style={{ ...css.box, ...(shape === "underline" ? { left: "6%", bottom: "22%", width: "88%" } : frame) }} /> : null}
         {css.border ? <span className="absolute block" style={{ ...css.border, ...(shape === "underline" ? {} : frame) }} /> : null}
       </span>
@@ -291,20 +423,20 @@ export function BannerShapePanel({ theme, banner, setBanner }: BannerProps) {
     <div className="space-y-2" data-banner-shapes="">
       <Cap hint={current?.hint}>Shape</Cap>
       <div className="grid grid-cols-4 gap-1.5" role="listbox" aria-label="Banner shape">
-        {BANNER_SHAPES.map((s) => (
-          <ShapeTile
-            key={s.id}
-            shape={s.id}
-            banner={banner}
-            theme={theme}
-            chosen={banner.shape === s.id}
-            onPick={() => setBanner({ shape: s.id })}
-          />
-        ))}
+        {BANNER_SHAPE_GROUPS.map((g) => [
+          <div key={`${g.name}-head`} className="col-span-4 flex items-baseline justify-between gap-2 border-t border-white/5 pt-1.5">
+            <span className="text-[10px] font-semibold text-slate-300">{g.name}</span>
+            <span className="truncate text-[9.5px] font-normal text-slate-500">{g.hint}</span>
+          </div>,
+          ...g.shapes.map((s) => (
+            <ShapeTile key={s.id} shape={s.id} banner={banner} theme={theme} chosen={banner.shape === s.id} onPick={() => setBanner({ shape: s.id })} />
+          )),
+        ])}
       </div>
       <p className="text-[10px] leading-relaxed text-slate-500">
-        <b>Glow</b> is a soft light, <b>Underline</b> a rule under the heading; the other silhouettes are real plates a border can
-        follow.
+        <b>Glow</b> is a soft light and <b>Underline</b> a rule under the heading; everything else is a real plate an outline can
+        follow — the <b>stylish</b> silhouettes are cut to their shape, the <b>multilayer</b> ones paint plates of their own
+        behind the body, and the <b>multilayer gradient</b> ones stack several paints on the one body.
       </p>
     </div>
   );
@@ -344,7 +476,17 @@ const FILL_SWATCHES = ["#1f5fd0", "#7c3aed", "#059669", "#b91c1c", "#b45309", "#
 export function BannerFillPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
   return (
     <div className="space-y-3" data-banner-fill="">
-      <Cap hint={banner.gradient.enabled ? "gradient" : banner.color}>Fill colour</Cap>
+      <Cap
+        hint={
+          platePaintLayers(banner) > 1
+            ? `${platePaintLayers(banner)} paints stacked on the plate`
+            : banner.gradient.enabled
+              ? "gradient"
+              : banner.color
+        }
+      >
+        Fill colour
+      </Cap>
       <ColorField
         label="Banner colour"
         value={banner.color}
@@ -454,7 +596,9 @@ export function BannerBorderStylePanel({ banner, setBanner }: Omit<BannerProps, 
 /* ------------------------------------------------------------------ */
 
 export function BannerRadiusPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
-  const shapes = canOutline(banner.shape) || banner.shape === "underline";
+  // a cut silhouette has no corners to round — the clip-path decides its shape
+  const clipped = isClippedShape(banner.shape);
+  const shapes = (canOutline(banner.shape) || banner.shape === "underline") && !clipped;
   const max = rangeMax(120, banner.radius);
   const preview: CSSProperties = {
     width: 44,
@@ -471,7 +615,7 @@ export function BannerRadiusPanel({ banner, setBanner }: Omit<BannerProps, "them
           <span style={preview} />
         </span>
         <span className="min-w-0 flex-1">
-          <Cap hint={banner.shape === "underline" ? "the rule's ends" : `${banner.radius}px`}>Border radius</Cap>
+          <Cap hint={banner.shape === "underline" ? "the rule's ends" : clipped ? "cut silhouette" : `${banner.radius}px`}>Border radius</Cap>
           <div className={cn(!shapes && "opacity-50")}>
             <Slider value={Math.min(banner.radius, max)} min={0} max={max} step={1} onChange={(v) => setBanner({ radius: v })} ariaLabel="Banner border radius (px)" />
           </div>
@@ -479,7 +623,9 @@ export function BannerRadiusPanel({ banner, setBanner }: Omit<BannerProps, "them
       </div>
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] leading-relaxed text-slate-500">
-          Drag past the plate's own half and it becomes a full round end — the slider keeps going well beyond it.
+          {clipped
+            ? "This silhouette is cut, not rounded — the hexagon's tips and the chevron's arrow keep their straight edges. Pick a plate, a tab or an arch to round the corners again."
+            : "Drag past the plate's own half and it becomes a full round end — the slider keeps going well beyond it. Tab and Arch round the top edge only."}
         </p>
         <AutoBtn on={banner.radius !== DEFAULT_BANNER.radius} onClick={() => setBanner({ radius: DEFAULT_BANNER.radius })} label="Border radius: back to the plate's own corners" />
       </div>

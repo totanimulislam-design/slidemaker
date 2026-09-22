@@ -905,6 +905,9 @@ function SlideBase({
                   }}
                 >
                   {header.showBanner && css.halo && <div style={css.halo} />}
+                  {/* the multilayer silhouettes' own plates, painted behind the body */}
+                  {header.showBanner &&
+                    css.layers.map((l, i) => <div key={`banner-layer-${i}`} data-banner-layer={i} style={l} />)}
                   {/* the plate's body; its own outline rides a second layer under the text */}
                   {header.showBanner && (
                     <div data-banner-plate="" className={bset.shimmer ? "banner-shimmer" : undefined} style={css.box} />

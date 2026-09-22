@@ -282,7 +282,7 @@ box and a ribbon whose notched ends are cut `16 px` deep (`RIBBON_NOTCH`,
 shallower still on a plate sized by hand).
 
 The `630 px` is the shape's *own* width, not one look among many: nothing that
-dresses the plate resizes it. A fresh deck, any of the thirty-two banner design
+dresses the plate resizes it. A fresh deck, any of the fifty-one banner design
 presets (`bannerPresetPatch` in `src/lib/banner.ts`), any of the 128 slide
 designs (`src/lib/slideDesigns.ts`) and the size card's own button all write the
 same `630 px` box — a preset dresses the chip, it never hands the width back to
@@ -316,6 +316,35 @@ factory look (typeface, size, colour, effects, marker / banner / frame /
 background settings) without changing the wording on the slide. Geometry of a
 drawn shape and the image it holds stay put; only the look is unwound. One
 click is one undo step.
+
+### Title background — the plate behind the heading
+
+The **Title background** line (Navigation ▸ *Title background*, or the title's
+own toolbar) is one button per channel, in the order a plate is dressed:
+**Design presets** · **Shape** · Effects · Fill · Border · Border radius ·
+Border style · Border weight · Transparency · Banner size · Banner position ·
+the eye · **Default**. Everything the plate is made of lives in
+`src/lib/banner.ts`; the same `bannerCss()` paints the board, the panel
+previews, the thumbnails and the export.
+
+| Section | What it does |
+| --- | --- |
+| **Design presets** — 51 looks in 10 groups | *Classic · Broadcast · Chalk & parchment · Teal current · Campus blue · Merit & highlighter · Seminar shelf*, then the three **shape-style** groups: **Stylish shapes** (hex badge, cut corner card, chevron tag, swallowtail flag, slant plate, sky tab, gold arch), **Multilayer shapes** (paper stack, neon stack, gold double frame, mint offset, amber accent card, long shadow blue) and **Multilayer gradient** (sheen royal, split sunset, gloss emerald, striped steel, stacked gradient, maroon sheen). Every tile is a live thumbnail of the plate it paints, and a click dresses the 630 px chip without resizing it |
+| **Shape** — 24 silhouettes in five families | **Plates** (glow, pill, rounded, box); **Stylish shapes** — one plate cut to another silhouette: ribbon, hexagon, cut corners, chevron, swallowtail, slant, tab, arch; **Multilayer shapes** — the plate plus painted plates of its own behind it: stack, double frame, accent block, offset line, long shadow; **Multilayer gradient** — one body painted from several stacked gradients: sheen, split, gloss, stripes, and stacked (three plates, each with a gradient of its own); **Marks** (underline, none). The outline's own layer wears the same clip-path, so a border follows the hexagon's tips and the chevron's arrow |
+| Effects · Fill · Border · radius · style · weight · Transparency · size · position | the glow's softness, the outer halo and the presenter-only shimmer; the body's paint (solid or the shared gradient builder — the multilayer-gradient silhouettes stack a second paint over whatever it is); the outline on a layer of its own; the corners (a cut silhouette keeps its straight edges, tab and arch round the top only); the two transparencies; and the plate's free px box and nudge on the board |
+
+Three rules keep the new silhouettes honest:
+
+- **A multilayer plate paints real layers.** `bannerCss()` returns them in
+  `layers`, and the board paints each on its own `div` *behind* the body and
+  *under* the heading (`data-banner-layer`), so the plate's own paint and its
+  outline still win. They fade with the shape's transparency, never with the
+  line's, and they are gone the moment a single-body silhouette is picked.
+- **Every offset is a percentage of the plate**, so a stack reads as a stack at
+  630 px on the board and at thumbnail scale in the gallery alike — no px
+  constant to outgrow a plate sized by hand.
+- **Nothing but the halo blurs.** The outer halo is the plate's only filtered
+  layer, which keeps the layers readable (and testable) apart from it.
 
 ### Every text part has the full text toolkit
 
