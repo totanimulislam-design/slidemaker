@@ -157,7 +157,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
   click(popButton("Banner common: Pop"));
   out.push({
     name: "Pop paints a hard offset drop-shadow on the plate's own filter, at its default intensity",
-    pass: filterOf().includes("drop-shadow(7.95px 7.95px 0 #000000)"),
+    pass: filterOf().includes("drop-shadow(7.95px 7.95px 0 #1f5fd0)"),
     detail: filterOf(),
   });
   const cInt = pop()?.querySelector<HTMLInputElement>('[aria-label="Banner fx: common intensity"]');
@@ -169,7 +169,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
   type(cInt, "100");
   out.push({
     name: "…and the Intensity bar walks the effect — Pop at 100 steps 12 px out",
-    pass: filterOf().includes("drop-shadow(12px 12px 0 #000000)"),
+    pass: filterOf().includes("drop-shadow(12px 12px 0 #1f5fd0)"),
     detail: filterOf(),
   });
   click(popButton("Banner common: Glow"));
@@ -232,6 +232,44 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     pass: filterOf() === "" && overlays().length === 0 && plateLayers().length === 0,
     detail: `filter ${filterOf() || "clean"} · overlays ${overlays().length} · layers ${plateLayers().length}`,
   });
+
+  /* verify common effects follow the shape's colour */
+  click(popButton("Banner common: Pop"));
+  out.push({
+    name: "Pop uses color from the shape — before fill change, matches initial shape color #1f5fd0",
+    pass: filterOf().includes("drop-shadow(7.95px 7.95px 0 #1f5fd0)"),
+    detail: filterOf(),
+  });
+  closePop();
+  openCard("Banner fill");
+  const fillWell = pop()?.querySelector<HTMLInputElement>('[data-banner-fill] input[type="color"]');
+  act(() => {
+    if (!fillWell) return;
+    const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(fillWell, "#29b36f");
+    fillWell.dispatchEvent(new win.Event("input", { bubbles: true }));
+  });
+  await frame();
+  closePop();
+  openCard("Banner effects");
+  out.push({
+    name: "Pop automatically updates to use the new color from the shape (#29b36f)",
+    pass: filterOf().includes("drop-shadow(7.95px 7.95px 0 #29b36f)"),
+    detail: filterOf(),
+  });
+  closePop();
+  openCard("Banner fill");
+  const fillRestore = pop()?.querySelector<HTMLInputElement>('[data-banner-fill] input[type="color"]');
+  act(() => {
+    if (!fillRestore) return;
+    const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(fillRestore, "#1f5fd0");
+    fillRestore.dispatchEvent(new win.Event("input", { bubbles: true }));
+  });
+  await frame();
+  closePop();
+  openCard("Banner effects");
+  click(popButton("Banner common: None"));
 
   /* ------------------------------- shadows --------------------------------- */
   click(popButton("Banner shadow: Drop Shadow"));
