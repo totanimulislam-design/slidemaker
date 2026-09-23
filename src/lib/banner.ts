@@ -1,6 +1,7 @@
 import {
   BANNER_AUTO_FRAME_HEIGHT,
   BANNER_WIDTH,
+  DEFAULT_BANNER,
   DEFAULT_BANNER_EFFECTS,
   type BannerBorderStyle,
   type BannerDecorFx,
@@ -21,7 +22,7 @@ import {
 } from "./types";
 import { shade, withAlpha } from "./color";
 import { rotateHue } from "./textEffects";
-import { effectColorFor, shapeEffectPasses, type ShapeEffectAuto } from "./shapeEffects";
+import { shapeEffectPasses } from "./shapeEffects";
 
 /* ---------------------------------------------------- silhouette families */
 
@@ -781,6 +782,15 @@ export function bannerEffectsOf(b: BannerSettings): BannerEffects {
 }
 
 /**
+ * **The colour every effect of the Effects card comes from** — the shape's own
+ * paint: the first stop of the plate's gradient, else its solid fill, else the
+ * banner's factory colour. An effect left on Auto wears it and so keeps step
+ * with the plate — repaint the fill and every auto effect follows, exactly the
+ * way a text background's plate does it (see `bgPlateColor`).
+ */
+export const bannerFxColor = (b: BannerSettings): string => baseColor(b.gradient, b.color || DEFAULT_BANNER.color);
+
+/**
  * The colour a common effect paints with when none is picked — the plate's
  * (the shape's) own colour, falling back to the banner's factory paint, and
  * for neon with an outline, the outline's colour.
@@ -788,7 +798,7 @@ export function bannerEffectsOf(b: BannerSettings): BannerEffects {
 export function bannerCommonColor(b: BannerSettings, fx: { kind: TextBgEffectKind; color?: string }): string {
   if (fx.color) return fx.color;
   if (fx.kind === "neon" && b.border.enabled && b.border.color) return b.border.color;
-  return baseColor(b.gradient, b.color || DEFAULT_BANNER.color);
+  return bannerFxColor(b);
 }
 
 export interface BannerEffectDef<K extends string> {
@@ -806,27 +816,31 @@ export const BANNER_SHADOW_EFFECTS: BannerEffectDef<BannerShadowKind>[] = [
   { kind: "inner", label: "Inner Shadow", hint: "The shadow falls inside the plate" },
   { kind: "floating", label: "Floating Shadow", hint: "A ground shadow — the plate lifts off the board" },
   { kind: "offset", label: "Offset Shadow", hint: "A solid duplicate, stepped down and right" },
-  { kind: "colored", label: "Colored Shadow", hint: "The shadow wears a colour of its own" },
+  { kind: "colored", label: "Colored Shadow", hint: "A soft fall in a colour of its own — it starts on the shape's" },
   { kind: "double", label: "Double Shadow", hint: "Two hard copies — one on each of two opposite sides" },
   { kind: "surround", label: "Surround Shadow", hint: "An even, soft shadow all around the plate" },
   { kind: "layered", label: "Layered Shadows", hint: "Three shadows stacked, each one further and fainter" },
   { kind: "cast", label: "Cast Shadow", hint: "A shadow thrown onto the board, skewed away from the plate" },
 ];
 
-/** what each shadow kind starts from — the six controls walk from here */
+/**
+ * what each shadow kind starts from — the six controls walk from here. The
+ * colour is left on **Auto** ("" = `bannerFxColor`), so a fresh shadow wears
+ * the shape's own colour and keeps following the plate as it is repainted.
+ */
 export const BANNER_SHADOW_DEFAULTS: Record<BannerShadowKind, Omit<BannerShadowFx, "kind">> = {
-  drop: { x: 0, y: 8, blur: 24, spread: 0, opacity: 50, color: "#000000" },
-  soft: { x: 0, y: 14, blur: 48, spread: 0, opacity: 35, color: "#000000" },
-  hard: { x: 10, y: 10, blur: 0, spread: 0, opacity: 60, color: "#000000" },
-  long: { x: 18, y: 18, blur: 0, spread: 60, opacity: 55, color: "#000000" },
-  inner: { x: 0, y: 6, blur: 14, spread: 0, opacity: 45, color: "#000000" },
-  floating: { x: 0, y: 24, blur: 36, spread: 12, opacity: 45, color: "#000000" },
-  offset: { x: 12, y: 12, blur: 0, spread: 0, opacity: 70, color: "#000000" },
-  colored: { x: 0, y: 10, blur: 28, spread: 0, opacity: 40, color: "#1f5fd0" },
-  double: { x: 10, y: 10, blur: 0, spread: 0, opacity: 60, color: "#000000" },
-  surround: { x: 0, y: 0, blur: 24, spread: 8, opacity: 50, color: "#000000" },
-  layered: { x: 0, y: 12, blur: 18, spread: 0, opacity: 45, color: "#000000" },
-  cast: { x: 14, y: 20, blur: 0, spread: 0, opacity: 45, color: "#000000" },
+  drop: { x: 0, y: 8, blur: 24, spread: 0, opacity: 50, color: "" },
+  soft: { x: 0, y: 14, blur: 48, spread: 0, opacity: 35, color: "" },
+  hard: { x: 10, y: 10, blur: 0, spread: 0, opacity: 60, color: "" },
+  long: { x: 18, y: 18, blur: 0, spread: 60, opacity: 55, color: "" },
+  inner: { x: 0, y: 6, blur: 14, spread: 0, opacity: 45, color: "" },
+  floating: { x: 0, y: 24, blur: 36, spread: 12, opacity: 45, color: "" },
+  offset: { x: 12, y: 12, blur: 0, spread: 0, opacity: 70, color: "" },
+  colored: { x: 0, y: 10, blur: 28, spread: 0, opacity: 40, color: "" },
+  double: { x: 10, y: 10, blur: 0, spread: 0, opacity: 60, color: "" },
+  surround: { x: 0, y: 0, blur: 24, spread: 8, opacity: 50, color: "" },
+  layered: { x: 0, y: 12, blur: 18, spread: 0, opacity: 45, color: "" },
+  cast: { x: 14, y: 20, blur: 0, spread: 0, opacity: 45, color: "" },
 };
 
 /** the twelve lights under *Glow & Light* */
@@ -845,7 +859,8 @@ export const BANNER_GLOW_EFFECTS: BannerEffectDef<BannerGlowKind>[] = [
   { kind: "rimLight", label: "Rim Light", hint: "A bright hairline hugging the plate's edge" },
 ];
 
-export const BANNER_GLOW_DEFAULT: Omit<BannerGlowFx, "kind"> = { intensity: 55, color: "#ffffff" };
+/** the light starts on Auto colour — it blooms in the shape's own paint (see `bannerFxColor`) */
+export const BANNER_GLOW_DEFAULT: Omit<BannerGlowFx, "kind"> = { intensity: 55, color: "" };
 
 /** the twelve depths under *Depth / 3D* */
 export const BANNER_DEPTH_EFFECTS: BannerEffectDef<BannerDepthKind>[] = [
@@ -881,7 +896,8 @@ export const BANNER_MODERN_EFFECTS: BannerEffectDef<BannerModernKind>[] = [
   { kind: "softUi", label: "Soft UI", hint: "The soft raised card — a light and a dark shadow" },
 ];
 
-export const BANNER_MODERN_DEFAULT: Omit<BannerModernFx, "kind"> = { intensity: 55, color: "#ffffff", blur: 8 };
+/** the finish starts on Auto colour — its tint is the shape's own paint, shaded for the effect */
+export const BANNER_MODERN_DEFAULT: Omit<BannerModernFx, "kind"> = { intensity: 55, color: "", blur: 8 };
 
 /** the fourteen decorations under *Decorative Effects* */
 export const BANNER_DECOR_EFFECTS: BannerEffectDef<BannerDecorKind>[] = [
@@ -901,7 +917,8 @@ export const BANNER_DECOR_EFFECTS: BannerEffectDef<BannerDecorKind>[] = [
   { kind: "sunburst", label: "Sunburst Rays", hint: "Fine rays radiating from the middle" },
 ];
 
-export const BANNER_DECOR_DEFAULT: Omit<BannerDecorFx, "kind"> = { intensity: 50, color: "#ffffff" };
+/** the decoration starts on Auto colour — it is laid over the plate in the plate's own paint */
+export const BANNER_DECOR_DEFAULT: Omit<BannerDecorFx, "kind"> = { intensity: 50, color: "" };
 
 /**
  * The paint a plate's effects add on top of its silhouette — everything the
@@ -1002,6 +1019,13 @@ function slantMaskPath(v: number): string {
 export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffectPaint {
   const fx = bannerEffectsOf(b);
   const shapeOpacity = clampOpacity(b.opacity);
+  /**
+   * What an effect paints when its own colour is left on Auto: the shape's
+   * colour, whatever the group — shadow, light, finish or decoration. Every
+   * effect in the card starts here, so the plate's paint and its effects are
+   * one colour story, and repainting the plate repaints them with it.
+   */
+  const auto = bannerFxColor(b);
   const shadows: string[] = [];
   const filters: string[] = [];
   const back: React.CSSProperties[] = [];
@@ -1078,7 +1102,7 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
   /* ------------------------------- shadows --------------------------------- */
   const s = fx.shadow;
   if (s) {
-    const sColor = s.color || (s.kind === "colored" ? base : "#000000");
+    const sColor = s.color || auto;
     const c = withAlpha(sColor, fxA(s.opacity));
     switch (s.kind) {
       case "inner":
@@ -1132,7 +1156,7 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
   if (g) {
     const i = Math.max(0, Math.min(100, g.intensity));
     const a = i / 100;
-    const c = g.color || base;
+    const c = g.color || auto;
     switch (g.kind) {
       case "inner":
         shadows.push(`inset 0 0 ${Math.round(6 + i * 0.5)}px ${withAlpha(c, 0.2 + 0.65 * a)}`);
@@ -1324,17 +1348,24 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
   if (m) {
     const i = Math.max(0, Math.min(100, m.intensity));
     const a = i / 100;
-    const c = m.color || base;
+    const c = m.color || auto;
     const blur = Math.max(0, m.blur ?? 0);
     const bf = (v: string): React.CSSProperties => ({ backdropFilter: v, WebkitBackdropFilter: v });
+    /**
+     * The finish's two tones: the tint lit and the tint shaded. Left on Auto the
+     * tint is the shape's own colour, so a glass edge or a soft-UI lift is a
+     * lighter / darker pass of the plate rather than a strip of plain white laid
+     * over it — the highlight follows the plate the moment it is repainted.
+     * (The two materials with a palette of their own — `metallic`'s chrome and
+     * `holographic`'s iridescence — keep it: the finish IS the colour there.)
+     */
+    const lit = (al: number) => withAlpha(shade(c, 0.72), al);
+    const deep = (al: number) => withAlpha(shade(c, -0.5), al);
     switch (m.kind) {
       case "glass":
         overLayer({
-          background: `linear-gradient(120deg, ${withAlpha("#ffffff", 0.12 + 0.4 * a)} 0%, ${withAlpha(
-            "#ffffff",
-            0.02 + 0.08 * a,
-          )} 55%, ${withAlpha("#ffffff", 0.08 + 0.18 * a)} 100%)`,
-          border: `1px solid ${withAlpha("#ffffff", 0.25 + 0.4 * a)}`,
+          background: `linear-gradient(120deg, ${lit(0.12 + 0.4 * a)} 0%, ${lit(0.02 + 0.08 * a)} 55%, ${lit(0.08 + 0.18 * a)} 100%)`,
+          border: `1px solid ${lit(0.25 + 0.4 * a)}`,
           boxSizing: "border-box",
           ...bf(`blur(${Math.round(1 + blur * 0.4)}px) saturate(1.25)`),
         });
@@ -1342,7 +1373,7 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
       case "frosted":
         overLayer({
           background: `linear-gradient(180deg, ${withAlpha(c, 0.18 + 0.45 * a)} 0%, ${withAlpha(c, 0.06 + 0.2 * a)} 100%)`,
-          border: `1px solid ${withAlpha("#ffffff", 0.15 + 0.3 * a)}`,
+          border: `1px solid ${lit(0.15 + 0.3 * a)}`,
           boxSizing: "border-box",
           ...bf(`blur(${Math.round(2 + blur * 0.8)}px)`),
         });
@@ -1358,11 +1389,8 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
         break;
       case "clearGlass":
         overLayer({
-          background: `linear-gradient(120deg, ${withAlpha("#ffffff", 0.08 + 0.25 * a)} 0%, ${withAlpha(
-            "#ffffff",
-            0.02 + 0.06 * a,
-          )} 100%)`,
-          border: `1px solid ${withAlpha("#ffffff", 0.35 + 0.4 * a)}`,
+          background: `linear-gradient(120deg, ${lit(0.08 + 0.25 * a)} 0%, ${lit(0.02 + 0.06 * a)} 100%)`,
+          border: `1px solid ${lit(0.35 + 0.4 * a)}`,
           boxSizing: "border-box",
         });
         break;
@@ -1371,10 +1399,7 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
         break;
       case "softGradient":
         overLayer({
-          background: `linear-gradient(120deg, ${withAlpha("#ffffff", 0.1 + 0.35 * a)} 0%, ${withAlpha("#ffffff", 0)} 45%, ${withAlpha(
-            "#000000",
-            0.05 + 0.25 * a,
-          )} 100%)`,
+          background: `linear-gradient(120deg, ${lit(0.1 + 0.35 * a)} 0%, ${lit(0)} 45%, ${deep(0.05 + 0.25 * a)} 100%)`,
         });
         break;
       case "mesh":
@@ -1420,8 +1445,8 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
       case "softUi": {
         const off = Math.max(2, Math.round(i * 0.12));
         shadows.push(
-          `${-off}px ${-off}px ${off * 2}px ${withAlpha("#ffffff", 0.12 + 0.4 * a)}`,
-          `${off}px ${off}px ${off * 2}px ${withAlpha("#000000", 0.16 + 0.44 * a)}`,
+          `${-off}px ${-off}px ${off * 2}px ${lit(0.12 + 0.4 * a)}`,
+          `${off}px ${off}px ${off * 2}px ${deep(0.16 + 0.44 * a)}`,
         );
         break;
       }
@@ -1433,7 +1458,7 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
   if (dc) {
     const i = Math.max(0, Math.min(100, dc.intensity));
     const a = i / 100;
-    const c = dc.color || base;
+    const c = dc.color || auto;
     switch (dc.kind) {
       case "innerHighlight":
         overLayer({

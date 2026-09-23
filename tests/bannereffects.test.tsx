@@ -20,6 +20,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import App from "../src/App";
 import { DEFAULT_LOGO } from "../src/lib/types";
+import { shade, withAlpha } from "../src/lib/color";
 
 type Win = Window & typeof globalThis;
 const win = window as unknown as Win;
@@ -67,6 +68,24 @@ const plateLayers = () => Array.from(titleBox()?.querySelectorAll<HTMLElement>("
 const overlays = () => Array.from(titleBox()?.querySelectorAll<HTMLElement>("[data-banner-overlay]") ?? []);
 const shadowOf = () => plate()?.style.boxShadow ?? "";
 const styleOf = (el: HTMLElement | null) => el?.getAttribute("style") ?? "";
+/** one Effects tile's own miniature — the plate the tile previews (see BannerPlatePreview) */
+const tilePreview = (group: string, label: string) =>
+  pop()?.querySelector<HTMLElement>(`[data-banner-fx-group="${group}"] button[aria-label="Banner ${group}: ${label}"] [data-banner-preview]`) ?? null;
+/** the body of that miniature, with the effect dressed on it */
+const tilePlate = (group: string, label: string) => tilePreview(group, label)?.querySelector<HTMLElement>("[data-banner-plate]") ?? null;
+/** how many tiles a group holds, and how many of them paint a plate */
+const tilesOf = (group: string) => pop()?.querySelectorAll(`[data-banner-fx-group="${group}"] [role="option"]`).length ?? 0;
+const previewsOf = (group: string) => pop()?.querySelectorAll(`[data-banner-fx-group="${group}"] [data-banner-preview]`).length ?? 0;
+/** the deck's plate colour as the effects read it, in both spellings — jsdom
+    normalizes a colour inside a gradient, so a style string may carry either */
+const PLATE = "#1f5fd0";
+const rgbOf = (hex: string) => `rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`;
+const PLATE_RGB = rgbOf(PLATE);
+/** does this element's own style paint with that colour, in either spelling? */
+const painted = (el: HTMLElement | null, hex: string) => {
+  const s = styleOf(el);
+  return s.includes(hex) || s.includes(rgbOf(hex)) || s.includes(hex.replace("#", ""));
+};
 /** how many paints a background string stacks, one per `…-gradient(` */
 const paints = (s: string) => (s.match(/gradient\(/g) ?? []).length;
 
@@ -136,6 +155,33 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     detail: Array.from(pop()?.querySelectorAll('[data-banner-fx-group="shadow"] [role="option"]') ?? [])
       .map((b) => b.getAttribute("aria-label")?.replace("Banner shadow: ", ""))
       .join(" / "),
+  });
+
+  /* the tiles preview the plate itself — the same language the Shape card's
+     tiles and the text background's Effects strip speak, in the plate's colour */
+  out.push({
+    name: "every effect tile paints the deck's own plate — silhouette, paint and the effect on top — one miniature per tile in all six groups",
+    pass:
+      ["common", "shadow", "glow", "depth", "modern", "decor"].every((gr) => previewsOf(gr) === tilesOf(gr) && !!tilePreview(gr, "None")) &&
+      previewsOf("shadow") === 13 &&
+      previewsOf("common") === 32 &&
+      // the None tile is the bare plate; the effect tiles carry the effect on it
+      !!tilePlate("shadow", "Long Shadow") &&
+      !!tilePlate("common", "Sticker"),
+    detail: ["common", "shadow", "glow", "depth", "modern", "decor"].map((gr) => `${gr}:${previewsOf(gr)}/${tilesOf(gr)}`).join(" "),
+  });
+  out.push({
+    name: "a tile is the plate in the SHAPE'S colour — the miniature carries the fill, not a generic mark",
+    pass: painted(tilePlate("shadow", "None"), PLATE),
+    detail: styleOf(tilePlate("shadow", "None")).slice(0, 90),
+  });
+  out.push({
+    name: "and the effect is painted on that miniature — the Drop Shadow tile already throws the plate's colour, the None tile throws nothing",
+    pass:
+      styleOf(tilePlate("shadow", "Drop Shadow")).includes("box-shadow") &&
+      styleOf(tilePlate("shadow", "Drop Shadow")).includes("rgba(31, 95, 208, 0.5)") &&
+      !styleOf(tilePlate("shadow", "None")).includes("box-shadow"),
+    detail: styleOf(tilePlate("shadow", "Drop Shadow")).slice(0, 110),
   });
 
   /* ----------------------------- common effects ---------------------------- */
@@ -271,12 +317,106 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
   openCard("Banner effects");
   click(popButton("Banner common: None"));
 
+  /* ---- the other four groups start on Auto too — the shape's colour — and
+         their tiles repaint with the plate ---- */
+  click(popButton("Banner shadow: Drop Shadow"));
+  click(popButton("Banner glow: Soft Glow"));
+  click(popButton("Banner decor: Edge Highlight"));
+  out.push({
+    name: "Shadow · Glow · Decorative all start on the shape's colour — no group brings a black or white of its own",
+    pass:
+      (shadowOf().match(/rgba\(31, 95, 208/g) ?? []).length === 3 &&
+        !/rgba\(0, 0, 0/.test(shadowOf()) &&
+        !/rgba\(255, 255, 255/.test(shadowOf()),
+    detail: shadowOf().slice(0, 130),
+  });
+  out.push({
+    name: "each group's colour well says so: the swatch is the plate's own and the field reads the shape's colour",
+    pass:
+      ["shadow", "glow", "decor"].every((gr) => {
+        const well = pop()?.querySelector<HTMLInputElement>(`[data-banner-fx-group="${gr}"] input[type="color"]`);
+        return !!well && well.value.toLowerCase() === PLATE;
+      }) &&
+      ["shadow", "glow", "decor"].every((gr) => (pop()?.querySelector(`[data-banner-fx-group="${gr}"]`)?.textContent ?? "").includes("the shape's colour")),
+    detail: ["shadow", "glow", "decor"].map((gr) => pop()?.querySelector<HTMLInputElement>(`[data-banner-fx-group="${gr}"] input[type="color"]`)?.value).join(" "),
+  });
+  out.push({
+    name: "…and a tile previews the effect in that colour — the Soft Glow tile blooms in the plate's paint",
+    pass: styleOf(tilePlate("glow", "Soft Glow")).includes("box-shadow") && styleOf(tilePlate("glow", "Soft Glow")).includes("rgba(31, 95, 208"),
+    detail: styleOf(tilePlate("glow", "Soft Glow")).slice(0, 110),
+  });
+  closePop();
+  openCard("Banner fill");
+  const repainted = pop()?.querySelector<HTMLInputElement>('[data-banner-fill] input[type="color"]');
+  act(() => {
+    if (!repainted) return;
+    const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(repainted, "#7c3aed");
+    repainted.dispatchEvent(new win.Event("input", { bubbles: true }));
+  });
+  await frame();
+  closePop();
+  openCard("Banner effects");
+  out.push({
+    name: "repainting the plate repaints the effects — an auto shadow, glow and decoration walk over to the new colour",
+    pass: (shadowOf().match(/rgba\(124, 58, 237/g) ?? []).length === 3,
+    detail: shadowOf().slice(0, 130),
+  });
+  out.push({
+    name: "…and every tile's miniature walks with it — the previews are the plate, so they cannot drift",
+    pass:
+      painted(tilePlate("glow", "Soft Glow"), "#7c3aed") &&
+      painted(tilePlate("shadow", "Long Shadow"), "#7c3aed") &&
+      painted(tilePlate("decor", "Vignette"), "#7c3aed"),
+    detail: styleOf(tilePlate("glow", "Soft Glow")).slice(0, 80),
+  });
+  const sWell2 = pop()?.querySelector<HTMLInputElement>('[data-banner-fx-group="shadow"] input[type="color"]');
+  act(() => {
+    if (!sWell2) return;
+    const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(sWell2, "#22d3ee");
+    sWell2.dispatchEvent(new win.Event("input", { bubbles: true }));
+  });
+  await frame();
+  out.push({
+    name: "a colour picked for one effect is its own from then on — the shadow stops following the plate",
+    pass: shadowOf().includes("rgba(34, 211, 238, 0.5)") && !shadowOf().includes("rgba(124, 58, 237, 0.5)"),
+    detail: shadowOf().slice(0, 130),
+  });
+  click(Array.from(pop()?.querySelectorAll<HTMLElement>('[data-banner-fx-group="shadow"] button') ?? []).find((b) => b.textContent?.trim() === "Auto"));
+  out.push({
+    name: "…and Auto hands it back — the shadow is the plate's colour again",
+    pass: shadowOf().includes("rgba(124, 58, 237, 0.5)"),
+    detail: shadowOf().slice(0, 130),
+  });
+  click(popButton("Banner shadow: None"));
+  click(popButton("Banner glow: None"));
+  click(popButton("Banner decor: None"));
+  closePop();
+  openCard("Banner fill");
+  const restore = pop()?.querySelector<HTMLInputElement>('[data-banner-fill] input[type="color"]');
+  act(() => {
+    if (!restore) return;
+    const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(restore, PLATE);
+    restore.dispatchEvent(new win.Event("input", { bubbles: true }));
+  });
+  await frame();
+  closePop();
+  openCard("Banner effects");
+
   /* ------------------------------- shadows --------------------------------- */
   click(popButton("Banner shadow: Drop Shadow"));
   out.push({
-    name: "Drop Shadow paints the plate's own box-shadow from its six controls — X 0 · Y 8 · Blur 24 · Spread 0 · Opacity 50 · black",
-    pass: shadowOf() === "0px 8px 24px 0px rgba(0, 0, 0, 0.5)",
+    name: "Drop Shadow paints the plate's own box-shadow from its six controls — X 0 · Y 8 · Blur 24 · Spread 0 · Opacity 50 · the SHAPE'S colour",
+    pass: shadowOf() === "0px 8px 24px 0px rgba(31, 95, 208, 0.5)",
     detail: shadowOf(),
+  });
+  const sWell = pop()?.querySelector<HTMLInputElement>('[data-banner-fx-group="shadow"] input[type="color"]');
+  out.push({
+    name: "the shadow's colour well reads Auto and shows the shape's colour — the plate's paint is what the effect wears",
+    pass: (sWell?.value ?? "").toLowerCase() === "#1f5fd0" && !!Array.from(pop()?.querySelectorAll('[data-banner-fx-group="shadow"] button') ?? []).some((b) => b.textContent?.trim() === "Auto"),
+    detail: `${sWell?.value} + Auto`,
   });
   const sx = pop()?.querySelector<HTMLInputElement>('[aria-label="Banner fx: shadow X (px)"]');
   const sy = pop()?.querySelector<HTMLInputElement>('[aria-label="Banner fx: shadow Y (px)"]');
@@ -295,7 +435,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
   type(sOp, "80");
   out.push({
     name: "…and each of the six walks the shadow — 20 · -12 · 40 · 6 · 80% all reach the plate",
-    pass: shadowOf() === "20px -12px 40px 6px rgba(0, 0, 0, 0.8)",
+    pass: shadowOf() === "20px -12px 40px 6px rgba(31, 95, 208, 0.8)",
     detail: shadowOf(),
   });
   const sColor = pop()?.querySelector<HTMLInputElement>('[data-banner-fx-group="shadow"] input[type="color"]');
@@ -329,25 +469,25 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
   click(popButton("Banner shadow: Floating Shadow"));
   out.push({
     name: "Floating Shadow is a ground shadow — the plate lifts off the board",
-    pass: shadowOf() === "0 24px 36px -12px rgba(0, 0, 0, 0.45)",
+    pass: shadowOf() === "0 24px 36px -12px rgba(31, 95, 208, 0.45)",
     detail: shadowOf(),
   });
   click(popButton("Banner shadow: Offset Shadow"));
   out.push({
     name: "Offset Shadow is a solid duplicate, stepped down and right — no blur",
-    pass: shadowOf() === "12px 12px 0px 0px rgba(0, 0, 0, 0.7)",
+    pass: shadowOf() === "12px 12px 0px 0px rgba(31, 95, 208, 0.7)",
     detail: shadowOf(),
   });
   click(popButton("Banner shadow: Double Shadow"));
   out.push({
     name: "Double Shadow throws a hard copy on each of two opposite sides — X · Y walk both at once",
-    pass: shadowOf() === "10px 10px 0px 0px rgba(0, 0, 0, 0.6), -10px -10px 0px 0px rgba(0, 0, 0, 0.45)",
+    pass: shadowOf() === "10px 10px 0px 0px rgba(31, 95, 208, 0.6), -10px -10px 0px 0px rgba(31, 95, 208, 0.45)",
     detail: shadowOf(),
   });
   click(popButton("Banner shadow: Surround Shadow"));
   out.push({
     name: "Surround Shadow falls evenly all around the plate",
-    pass: shadowOf() === "0px 0px 24px 8px rgba(0, 0, 0, 0.5)",
+    pass: shadowOf() === "0px 0px 24px 8px rgba(31, 95, 208, 0.5)",
     detail: shadowOf(),
   });
   click(popButton("Banner shadow: Layered Shadows"));
@@ -560,8 +700,10 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
   });
   click(popButton("Banner modern: Soft UI"));
   out.push({
-    name: "Soft UI raises the card — a light shadow up-left, a dark one down-right",
-    pass: shadowOf().includes("rgba(255, 255, 255,") && shadowOf().includes("rgba(0, 0, 0,"),
+    name: "Soft UI raises the card — its two tones are the shape's colour, lit and shaded, not white and black",
+    pass:
+      shadowOf().includes(withAlpha(shade(PLATE, 0.72), 0.12 + 0.4 * 0.55)) &&
+      shadowOf().includes(withAlpha(shade(PLATE, -0.5), 0.16 + 0.44 * 0.55)),
     detail: shadowOf(),
   });
   click(popButton("Banner modern: None"));
@@ -724,11 +866,11 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
   click(popButton("Banner glow: Outer Glow"));
   click(popButton("Banner decor: Outline Glow"));
   out.push({
-    name: "one effect per group, all at once — the shadows stack on the plate, the groups never fight",
+    name: "one effect per group, all at once — the shadows stack on the plate in the shape's colour, the groups never fight",
     pass:
       (shadowOf().match(/rgba\(/g) ?? []).length >= 4 &&
-      shadowOf().includes("rgba(0, 0, 0, 0.5)") &&
-      shadowOf().includes("rgba(255, 255, 255,"),
+      shadowOf().includes("rgba(31, 95, 208, 0.5)") &&
+      shadowOf().includes("rgba(31, 95, 208, 0.6)"),
     detail: shadowOf(),
   });
 

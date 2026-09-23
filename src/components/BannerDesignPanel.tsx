@@ -15,9 +15,9 @@ import {
   BANNER_PRESET_GROUPS,
   BANNER_SHADOW_DEFAULTS,
   BANNER_SHADOW_EFFECTS,
-  baseColor,
   bannerCommonColor,
   bannerCss,
+  bannerFxColor,
   bannerEffectsOf,
   bannerHasLine,
   bannerPlateWidth,
@@ -64,7 +64,11 @@ import { cn } from "../utils/cn";
  *                     shadows on X · Y · Blur · Spread · Opacity ·
  *                     Colour), Glow & Light, Depth / 3D, Modern
  *                     Effects, Shape Effects and Decorative
- *                     Effects                              `effects`
+ *                     Effects — every tile a miniature of the deck's
+ *                     own plate wearing that effect, and every Colour
+ *                     channel auto to the shape's own paint (the fill
+ *                     card's colour), so an effect follows a repaint
+ *                                                          `effects`
  *   Fill colour       solid + gradient                          `color` · `gradient`
  *   Border colour     the outline's paint                       `border.color`
  *   Border style      solid · dashed · dotted · double · none    `border.style`
@@ -549,6 +553,85 @@ export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
 /*  Shape                                                              */
 /* ------------------------------------------------------------------ */
 
+/**
+ * One miniature board: the plate exactly as `bannerCss` paints it, shrunk into
+ * a tile, so a preview shows the real thing — the silhouette, the paint (solid
+ * or gradient), the multilayer plates' own layers, the outline and whatever the
+ * Effects card has dressed it with, shadows and glows reaching outside the body
+ * included. The miniature keeps the board's proportions: the plate fills the
+ * stage (`size` × `shrink`), and an effect's px offsets, blurs and slabs shrink
+ * with it, so a tile that says "Long shadow" looks like the long shadow the
+ * slide will paint.
+ *
+ * `preview` dresses the plate for the tile (another silhouette, one effect
+ * group) without touching the deck; `standIn` is the silhouette to paint when
+ * the plate wears none at all, so an effect still has a body to dress.
+ */
+export function BannerPlatePreview({
+  banner,
+  theme,
+  preview,
+  standIn,
+  size = { w: 260, h: 40 },
+  shrink = 0.26,
+  height,
+  background = "#0b1220",
+  className,
+}: {
+  banner: BannerSettings;
+  theme: ThemeSettings;
+  preview?: Partial<BannerSettings>;
+  /** the silhouette to stand in when the deck paints no plate at all */
+  standIn?: BannerShape;
+  /** the miniature board, in CSS px — the plate is laid out on it as on the stage */
+  size?: { w: number; h: number };
+  /** how far that board is shrunk into the tile */
+  shrink?: number;
+  /** the frame's height — room for what an effect throws outside the plate */
+  height?: number;
+  background?: string;
+  className?: string;
+}) {
+  const shape: BannerShape = banner.shape === "none" && standIn ? standIn : banner.shape;
+  // the plate at its automatic box with no room around the (unseen) heading:
+  // the stage is the plate, so a tile's plate is `size` × `shrink` and nothing
+  // about the free size or the nudge leaks into a thumbnail
+  const b: BannerSettings = { ...banner, shape, size: undefined, pos: undefined, padX: 0, padY: 0, halo: 0, ...preview };
+  const css = bannerCss({ ...b, border: { ...b.border, enabled: canOutline(shape) && b.border.enabled } }, theme.titleColor);
+  // a round or freehand silhouette stretches its own frame — the same factor the
+  // board applies — so a circle tile stays round instead of being squashed
+  const tall = plateHeightFactor(shape);
+  return (
+    <span
+      aria-hidden="true"
+      data-banner-preview={shape}
+      className={cn("relative block overflow-hidden rounded", className)}
+      style={{ width: "100%", height: height ?? Math.round(size.h * tall * shrink) + 16, background }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          width: size.w,
+          height: size.h,
+          transform: `translate(-50%, -50%) scale(${shrink})`,
+        }}
+      >
+        {css.halo ? <span style={css.halo} /> : null}
+        {css.layers.map((l, i) => (
+          <span key={`fx-layer-${i}`} data-banner-layer={i} style={l} />
+        ))}
+        <span data-banner-plate="" style={css.box} />
+        {css.border ? <span style={css.border} /> : null}
+        {css.overlays.map((l, i) => (
+          <span key={`fx-overlay-${i}`} data-banner-overlay={i} style={l} />
+        ))}
+      </span>
+    </span>
+  );
+}
+
 /** one silhouette drawn with the plate's own paint, so the tiles read true */
 function ShapeTile({ shape, banner, theme, chosen, onPick }: { shape: BannerShape; banner: BannerSettings; theme: ThemeSettings; chosen: boolean; onPick: () => void }) {
   const def = BANNER_SHAPES.find((s) => s.id === shape)!;
@@ -620,88 +703,44 @@ export function BannerShapePanel({ theme, banner, setBanner }: BannerProps) {
 /*  Effects                                                            */
 /* ------------------------------------------------------------------ */
 
-/** the little mark each effect group's tiles wear — one per group, not per effect */
-function FxMark({ group }: { group: "common" | "shadow" | "glow" | "depth" | "modern" | "decor" }) {
-  switch (group) {
-    case "common":
-      return (
-        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
-          <path d="M10 1.2c.5 2.9 2.3 4.7 5.2 5.2-2.9.5-4.7 2.3-5.2 5.2-.5-2.9-2.3-4.7-5.2-5.2 2.9-.5 4.7-2.3 5.2-5.2Z" fill="currentColor" opacity="0.9" />
-          <path d="M15.2 9.4c.25 1.45 1.15 2.35 2.6 2.6-1.45.25-2.35 1.15-2.6 2.6-.25-1.45-1.15-2.35-2.6-2.6 1.45-.25 2.35-1.15 2.6-2.6Z" fill="currentColor" opacity="0.55" />
-          <rect x="1.6" y="11.2" width="10" height="3.4" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.1" opacity="0.7" />
-        </svg>
-      );
-    case "shadow":
-      return (
-        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
-          <rect x="2.5" y="2" width="13" height="8" rx="2" fill="currentColor" opacity="0.35" />
-          <rect x="5.5" y="5.5" width="13" height="8" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        </svg>
-      );
-    case "glow":
-      return (
-        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
-          <defs>
-            <radialGradient id="fxmark-glow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="currentColor" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-            </radialGradient>
-          </defs>
-          <ellipse cx="10" cy="8" rx="9" ry="7" fill="url(#fxmark-glow)" />
-          <rect x="4" y="4.5" width="12" height="7" rx="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-        </svg>
-      );
-    case "depth":
-      return (
-        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
-          <rect x="3" y="8" width="13" height="6" rx="1.6" fill="currentColor" opacity="0.4" />
-          <rect x="3" y="3" width="13" height="6" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.3" />
-          <path d="M6.5 9V6.2M10 9V6.2M13.5 9V6.2" stroke="currentColor" strokeWidth="0.9" opacity="0.7" />
-        </svg>
-      );
-    case "modern":
-      return (
-        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
-          <rect x="3" y="3" width="14" height="10" rx="2.4" fill="currentColor" opacity="0.2" />
-          <rect x="3" y="3" width="14" height="10" rx="2.4" fill="none" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M6 13 12 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
-          <path d="M9.5 13 14.5 4.8" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
-        </svg>
-      );
-    case "decor":
-      return (
-        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
-          <rect x="3" y="3.5" width="14" height="9" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-          <path
-            d="M15.4 1c.3.95.95 1.6 1.9 1.9-.95.3-1.6.95-1.9 1.9-.3-.95-.95-1.6-1.9-1.9.95-.3 1.6-.95 1.9-1.9Z"
-            fill="currentColor"
-          />
-        </svg>
-      );
-  }
-}
-
-/** one group's tiles: the "None" tile plus one tile per effect, as pictures */
+/**
+ * One group's tiles: the "None" tile plus one tile per effect. Each tile is not
+ * a mark but the plate itself — the deck's own silhouette and paint, wearing
+ * that effect — so the strip reads the way the Shape card's tiles do and the
+ * same way a text background's Effects strip previews its plate. `dress` hands
+ * back the effects the tile is trying on (the group off for "None"), and the
+ * tile paints them: what the tile shows is what the slide paints, in the
+ * plate's own colour.
+ */
 function FxTiles<K extends string>({
   prefix,
   defs,
   active,
   onPick,
   onClear,
-  mark,
+  theme,
+  banner,
+  dress,
 }: {
   prefix: string;
   defs: BannerEffectDef<K>[];
   active: K | undefined;
   onPick: (kind: K) => void;
   onClear: () => void;
-  mark: ReactNode;
+  theme: ThemeSettings;
+  banner: BannerSettings;
+  /** the plate this tile is trying on — the group's effect dressed, or the group off */
+  dress: (kind: K | undefined) => BannerEffects;
 }) {
   const tile = (selected: boolean) =>
     cn(
       "flex min-h-[48px] flex-col items-center justify-center gap-1 rounded-lg border px-1 py-1.5 text-center transition-colors",
       selected ? "border-amber-400 bg-amber-400/15 text-amber-200" : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/25",
     );
+  /** the plate as this tile wants it — nothing but the body's own paint when the group is off */
+  const plate = (kind: K | undefined) => (
+    <BannerPlatePreview banner={banner} theme={theme} standIn="rect" preview={{ effects: dress(kind) }} />
+  );
   return (
     <div className="grid grid-cols-3 gap-1.5" role="listbox" aria-label={prefix}>
       <button
@@ -713,9 +752,7 @@ function FxTiles<K extends string>({
         onClick={onClear}
         className={tile(active === undefined)}
       >
-        <span className="text-[12px]" aria-hidden="true">
-          ∅
-        </span>
+        {plate(undefined)}
         <span className="text-[9px] font-medium leading-tight">None</span>
       </button>
       {defs.map((d) => (
@@ -729,7 +766,7 @@ function FxTiles<K extends string>({
           onClick={() => onPick(d.kind)}
           className={tile(active === d.kind)}
         >
-          <span aria-hidden="true">{mark}</span>
+          {plate(d.kind)}
           <span className="text-[9px] font-medium leading-tight">{d.label}</span>
         </button>
       ))}
@@ -751,17 +788,27 @@ function FxTiles<K extends string>({
  *                      and Corner fold — the same shared vocabulary a text
  *                      plate wears, each by intensity and colour
  *   Shadow Effects     twelve shadows, each dressed by X · Y · Blur · Spread ·
- *                      Opacity · Colour
- *   Glow & Light       twelve lights, each by intensity and colour
+ *                      Opacity · Colour (the colour starts on the shape's own)
+ *   Glow & Light       twelve lights, each by intensity and colour — the light
+ *                      is the shape's colour until another is picked
  *   Depth / 3D         twelve depths, each by intensity and the light's angle
- *   Modern Effects     twelve finishes, each by intensity, tint and blur
+ *   Modern Effects     twelve finishes, each by intensity, tint and blur — the
+ *                      tint lights and shades the shape's own colour
  *   Shape Effects      the corners (shared or four of their own) and the
  *                      plate's own distortions — stretch, wave, curve, slant,
  *                      skew, rotation and the two flips
- *   Decorative Effects fourteen decorations, each by intensity and colour
+ *   Decorative Effects fourteen decorations, each by intensity and colour (the
+ *                      shape's own, left on Auto)
  *
  * Every channel falls back to off, so an untouched deck renders exactly as it
- * always did.
+ * always did, and every colour channel falls back to the SAME colour: the
+ * shape's own paint (`bannerFxColor`) — the plate's solid colour, or its
+ * gradient's first stop. An effect never brings a colour of its own to the
+ * party; it wears what the plate wears, and repaint the plate and every effect
+ * left on Auto follows it, the way a text background's plate does. The tiles
+ * say so: each one is the deck's own plate painted with that effect on, in the
+ * plate's own colour — the same preview language the Shape card's tiles and the
+ * text background's Effects strip speak.
  */
 
 /** the plate's **Common Effects** — the text background's own Effects, as the tiles read them */
@@ -769,11 +816,14 @@ export const BANNER_COMMON_EFFECTS: { kind: TextBgEffectKind; label: string; hin
   (e) => e.id !== "none",
 ).map((e) => ({ kind: e.id, label: e.label, hint: e.hint }));
 
-export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
+export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
   const fx = bannerEffectsOf(banner);
   const setFx = (patch: Partial<BannerEffects>) => setBanner({ effects: { ...fx, ...patch } });
   const setShape = (patch: Partial<BannerShapeFx>) => setBanner({ effects: { ...fx, shape: { ...fx.shape, ...patch } } });
-  const shapeColor = baseColor(banner.gradient, banner.color || DEFAULT_BANNER.color);
+  /** every effect's auto colour — the shape's own paint, the plate keeps it in step */
+  const shapeColor = bannerFxColor(banner);
+  /** a tile's preview: the plate wearing one effect of this group (undefined = the group off) */
+  const dress = <G extends keyof BannerEffects>(key: G, on: BannerEffects[G]) => ({ ...fx, [key]: on } as BannerEffects);
   const c = fx.common;
   const s = fx.shadow;
   const g = fx.glow;
@@ -803,7 +853,9 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
           active={c?.kind}
           onPick={(kind) => setFx({ common: { kind, intensity: c?.intensity ?? 55, color: c?.color } })}
           onClear={() => setFx({ common: undefined })}
-          mark={<FxMark group="common" />}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("common", kind === undefined ? undefined : c && c.kind === kind ? c : { kind, intensity: c?.intensity ?? 55, color: c?.color })}
         />
         {c && (
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
@@ -820,6 +872,8 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
             {TEXT_BG_EFFECT_BY_ID.get(c.kind)?.color && (
               <ColorField
                 label="Effect colour"
+                autoHint="Follow the shape's colour"
+                hint={c.color ? undefined : "the shape's colour"}
                 value={c.color ?? ""}
                 fallback={bannerCommonColor(banner, c)}
                 presets={Array.from(new Set([shapeColor, "#000000", "#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6"]))}
@@ -845,13 +899,17 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
             setFx({
               shadow: {
                 kind,
+                // the shadow starts on Auto colour — the plate's own paint, so the
+                // tile the deck picks and the shadow it throws are one colour story
                 ...BANNER_SHADOW_DEFAULTS[kind],
-                ...(kind === "colored" ? { color: shapeColor } : {}),
+                ...(kind === "colored" ? { color: s?.color || "" } : {}),
               },
             })
           }
           onClear={() => setFx({ shadow: undefined })}
-          mark={<FxMark group="shadow" />}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("shadow", kind === undefined ? undefined : s && s.kind === kind ? s : { kind, ...BANNER_SHADOW_DEFAULTS[kind], color: s?.color || "" })}
         />
         {s && (
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
@@ -874,10 +932,12 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
             </div>
             <ColorField
               label="Shadow colour"
+              autoHint="Follow the shape's colour"
+              hint={s.color ? undefined : "the shape's colour"}
               value={s.color}
-              fallback={s.kind === "colored" ? shapeColor : "#000000"}
+              fallback={shapeColor}
               presets={Array.from(new Set([shapeColor, "#000000", "#1f5fd0", "#7c3aed", "#b91c1c", "#059669", "#b45309"]))}
-              onChange={(v) => setFx({ shadow: { ...s, color: v || (s.kind === "colored" ? shapeColor : "#000000") } })}
+              onChange={(v) => setFx({ shadow: { ...s, color: v || "" } })}
             />
           </div>
         )}
@@ -890,9 +950,11 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
           prefix="Banner glow"
           defs={BANNER_GLOW_EFFECTS}
           active={g?.kind}
-          onPick={(kind) => setFx({ glow: { kind, ...BANNER_GLOW_DEFAULT } })}
+          onPick={(kind) => setFx({ glow: { kind, ...BANNER_GLOW_DEFAULT, color: g?.color || "" } })}
           onClear={() => setFx({ glow: undefined })}
-          mark={<FxMark group="glow" />}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("glow", kind === undefined ? undefined : g && g.kind === kind ? g : { kind, ...BANNER_GLOW_DEFAULT, color: g?.color || "" })}
         />
         {g && (
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
@@ -901,10 +963,12 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
             </Field>
             <ColorField
               label="Glow colour"
+              autoHint="Follow the shape's colour"
+              hint={g.color ? undefined : "the shape's colour"}
               value={g.color}
               fallback={shapeColor}
               presets={Array.from(new Set([shapeColor, "#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6", "#4ade80"]))}
-              onChange={(v) => setFx({ glow: { ...g, color: v || shapeColor } })}
+              onChange={(v) => setFx({ glow: { ...g, color: v || "" } })}
             />
           </div>
         )}
@@ -919,7 +983,9 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
           active={d?.kind}
           onPick={(kind) => setFx({ depth: { kind, ...BANNER_DEPTH_DEFAULT } })}
           onClear={() => setFx({ depth: undefined })}
-          mark={<FxMark group="depth" />}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("depth", kind === undefined ? undefined : d && d.kind === kind ? d : { kind, ...BANNER_DEPTH_DEFAULT })}
         />
         {d && (
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
@@ -943,9 +1009,11 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
           prefix="Banner modern"
           defs={BANNER_MODERN_EFFECTS}
           active={m?.kind}
-          onPick={(kind) => setFx({ modern: { kind, ...BANNER_MODERN_DEFAULT } })}
+          onPick={(kind) => setFx({ modern: { kind, ...BANNER_MODERN_DEFAULT, color: m?.color || "" } })}
           onClear={() => setFx({ modern: undefined })}
-          mark={<FxMark group="modern" />}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("modern", kind === undefined ? undefined : m && m.kind === kind ? m : { kind, ...BANNER_MODERN_DEFAULT, color: m?.color || "" })}
         />
         {m && (
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
@@ -957,10 +1025,12 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
             </Field>
             <ColorField
               label="Modern tint"
+              autoHint="Follow the shape's colour"
+              hint={m.color ? undefined : "the shape's colour"}
               value={m.color}
               fallback={shapeColor}
               presets={Array.from(new Set([shapeColor, "#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f"]))}
-              onChange={(v) => setFx({ modern: { ...m, color: v || shapeColor } })}
+              onChange={(v) => setFx({ modern: { ...m, color: v || "" } })}
             />
             <p className="text-[10px] leading-relaxed text-slate-500">
               The glass family blurs the board through the plate in the browser; exports carry the tint and the rim
@@ -1036,9 +1106,11 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
           prefix="Banner decor"
           defs={BANNER_DECOR_EFFECTS}
           active={dc?.kind}
-          onPick={(kind) => setFx({ decor: { kind, ...BANNER_DECOR_DEFAULT } })}
+          onPick={(kind) => setFx({ decor: { kind, ...BANNER_DECOR_DEFAULT, color: dc?.color || "" } })}
           onClear={() => setFx({ decor: undefined })}
-          mark={<FxMark group="decor" />}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("decor", kind === undefined ? undefined : dc && dc.kind === kind ? dc : { kind, ...BANNER_DECOR_DEFAULT, color: dc?.color || "" })}
         />
         {dc && (
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
@@ -1047,10 +1119,12 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
             </Field>
             <ColorField
               label="Decorative colour"
+              autoHint="Follow the shape's colour"
+              hint={dc.color ? undefined : "the shape's colour"}
               value={dc.color}
               fallback={shapeColor}
               presets={Array.from(new Set([shapeColor, "#ffffff", "#000000", "#ffd633", "#22d3ee", "#f472b6", "#94a3b8"]))}
-              onChange={(v) => setFx({ decor: { ...dc, color: v || shapeColor } })}
+              onChange={(v) => setFx({ decor: { ...dc, color: v || "" } })}
             />
           </div>
         )}
@@ -1059,7 +1133,10 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
       <p className="text-[10px] leading-relaxed text-slate-500">
         The halo grows outward from the plate itself, whatever size it is. Shimmer is a presenter-only sheen and is never
         exported. One effect wears at a time in each group; the shape's distortions stack, and every group falls back to
-        off, so the plate never wears more than the teacher put on it.
+        off, so the plate never wears more than the teacher put on it. Every colour channel starts on <b>Auto</b>, which is
+        the shape's own paint: pick it once and the effect keeps that colour, leave it and it follows the plate the moment
+        the fill (or the gradient's first stop) changes. The tiles are the plate itself wearing each effect — the same
+        miniature the <b>Shape</b> card paints, so what a tile shows is what the board paints.
       </p>
     </div>
   );

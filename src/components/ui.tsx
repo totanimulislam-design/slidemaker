@@ -192,6 +192,7 @@ export function ColorField({
   allowNone = false,
   presets = [],
   autoLabel = "Auto",
+  autoHint,
 }: {
   label: string;
   hint?: string;
@@ -203,6 +204,8 @@ export function ColorField({
   allowNone?: boolean;
   presets?: string[];
   autoLabel?: string;
+  /** what Auto inherits, in the panel's own words — the button's tooltip */
+  autoHint?: string;
 }) {
   const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value) ? value : "";
   const isNone = value === "transparent";
@@ -259,7 +262,7 @@ export function ColorField({
           )}
           <button
             type="button"
-            title={`Inherit the marker colour (${fallback})`}
+            title={`${autoHint ?? "Inherit the marker colour"} (${fallback})`}
             onClick={() => onChange("")}
             className={cn(
               "rounded border px-1.5 py-0.5 text-[9.5px] transition-colors",
