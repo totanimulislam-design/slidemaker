@@ -101,7 +101,7 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
       {/* ------------------------- the plate, channel by channel ------------- */}
       <BannerPresetPanel {...cards} />
       <BannerShapePanel {...cards} />
-      <BannerEffectsPanel banner={b} setBanner={set} />
+      <BannerEffectsPanel theme={theme} banner={b} setBanner={set} />
       <BannerFillPanel {...cards} />
       <BannerBorderPanel banner={b} setBanner={set} />
       <BannerRadiusPanel banner={b} setBanner={set} />

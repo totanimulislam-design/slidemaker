@@ -1310,7 +1310,7 @@ export default function ContextToolbar(p: Props) {
     const cards: Record<string, ReactNode> = {
       "Design presets": <BannerPresetPanel theme={theme} banner={banner} setBanner={p} />,
       "Banner shape": <BannerShapePanel theme={theme} banner={banner} setBanner={p} />,
-      "Banner effects": <BannerEffectsPanel banner={banner} setBanner={p} />,
+      "Banner effects": <BannerEffectsPanel theme={theme} banner={banner} setBanner={p} />,
       "Banner fill": <BannerFillPanel banner={banner} setBanner={p} />,
       "Banner border": <BannerBorderPanel banner={banner} setBanner={p} />,
       "Banner radius": <BannerRadiusPanel banner={banner} setBanner={p} />,
