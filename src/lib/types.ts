@@ -557,6 +557,42 @@ export type BannerBorderStyle = "solid" | "dashed" | "dotted" | "double" | "none
 
 /* ------------------------------------- the Effects card of the plate ------ */
 
+/* ====================================================================== *
+ *  The effects a plate wears, category by category
+ * ====================================================================== *
+ *
+ * The plate's **Effects** card reads like Canva's: seven categories, each one
+ * a family of effects with its own tiles and its own controls, and each one
+ * wearing at most one effect at a time:
+ *
+ *   Shadow      an offset copy of the plate, on X · Y · Blur · Spread ·
+ *               Opacity · Colour
+ *   Glow        light blooming off the plate, on Type · Blur · Intensity ·
+ *               Colour
+ *   Blur        the plate (or the board behind it) blurred, on Type · Blur ·
+ *               Intensity · Direction · Colour
+ *   Glass       the frosted pane family, on Type · Blur · Intensity · Tint
+ *   Bevel       a lit edge and a shaded one, on Type · Depth · Blur · Angle ·
+ *               Colour
+ *   ​3D          a slab behind the plate (or the plate tipped in space), on
+ *               Type · Depth · Blur · Angle · Colour
+ *   Highlight   a light laid over the plate, on Type · Blur · Intensity ·
+ *               Angle · Colour
+ *
+ * Every one of them falls back to off, and every colour channel falls back to
+ * the shape's own paint (`bannerFxColor`), so an effect left on Auto follows
+ * the plate the moment it is repainted.
+ *
+ * Decks written before the seven categories kept their effects in the older
+ * groups — `common` (the text background's shared vocabulary), `depth` (the
+ * 3D shapes) and `modern` (the glass family). Those are still read, and
+ * `bannerEffectsOf` in `lib/banner` folds each of them into the category it
+ * belongs to, so an old deck opens with its effect already selected in the
+ * right place.
+ */
+
+/* -------------------------------- shadow --------------------------------- */
+
 /** the twelve shadows a plate can carry — one at a time, dressed by the card */
 export type BannerShadowKind =
   | "drop"
@@ -587,74 +623,118 @@ export interface BannerShadowFx {
   color: string;
 }
 
-/** the twelve lights a plate can carry — one at a time */
-export type BannerGlowKind =
-  | "outer"
-  | "inner"
-  | "neon"
-  | "soft"
-  | "highlight"
-  | "reflection"
-  | "shine"
-  | "gloss"
-  | "backlight"
-  | "spotlight"
-  | "aurora"
-  | "rimLight";
+/* --------------------------------- glow ---------------------------------- */
+
+/** the eight lights a plate can bloom with — one at a time */
+export type BannerGlowKind = "outer" | "inner" | "neon" | "soft" | "halo" | "backlight" | "aurora" | "outlineGlow";
 
 export interface BannerGlowFx {
   kind: BannerGlowKind;
-  /** 0–100 */
+  /** 0–100 — how bright the light is */
   intensity: number;
+  /** px — the bloom's reach, on top of the intensity's own */
+  blur: number;
   color: string;
 }
 
-/** the twelve depths a plate can wear — one at a time */
-export type BannerDepthKind =
+/* --------------------------------- blur ---------------------------------- */
+
+/** the eight blurs a plate can wear — one at a time */
+export type BannerBlurKind = "soft" | "gaussian" | "backdrop" | "motion" | "zoom" | "feather" | "bloom" | "frost";
+
+export interface BannerBlurFx {
+  kind: BannerBlurKind;
+  /** px — how much blur */
+  blur: number;
+  /** 0–100 — how deep the blur (and, with it, the tint) goes */
+  intensity: number;
+  /** degrees — the way a motion, zoom or feather blur runs */
+  angle: number;
+  color: string;
+}
+
+/* --------------------------------- glass --------------------------------- */
+
+/** the seven panes a plate can be cut from — one at a time */
+export type BannerGlassKind = "glass" | "frosted" | "acrylic" | "blurBg" | "clearGlass" | "tinted" | "glassEdge";
+
+export interface BannerGlassFx {
+  kind: BannerGlassKind;
+  /** 0–100 — the pane's tint and the strength of its rim */
+  intensity: number;
+  /** px — the backdrop blur the pane frosts the board with */
+  blur: number;
+  color: string;
+}
+
+/* --------------------------------- bevel --------------------------------- */
+
+/** the seven edges a plate can be cut with — one at a time */
+export type BannerBevelKind = "bevel" | "innerBevel" | "outerBevel" | "emboss" | "ridge" | "groove" | "pillow";
+
+export interface BannerBevelFx {
+  kind: BannerBevelKind;
+  /** 0–100 — how deep the edge is cut */
+  intensity: number;
+  /** px — how soft the cut is */
+  blur: number;
+  /** degrees — where the light comes from (0 = straight above, clockwise) */
+  angle: number;
+  color: string;
+}
+
+/* ---------------------------------- 3D ----------------------------------- */
+
+/** the nine depths a plate can stand in — one at a time */
+export type Banner3DKind =
   | "extrusion"
-  | "bevel"
-  | "emboss"
-  | "innerBevel"
-  | "outerBevel"
+  | "depth"
+  | "layered3d"
+  | "perspective"
+  | "tilt"
+  | "pop"
   | "raised"
   | "pressed"
-  | "depth"
-  | "perspective"
-  | "layered3d"
-  | "tilt"
-  | "pop";
+  | "isometric";
 
-export interface BannerDepthFx {
-  kind: BannerDepthKind;
-  /** 0–100 */
+export interface Banner3DFx {
+  kind: Banner3DKind;
+  /** 0–100 — how far the depth runs */
   intensity: number;
-  /** the light's direction in degrees — 0 is straight above, clockwise */
-  angle: number;
-}
-
-/** the twelve modern finishes a plate can wear — one at a time */
-export type BannerModernKind =
-  | "glass"
-  | "frosted"
-  | "acrylic"
-  | "blurBg"
-  | "clearGlass"
-  | "noise"
-  | "softGradient"
-  | "mesh"
-  | "holographic"
-  | "metallic"
-  | "duotone"
-  | "softUi";
-
-export interface BannerModernFx {
-  kind: BannerModernKind;
-  /** 0–100 */
-  intensity: number;
-  color: string;
-  /** the backdrop blur the glass family wears, px */
+  /** px — the softness of the shadow the depth throws */
   blur: number;
+  /** degrees — the way the depth runs (0 = straight up, 90 = down, 180 = up) */
+  angle: number;
+  color: string;
 }
+
+/* ------------------------------- highlight ------------------------------- */
+
+/** the ten lights a plate can wear on its face — one at a time */
+export type BannerHighlightKind =
+  | "highlight"
+  | "innerHighlight"
+  | "outerHighlight"
+  | "edgeHighlight"
+  | "gloss"
+  | "sheen"
+  | "shine"
+  | "reflection"
+  | "spotlight"
+  | "rimLight";
+
+export interface BannerHighlightFx {
+  kind: BannerHighlightKind;
+  /** 0–100 — how bright the light is */
+  intensity: number;
+  /** px — how soft the light's edge is */
+  blur: number;
+  /** degrees — the way the light runs */
+  angle: number;
+  color: string;
+}
+
+/* ---------------------------- the shape's own ---------------------------- */
 
 /** the shape's own distortion channels — sliders and flips, all independent */
 export interface BannerShapeFx {
@@ -682,7 +762,17 @@ export interface BannerShapeFx {
   flipV: boolean;
 }
 
-/** the fourteen decorations a plate can wear — one at a time */
+/* ------------------------------------------------------------------------- *
+ *  The decorations & the finishes — the effects that are none of the seven
+ * ------------------------------------------------------------------------- */
+
+/**
+ * The plate's **Decorations** — the patterns, the textures and the accents
+ * that are none of the seven categories: the vignette, the grain, the stitch,
+ * the bars, the sticker outline and the rest. One at a time, with its own
+ * strength and colour, read from the same `decor` group the card always kept
+ * them in.
+ */
 export type BannerDecorKind =
   | "innerHighlight"
   | "outerHighlight"
@@ -697,7 +787,20 @@ export type BannerDecorKind =
   | "dots"
   | "grid"
   | "stitch"
-  | "sunburst";
+  | "sunburst"
+  /** the accents the shared text-background vocabulary brings (see `common`) */
+  | "ring"
+  | "offsetOutline"
+  | "sticker"
+  | "stack"
+  | "topBar"
+  | "bottomBar"
+  | "leftBar"
+  | "stripes"
+  | "checker"
+  | "cornerFold"
+  | "fadeRight"
+  | "fadeEdges";
 
 export interface BannerDecorFx {
   kind: BannerDecorKind;
@@ -707,12 +810,28 @@ export interface BannerDecorFx {
 }
 
 /**
- * The plate's **Common Effects** — the very vocabulary of the text
- * background's own Effects card (see `TextBgEffectKind` and
- * `lib/textBgShape` `TEXT_BG_EFFECTS`): Shadow, Pop, Neon, Gloss, Sticker…
- * painted on the whole title plate. One at a time, with its own strength and
- * colour; `lib/shapeEffects` turns it into the same CSS passes a text plate
- * wears, so the two surfaces paint the very same "Pop" or "Neon".
+ * The plate's **Finishes** — the modern surface treatments: the grain, the
+ * mesh, the holographic sheen, the brushed metal, the duotone and the soft-UI
+ * card. The glass family moved to the **Glass** category, where it is dressed
+ * by the pane's own controls.
+ */
+export type BannerModernKind = "noise" | "softGradient" | "mesh" | "holographic" | "metallic" | "duotone" | "softUi";
+
+export interface BannerModernFx {
+  kind: BannerModernKind;
+  /** 0–100 */
+  intensity: number;
+  color: string;
+  /** a little extra blur the finish may lay over the body, px */
+  blur: number;
+}
+
+/**
+ * The plate's **Shared Effects** — the very vocabulary of the text
+ * background's own Effects card (see `TextBgEffectKind` and `lib/textBgShape`
+ * `TEXT_BG_EFFECTS`), painted on the whole title plate by the same
+ * `lib/shapeEffects` engine a text plate wears. What the card still files here
+ * is the patterns and the accents the seven categories do not carry.
  */
 export interface BannerCommonFx {
   kind: TextBgEffectKind;
@@ -722,20 +841,68 @@ export interface BannerCommonFx {
   color?: string;
 }
 
+/* ------------------------------------------------------------------------- *
+ *  Everything the card dresses
+ * ------------------------------------------------------------------------- */
+
 /**
- * Everything the plate's **Effects** card dresses. One light effect per group
- * (common · shadow · glow · depth · modern · decoration) and the shape's
- * distortion channels on their own. `undefined` in a group means the group is
- * off.
+ * Everything the plate's **Effects** card dresses: one effect per category
+ * (`shadow` · `glow` · `blur` · `glass` · `bevel` · `threeD` · `highlight`),
+ * the decorations and the finishes, and the shape's distortion channels on
+ * their own. `undefined` in a group means the group is off.
+ *
+ * `depth` is the one group decks no longer write: it is the old **Depth / 3D**
+ * card, whose twelve depths are folded into `bevel` (the four bevelled edges)
+ * and `threeD` (the extrusions and the turns) when the deck is read — so a
+ * deck that had, say, *3D Extrusion* selected opens with it selected under
+ * **3D**.
  */
 export interface BannerEffects {
-  common?: BannerCommonFx;
   shadow?: BannerShadowFx;
   glow?: BannerGlowFx;
-  depth?: BannerDepthFx;
-  modern?: BannerModernFx;
-  shape: BannerShapeFx;
+  blur?: BannerBlurFx;
+  glass?: BannerGlassFx;
+  bevel?: BannerBevelFx;
+  threeD?: Banner3DFx;
+  highlight?: BannerHighlightFx;
+  /** the patterns, textures and accents — the Decorations card */
   decor?: BannerDecorFx;
+  /** the modern finishes — the Finishes strip of the Decorations card */
+  modern?: BannerModernFx;
+  /** the shared text-background effects still filed here */
+  common?: BannerCommonFx;
+  /** @deprecated the old Depth / 3D group — read, folded into `bevel` / `threeD` */
+  depth?: BannerDepthFx;
+  /** the corners and the distortions, stacked on top of every category */
+  shape: BannerShapeFx;
+}
+
+/**
+ * The old **Depth / 3D** group — twelve depths in one list. Decks written
+ * before the seven categories carry it; `bannerEffectsOf` maps each kind into
+ * the category that suits it (the bevelled edges to **Bevel**, the extrusions
+ * and the turns to **3D**) and the card never writes it again.
+ */
+export type BannerDepthKind =
+  | "extrusion"
+  | "bevel"
+  | "emboss"
+  | "innerBevel"
+  | "outerBevel"
+  | "raised"
+  | "pressed"
+  | "depth"
+  | "perspective"
+  | "layered3d"
+  | "tilt"
+  | "pop";
+
+export interface BannerDepthFx {
+  kind: BannerDepthKind;
+  /** 0–100 */
+  intensity: number;
+  /** the light's direction in degrees — 0 is straight above, clockwise */
+  angle: number;
 }
 
 /** the factory effects — everything off, the shape wearing its own body */

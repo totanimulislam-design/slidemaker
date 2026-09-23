@@ -1,21 +1,27 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { BannerBorderStyle, BannerSettings, BannerShape, Gradient, TextBgEffectKind, ThemeSettings } from "../lib/types";
+import type { BannerBorderStyle, BannerSettings, BannerShape, Gradient, ThemeSettings } from "../lib/types";
 import { BANNER_WIDTH, DEFAULT_BANNER } from "../lib/types";
-import { TEXT_BG_EFFECTS, TEXT_BG_EFFECT_BY_ID } from "../lib/textBgShape";
 import {
+  BANNER_3D_DEFAULTS,
+  BANNER_3D_EFFECTS,
+  BANNER_BEVEL_DEFAULTS,
+  BANNER_BEVEL_EFFECTS,
+  BANNER_BLUR_DEFAULTS,
+  BANNER_BLUR_EFFECTS,
   BANNER_DECOR_DEFAULT,
   BANNER_DECOR_EFFECTS,
-  BANNER_DEPTH_DEFAULT,
-  BANNER_DEPTH_EFFECTS,
-  BANNER_GLOW_DEFAULT,
+  BANNER_GLASS_DEFAULTS,
+  BANNER_GLASS_EFFECTS,
+  BANNER_GLOW_DEFAULTS,
   BANNER_GLOW_EFFECTS,
+  BANNER_HIGHLIGHT_DEFAULTS,
+  BANNER_HIGHLIGHT_EFFECTS,
   BANNER_MODERN_DEFAULT,
   BANNER_MODERN_EFFECTS,
   BANNER_PRESETS,
   BANNER_PRESET_GROUPS,
   BANNER_SHADOW_DEFAULTS,
   BANNER_SHADOW_EFFECTS,
-  bannerCommonColor,
   bannerCss,
   bannerFxColor,
   bannerEffectsOf,
@@ -703,6 +709,10 @@ export function BannerShapePanel({ theme, banner, setBanner }: BannerProps) {
 /*  Effects                                                            */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Effects                                                            */
+/* ------------------------------------------------------------------ */
+
 /**
  * One group's tiles: the "None" tile plus one tile per effect. Each tile is not
  * a mark but the plate itself — the deck's own silhouette and paint, wearing
@@ -748,7 +758,7 @@ function FxTiles<K extends string>({
         role="option"
         aria-selected={active === undefined}
         aria-label={`${prefix}: None`}
-        title="Turn this group off"
+        title="Turn this category off"
         onClick={onClear}
         className={tile(active === undefined)}
       >
@@ -775,30 +785,61 @@ function FxTiles<K extends string>({
 }
 
 /**
+ * One **category** of the Effects card: its heading and what its Type row says,
+ * then whatever the caller paints inside — the family's tiles and, when one is
+ * chosen, that effect's own controls and colour.
+ */
+function FxGroup({
+  group,
+  title,
+  type,
+  state,
+  children,
+}: {
+  /** the `data-banner-fx-group` name a reader (and a test) finds the category by */
+  group: string;
+  title: string;
+  /** what this category's **Type** control offers */
+  type: string;
+  /** what is on at the moment, for the heading's hint */
+  state: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group={group}>
+      <Cap hint={state}>{title}</Cap>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Type</span>
+        <span className="text-[10px] text-slate-400">{type}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
  * The plate's **Effects** card — the "Banner effects" button of the Title
  * background line. The plate's own softness, halo and shimmer lead, and then
- * one section per effect group, each with its effects as tiles (one at a time,
- * "None" takes it off) and the controls of the effect on:
+ * one section per **category**, the way a design tool files its effects:
  *
- *   Common Effects     the text background's own effects — Shadow, Pop, Lift,
- *                      Float, Long shadow, Glow, Halo, Neon, Inner shadow,
- *                      Inner glow, Bevel, Emboss, Gloss, Sheen, Spotlight,
- *                      Stripes, Dots, Grid, Checker, Glass, Blur, the fades,
- *                      Ring, Offset outline, Sticker, Stack, the accent bars
- *                      and Corner fold — the same shared vocabulary a text
- *                      plate wears, each by intensity and colour
- *   Shadow Effects     twelve shadows, each dressed by X · Y · Blur · Spread ·
- *                      Opacity · Colour (the colour starts on the shape's own)
- *   Glow & Light       twelve lights, each by intensity and colour — the light
- *                      is the shape's colour until another is picked
- *   Depth / 3D         twelve depths, each by intensity and the light's angle
- *   Modern Effects     twelve finishes, each by intensity, tint and blur — the
- *                      tint lights and shades the shape's own colour
- *   Shape Effects      the corners (shared or four of their own) and the
- *                      plate's own distortions — stretch, wave, curve, slant,
- *                      skew, rotation and the two flips
- *   Decorative Effects fourteen decorations, each by intensity and colour (the
- *                      shape's own, left on Auto)
+ *   Shadow      twelve shadows, dressed by X · Y · Blur · Spread · Opacity · Colour
+ *   Glow        eight lights, by Type · Blur · Intensity · Colour
+ *   Blur        eight blurs, by Type · Blur · Intensity · Direction · Colour
+ *   Glass       seven panes, by Type · Blur · Intensity · Tint
+ *   Bevel       seven edges, by Type · Depth · Blur · Angle · Colour
+ *   3D          nine depths, by Type · Depth · Blur · Angle · Colour
+ *   Highlight   ten lights, by Type · Blur · Intensity · Angle · Colour
+ *   Decorations the patterns, the textures and the accents, by Type · Intensity · Colour
+ *   Finishes    the modern surface treatments, by Type · Intensity · Blur · Tint
+ *   Shape       the corners (shared or four of their own) and the plate's own
+ *               distortions — stretch, wave, curve, slant, skew, rotation and
+ *               the two flips
+ *
+ * **Type** is the family's own list — one effect of that family at a time, the
+ * way a design tool's Type row behaves. (The decorations are the one family
+ * that stacks, and every one of them is a type; the Shape card's distortions
+ * stack too.) Switching type keeps the numbers the two effects share, so a
+ * shadow's Blur is still a glow's Blur.
  *
  * Every channel falls back to off, so an untouched deck renders exactly as it
  * always did, and every colour channel falls back to the SAME colour: the
@@ -809,13 +850,12 @@ function FxTiles<K extends string>({
  * say so: each one is the deck's own plate painted with that effect on, in the
  * plate's own colour — the same preview language the Shape card's tiles and the
  * text background's Effects strip speak.
+ *
+ * A deck written before the categories is read through `bannerEffectsOf`, which
+ * folds its old `depth`, `modern`, `glow`, `decor` and `common` groups into the
+ * category each effect belongs to — so an old deck opens with its effect already
+ * selected in the right place, and this card never writes the old groups again.
  */
-
-/** the plate's **Common Effects** — the text background's own Effects, as the tiles read them */
-export const BANNER_COMMON_EFFECTS: { kind: TextBgEffectKind; label: string; hint: string }[] = TEXT_BG_EFFECTS.filter(
-  (e) => e.id !== "none",
-).map((e) => ({ kind: e.id, label: e.label, hint: e.hint }));
-
 export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
   const fx = bannerEffectsOf(banner);
   const setFx = (patch: Partial<BannerEffects>) => setBanner({ effects: { ...fx, ...patch } });
@@ -824,13 +864,19 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
   const shapeColor = bannerFxColor(banner);
   /** a tile's preview: the plate wearing one effect of this group (undefined = the group off) */
   const dress = <G extends keyof BannerEffects>(key: G, on: BannerEffects[G]) => ({ ...fx, [key]: on } as BannerEffects);
-  const c = fx.common;
+  /** the deck's own colour first in every well, so an effect can wear it back */
+  const swatches = (...extra: string[]) => Array.from(new Set([shapeColor, ...extra]));
   const s = fx.shadow;
   const g = fx.glow;
-  const d = fx.depth;
+  const b = fx.blur;
+  const gl = fx.glass;
+  const bv = fx.bevel;
+  const d = fx.threeD;
+  const h = fx.highlight;
   const m = fx.modern;
   const dc = fx.decor;
   const t = fx.shape;
+  const label = <K extends string>(defs: BannerEffectDef<K>[], kind: K | undefined) => defs.find((e) => e.kind === kind)?.label ?? "on";
   return (
     <div className="space-y-4" data-banner-effects="">
       <Cap hint={banner.shape === "glow" ? "the glow's softness" : "glow silhouettes only"}>Effects</Cap>
@@ -844,53 +890,13 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
       </Field>
       <Toggle label="Shimmer animation (screen only)" checked={banner.shimmer} onChange={(v) => setBanner({ shimmer: v })} />
 
-      {/* ----------------------------- common effects ----------------------- */}
-      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="common">
-        <Cap hint={c ? TEXT_BG_EFFECT_BY_ID.get(c.kind)?.label ?? "on" : "off"}>Common Effects</Cap>
-        <FxTiles
-          prefix="Banner common"
-          defs={BANNER_COMMON_EFFECTS}
-          active={c?.kind}
-          onPick={(kind) => setFx({ common: { kind, intensity: c?.intensity ?? 55, color: c?.color } })}
-          onClear={() => setFx({ common: undefined })}
-          theme={theme}
-          banner={banner}
-          dress={(kind) => dress("common", kind === undefined ? undefined : c && c.kind === kind ? c : { kind, intensity: c?.intensity ?? 55, color: c?.color })}
-        />
-        {c && (
-          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
-            <Field label="Intensity" hint={`${c.intensity}`}>
-              <Slider
-                min={0}
-                max={100}
-                step={1}
-                value={c.intensity}
-                onChange={(v) => setFx({ common: { ...c, intensity: v } })}
-                ariaLabel="Banner fx: common intensity"
-              />
-            </Field>
-            {TEXT_BG_EFFECT_BY_ID.get(c.kind)?.color && (
-              <ColorField
-                label="Effect colour"
-                autoHint="Follow the shape's colour"
-                hint={c.color ? undefined : "the shape's colour"}
-                value={c.color ?? ""}
-                fallback={bannerCommonColor(banner, c)}
-                presets={Array.from(new Set([shapeColor, "#000000", "#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6"]))}
-                onChange={(v) => setFx({ common: { ...c, color: v || undefined } })}
-              />
-            )}
-            <p className="text-[10px] leading-relaxed text-slate-500">
-              The same effects the <b>text background</b> wears — Shadow, Pop, Neon, Gloss, Sticker… — painted on the whole
-              plate, at the effect's own intensity and colour. The colour follows the shape when left on Auto.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* ---------------------------- shadow effects ------------------------ */}
-      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="shadow">
-        <Cap hint={s ? BANNER_SHADOW_EFFECTS.find((e) => e.kind === s.kind)?.label : "off"}>Shadow Effects</Cap>
+      {/* -------------------------------- shadow ---------------------------- */}
+      <FxGroup
+        group="shadow"
+        title="Shadow"
+        type="one of twelve · Drop · Soft · Hard · Long · Inner · Floating · Offset · Coloured · Double · Surround · Layered · Cast"
+        state={s ? label(BANNER_SHADOW_EFFECTS, s.kind) : "off"}
+      >
         <FxTiles
           prefix="Banner shadow"
           defs={BANNER_SHADOW_EFFECTS}
@@ -936,30 +942,37 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
               hint={s.color ? undefined : "the shape's colour"}
               value={s.color}
               fallback={shapeColor}
-              presets={Array.from(new Set([shapeColor, "#000000", "#1f5fd0", "#7c3aed", "#b91c1c", "#059669", "#b45309"]))}
+              presets={swatches("#000000", "#1f5fd0", "#7c3aed", "#b91c1c", "#059669", "#b45309")}
               onChange={(v) => setFx({ shadow: { ...s, color: v || "" } })}
             />
           </div>
         )}
-      </div>
+      </FxGroup>
 
-      {/* ----------------------------- glow & light ------------------------- */}
-      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="glow">
-        <Cap hint={g ? BANNER_GLOW_EFFECTS.find((e) => e.kind === g.kind)?.label : "off"}>Glow &amp; Light</Cap>
+      {/* --------------------------------- glow ------------------------------ */}
+      <FxGroup
+        group="glow"
+        title="Glow"
+        type="one of eight · Outer · Inner · Neon · Soft · Halo · Backlight · Aurora · Outline"
+        state={g ? label(BANNER_GLOW_EFFECTS, g.kind) : "off"}
+      >
         <FxTiles
           prefix="Banner glow"
           defs={BANNER_GLOW_EFFECTS}
           active={g?.kind}
-          onPick={(kind) => setFx({ glow: { kind, ...BANNER_GLOW_DEFAULT, color: g?.color || "" } })}
+          onPick={(kind) => setFx({ glow: { kind, ...BANNER_GLOW_DEFAULTS[kind], color: g?.color || "" } })}
           onClear={() => setFx({ glow: undefined })}
           theme={theme}
           banner={banner}
-          dress={(kind) => dress("glow", kind === undefined ? undefined : g && g.kind === kind ? g : { kind, ...BANNER_GLOW_DEFAULT, color: g?.color || "" })}
+          dress={(kind) => dress("glow", kind === undefined ? undefined : g && g.kind === kind ? g : { kind, ...BANNER_GLOW_DEFAULTS[kind], color: g?.color || "" })}
         />
         {g && (
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
             <Field label="Intensity" hint={`${g.intensity}`}>
               <Slider min={0} max={100} step={1} value={g.intensity} onChange={(v) => setFx({ glow: { ...g, intensity: v } })} ariaLabel="Banner fx: glow intensity" />
+            </Field>
+            <Field label="Blur" hint={`${g.blur}px`}>
+              <Slider min={0} max={60} step={1} value={g.blur} onChange={(v) => setFx({ glow: { ...g, blur: v } })} ariaLabel="Banner fx: glow blur (px)" />
             </Field>
             <ColorField
               label="Glow colour"
@@ -967,44 +980,270 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
               hint={g.color ? undefined : "the shape's colour"}
               value={g.color}
               fallback={shapeColor}
-              presets={Array.from(new Set([shapeColor, "#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6", "#4ade80"]))}
+              presets={swatches("#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6", "#4ade80")}
               onChange={(v) => setFx({ glow: { ...g, color: v || "" } })}
             />
           </div>
         )}
-      </div>
+      </FxGroup>
 
-      {/* ------------------------------ depth / 3D -------------------------- */}
-      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="depth">
-        <Cap hint={d ? BANNER_DEPTH_EFFECTS.find((e) => e.kind === d.kind)?.label : "off"}>Depth / 3D</Cap>
+      {/* --------------------------------- blur ------------------------------ */}
+      <FxGroup
+        group="blur"
+        title="Blur"
+        type="one of eight · Soft · Gaussian · Backdrop · Motion · Zoom · Feather · Bloom · Frosted"
+        state={b ? label(BANNER_BLUR_EFFECTS, b.kind) : "off"}
+      >
         <FxTiles
-          prefix="Banner depth"
-          defs={BANNER_DEPTH_EFFECTS}
-          active={d?.kind}
-          onPick={(kind) => setFx({ depth: { kind, ...BANNER_DEPTH_DEFAULT } })}
-          onClear={() => setFx({ depth: undefined })}
+          prefix="Banner blur"
+          defs={BANNER_BLUR_EFFECTS}
+          active={b?.kind}
+          onPick={(kind) => setFx({ blur: { kind, ...BANNER_BLUR_DEFAULTS[kind], color: b?.color || "" } })}
+          onClear={() => setFx({ blur: undefined })}
           theme={theme}
           banner={banner}
-          dress={(kind) => dress("depth", kind === undefined ? undefined : d && d.kind === kind ? d : { kind, ...BANNER_DEPTH_DEFAULT })}
+          dress={(kind) => dress("blur", kind === undefined ? undefined : b && b.kind === kind ? b : { kind, ...BANNER_BLUR_DEFAULTS[kind], color: b?.color || "" })}
         />
-        {d && (
+        {b && (
           <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
-            <Field label="Intensity" hint={`${d.intensity}`}>
-              <Slider min={0} max={100} step={1} value={d.intensity} onChange={(v) => setFx({ depth: { ...d, intensity: v } })} ariaLabel="Banner fx: depth intensity" />
+            <Field label="Blur" hint={`${b.blur}px`}>
+              <Slider min={0} max={48} step={1} value={b.blur} onChange={(v) => setFx({ blur: { ...b, blur: v } })} ariaLabel="Banner fx: blur amount (px)" />
             </Field>
-            <Field label="Light angle" hint={`${d.angle}°`}>
-              <Slider min={0} max={360} step={5} value={d.angle} onChange={(v) => setFx({ depth: { ...d, angle: v } })} ariaLabel="Banner fx: light angle (deg)" />
+            <Field label="Intensity" hint={`${b.intensity}`}>
+              <Slider min={0} max={100} step={1} value={b.intensity} onChange={(v) => setFx({ blur: { ...b, intensity: v } })} ariaLabel="Banner fx: blur intensity" />
             </Field>
+            <Field label="Direction °" hint={`${b.angle}°`}>
+              <Slider min={-180} max={180} step={1} value={b.angle} onChange={(v) => setFx({ blur: { ...b, angle: v } })} ariaLabel="Banner fx: blur direction (deg)" />
+            </Field>
+            <ColorField
+              label="Blur colour"
+              autoHint="Follow the shape's colour"
+              hint={b.color ? undefined : "the shape's colour"}
+              value={b.color}
+              fallback={shapeColor}
+              presets={swatches("#ffffff", "#000000", "#22d3ee", "#a78bfa", "#f472b6", "#94a3b8")}
+              onChange={(v) => setFx({ blur: { ...b, color: v || "" } })}
+            />
+          </div>
+        )}
+      </FxGroup>
+
+      {/* --------------------------------- glass ----------------------------- */}
+      <FxGroup
+        group="glass"
+        title="Glass"
+        type="one of seven · Glassmorphism · Frosted · Acrylic · Blur background · Transparent · Tinted · Glass edge"
+        state={gl ? label(BANNER_GLASS_EFFECTS, gl.kind) : "off"}
+      >
+        <FxTiles
+          prefix="Banner glass"
+          defs={BANNER_GLASS_EFFECTS}
+          active={gl?.kind}
+          onPick={(kind) => setFx({ glass: { kind, ...BANNER_GLASS_DEFAULTS[kind], color: gl?.color || "" } })}
+          onClear={() => setFx({ glass: undefined })}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("glass", kind === undefined ? undefined : gl && gl.kind === kind ? gl : { kind, ...BANNER_GLASS_DEFAULTS[kind], color: gl?.color || "" })}
+        />
+        {gl && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Blur" hint={`${gl.blur}px`}>
+              <Slider min={0} max={40} step={1} value={gl.blur} onChange={(v) => setFx({ glass: { ...gl, blur: v } })} ariaLabel="Banner fx: glass blur (px)" />
+            </Field>
+            <Field label="Intensity" hint={`${gl.intensity}`}>
+              <Slider min={0} max={100} step={1} value={gl.intensity} onChange={(v) => setFx({ glass: { ...gl, intensity: v } })} ariaLabel="Banner fx: glass intensity" />
+            </Field>
+            <ColorField
+              label="Glass tint"
+              autoHint="Follow the shape's colour"
+              hint={gl.color ? undefined : "the shape's colour"}
+              value={gl.color}
+              fallback={shapeColor}
+              presets={swatches("#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f")}
+              onChange={(v) => setFx({ glass: { ...gl, color: v || "" } })}
+            />
+            <p className="text-[10px] leading-relaxed text-slate-500">
+              The glass family blurs the board through the plate in the browser; exports carry the tint and the rim instead.
+            </p>
+          </div>
+        )}
+      </FxGroup>
+
+      {/* --------------------------------- bevel ----------------------------- */}
+      <FxGroup
+        group="bevel"
+        title="Bevel"
+        type="one of seven · Bevel · Inner · Outer · Emboss · Ridge · Groove · Pillow"
+        state={bv ? label(BANNER_BEVEL_EFFECTS, bv.kind) : "off"}
+      >
+        <FxTiles
+          prefix="Banner bevel"
+          defs={BANNER_BEVEL_EFFECTS}
+          active={bv?.kind}
+          onPick={(kind) => setFx({ bevel: { kind, ...BANNER_BEVEL_DEFAULTS[kind], color: bv?.color || "" } })}
+          onClear={() => setFx({ bevel: undefined })}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("bevel", kind === undefined ? undefined : bv && bv.kind === kind ? bv : { kind, ...BANNER_BEVEL_DEFAULTS[kind], color: bv?.color || "" })}
+        />
+        {bv && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Depth" hint={`${bv.intensity}`}>
+              <Slider min={0} max={100} step={1} value={bv.intensity} onChange={(v) => setFx({ bevel: { ...bv, intensity: v } })} ariaLabel="Banner fx: bevel depth" />
+            </Field>
+            <Field label="Blur" hint={`${bv.blur}px`}>
+              <Slider min={0} max={24} step={1} value={bv.blur} onChange={(v) => setFx({ bevel: { ...bv, blur: v } })} ariaLabel="Banner fx: bevel blur (px)" />
+            </Field>
+            <Field label="Angle °" hint={`${bv.angle}°`}>
+              <Slider min={0} max={360} step={5} value={bv.angle} onChange={(v) => setFx({ bevel: { ...bv, angle: v } })} ariaLabel="Banner fx: bevel angle (deg)" />
+            </Field>
+            <ColorField
+              label="Bevel colour"
+              autoHint="Follow the shape's colour"
+              hint={bv.color ? undefined : "the shape's colour"}
+              value={bv.color}
+              fallback={shapeColor}
+              presets={swatches("#ffffff", "#000000", "#ffd633", "#22d3ee", "#a78bfa", "#94a3b8")}
+              onChange={(v) => setFx({ bevel: { ...bv, color: v || "" } })}
+            />
             <p className="text-[10px] leading-relaxed text-slate-500">
               0° is light from straight above; walk the angle round and the bevel's lit edge follows it.
             </p>
           </div>
         )}
-      </div>
+      </FxGroup>
 
-      {/* ---------------------------- modern effects ------------------------ */}
-      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="modern">
-        <Cap hint={m ? BANNER_MODERN_EFFECTS.find((e) => e.kind === m.kind)?.label : "off"}>Modern Effects</Cap>
+      {/* ---------------------------------- 3D ------------------------------- */}
+      <FxGroup
+        group="threeD"
+        title="3D"
+        type="one of nine · Extrusion · Depth · Layered · Perspective · Tilt · Pop out · Raised · Pressed · Isometric"
+        state={d ? label(BANNER_3D_EFFECTS, d.kind) : "off"}
+      >
+        <FxTiles
+          prefix="Banner 3D"
+          defs={BANNER_3D_EFFECTS}
+          active={d?.kind}
+          onPick={(kind) => setFx({ threeD: { kind, ...BANNER_3D_DEFAULTS[kind], color: d?.color || "" } })}
+          onClear={() => setFx({ threeD: undefined })}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("threeD", kind === undefined ? undefined : d && d.kind === kind ? d : { kind, ...BANNER_3D_DEFAULTS[kind], color: d?.color || "" })}
+        />
+        {d && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Depth" hint={`${d.intensity}`}>
+              <Slider min={0} max={100} step={1} value={d.intensity} onChange={(v) => setFx({ threeD: { ...d, intensity: v } })} ariaLabel="Banner fx: 3D depth" />
+            </Field>
+            <Field label="Blur" hint={`${d.blur}px`}>
+              <Slider min={0} max={40} step={1} value={d.blur} onChange={(v) => setFx({ threeD: { ...d, blur: v } })} ariaLabel="Banner fx: 3D blur (px)" />
+            </Field>
+            <Field label="Angle °" hint={`${d.angle}°`}>
+              <Slider min={0} max={360} step={5} value={d.angle} onChange={(v) => setFx({ threeD: { ...d, angle: v } })} ariaLabel="Banner fx: 3D angle (deg)" />
+            </Field>
+            <ColorField
+              label="3D colour"
+              autoHint="Follow the shape's colour"
+              hint={d.color ? undefined : "the shape's colour"}
+              value={d.color}
+              fallback={shapeColor}
+              presets={swatches("#000000", "#ffffff", "#1f5fd0", "#7c3aed", "#059669", "#b91c1c")}
+              onChange={(v) => setFx({ threeD: { ...d, color: v || "" } })}
+            />
+            <p className="text-[10px] leading-relaxed text-slate-500">
+              The slabs and the shadows are the shape's own paint, shaded; the turns (Perspective · Tilt · Pop out) leave the paint alone
+              and tip the plate in space. 90° runs the depth straight down, 0° straight up.
+            </p>
+          </div>
+        )}
+      </FxGroup>
+
+      {/* ------------------------------ highlight ---------------------------- */}
+      <FxGroup
+        group="highlight"
+        title="Highlight"
+        type="one of ten · Highlight · Inner · Outer · Edge · Gloss · Sheen · Shine · Reflection · Spotlight · Rim light"
+        state={h ? label(BANNER_HIGHLIGHT_EFFECTS, h.kind) : "off"}
+      >
+        <FxTiles
+          prefix="Banner highlight"
+          defs={BANNER_HIGHLIGHT_EFFECTS}
+          active={h?.kind}
+          onPick={(kind) => setFx({ highlight: { kind, ...BANNER_HIGHLIGHT_DEFAULTS[kind], color: h?.color || "" } })}
+          onClear={() => setFx({ highlight: undefined })}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("highlight", kind === undefined ? undefined : h && h.kind === kind ? h : { kind, ...BANNER_HIGHLIGHT_DEFAULTS[kind], color: h?.color || "" })}
+        />
+        {h && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Intensity" hint={`${h.intensity}`}>
+              <Slider min={0} max={100} step={1} value={h.intensity} onChange={(v) => setFx({ highlight: { ...h, intensity: v } })} ariaLabel="Banner fx: highlight intensity" />
+            </Field>
+            <Field label="Blur" hint={`${h.blur}px`}>
+              <Slider min={0} max={40} step={1} value={h.blur} onChange={(v) => setFx({ highlight: { ...h, blur: v } })} ariaLabel="Banner fx: highlight blur (px)" />
+            </Field>
+            <Field label="Angle °" hint={`${h.angle}°`}>
+              <Slider min={0} max={360} step={5} value={h.angle} onChange={(v) => setFx({ highlight: { ...h, angle: v } })} ariaLabel="Banner fx: highlight angle (deg)" />
+            </Field>
+            <ColorField
+              label="Highlight colour"
+              autoHint="Follow the shape's colour"
+              hint={h.color ? undefined : "the shape's colour"}
+              value={h.color}
+              fallback={shapeColor}
+              presets={swatches("#ffffff", "#ffd633", "#22d3ee", "#f472b6", "#a78bfa", "#000000")}
+              onChange={(v) => setFx({ highlight: { ...h, color: v || "" } })}
+            />
+            <p className="text-[10px] leading-relaxed text-slate-500">
+              0° lays the light on from the top edge, 90° from the right — walk the angle and the sheen follows it.
+            </p>
+          </div>
+        )}
+      </FxGroup>
+
+      {/* ----------------------------- decorations --------------------------- */}
+      <FxGroup
+        group="decor"
+        title="Decorations"
+        type="one of twenty-two · patterns · textures · accents · the two fades"
+        state={dc ? label(BANNER_DECOR_EFFECTS, dc.kind) : "off"}
+      >
+        <FxTiles
+          prefix="Banner decor"
+          defs={BANNER_DECOR_EFFECTS}
+          active={dc?.kind}
+          onPick={(kind) => setFx({ decor: { kind, ...BANNER_DECOR_DEFAULT, color: dc?.color || "" } })}
+          onClear={() => setFx({ decor: undefined })}
+          theme={theme}
+          banner={banner}
+          dress={(kind) => dress("decor", kind === undefined ? undefined : dc && dc.kind === kind ? dc : { kind, ...BANNER_DECOR_DEFAULT, color: dc?.color || "" })}
+        />
+        {dc && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Intensity" hint={`${dc.intensity}`}>
+              <Slider min={0} max={100} step={1} value={dc.intensity} onChange={(v) => setFx({ decor: { ...dc, intensity: v } })} ariaLabel="Banner fx: decorative intensity" />
+            </Field>
+            <ColorField
+              label="Decorative colour"
+              autoHint="Follow the shape's colour"
+              hint={dc.color ? undefined : "the shape's colour"}
+              value={dc.color}
+              fallback={shapeColor}
+              presets={swatches("#ffffff", "#000000", "#ffd633", "#22d3ee", "#f472b6", "#94a3b8")}
+              onChange={(v) => setFx({ decor: { ...dc, color: v || "" } })}
+            />
+          </div>
+        )}
+      </FxGroup>
+
+      {/* ------------------------------- finishes ---------------------------- */}
+      <FxGroup
+        group="modern"
+        title="Finishes"
+        type="one of seven · grain · soft gradient · mesh · holographic · metallic · duotone · soft UI"
+        state={m ? label(BANNER_MODERN_EFFECTS, m.kind) : "off"}
+      >
         <FxTiles
           prefix="Banner modern"
           defs={BANNER_MODERN_EFFECTS}
@@ -1020,25 +1259,21 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
             <Field label="Intensity" hint={`${m.intensity}`}>
               <Slider min={0} max={100} step={1} value={m.intensity} onChange={(v) => setFx({ modern: { ...m, intensity: v } })} ariaLabel="Banner fx: modern intensity" />
             </Field>
-            <Field label="Backdrop blur" hint={`${m.blur}px`}>
-              <Slider min={0} max={40} step={1} value={m.blur} onChange={(v) => setFx({ modern: { ...m, blur: v } })} ariaLabel="Banner fx: backdrop blur (px)" />
+            <Field label="Blur" hint={`${m.blur}px`}>
+              <Slider min={0} max={40} step={1} value={m.blur} onChange={(v) => setFx({ modern: { ...m, blur: v } })} ariaLabel="Banner fx: modern blur (px)" />
             </Field>
             <ColorField
-              label="Modern tint"
+              label="Finish tint"
               autoHint="Follow the shape's colour"
               hint={m.color ? undefined : "the shape's colour"}
               value={m.color}
               fallback={shapeColor}
-              presets={Array.from(new Set([shapeColor, "#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f"]))}
+              presets={swatches("#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f")}
               onChange={(v) => setFx({ modern: { ...m, color: v || "" } })}
             />
-            <p className="text-[10px] leading-relaxed text-slate-500">
-              The glass family blurs the board through the plate in the browser; exports carry the tint and the rim
-              instead.
-            </p>
           </div>
         )}
-      </div>
+      </FxGroup>
 
       {/* ----------------------------- shape effects ------------------------ */}
       <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="shape">
@@ -1094,49 +1329,18 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
         <Toggle label="Flip horizontal" checked={t.flipH} onChange={(v) => setShape({ flipH: v })} />
         <Toggle label="Flip vertical" checked={t.flipV} onChange={(v) => setShape({ flipV: v })} />
         <p className="text-[10px] leading-relaxed text-slate-500">
-          Wave, curve and slant each cut the plate's edge — the one you turn on last wins. The rest stack: rotate, then
-          skew, then stretch, then the flips.
+          Wave, curve and slant each cut the plate's edge — the one you turn on last wins. The rest stack: rotate, then skew, then
+          stretch, then the flips, on top of every effect above.
         </p>
       </div>
 
-      {/* -------------------------- decorative effects ---------------------- */}
-      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="decor">
-        <Cap hint={dc ? BANNER_DECOR_EFFECTS.find((e) => e.kind === dc.kind)?.label : "off"}>Decorative Effects</Cap>
-        <FxTiles
-          prefix="Banner decor"
-          defs={BANNER_DECOR_EFFECTS}
-          active={dc?.kind}
-          onPick={(kind) => setFx({ decor: { kind, ...BANNER_DECOR_DEFAULT, color: dc?.color || "" } })}
-          onClear={() => setFx({ decor: undefined })}
-          theme={theme}
-          banner={banner}
-          dress={(kind) => dress("decor", kind === undefined ? undefined : dc && dc.kind === kind ? dc : { kind, ...BANNER_DECOR_DEFAULT, color: dc?.color || "" })}
-        />
-        {dc && (
-          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
-            <Field label="Intensity" hint={`${dc.intensity}`}>
-              <Slider min={0} max={100} step={1} value={dc.intensity} onChange={(v) => setFx({ decor: { ...dc, intensity: v } })} ariaLabel="Banner fx: decorative intensity" />
-            </Field>
-            <ColorField
-              label="Decorative colour"
-              autoHint="Follow the shape's colour"
-              hint={dc.color ? undefined : "the shape's colour"}
-              value={dc.color}
-              fallback={shapeColor}
-              presets={Array.from(new Set([shapeColor, "#ffffff", "#000000", "#ffd633", "#22d3ee", "#f472b6", "#94a3b8"]))}
-              onChange={(v) => setFx({ decor: { ...dc, color: v || "" } })}
-            />
-          </div>
-        )}
-      </div>
-
       <p className="text-[10px] leading-relaxed text-slate-500">
-        The halo grows outward from the plate itself, whatever size it is. Shimmer is a presenter-only sheen and is never
-        exported. One effect wears at a time in each group; the shape's distortions stack, and every group falls back to
-        off, so the plate never wears more than the teacher put on it. Every colour channel starts on <b>Auto</b>, which is
-        the shape's own paint: pick it once and the effect keeps that colour, leave it and it follows the plate the moment
-        the fill (or the gradient's first stop) changes. The tiles are the plate itself wearing each effect — the same
-        miniature the <b>Shape</b> card paints, so what a tile shows is what the board paints.
+        The halo grows outward from the plate itself, whatever size it is. Shimmer is a presenter-only sheen and is never exported.
+        One effect wears at a time in each category — Type picks which — the decorations and the shape's distortions stack on top,
+        and every category falls back to off, so the plate never wears more than the teacher put on it. Every colour channel starts
+        on <b>Auto</b>, which is the shape's own paint: pick it once and the effect keeps that colour, leave it and it follows the
+        plate the moment the fill (or the gradient's first stop) changes. The tiles are the plate itself wearing each effect — the
+        same miniature the <b>Shape</b> card paints, so what a tile shows is what the board paints.
       </p>
     </div>
   );
