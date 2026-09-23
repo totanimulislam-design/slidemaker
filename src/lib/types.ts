@@ -707,11 +707,29 @@ export interface BannerDecorFx {
 }
 
 /**
+ * The plate's **Common Effects** — the very vocabulary of the text
+ * background's own Effects card (see `TextBgEffectKind` and
+ * `lib/textBgShape` `TEXT_BG_EFFECTS`): Shadow, Pop, Neon, Gloss, Sticker…
+ * painted on the whole title plate. One at a time, with its own strength and
+ * colour; `lib/shapeEffects` turns it into the same CSS passes a text plate
+ * wears, so the two surfaces paint the very same "Pop" or "Neon".
+ */
+export interface BannerCommonFx {
+  kind: TextBgEffectKind;
+  /** 0–100 strength of the effect */
+  intensity: number;
+  /** the effect's own colour; undefined = derived from the plate */
+  color?: string;
+}
+
+/**
  * Everything the plate's **Effects** card dresses. One light effect per group
- * (shadow · glow · depth · modern · decoration) and the shape's distortion
- * channels on their own. `undefined` in a group means the group is off.
+ * (common · shadow · glow · depth · modern · decoration) and the shape's
+ * distortion channels on their own. `undefined` in a group means the group is
+ * off.
  */
 export interface BannerEffects {
+  common?: BannerCommonFx;
   shadow?: BannerShadowFx;
   glow?: BannerGlowFx;
   depth?: BannerDepthFx;

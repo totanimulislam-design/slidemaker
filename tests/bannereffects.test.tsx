@@ -3,15 +3,18 @@
  *
  * The "Banner effects" button of the Title background line opens the plate's
  * Effects card: its own softness · halo · shimmer lead, and then one section
- * per effect group — Shadow Effects (twelve shadows, each dressed by X · Y ·
- * Blur · Spread · Opacity · Colour), Glow & Light, Depth / 3D, Modern Effects,
- * Shape Effects and Decorative Effects. One effect wears at a time in each
- * group ("None" takes it off); the shape's distortions stack. These tests walk
- * every group to the slide: the shadow's six controls reach the plate's
- * box-shadow, the glows and the decorations paint, the depth rides its own
- * layers, the modern finishes paint overlays (and the glass family its
- * backdrop blur), the shape effects cut the edge and turn the plate, and the
- * line's Default hands the plate back its undressed body.
+ * per effect group — Common Effects (the text background's own effects, each
+ * by intensity and colour), Shadow Effects (twelve shadows, each dressed by
+ * X · Y · Blur · Spread · Opacity · Colour), Glow & Light, Depth / 3D, Modern
+ * Effects, Shape Effects and Decorative Effects. One effect wears at a time
+ * in each group ("None" takes it off); the shape's distortions stack. These
+ * tests walk every group to the slide: the common effects reach the plate's
+ * filter, overlays and back layers (the same shared engine a text plate
+ * wears), the shadow's six controls reach the plate's box-shadow, the glows
+ * and the decorations paint, the depth rides its own layers, the modern
+ * finishes paint overlays (and the glass family its backdrop blur), the shape
+ * effects cut the edge and turn the plate, and the line's Default hands the
+ * plate back its undressed body.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -133,6 +136,101 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     detail: Array.from(pop()?.querySelectorAll('[data-banner-fx-group="shadow"] [role="option"]') ?? [])
       .map((b) => b.getAttribute("aria-label")?.replace("Banner shadow: ", ""))
       .join(" / "),
+  });
+
+  /* ----------------------------- common effects ---------------------------- */
+  const filterOf = () => plate()?.style.filter ?? "";
+  out.push({
+    name: "Common Effects holds the text background's own effects as tiles — Shadow · Pop · Lift · Float · Long shadow · Glow · Halo · Neon · Inner shadow · Inner glow · Bevel · Emboss · Gloss · Sheen · Spotlight · Stripes · Dots · Grid · Checker · Glass · Blur · the fades · Ring · Offset outline · Sticker · Stack · the bars · Corner fold — plus None",
+    pass:
+      [
+        "Shadow", "Pop", "Lift", "Float", "Long shadow", "Glow", "Halo", "Neon", "Inner shadow", "Inner glow",
+        "Bevel", "Emboss", "Gloss", "Sheen", "Spotlight", "Stripes", "Dots", "Grid", "Checker", "Glass",
+        "Blur", "Fade →", "Fade edges", "Ring", "Offset outline", "Sticker", "Stack", "Top bar", "Bottom bar",
+        "Left bar", "Corner fold",
+      ].every((l) => !!popButton(`Banner common: ${l}`)) && !!popButton("Banner common: None"),
+    detail: Array.from(pop()?.querySelectorAll('[data-banner-fx-group="common"] [role="option"]') ?? [])
+      .map((b) => b.getAttribute("aria-label")?.replace("Banner common: ", ""))
+      .join(" / ")
+      .slice(0, 160),
+  });
+  click(popButton("Banner common: Pop"));
+  out.push({
+    name: "Pop paints a hard offset drop-shadow on the plate's own filter, at its default intensity",
+    pass: filterOf().includes("drop-shadow(7.95px 7.95px 0 #000000)"),
+    detail: filterOf(),
+  });
+  const cInt = pop()?.querySelector<HTMLInputElement>('[aria-label="Banner fx: common intensity"]');
+  out.push({
+    name: "the common effect's controls are an Intensity bar and a colour well when the effect wears a colour",
+    pass: cInt?.type === "range" && !!pop()?.querySelector('[data-banner-fx-group="common"] input[type="color"]'),
+    detail: `${cInt?.type} + colour`,
+  });
+  type(cInt, "100");
+  out.push({
+    name: "…and the Intensity bar walks the effect — Pop at 100 steps 12 px out",
+    pass: filterOf().includes("drop-shadow(12px 12px 0 #000000)"),
+    detail: filterOf(),
+  });
+  click(popButton("Banner common: Glow"));
+  out.push({
+    name: "switching effects keeps the intensity — Glow at the same 100 blooms wider than Pop did",
+    pass: filterOf().includes("drop-shadow(0 0 14px") && filterOf().includes("drop-shadow(0 0 6px"),
+    detail: filterOf(),
+  });
+  const cColor = pop()?.querySelector<HTMLInputElement>('[data-banner-fx-group="common"] input[type="color"]');
+  act(() => {
+    if (!cColor) return;
+    const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(cColor, "#22d3ee");
+    cColor.dispatchEvent(new win.Event("input", { bubbles: true }));
+  });
+  await frame();
+  out.push({
+    name: "Glow blooms in the picked colour — the effect's own colour well repaints it",
+    pass: filterOf().includes("drop-shadow(0 0 14px #22d3ee)") && filterOf().includes("drop-shadow(0 0 6px #22d3ee)"),
+    detail: filterOf(),
+  });
+  const cWave = pop()?.querySelector<HTMLInputElement>('[aria-label="Banner fx: wave amount"]');
+  type(cWave, "60");
+  click(popButton("Banner common: Fade →"));
+  out.push({
+    name: "Fade → runs the plate out to the right — its mask intersecting the silhouette's own cut",
+    pass:
+      (plate()?.style.maskImage ?? "").includes("linear-gradient(90deg") &&
+      (plate()?.style.maskImage ?? "").includes("data:image/svg") &&
+      /mask-composite:\s*intersect/.test(plate()?.getAttribute("style") ?? ""),
+    detail: (plate()?.style.maskImage ?? "").slice(0, 90),
+  });
+  click(popButton("Banner common: Sticker"));
+  out.push({
+    name: "Sticker wears a thick outline all round, on the plate's own filter — keeping the colour picked for Glow",
+    pass: (filterOf().match(/drop-shadow/g) ?? []).length === 4 && filterOf().includes("#22d3ee"),
+    detail: filterOf().slice(0, 100),
+  });
+  click(popButton("Banner common: Ring"));
+  out.push({
+    name: "Ring stands a thin outline round the plate, on a layer of its own behind the body",
+    pass: plateLayers().length === 1 && (plateLayers()[0]?.style.border ?? "").includes("solid"),
+    detail: `${plateLayers().length} layer · ${plateLayers()[0]?.style.border ?? ""}`,
+  });
+  click(popButton("Banner common: Stack"));
+  out.push({
+    name: "Stack paints two paper copies behind the body, each stepping out",
+    pass: plateLayers().length === 2 && plateLayers().every((l) => (l.style.transform ?? "").includes("translate(")),
+    detail: `${plateLayers().length} layers`,
+  });
+  click(popButton("Banner common: Gloss"));
+  out.push({
+    name: "Gloss lays the glossy highlight over the top half, as an overlay above the body",
+    pass: overlays().length === 1 && (overlays()[0]?.style.background ?? "").includes("linear-gradient(180deg"),
+    detail: (overlays()[0]?.style.background ?? "").slice(0, 52),
+  });
+  click(popButton("Banner common: None"));
+  out.push({
+    name: "…and None strips the common effect away — filter, overlays and layers all clean again",
+    pass: filterOf() === "" && overlays().length === 0 && plateLayers().length === 0,
+    detail: `filter ${filterOf() || "clean"} · overlays ${overlays().length} · layers ${plateLayers().length}`,
   });
 
   /* ------------------------------- shadows --------------------------------- */
