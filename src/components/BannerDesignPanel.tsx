@@ -15,7 +15,6 @@ import {
   BANNER_PRESET_GROUPS,
   BANNER_SHADOW_DEFAULTS,
   BANNER_SHADOW_EFFECTS,
-  baseColor,
   bannerCommonColor,
   bannerCss,
   bannerEffectsOf,
@@ -773,7 +772,6 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
   const fx = bannerEffectsOf(banner);
   const setFx = (patch: Partial<BannerEffects>) => setBanner({ effects: { ...fx, ...patch } });
   const setShape = (patch: Partial<BannerShapeFx>) => setBanner({ effects: { ...fx, shape: { ...fx.shape, ...patch } } });
-  const shapeColor = baseColor(banner.gradient, banner.color || DEFAULT_BANNER.color);
   const c = fx.common;
   const s = fx.shadow;
   const g = fx.glow;
@@ -822,13 +820,13 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
                 label="Effect colour"
                 value={c.color ?? ""}
                 fallback={bannerCommonColor(banner, c)}
-                presets={Array.from(new Set([shapeColor, "#000000", "#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6"]))}
+                presets={["#000000", "#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6"]}
                 onChange={(v) => setFx({ common: { ...c, color: v || undefined } })}
               />
             )}
             <p className="text-[10px] leading-relaxed text-slate-500">
               The same effects the <b>text background</b> wears — Shadow, Pop, Neon, Gloss, Sticker… — painted on the whole
-              plate, at the effect's own intensity and colour. The colour follows the shape when left on Auto.
+              plate, at the effect's own intensity and colour. The colour follows the plate when left on Auto.
             </p>
           </div>
         )}
@@ -841,15 +839,7 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
           prefix="Banner shadow"
           defs={BANNER_SHADOW_EFFECTS}
           active={s?.kind}
-          onPick={(kind) =>
-            setFx({
-              shadow: {
-                kind,
-                ...BANNER_SHADOW_DEFAULTS[kind],
-                ...(kind === "colored" ? { color: shapeColor } : {}),
-              },
-            })
-          }
+          onPick={(kind) => setFx({ shadow: { kind, ...BANNER_SHADOW_DEFAULTS[kind] } })}
           onClear={() => setFx({ shadow: undefined })}
           mark={<FxMark group="shadow" />}
         />
@@ -875,9 +865,9 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
             <ColorField
               label="Shadow colour"
               value={s.color}
-              fallback={s.kind === "colored" ? shapeColor : "#000000"}
-              presets={Array.from(new Set([shapeColor, "#000000", "#1f5fd0", "#7c3aed", "#b91c1c", "#059669", "#b45309"]))}
-              onChange={(v) => setFx({ shadow: { ...s, color: v || (s.kind === "colored" ? shapeColor : "#000000") } })}
+              fallback="#000000"
+              presets={["#000000", "#1f5fd0", "#7c3aed", "#b91c1c", "#059669", "#b45309"]}
+              onChange={(v) => setFx({ shadow: { ...s, color: v || "#000000" } })}
             />
           </div>
         )}
@@ -902,9 +892,9 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
             <ColorField
               label="Glow colour"
               value={g.color}
-              fallback={shapeColor}
-              presets={Array.from(new Set([shapeColor, "#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6", "#4ade80"]))}
-              onChange={(v) => setFx({ glow: { ...g, color: v || shapeColor } })}
+              fallback="#ffffff"
+              presets={["#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6", "#4ade80"]}
+              onChange={(v) => setFx({ glow: { ...g, color: v || "#ffffff" } })}
             />
           </div>
         )}
@@ -958,9 +948,9 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
             <ColorField
               label="Modern tint"
               value={m.color}
-              fallback={shapeColor}
-              presets={Array.from(new Set([shapeColor, "#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f"]))}
-              onChange={(v) => setFx({ modern: { ...m, color: v || shapeColor } })}
+              fallback="#ffffff"
+              presets={["#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f"]}
+              onChange={(v) => setFx({ modern: { ...m, color: v || "#ffffff" } })}
             />
             <p className="text-[10px] leading-relaxed text-slate-500">
               The glass family blurs the board through the plate in the browser; exports carry the tint and the rim
@@ -1048,9 +1038,9 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
             <ColorField
               label="Decorative colour"
               value={dc.color}
-              fallback={shapeColor}
-              presets={Array.from(new Set([shapeColor, "#ffffff", "#000000", "#ffd633", "#22d3ee", "#f472b6", "#94a3b8"]))}
-              onChange={(v) => setFx({ decor: { ...dc, color: v || shapeColor } })}
+              fallback="#ffffff"
+              presets={["#ffffff", "#000000", "#ffd633", "#22d3ee", "#f472b6", "#94a3b8"]}
+              onChange={(v) => setFx({ decor: { ...dc, color: v || "#ffffff" } })}
             />
           </div>
         )}

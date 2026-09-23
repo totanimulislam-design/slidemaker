@@ -781,14 +781,35 @@ export function bannerEffectsOf(b: BannerSettings): BannerEffects {
 }
 
 /**
- * The colour a common effect paints with when none is picked — the plate's
- * (the shape's) own colour, falling back to the banner's factory paint, and
- * for neon with an outline, the outline's colour.
+ * The colour a common effect paints with when none is picked — the same
+ * table the text background's Effects wear (lib/textBgShape `TEXT_BG_EFFECTS`
+ * `auto` field): the light-washed ones start from white, the edge-hugging
+ * ones (glow · halo · neon · ring · stack) from the plate's own paint, and
+ * everything else from black.
  */
+const COMMON_LIGHT: ReadonlySet<TextBgEffectKind> = new Set<TextBgEffectKind>([
+  "innerGlow",
+  "gloss",
+  "sheen",
+  "spotlight",
+  "stripes",
+  "dots",
+  "grid",
+  "checker",
+  "glass",
+  "offsetOutline",
+  "sticker",
+  "topBar",
+  "bottomBar",
+  "leftBar",
+]);
+const COMMON_PLATE: ReadonlySet<TextBgEffectKind> = new Set<TextBgEffectKind>(["glow", "halo", "neon", "ring", "stack"]);
+const commonAuto = (kind: TextBgEffectKind): ShapeEffectAuto =>
+  COMMON_PLATE.has(kind) ? "plate" : COMMON_LIGHT.has(kind) ? "light" : "dark";
+
+/** the colour the plate's common effect paints with right now */
 export function bannerCommonColor(b: BannerSettings, fx: { kind: TextBgEffectKind; color?: string }): string {
-  if (fx.color) return fx.color;
-  if (fx.kind === "neon" && b.border.enabled && b.border.color) return b.border.color;
-  return baseColor(b.gradient, b.color || DEFAULT_BANNER.color);
+  return effectColorFor(fx.kind, commonAuto(fx.kind), fx.color, baseColor(b.gradient, b.color), b.border.enabled ? b.border.color : undefined);
 }
 
 export interface BannerEffectDef<K extends string> {
@@ -1078,15 +1099,14 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
   /* ------------------------------- shadows --------------------------------- */
   const s = fx.shadow;
   if (s) {
-    const sColor = s.color || (s.kind === "colored" ? base : "#000000");
-    const c = withAlpha(sColor, fxA(s.opacity));
+    const c = withAlpha(s.color, fxA(s.opacity));
     switch (s.kind) {
       case "inner":
         shadows.push(`inset ${s.x}px ${s.y}px ${s.blur}px ${s.spread}px ${c}`);
         break;
       case "long":
         backLayer({
-          background: `linear-gradient(135deg, ${c} ${Math.max(0, 100 - s.spread)}%, ${withAlpha(sColor, 0)} 100%)`,
+          background: `linear-gradient(135deg, ${c} ${Math.max(0, 100 - s.spread)}%, ${withAlpha(s.color, 0)} 100%)`,
           transform: `${pre}translate(${s.x}px, ${s.y}px)`,
         });
         break;
@@ -1100,7 +1120,7 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
       case "double":
         shadows.push(
           `${s.x}px ${s.y}px ${s.blur}px ${s.spread}px ${c}`,
-          `${-s.x}px ${-s.y}px ${s.blur}px ${s.spread}px ${withAlpha(sColor, Math.round(fxA(s.opacity) * 0.75 * 1000) / 1000)}`,
+          `${-s.x}px ${-s.y}px ${s.blur}px ${s.spread}px ${withAlpha(s.color, Math.round(fxA(s.opacity) * 0.75 * 1000) / 1000)}`,
         );
         break;
       // an even fall-off all round the plate — Blur is its reach, Spread its ring
@@ -1110,14 +1130,14 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
       // three fall-offs stacked on the same direction, each one further and fainter
       case "layered": {
         const seg = (k: number, o: number) =>
-          `${Math.round(s.x * k)}px ${Math.round(s.y * k)}px ${Math.round(s.blur * k)}px ${s.spread}px ${withAlpha(sColor, fxA(s.opacity) * o)}`;
+          `${Math.round(s.x * k)}px ${Math.round(s.y * k)}px ${Math.round(s.blur * k)}px ${s.spread}px ${withAlpha(s.color, fxA(s.opacity) * o)}`;
         shadows.push(seg(0.33, 0.45), seg(0.66, 0.68), seg(1, 0.9));
         break;
       }
       // a shadow thrown onto the board — a soft ellipse, skewed away from the plate
       case "cast":
         backLayer({
-          background: `radial-gradient(ellipse at center, ${c} 0%, ${withAlpha(sColor, 0)} 72%)`,
+          background: `radial-gradient(ellipse at center, ${c} 0%, ${withAlpha(s.color, 0)} 72%)`,
           borderRadius: 999,
           transform: `${pre}translate(${Math.round(s.x * 0.5)}px, ${Math.max(4, Math.round(s.y * 0.6))}px) scaleY(0.45) skewX(-16deg)`,
         });
@@ -1132,7 +1152,7 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
   if (g) {
     const i = Math.max(0, Math.min(100, g.intensity));
     const a = i / 100;
-    const c = g.color || base;
+    const c = g.color;
     switch (g.kind) {
       case "inner":
         shadows.push(`inset 0 0 ${Math.round(6 + i * 0.5)}px ${withAlpha(c, 0.2 + 0.65 * a)}`);
@@ -1324,7 +1344,7 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
   if (m) {
     const i = Math.max(0, Math.min(100, m.intensity));
     const a = i / 100;
-    const c = m.color || base;
+    const c = m.color;
     const blur = Math.max(0, m.blur ?? 0);
     const bf = (v: string): React.CSSProperties => ({ backdropFilter: v, WebkitBackdropFilter: v });
     switch (m.kind) {
@@ -1433,7 +1453,7 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
   if (dc) {
     const i = Math.max(0, Math.min(100, dc.intensity));
     const a = i / 100;
-    const c = dc.color || base;
+    const c = dc.color;
     switch (dc.kind) {
       case "innerHighlight":
         overLayer({
