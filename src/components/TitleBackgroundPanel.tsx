@@ -116,7 +116,9 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
       <div className="flex gap-2 border-t border-white/10 pt-3">
         <button
           type="button"
-          onClick={() => setTheme({ banner: cloneBanner(DEFAULT_BANNER) })}
+          /* `fillMode` is named as undefined so the merge cannot keep a
+             special fill (glass · metallic · pattern) the plate was wearing */
+          onClick={() => setTheme({ banner: { ...cloneBanner(DEFAULT_BANNER), fillMode: undefined } })}
           className="rounded-lg border border-rose-400/30 bg-rose-500/15 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/25"
         >
           Reset banner design

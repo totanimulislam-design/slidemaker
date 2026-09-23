@@ -3,6 +3,9 @@ import {
   BANNER_WIDTH,
   DEFAULT_BANNER,
   DEFAULT_BANNER_EFFECTS,
+  DEFAULT_BANNER_GLASS,
+  DEFAULT_BANNER_METALLIC,
+  DEFAULT_BANNER_PATTERN,
   type Banner3DFx,
   type Banner3DKind,
   type BannerBevelFx,
@@ -14,14 +17,18 @@ import {
   type BannerDecorKind,
   type BannerDepthKind,
   type BannerEffects,
+  type BannerFillMode,
+  type BannerGlassFill,
   type BannerGlassFx,
   type BannerGlassKind,
   type BannerGlowFx,
   type BannerGlowKind,
   type BannerHighlightFx,
   type BannerHighlightKind,
+  type BannerMetallicFill,
   type BannerModernFx,
   type BannerModernKind,
+  type BannerPatternFill,
   type BannerSettings,
   type BannerShape,
   type BannerShadowFx,
@@ -924,7 +931,16 @@ const BANNER_COMMON_HIGHLIGHTS: Partial<Record<TextBgEffectKind, BannerHighlight
  * with the plate — repaint the fill and every auto effect follows, exactly the
  * way a text background's plate does it (see `bgPlateColor`).
  */
-export const bannerFxColor = (b: BannerSettings): string => baseColor(b.gradient, b.color || DEFAULT_BANNER.color);
+export const bannerFxColor = (b: BannerSettings): string => {
+  const base = baseColor(b.gradient, b.color || DEFAULT_BANNER.color);
+  /* a special paint hands the effects its own tint when it carries one, so an
+     auto effect follows the frosted pane / the metal / the pattern's ink */
+  const mode = bannerFillMode(b);
+  if (mode === "glass" && b.glass?.color) return b.glass.color;
+  if (mode === "metallic" && b.metallic?.color) return b.metallic.color;
+  if (mode === "pattern" && b.pattern?.color) return b.pattern.color;
+  return base;
+};
 
 export interface BannerEffectDef<K extends string> {
   kind: K;
@@ -2364,11 +2380,147 @@ export function gradientCss(g: Gradient, fallback: string): string {
     );
     return layers.length ? `${layers.join(", ")}, linear-gradient(${base}, ${base})` : base;
   }
+  if (g.type === "conic") {
+    // the angular sweep: the stops ride one turn round the plate's own centre,
+    // starting from the gradient's angle
+    const cx = g.cx ?? 50;
+    const cy = g.cy ?? 50;
+    return `conic-gradient(from ${g.angle}deg at ${cx}% ${cy}%, ${stops})`;
+  }
+  if (g.type === "reflected") {
+    // the ramp mirrored out from the middle: the first colour holds the centre
+    // and the last one both ends, along the same angle a linear ramp would run
+    const mirrored = [
+      ...[...sorted].reverse().map((s) => ({ color: s.color, at: 50 - s.at / 2 })),
+      ...sorted.map((s) => ({ color: s.color, at: 50 + s.at / 2 })),
+    ];
+    return `linear-gradient(${g.angle}deg, ${mirrored.map((s) => `${s.color} ${s.at}%`).join(", ")})`;
+  }
   return `linear-gradient(${g.angle}deg, ${stops})`;
 }
 
 /** The dominant colour of a gradient (first stop) — used for glows/halos. */
 export const baseColor = (g: Gradient, fallback: string) => (g.enabled && g.stops[0] ? g.stops[0].color : fallback);
+
+/* ------------------------------------------------------------------ */
+/*  The plate's ten fills                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Which paint the plate is wearing right now. Only the three special paints
+ * live in `fillMode`; **solid** and **gradient** are read from
+ * `gradient.enabled` — so a preset or a design that repaints `gradient` is
+ * never hidden behind a stale mode, and an untouched older deck reads exactly
+ * the way it always did.
+ */
+export function bannerFillMode(b: BannerSettings): BannerFillMode {
+  const m = b.fillMode;
+  if (m === "glass" || m === "metallic" || m === "pattern") return m;
+  return b.gradient.enabled ? "gradient" : "solid";
+}
+
+/**
+ * The frosted pane: a tinted sheet that grows denser toward the bottom, with
+ * the light gathered along the top edge and a cold sheen across the corner —
+ * written as stacked gradients only, so exports capture it pixel for pixel.
+ */
+export function glassFillCss(base: string, glass?: BannerGlassFill): string {
+  const g = { ...DEFAULT_BANNER_GLASS, ...glass };
+  const c = g.color || base;
+  const o = Math.max(0, Math.min(100, g.opacity)) / 100;
+  const f = Math.max(0, Math.min(100, g.frost)) / 100;
+  const pane = (a: number) => withAlpha(c, Math.max(0, Math.min(1, a)));
+  const ice = (a: number) => withAlpha("#ffffff", Math.max(0, Math.min(1, a)));
+  return [
+    `linear-gradient(118deg, ${ice(0.34 * f + 0.08)} 0%, ${ice(0.05 * f)} 44%, ${ice(0.14 * f + 0.02)} 100%)`,
+    `radial-gradient(ellipse 120% 62% at 50% 0%, ${ice(0.16 * f + 0.04)} 0%, ${ice(0)} 68%)`,
+    `linear-gradient(180deg, ${pane(0.28 + 0.5 * o)} 0%, ${pane(0.42 + 0.55 * o)} 100%)`,
+  ].join(", ");
+}
+
+/**
+ * Brushed metal: bright and shaded bands brushed along one angle — the polish
+ * slider drives how far apart the bright and the dark bands sit.
+ */
+export function metallicFillCss(base: string, metal?: BannerMetallicFill): string {
+  const m = { ...DEFAULT_BANNER_METALLIC, ...metal };
+  const c = m.color || base;
+  const p = Math.max(0, Math.min(100, m.polish)) / 100;
+  const hi = shade(c, 0.5 + 0.35 * p);
+  const light = shade(c, 0.18 + 0.2 * p);
+  const deep = shade(c, -(0.28 + 0.3 * p));
+  return `linear-gradient(${m.angle}deg, ${hi} 0%, ${light} 16%, ${deep} 34%, ${c} 50%, ${hi} 64%, ${light} 78%, ${deep} 90%, ${shade(c, 0.08)} 100%)`;
+}
+
+/**
+ * The pattern motifs. Every one is a single `background` value — the tiled
+ * kinds carry their own `position / size` inside the shorthand and the
+ * repeating kinds need none — so the pattern flows through the same paint
+ * channel as every other fill.
+ */
+export function patternFillCss(base: string, pattern?: BannerPatternFill): string {
+  const p = { ...DEFAULT_BANNER_PATTERN, ...pattern };
+  const ink = p.color || base;
+  const ground = p.back || base;
+  const t = Math.max(0, Math.min(100, p.scale)) / 100;
+  const tile = Math.round(10 + 26 * t); // the motif tile, 10–36 px
+  const clear = withAlpha(ink, 0);
+  const baseLayer = `linear-gradient(${ground}, ${ground})`;
+  switch (p.kind) {
+    case "dots": {
+      const r = Math.max(1.5, tile * 0.16);
+      return `radial-gradient(circle, ${ink} ${r}px, ${clear} ${r + 0.6}px) 0 0 / ${tile}px ${tile}px, ${baseLayer}`;
+    }
+    case "stripes": {
+      const w = Math.max(3, Math.round(tile * 0.3));
+      return `repeating-linear-gradient(45deg, ${ink} 0 ${w}px, ${clear} ${w}px ${tile}px), ${baseLayer}`;
+    }
+    case "lines": {
+      const w = Math.max(2, Math.round(tile * 0.14));
+      return `repeating-linear-gradient(0deg, ${ink} 0 ${w}px, ${clear} ${w}px ${tile}px), ${baseLayer}`;
+    }
+    case "grid": {
+      const w = Math.max(1, Math.round(tile * 0.09));
+      return `repeating-linear-gradient(0deg, ${ink} 0 ${w}px, ${clear} ${w}px ${tile}px), repeating-linear-gradient(90deg, ${ink} 0 ${w}px, ${clear} ${w}px ${tile}px), ${baseLayer}`;
+    }
+    case "checker":
+      return `repeating-conic-gradient(${ink} 0% 25%, ${ground} 25% 50%) 0 0 / ${tile}px ${tile}px`;
+    case "diamonds":
+      return [
+        `linear-gradient(45deg, ${ink} 25%, ${clear} 25%) 0 0 / ${tile}px ${tile}px`,
+        `linear-gradient(135deg, ${ink} 25%, ${clear} 25%) 0 0 / ${tile}px ${tile}px`,
+        `linear-gradient(225deg, ${ink} 25%, ${clear} 25%) 0 0 / ${tile}px ${tile}px`,
+        `linear-gradient(315deg, ${ink} 25%, ${clear} 25%) 0 0 / ${tile}px ${tile}px`,
+        baseLayer,
+      ].join(", ");
+    case "rays": {
+      const on = Math.max(2, Math.round(tile * 0.18));
+      const off = Math.max(4, Math.round(tile * 0.4));
+      return `repeating-conic-gradient(from 0deg at 50% 50%, ${withAlpha(ink, 0.85)} 0deg ${on}deg, ${clear} ${on}deg ${off}deg), ${baseLayer}`;
+    }
+    case "rings": {
+      const w = Math.max(2, Math.round(tile * 0.14));
+      return `repeating-radial-gradient(circle at 50% 50%, ${ink} 0 ${w}px, ${clear} ${w}px ${tile}px), ${baseLayer}`;
+    }
+    default:
+      return baseLayer;
+  }
+}
+
+/**
+ * The paint the plate's body wears right now — one of the ten fills: the
+ * solid colour, the gradient's five ramps (linear · radial · angular ·
+ * reflected · multi-colour · transparent all ride `gradient`), or one of the
+ * three special paints.
+ */
+export function bannerFillCss(b: BannerSettings): string {
+  const base = baseColor(b.gradient, b.color || DEFAULT_BANNER.color);
+  const mode = bannerFillMode(b);
+  if (mode === "glass") return glassFillCss(base, b.glass);
+  if (mode === "metallic") return metallicFillCss(base, b.metallic);
+  if (mode === "pattern") return patternFillCss(base, b.pattern);
+  return gradientCss(b.gradient, b.color || DEFAULT_BANNER.color);
+}
 
 export interface BannerCss {
   /** the plate's body — fill, corners, silhouette and its own transparency */
@@ -2456,7 +2608,7 @@ export function plateShadow(b: BannerSettings, base: string): string | undefined
  * of the 1280 × 720 stage, with no ceiling anywhere.
  */
 export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
-  const fill = gradientCss(b.gradient, b.color);
+  const fill = bannerFillCss(b);
   const base = baseColor(b.gradient, b.color);
   const shapeOpacity = clampOpacity(b.opacity);
   const radius = plateRadius(b);
@@ -2495,7 +2647,19 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
       const g = Math.max(0, Math.min(100, b.glow));
       const inner = 30 + (100 - g) * 0.3; // where the fade starts
       const outer = 55 + g * 0.35; // where it reaches transparent
-      const stops = b.gradient.enabled ? gradientCss({ ...b.gradient, type: "linear" }, b.color) : undefined;
+      /* a paint that carries layers (a gradient or one of the three special
+         fills) is faded with a mask so its colours still show; the radial and
+         mesh ramps flatten to a linear one first, exactly the way the older
+         decks rendered them under the glow */
+      const fillModeNow = bannerFillMode(b);
+      const stops = b.gradient.enabled
+        ? gradientCss(
+            b.gradient.type === "radial" || b.gradient.type === "mesh" ? { ...b.gradient, type: "linear" } : b.gradient,
+            b.color,
+          )
+        : fillModeNow === "glass" || fillModeNow === "metallic" || fillModeNow === "pattern"
+          ? fill
+          : undefined;
       const fade =
         stops && `radial-gradient(${GLOW_ELLIPSE}, #000 0%, rgba(0,0,0,.8) ${inner}%, transparent ${outer}%)`;
       // when a gradient is used we fade it with a mask instead so the colours still show —
@@ -3647,6 +3811,9 @@ export function bannerPresetPatch(
     size: { w: bannerPlateWidth(current) },
     pos: undefined,
     ...preset.banner,
+    // a preset paints the whole plate: the special fills (glass · metallic ·
+    // pattern) step aside so the preset's own colour / gradient is worn
+    fillMode: undefined,
   };
 }
 

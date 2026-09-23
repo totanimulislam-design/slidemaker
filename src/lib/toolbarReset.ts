@@ -92,6 +92,9 @@ function resetTitleBg(theme: ThemeSettings): ToolbarResetPatch {
         // height with it; only the nudge is named here, because the merge that
         // writes this patch keeps whatever the old object had
         pos: undefined,
+        // the special fills (glass · metallic · pattern) are named here for the
+        // same reason — a key the patch leaves out would survive the merge
+        fillMode: undefined,
         textGradient: banner.textGradient,
         textGlow: banner.textGlow,
         textShadow: banner.textShadow,

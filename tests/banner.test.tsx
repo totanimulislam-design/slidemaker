@@ -53,7 +53,6 @@ const line = () => doc.querySelector<HTMLElement>('.context-toolbar [role="toolb
 const lineButtons = () => Array.from(line()?.querySelectorAll<HTMLElement>(":scope > button, :scope > span > button") ?? []);
 const pop = () => doc.querySelector<HTMLElement>(".context-toolbar .ctx-pop");
 const popButton = (label: string) => pop()?.querySelector<HTMLElement>(`button[aria-label="${label}"]`) ?? null;
-const popText = (sel: string) => pop()?.querySelector<HTMLElement>(sel) ?? null;
 const openCard = (label: string) => {
   click(doc.querySelector(`.context-toolbar [aria-label="${label}"]`));
 };
@@ -608,10 +607,18 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   /* -------------------------------- fill ----------------------------------- */
   openCard("Banner fill");
   const fillWell = pop()?.querySelector<HTMLInputElement>('[data-banner-fill] input[type="color"]');
+  const fillTiles = Array.from(
+    pop()?.querySelectorAll<HTMLElement>('[data-banner-fill] [role="listbox"][aria-label="Fill style"] [role="option"]') ?? [],
+  );
   out.push({
-    name: "Fill colour is the body's paint — a solid well plus the full gradient builder",
-    pass: !!fillWell && !!popText("details summary"),
-    detail: `${pop()?.getAttribute("data-pop-panel")} · well ${!!fillWell}`,
+    name: "Fill is the body's paint — the ten fills (solid · five gradients · glass · metallic · pattern) as picture tiles, one of them worn right now, the solid one wearing a colour well",
+    pass:
+      !!fillWell &&
+      fillTiles.length === 10 &&
+      fillTiles.map((t) => t.textContent?.trim()).join(" · ") ===
+        "Solid · Linear · Radial · Angular · Reflected · Multi-Color · Transparent · Glass · Metallic · Pattern" &&
+      fillTiles.filter((t) => t.getAttribute("aria-selected") === "true").length === 1,
+    detail: `${fillTiles.length} fills · ${fillTiles.filter((t) => t.getAttribute("aria-selected") === "true").length} worn`,
   });
   act(() => {
     if (!fillWell) return;
@@ -625,6 +632,70 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     name: "picking a fill colour reaches the plate",
     pass: styleOf(plate()).toLowerCase().includes("#29b36f") || styleOf(plate()).includes("rgb(41, 179, 111)"),
     detail: styleOf(plate()).slice(0, 60),
+  });
+
+  /* ---- the other nine fills: five ramps + glass · metallic · pattern ------ */
+  const ramp = (type: "conic" | "reflected") =>
+    String(
+      bannerCss({ ...DEFAULT_BANNER, gradient: { ...DEFAULT_BANNER.gradient, enabled: true, type, angle: 90 } }, "#ffffff")
+        .box.background ?? "",
+    );
+  out.push({
+    name: "the angular ramp sweeps round the centre and the reflected ramp mirrors out from the middle",
+    pass:
+      ramp("conic").startsWith("conic-gradient(from 90deg at 50% 50%") &&
+      ramp("reflected").startsWith("linear-gradient(90deg") &&
+      ramp("reflected").includes("#1f5fd0 50%"),
+    detail: `${ramp("conic").slice(0, 32)} · ${ramp("reflected").slice(0, 32)}`,
+  });
+  const special = (fillMode: "glass" | "metallic" | "pattern") =>
+    String(bannerCss({ ...DEFAULT_BANNER, fillMode }, "#ffffff").box.background ?? "");
+  out.push({
+    name: "glass, metallic and pattern are paints of their own — a frosted pane in three layers, brushed metal bands, one tiled motif",
+    pass:
+      paints(special("glass")) === 3 &&
+      (special("metallic").match(/#[0-9a-f]{6}/gi)?.length ?? 0) >= 6 &&
+      special("metallic").startsWith("linear-gradient(") &&
+      special("pattern").includes("radial-gradient(circle") &&
+      special("pattern").includes("/ "),
+    detail: `glass ${paints(special("glass"))} paints · metal ${(special("metallic").match(/#[0-9a-f]{6}/gi) ?? []).length} stops · pattern ${special("pattern").slice(0, 26)}`,
+  });
+  click(popButton("Fill: Metallic Fill"));
+  await frame();
+  out.push({
+    name: "clicking the metallic tile wears that paint on the plate",
+    pass:
+      popButton("Fill: Metallic Fill")?.getAttribute("aria-selected") === "true" &&
+      /linear-gradient\(\d+deg/.test(styleOf(plate())),
+    detail: (styleOf(plate()).match(/background:[^;]*/)?.[0] ?? "").slice(0, 110),
+  });
+  click(popButton("Fill: Pattern Fill"));
+  await frame();
+  click(popButton("Pattern: Checker"));
+  out.push({
+    name: "the pattern paint carries eight motifs of its own — picking one wears the tile and keeps the others",
+    pass:
+      (pop()?.querySelectorAll('[role="listbox"][aria-label="Pattern motif"] [role="option"]').length ?? 0) === 8 &&
+      popButton("Pattern: Checker")?.getAttribute("aria-selected") === "true" &&
+      (special("pattern").length ?? 0) > 0,
+    detail: `${pop()?.querySelectorAll('[role="listbox"][aria-label="Pattern motif"] [role="option"]').length} motifs · ${(styleOf(plate()).match(/background:[^;]*/)?.[0] ?? "").slice(0, 80)}`,
+  });
+  click(popButton("Fill: Solid Color"));
+  await frame();
+  /* the flat colour is the banner's own colour well — the plate must wear it */
+  const solidWell = pop()?.querySelector<HTMLInputElement>('[data-banner-fill] input[type="color"]');
+  const wellRgb = (() => {
+    const m = /^#([0-9a-f]{6})$/i.exec(solidWell?.value ?? "");
+    if (!m) return "";
+    return `rgb(${parseInt(m[1].slice(0, 2), 16)}, ${parseInt(m[1].slice(2, 4), 16)}, ${parseInt(m[1].slice(4, 6), 16)})`;
+  })();
+  out.push({
+    name: "back on Solid Color the plate wears the flat banner colour again",
+    pass:
+      popButton("Fill: Solid Color")?.getAttribute("aria-selected") === "true" &&
+      !!wellRgb &&
+      styleOf(plate()).includes(wellRgb),
+    detail: `well ${solidWell?.value} · ${(styleOf(plate()).match(/background:[^;]*/)?.[0] ?? "").slice(0, 48)}`,
   });
   closePop();
 

@@ -19,7 +19,7 @@ export function normalizeGradient(g: Gradient | undefined): Gradient {
     : base.stops.map((s) => ({ ...s }));
   return {
     enabled: !!g.enabled,
-    type: g.type === "radial" || g.type === "mesh" ? g.type : "linear",
+    type: g.type === "radial" || g.type === "mesh" || g.type === "conic" || g.type === "reflected" ? g.type : "linear",
     angle: Number.isFinite(g.angle) ? g.angle : base.angle,
     stops,
     cx: Number.isFinite(g.cx) ? g.cx : 50,
