@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { BannerBorderStyle, BannerSettings, BannerShape, Gradient, ThemeSettings } from "../lib/types";
+import type { BannerBorderStyle, BannerSettings, BannerShape, Gradient, TextBgEffectKind, ThemeSettings } from "../lib/types";
 import { BANNER_WIDTH, DEFAULT_BANNER } from "../lib/types";
+import { TEXT_BG_EFFECTS, TEXT_BG_EFFECT_BY_ID } from "../lib/textBgShape";
 import {
   BANNER_DECOR_DEFAULT,
   BANNER_DECOR_EFFECTS,
@@ -14,6 +15,7 @@ import {
   BANNER_PRESET_GROUPS,
   BANNER_SHADOW_DEFAULTS,
   BANNER_SHADOW_EFFECTS,
+  bannerCommonColor,
   bannerCss,
   bannerEffectsOf,
   bannerHasLine,
@@ -55,10 +57,12 @@ import { cn } from "../utils/cn";
  *                     families (plates · stylish cuts ·
  *                     multilayer · multilayer gradient · marks)
  *   Effects           softness (glow) · outer halo · shimmer,
- *                     and the six effect groups — Shadow Effects
- *                     (twelve shadows on X · Y · Blur · Spread ·
- *                     Opacity · Colour), Glow & Light, Depth / 3D,
- *                     Modern Effects, Shape Effects and Decorative
+ *                     and the seven effect groups — Common Effects
+ *                     (the text background's own effects, each by
+ *                     intensity and colour), Shadow Effects (twelve
+ *                     shadows on X · Y · Blur · Spread · Opacity ·
+ *                     Colour), Glow & Light, Depth / 3D, Modern
+ *                     Effects, Shape Effects and Decorative
  *                     Effects                              `effects`
  *   Fill colour       solid + gradient                          `color` · `gradient`
  *   Border colour     the outline's paint                       `border.color`
@@ -616,8 +620,16 @@ export function BannerShapePanel({ theme, banner, setBanner }: BannerProps) {
 /* ------------------------------------------------------------------ */
 
 /** the little mark each effect group's tiles wear — one per group, not per effect */
-function FxMark({ group }: { group: "shadow" | "glow" | "depth" | "modern" | "decor" }) {
+function FxMark({ group }: { group: "common" | "shadow" | "glow" | "depth" | "modern" | "decor" }) {
   switch (group) {
+    case "common":
+      return (
+        <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
+          <path d="M10 1.2c.5 2.9 2.3 4.7 5.2 5.2-2.9.5-4.7 2.3-5.2 5.2-.5-2.9-2.3-4.7-5.2-5.2 2.9-.5 4.7-2.3 5.2-5.2Z" fill="currentColor" opacity="0.9" />
+          <path d="M15.2 9.4c.25 1.45 1.15 2.35 2.6 2.6-1.45.25-2.35 1.15-2.6 2.6-.25-1.45-1.15-2.35-2.6-2.6 1.45-.25 2.35-1.15 2.6-2.6Z" fill="currentColor" opacity="0.55" />
+          <rect x="1.6" y="11.2" width="10" height="3.4" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.1" opacity="0.7" />
+        </svg>
+      );
     case "shadow":
       return (
         <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
@@ -730,6 +742,13 @@ function FxTiles<K extends string>({
  * one section per effect group, each with its effects as tiles (one at a time,
  * "None" takes it off) and the controls of the effect on:
  *
+ *   Common Effects     the text background's own effects — Shadow, Pop, Lift,
+ *                      Float, Long shadow, Glow, Halo, Neon, Inner shadow,
+ *                      Inner glow, Bevel, Emboss, Gloss, Sheen, Spotlight,
+ *                      Stripes, Dots, Grid, Checker, Glass, Blur, the fades,
+ *                      Ring, Offset outline, Sticker, Stack, the accent bars
+ *                      and Corner fold — the same shared vocabulary a text
+ *                      plate wears, each by intensity and colour
  *   Shadow Effects     twelve shadows, each dressed by X · Y · Blur · Spread ·
  *                      Opacity · Colour
  *   Glow & Light       twelve lights, each by intensity and colour
@@ -743,10 +762,17 @@ function FxTiles<K extends string>({
  * Every channel falls back to off, so an untouched deck renders exactly as it
  * always did.
  */
+
+/** the plate's **Common Effects** — the text background's own Effects, as the tiles read them */
+export const BANNER_COMMON_EFFECTS: { kind: TextBgEffectKind; label: string; hint: string }[] = TEXT_BG_EFFECTS.filter(
+  (e) => e.id !== "none",
+).map((e) => ({ kind: e.id, label: e.label, hint: e.hint }));
+
 export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
   const fx = bannerEffectsOf(banner);
   const setFx = (patch: Partial<BannerEffects>) => setBanner({ effects: { ...fx, ...patch } });
   const setShape = (patch: Partial<BannerShapeFx>) => setBanner({ effects: { ...fx, shape: { ...fx.shape, ...patch } } });
+  const c = fx.common;
   const s = fx.shadow;
   const g = fx.glow;
   const d = fx.depth;
@@ -765,6 +791,46 @@ export function BannerEffectsPanel({ banner, setBanner }: Omit<BannerProps, "the
         <Slider min={0} max={100} value={banner.halo} onChange={(v) => setBanner({ halo: v })} ariaLabel="Banner halo" />
       </Field>
       <Toggle label="Shimmer animation (screen only)" checked={banner.shimmer} onChange={(v) => setBanner({ shimmer: v })} />
+
+      {/* ----------------------------- common effects ----------------------- */}
+      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="common">
+        <Cap hint={c ? TEXT_BG_EFFECT_BY_ID.get(c.kind)?.label ?? "on" : "off"}>Common Effects</Cap>
+        <FxTiles
+          prefix="Banner common"
+          defs={BANNER_COMMON_EFFECTS}
+          active={c?.kind}
+          onPick={(kind) => setFx({ common: { kind, intensity: c?.intensity ?? 55, color: c?.color } })}
+          onClear={() => setFx({ common: undefined })}
+          mark={<FxMark group="common" />}
+        />
+        {c && (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+            <Field label="Intensity" hint={`${c.intensity}`}>
+              <Slider
+                min={0}
+                max={100}
+                step={1}
+                value={c.intensity}
+                onChange={(v) => setFx({ common: { ...c, intensity: v } })}
+                ariaLabel="Banner fx: common intensity"
+              />
+            </Field>
+            {TEXT_BG_EFFECT_BY_ID.get(c.kind)?.color && (
+              <ColorField
+                label="Effect colour"
+                value={c.color ?? ""}
+                fallback={bannerCommonColor(banner, c)}
+                presets={["#000000", "#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6"]}
+                onChange={(v) => setFx({ common: { ...c, color: v || undefined } })}
+              />
+            )}
+            <p className="text-[10px] leading-relaxed text-slate-500">
+              The same effects the <b>text background</b> wears — Shadow, Pop, Neon, Gloss, Sticker… — painted on the whole
+              plate, at the effect's own intensity and colour. The colour follows the plate when left on Auto.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* ---------------------------- shadow effects ------------------------ */}
       <div className="space-y-2 border-t border-white/10 pt-3" data-banner-fx-group="shadow">

@@ -17,9 +17,11 @@ import {
   type BannerShadowFx,
   type BannerShadowKind,
   type Gradient,
+  type TextBgEffectKind,
 } from "./types";
 import { shade, withAlpha } from "./color";
 import { rotateHue } from "./textEffects";
+import { effectColorFor, shapeEffectPasses, type ShapeEffectAuto } from "./shapeEffects";
 
 /* ---------------------------------------------------- silhouette families */
 
@@ -768,6 +770,7 @@ const fxA = (v: number) => clampOpacity(v / 100);
 export function bannerEffectsOf(b: BannerSettings): BannerEffects {
   const e = b.effects;
   return {
+    common: e?.common,
     shadow: e?.shadow,
     glow: e?.glow,
     depth: e?.depth,
@@ -775,6 +778,38 @@ export function bannerEffectsOf(b: BannerSettings): BannerEffects {
     decor: e?.decor,
     shape: { ...DEFAULT_BANNER_EFFECTS.shape, ...(e?.shape ?? {}) },
   };
+}
+
+/**
+ * The colour a common effect paints with when none is picked — the same
+ * table the text background's Effects wear (lib/textBgShape `TEXT_BG_EFFECTS`
+ * `auto` field): the light-washed ones start from white, the edge-hugging
+ * ones (glow · halo · neon · ring · stack) from the plate's own paint, and
+ * everything else from black.
+ */
+const COMMON_LIGHT: ReadonlySet<TextBgEffectKind> = new Set<TextBgEffectKind>([
+  "innerGlow",
+  "gloss",
+  "sheen",
+  "spotlight",
+  "stripes",
+  "dots",
+  "grid",
+  "checker",
+  "glass",
+  "offsetOutline",
+  "sticker",
+  "topBar",
+  "bottomBar",
+  "leftBar",
+]);
+const COMMON_PLATE: ReadonlySet<TextBgEffectKind> = new Set<TextBgEffectKind>(["glow", "halo", "neon", "ring", "stack"]);
+const commonAuto = (kind: TextBgEffectKind): ShapeEffectAuto =>
+  COMMON_PLATE.has(kind) ? "plate" : COMMON_LIGHT.has(kind) ? "light" : "dark";
+
+/** the colour the plate's common effect paints with right now */
+export function bannerCommonColor(b: BannerSettings, fx: { kind: TextBgEffectKind; color?: string }): string {
+  return effectColorFor(fx.kind, commonAuto(fx.kind), fx.color, baseColor(b.gradient, b.color), b.border.enabled ? b.border.color : undefined);
 }
 
 export interface BannerEffectDef<K extends string> {
@@ -895,12 +930,17 @@ export const BANNER_DECOR_DEFAULT: Omit<BannerDecorFx, "kind"> = { intensity: 50
  * channels `bannerCss` already knows how to paint:
  *
  *   shadows   box-shadow segments on the body itself (outer or inset)
- *   back      layers of its own behind the body (streaks, slabs)
+ *   back      layers of its own behind the body (streaks, slabs, rings, stacks)
  *   over      overlays above the body, under the heading
+ *   filters   CSS filters on the body itself — the common effects'
+ *             drop-shadows, glows and blur, which follow the silhouette
  *   transform the depth and shape transforms the body, its layers and its
  *             overlays all wear together
  *   radius    the body's corner radius, when a shape effect says otherwise
  *   mask      the body's edge, when a shape effect cuts it (wave · curve · slant)
+ *   maskFade  the body's edge, when a common effect fades it (Fade → · Fade
+ *             edges) — combined with `mask` and the silhouette's own mask in
+ *             `bannerCss`, which makes the layers intersect
  *
  * A group that is off paints nothing, so an untouched deck renders exactly as
  * it always did.
@@ -909,12 +949,23 @@ export interface BannerEffectPaint {
   shadows: string[];
   back: React.CSSProperties[];
   over: React.CSSProperties[];
+  filters: string[];
   transform: string;
   radius: number | string | undefined;
   mask: string | undefined;
+  maskFade: string | undefined;
 }
 
-const EMPTY_FX: BannerEffectPaint = { shadows: [], back: [], over: [], transform: "", radius: undefined, mask: undefined };
+const EMPTY_FX: BannerEffectPaint = {
+  shadows: [],
+  back: [],
+  over: [],
+  filters: [],
+  transform: "",
+  radius: undefined,
+  mask: undefined,
+  maskFade: undefined,
+};
 
 /** the film grain the Noise / Grain and the Texture Overlay wear, as a data-URL */
 const NOISE_BG = `url("data:image/svg+xml,${encodeURIComponent(
@@ -973,8 +1024,10 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
   const fx = bannerEffectsOf(b);
   const shapeOpacity = clampOpacity(b.opacity);
   const shadows: string[] = [];
+  const filters: string[] = [];
   const back: React.CSSProperties[] = [];
   const over: React.CSSProperties[] = [];
+  let maskFade: string | undefined;
 
   const common: React.CSSProperties = { position: "absolute", pointerEvents: "none" };
   const geo = b.shape === "underline" ? ruleRect(b) : plateRect(b);
@@ -1483,7 +1536,60 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
     }
   }
 
-  return { shadows, back, over, transform, radius: fxRadius, mask };
+  /* ------------------------------ common effects --------------------------- */
+  /* The text background's own Effects (lib/textBgShape TEXT_BG_EFFECTS),
+     painted on the whole plate by the very shared engine the text plates
+     wear — one pass vocabulary, so the title plate and a text plate paint the
+     same "Pop" or the same "Neon". */
+  const c = fx.common;
+  if (c && c.kind !== "none") {
+    const i = Math.max(0, Math.min(100, Number.isFinite(c.intensity) ? c.intensity : 55));
+    const cColor = bannerCommonColor(b, c);
+    const passes = shapeEffectPasses(c.kind, i, cColor, base);
+    if (passes.filters.length) filters.push(...passes.filters);
+    if (passes.overlay || passes.backdrop) {
+      overLayer({
+        ...(passes.backdrop ? { backdropFilter: passes.backdrop, WebkitBackdropFilter: passes.backdrop } : {}),
+        ...(passes.overlay ?? {}),
+      });
+    }
+    for (const h of passes.behind) {
+      if (!h.css.transform && h.stroke) {
+        /* a ring — the plate's own box grown out by the gap, outline only */
+        if (!("top" in geo)) continue;
+        const gap = Math.abs(Number(h.css.inset)) || 0;
+        back.push({
+          ...common,
+          left: `calc(${geo.left} - ${gap}px)`,
+          top: `calc(${geo.top} - ${gap}px)`,
+          width: `calc(${geo.width} + ${gap * 2}px)`,
+          height: `calc(${geo.height} + ${gap * 2}px)`,
+          borderRadius: radius,
+          clipPath: clip,
+          border: `${h.strokeWidth}px solid ${h.stroke}`,
+          boxSizing: "border-box",
+          transform: pre || undefined,
+          opacity: shapeOpacity,
+        });
+      } else {
+        /* offset outline / paper stack — the plate's own box, moved */
+        back.push({
+          ...common,
+          ...geo,
+          borderRadius: radius,
+          clipPath: clip,
+          background: h.fill || undefined,
+          ...(h.stroke ? { border: `${h.strokeWidth}px solid ${h.stroke}`, boxSizing: "border-box" } : {}),
+          transform: h.css.transform ? `${pre}${h.css.transform}` : pre || undefined,
+          opacity: shapeOpacity * (typeof h.css.opacity === "number" ? h.css.opacity : 1),
+        });
+      }
+    }
+    if (passes.mask) maskFade = passes.mask;
+    if (passes.transform) transform += ` ${passes.transform}`;
+  }
+
+  return { shadows, back, over, filters, transform, radius: fxRadius, mask, maskFade };
 }
 
 /**
@@ -1859,6 +1965,23 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
   /** the Effects card's paint, folded into the body's channels below */
   const fx = b.shape === "none" ? EMPTY_FX : bannerEffectsPaint(b, base);
   const fxShadow = fx.shadows.length ? fx.shadows.join(", ") : undefined;
+  /** the common effects' filters — drop-shadows, glows and the blur, on the
+      body itself, where they follow the silhouette's own edge */
+  const fxFilter = fx.filters.length ? fx.filters.join(" ") : undefined;
+  /**
+   * One plate, several masks (the shape's cut, the common effect's fade and
+   * the silhouette's own): CSS lays multiple mask layers down `add` by
+   * default, where each would open a hole in the others — so two or more
+   * layers are asked to INTERSECT instead.
+   */
+  const joinMasks = (...masks: (string | undefined)[]) => {
+    const list = masks.filter((m): m is string => !!m);
+    if (!list.length) return { value: undefined as string | undefined, composite: {} as Partial<React.CSSProperties> };
+    return {
+      value: list.join(", "),
+      composite: list.length > 1 ? { maskComposite: "intersect" as const, WebkitMaskComposite: "source-in" as const } : {},
+    };
+  };
   const common: React.CSSProperties = {
     position: "absolute",
     pointerEvents: "none",
@@ -1877,33 +2000,41 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
       const stops = b.gradient.enabled ? gradientCss({ ...b.gradient, type: "linear" }, b.color) : undefined;
       const fade =
         stops && `radial-gradient(${GLOW_ELLIPSE}, #000 0%, rgba(0,0,0,.8) ${inner}%, transparent ${outer}%)`;
+      // when a gradient is used we fade it with a mask instead so the colours still show —
+      // and a shape effect that cuts the edge (wave · curve · slant) wins over the fade,
+      // a common effect's fade intersecting with it
+      const glowMask = joinMasks(fx.mask, fx.maskFade, fade);
       box = {
         ...common,
         ...plateRect(b),
         background: stops
           ? `${stops}`
           : `radial-gradient(${GLOW_ELLIPSE}, ${base} 0%, ${withAlpha(base, 0.75)} ${inner}%, ${withAlpha(base, 0)} ${outer}%)`,
-        // when a gradient is used we fade it with a mask instead so the colours still show —
-        // and a shape effect that cuts the edge (wave · curve · slant) wins over the fade
-        WebkitMaskImage: fx.mask ?? fade,
-        maskImage: fx.mask ?? fade,
+        WebkitMaskImage: glowMask.value,
+        maskImage: glowMask.value,
+        ...glowMask.composite,
         boxShadow: fxShadow,
+        filter: fxFilter,
         transform: fx.transform || undefined,
       };
       break;
     }
-    case "underline":
+    case "underline": {
+      const ruleMask = joinMasks(fx.mask, fx.maskFade);
       box = {
         ...common,
         ...ruleRect(b),
         background: fill,
         borderRadius: fx.radius ?? 999,
-        maskImage: fx.mask,
-        WebkitMaskImage: fx.mask,
+        maskImage: ruleMask.value,
+        WebkitMaskImage: ruleMask.value,
+        ...ruleMask.composite,
         boxShadow: fxShadow,
+        filter: fxFilter,
         transform: fx.transform || undefined,
       };
       break;
+    }
     default: {
       /**
        * Every other silhouette — the plates, the shape library (basic · banner
@@ -1916,6 +2047,7 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
        * cut win over the silhouette's, and its transform dresses the whole
        * stack (the body, its layers and its overlays) together.
        */
+      const bodyMask = joinMasks(fx.mask, fx.maskFade, plateMask(b));
       box = {
         ...common,
         ...plateRect(b),
@@ -1923,13 +2055,16 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
         borderRadius: fx.radius ?? radius,
         clipPath: plateClipPath(b),
         // the smooth silhouettes (waves, domes, blobs, strokes) wear their cut
-        // as a mask — the outline's layer wears the very same one below
-        maskImage: fx.mask ?? plateMask(b),
-        WebkitMaskImage: fx.mask ?? plateMask(b),
+        // as a mask — the outline's layer wears the very same one below — and
+        // a common effect's fade intersects with it
+        maskImage: bodyMask.value,
+        WebkitMaskImage: bodyMask.value,
+        ...bodyMask.composite,
         // the double frame keeps a hairline inside itself and the long-shadow
         // plate its own soft fall — both on the body, so neither fights the
         // outline's own layer — and the effects' shadows ride the same body
         boxShadow: [plateShadow(b, base), fxShadow].filter(Boolean).join(", ") || undefined,
+        filter: fxFilter,
         transform: fx.transform || undefined,
       };
     }
@@ -1962,6 +2097,7 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
    * The outline is its own layer: a transparent box wearing only a border, so
    * Border transparency fades the line alone and never the paint behind it.
    */
+  const lineMask = joinMasks(plateMask(b), fx.maskFade);
   const borderLine: React.CSSProperties | undefined = bannerHasLine(b)
     ? {
         ...common,
@@ -1972,10 +2108,12 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
         // the outline follows the cut silhouette — the ribbon's notch, the
         // hexagon's tips, the chevron's arrow — and the masked silhouette
         // clips it to the very same mask, so the line stays inside the wave
-        // or the blob instead of running off its curve
+        // or the blob instead of running off its curve; a common effect's
+        // fade runs the line out with the plate
         clipPath: plateClipPath(b),
-        maskImage: plateMask(b),
-        WebkitMaskImage: plateMask(b),
+        maskImage: lineMask.value,
+        WebkitMaskImage: lineMask.value,
+        ...lineMask.composite,
       }
     : undefined;
 
