@@ -56,7 +56,7 @@ import { cn } from "../utils/cn";
  *                     multilayer · multilayer gradient · marks)
  *   Effects           softness (glow) · outer halo · shimmer,
  *                     and the six effect groups — Shadow Effects
- *                     (eight shadows on X · Y · Blur · Spread ·
+ *                     (twelve shadows on X · Y · Blur · Spread ·
  *                     Opacity · Colour), Glow & Light, Depth / 3D,
  *                     Modern Effects, Shape Effects and Decorative
  *                     Effects                              `effects`
@@ -730,15 +730,15 @@ function FxTiles<K extends string>({
  * one section per effect group, each with its effects as tiles (one at a time,
  * "None" takes it off) and the controls of the effect on:
  *
- *   Shadow Effects     eight shadows, each dressed by X · Y · Blur · Spread ·
+ *   Shadow Effects     twelve shadows, each dressed by X · Y · Blur · Spread ·
  *                      Opacity · Colour
- *   Glow & Light       eight lights, each by intensity and colour
- *   Depth / 3D         nine depths, each by intensity and the light's angle
- *   Modern Effects     eight finishes, each by intensity, tint and blur
+ *   Glow & Light       twelve lights, each by intensity and colour
+ *   Depth / 3D         twelve depths, each by intensity and the light's angle
+ *   Modern Effects     twelve finishes, each by intensity, tint and blur
  *   Shape Effects      the corners (shared or four of their own) and the
  *                      plate's own distortions — stretch, wave, curve, slant,
  *                      skew, rotation and the two flips
- *   Decorative Effects ten decorations, each by intensity and colour
+ *   Decorative Effects fourteen decorations, each by intensity and colour
  *
  * Every channel falls back to off, so an untouched deck renders exactly as it
  * always did.
