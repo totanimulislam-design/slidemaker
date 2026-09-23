@@ -16,7 +16,7 @@ import {
   resetToolbarLine,
   type ToolbarResetPatch,
 } from "../lib/toolbarReset";
-import { TEXT_GRADIENT_PRESETS, bannerBorderStyle, gradientCss } from "../lib/banner";
+import { TEXT_GRADIENT_PRESETS, bannerBorderStyle, bannerFillCss, gradientCss } from "../lib/banner";
 import {
   TEXT_PART_LABELS, WEIGHTS, boxFontLabel, boxTypeface, elementInk, opacityAlpha, opacityPercent, patchTextPart, setBoxFont, setElementInk, textPartDeckFamily, textPartTypeface,
 } from "../lib/boxFonts";
@@ -1294,7 +1294,9 @@ export default function ContextToolbar(p: Props) {
    *                    Spread · Opacity · Colour) · Glow & Light ·
    *                    Depth / 3D · Modern Effects · Shape Effects ·
    *                    Decorative Effects
-   *   Fill             the body's paint: solid or gradient
+   *   Fill             the body's paint — ten fills: solid colour, five
+   *                    gradient ramps (linear · radial · angular · reflected ·
+   *                    multi-colour · transparent), glass, metal and pattern
    *   Border           the outline's paint
    *   Border radius    the corners, one slider with no ceiling
    *   Border style     solid · dashed · dotted · double · none
@@ -1600,7 +1602,7 @@ export default function ContextToolbar(p: Props) {
           <span
             className="ctx-plate-well"
             aria-hidden="true"
-            style={{ background: banner.gradient.enabled ? gradientCss(banner.gradient, banner.color) : banner.color }}
+            style={{ background: bannerFillCss(banner) }}
           />
         );
         const lineWell = (

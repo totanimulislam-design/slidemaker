@@ -85,7 +85,11 @@ export function GradientAngleWheel({ value, onChange, fallback, size = 148 }: Di
   const g = value;
   const r = size / 2;
 
-  const send = useFrameSend((deg: number) => onChange({ ...g, type: "linear", angle: deg }));
+  /* dragging the rim steers whichever ramp runs along an angle — linear,
+     angular or reflected; a radial or mesh ramp steps over to linear */
+  const send = useFrameSend((deg: number) =>
+    onChange({ ...g, type: g.type === "linear" || g.type === "conic" || g.type === "reflected" ? g.type : "linear", angle: deg }),
+  );
 
   /** paints the knob + arrow from one angle — no React render in the way */
   const paint = (deg: number) => {
@@ -246,7 +250,9 @@ export function GradientAngleWheel({ value, onChange, fallback, size = 148 }: Di
               onClick={() => apply(Number(a))}
               className={cn(
                 "rounded border px-1.5 py-0.5 text-[11px]",
-                g.angle === a && g.type === "linear" ? "border-amber-400/70 bg-amber-400/15 text-amber-200" : "border-white/10 text-slate-300 hover:bg-white/10",
+                g.angle === a && (g.type === "linear" || g.type === "conic" || g.type === "reflected")
+                  ? "border-amber-400/70 bg-amber-400/15 text-amber-200"
+                  : "border-white/10 text-slate-300 hover:bg-white/10",
               )}
               title={`${a}°`}
             >
@@ -254,7 +260,15 @@ export function GradientAngleWheel({ value, onChange, fallback, size = 148 }: Di
             </button>
           ))}
         </div>
-        <span className="text-[10px] text-slate-500">{g.type === "radial" ? "Radial (centre → edge)" : `Linear ${g.angle}°`}</span>
+        <span className="text-[10px] text-slate-500">
+          {g.type === "radial"
+            ? "Radial (centre → edge)"
+            : g.type === "conic"
+              ? `Angular ${g.angle}° (the sweep round the centre)`
+              : g.type === "reflected"
+                ? `Reflected ${g.angle}° (middle → both ends)`
+                : `Linear ${g.angle}°`}
+        </span>
       </div>
     </div>
   );

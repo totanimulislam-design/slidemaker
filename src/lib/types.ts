@@ -536,7 +536,14 @@ export interface GradientStop {
   at: number;
 }
 
-export type GradientType = "linear" | "radial" | "mesh";
+/**
+ * linear    one ramp along an angle
+ * radial     one ramp out from a centre
+ * mesh       colour blobs melted over a base
+ * conic      the angular sweep round a centre (from its angle)
+ * reflected  the ramp mirrored out from the middle to both ends
+ */
+export type GradientType = "linear" | "radial" | "mesh" | "conic" | "reflected";
 
 export interface Gradient {
   enabled: boolean;
@@ -554,6 +561,68 @@ export interface Gradient {
  * dashed one, dots, two parallel lines, or none at all.
  */
 export type BannerBorderStyle = "solid" | "dashed" | "dotted" | "double" | "none";
+
+/* ------------------------------ the plate's ten fills ------------------- */
+
+/**
+ * The paint the title plate wears (Title background ▸ Fill). **Solid** and
+ * **gradient** both read from `color` / `gradient` (the gradient's own `type`
+ * names the linear · radial · angular · reflected · multi-colour · transparent
+ * ramps); the three special paints carry their own settings below. Older decks
+ * never saved a `fillMode` — the plate derives solid / gradient from
+ * `gradient.enabled`, exactly as it always did.
+ */
+export type BannerFillMode = "solid" | "gradient" | "glass" | "metallic" | "pattern";
+
+/**
+ * The pattern paint's motifs — every one is written in repeating CSS
+ * gradients, so the whole pattern stays inside a single `background` value
+ * and exports pixel-for-pixel.
+ */
+export type BannerPatternKind =
+  | "dots"
+  | "stripes"
+  | "lines"
+  | "grid"
+  | "checker"
+  | "diamonds"
+  | "rays"
+  | "rings";
+
+/** the frosted pane paint — a tinted pane with frost gathered along the top */
+export interface BannerGlassFill {
+  /** the pane's tint — "" follows the plate's own colour */
+  color: string;
+  /** how solidly the pane is painted, 0–100 */
+  opacity: number;
+  /** how hard the frost gathers (the white sheen), 0–100 */
+  frost: number;
+}
+
+/** the brushed-metal paint — lit and shaded bands brushed along one angle */
+export interface BannerMetallicFill {
+  /** the metal's tint — "" follows the plate's own colour */
+  color: string;
+  /** the direction the sheen runs, degrees */
+  angle: number;
+  /** the contrast between the bright and the dark bands, 0–100 */
+  polish: number;
+}
+
+/** the pattern paint — one motif inked over one ground */
+export interface BannerPatternFill {
+  kind: BannerPatternKind;
+  /** the pattern's ink — "" follows the plate's own colour */
+  color: string;
+  /** the ground under the motif — "" follows the plate's own colour */
+  back: string;
+  /** the motif's tile size, 0–100 */
+  scale: number;
+}
+
+export const DEFAULT_BANNER_GLASS: BannerGlassFill = { color: "", opacity: 60, frost: 55 };
+export const DEFAULT_BANNER_METALLIC: BannerMetallicFill = { color: "", angle: 135, polish: 65 };
+export const DEFAULT_BANNER_PATTERN: BannerPatternFill = { kind: "dots", color: "", back: "", scale: 45 };
 
 /* ------------------------------------- the Effects card of the plate ------ */
 
@@ -930,6 +999,19 @@ export interface BannerSettings {
   /** solid colour (used when gradient is disabled) */
   color: string;
   gradient: Gradient;
+  /**
+   * The paint the plate wears — one of the ten fills. Left out (or set to
+   * solid / gradient), the plate reads its paint from `color` / `gradient`
+   * exactly like the older decks; **glass**, **metallic** and **pattern** wear
+   * the special paints below instead.
+   */
+  fillMode?: BannerFillMode;
+  /** the frosted pane paint, worn while `fillMode` is "glass" */
+  glass?: BannerGlassFill;
+  /** the brushed-metal paint, worn while `fillMode` is "metallic" */
+  metallic?: BannerMetallicFill;
+  /** the pattern paint, worn while `fillMode` is "pattern" */
+  pattern?: BannerPatternFill;
   /** the SHAPE's own transparency 0–1 — the outline keeps its own below */
   opacity: number;
   /** soft edge / blur strength 0–100 (glow shape) */
@@ -1020,6 +1102,11 @@ export const DEFAULT_BANNER: BannerSettings = {
       { color: "#5b8cff", at: 100 },
     ],
   },
+  // the plate starts on the classic solid / gradient pair — the three special
+  // paints wait on their own factory settings
+  glass: { ...DEFAULT_BANNER_GLASS },
+  metallic: { ...DEFAULT_BANNER_METALLIC },
+  pattern: { ...DEFAULT_BANNER_PATTERN },
   opacity: 1,
   glow: 65,
   halo: 0,

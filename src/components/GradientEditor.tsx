@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { Gradient, GradientStop, GradientType } from "../lib/types";
 import { gradientCss } from "../lib/banner";
 import { GRADIENT_CATEGORIES, GRADIENT_PRESETS } from "../lib/gradientPresets";
-import { Field, SegButtons, Slider, Toggle } from "./ui";
+import { Field, Slider, Toggle } from "./ui";
 import { ColorWheel, GradientAngleWheel } from "./GradientWheel";
 import { usePointerDrag } from "../lib/dragSession";
 import { useColorFrame, useFrameSend } from "../lib/frameSend";
@@ -242,16 +242,29 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
 
           {/* ------------------------------ type ------------------------------ */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex-1">
-              <SegButtons
-                value={g.type}
-                onChange={(v) => set({ type: v })}
-                options={[
+            <div className="grid flex-1 grid-cols-3 gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1">
+              {(
+                [
                   { value: "linear", label: "Linear" },
                   { value: "radial", label: "Radial" },
+                  { value: "conic", label: "Angular" },
+                  { value: "reflected", label: "Reflected" },
                   { value: "mesh", label: "Mesh" },
-                ]}
-              />
+                ] as { value: GradientType; label: string }[]
+              ).map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => set({ type: o.value })}
+                  title={`Gradient type: ${o.label}`}
+                  className={cn(
+                    "rounded-md px-1 py-1.5 text-[11px] font-medium transition-colors",
+                    g.type === o.value ? "bg-amber-400 text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
+                  )}
+                >
+                  {o.label}
+                </button>
+              ))}
             </div>
             <button
               onClick={g.type === "mesh" ? shuffleMesh : reverse}
@@ -263,13 +276,16 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
           </div>
 
           {/* --------------------- direction / position ---------------------- */}
-          {g.type === "linear" && (
-            <Field label="Direction" hint={`${g.angle}°`}>
+          {(g.type === "linear" || g.type === "conic" || g.type === "reflected") && (
+            <Field
+              label={g.type === "conic" ? "Sweep angle" : "Direction"}
+              hint={`${g.angle}°`}
+            >
               <GradientAngleWheel value={g} onChange={onChange} fallback={fallback} />
             </Field>
           )}
-          {g.type === "radial" && (
-            <Field label="Glow centre" hint={`${g.cx ?? 50}% · ${g.cy ?? 50}%`}>
+          {(g.type === "radial" || g.type === "conic") && (
+            <Field label={g.type === "radial" ? "Glow centre" : "Sweep centre"} hint={`${g.cx ?? 50}% · ${g.cy ?? 50}%`}>
               <div className="grid grid-cols-3 gap-1">
                 {[
                   [0, 0, "↖"], [50, 0, "↑"], [100, 0, "↗"],
@@ -299,6 +315,16 @@ export default function GradientEditor({ value, onChange, fallback, label, prese
           {g.type === "mesh" && (
             <p className="rounded-lg border border-white/10 bg-slate-900/40 px-2.5 py-1.5 text-[10px] leading-relaxed text-slate-400">
               Mesh blends every colour stop into soft blobs over the first colour. Add stops for more blobs, ⤨ shuffles them.
+            </p>
+          )}
+          {g.type === "conic" && (
+            <p className="rounded-lg border border-white/10 bg-slate-900/40 px-2.5 py-1.5 text-[10px] leading-relaxed text-slate-400">
+              Angular sweeps the colour stops round the centre, starting from the sweep angle — move the centre to move the turn.
+            </p>
+          )}
+          {g.type === "reflected" && (
+            <p className="rounded-lg border border-white/10 bg-slate-900/40 px-2.5 py-1.5 text-[10px] leading-relaxed text-slate-400">
+              Reflected mirrors the ramp out from the middle: the first colour holds the centre and the last one both ends.
             </p>
           )}
 
