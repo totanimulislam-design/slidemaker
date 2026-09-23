@@ -318,7 +318,7 @@ export function ColorField({
         />
         {presets.length > 0 && (
           <span className="flex flex-wrap items-center gap-1">
-            {presets.map((c) => (
+            {Array.from(new Set(presets.map((c) => c.toLowerCase()))).map((c) => (
               <button
                 key={c}
                 type="button"
