@@ -478,7 +478,7 @@ interface PaintCtx {
 }
 
 /** the pop-ups that need the wide card (a colour grid, a design gallery, the effects' tile groups) */
-const WIDE_PANELS = new Set(["TextColor", "Paint", "Bullet design", "Design", "Numbering", "Banner effects"]);
+const WIDE_PANELS = new Set(["TextColor", "Paint", "Banner fill", "Bullet design", "Design", "Numbering", "Banner effects"]);
 const widePanel = (panel: string | null) => !!panel && WIDE_PANELS.has(panel);
 
 /** the droplet a paint button wears over its current colour */
@@ -1313,7 +1313,7 @@ export default function ContextToolbar(p: Props) {
       "Design presets": <BannerPresetPanel theme={theme} banner={banner} setBanner={p} />,
       "Banner shape": <BannerShapePanel theme={theme} banner={banner} setBanner={p} />,
       "Banner effects": <BannerEffectsPanel theme={theme} banner={banner} setBanner={p} />,
-      "Banner fill": <BannerFillPanel banner={banner} setBanner={p} />,
+      "Banner fill": <BannerFillPanel banner={banner} setBanner={p} documentColors={docColors} />,
       "Banner border": <BannerBorderPanel banner={banner} setBanner={p} />,
       "Banner radius": <BannerRadiusPanel banner={banner} setBanner={p} />,
       "Banner border style": <BannerBorderStylePanel banner={banner} setBanner={p} />,
@@ -1435,7 +1435,7 @@ export default function ContextToolbar(p: Props) {
         popPos ? "ctx-pop-floating" : "ctx-pop-docked",
         widePanel(panel) && "ctx-pop-wide",
         (panel === "Bullet design" || panel === "Design") && "ctx-pop-xl",
-        (panel === "TextColor" || panel === "Paint") && "ctx-pop-color",
+        (panel === "TextColor" || panel === "Paint" || panel === "Banner fill") && "ctx-pop-color",
         panel === "Numbering" && "ctx-pop-wide",
       )}
       style={

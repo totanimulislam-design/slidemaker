@@ -362,6 +362,20 @@ input[type="text"] {
   min-height: 0;
 }
 
+/* Title background ▸ Fill now lives in the same edge-to-edge colour card as
+   text colour. Its ten fill styles and transparent-edge controls are slots in
+   that card, not a second scrolling popup nested inside it. */
+.ctx-pop-color .banner-fill-color-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.ctx-pop-color .banner-fill-color-panel .font-color-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* the paint button — a shape channel's colour, named in words (Canva-style).
    The droplet wears the paint that is on: solid, gradient, the checker of
    "none", or hollow while the marker design paints its own. */

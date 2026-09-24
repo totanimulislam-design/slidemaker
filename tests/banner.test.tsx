@@ -606,32 +606,55 @@ export async function runBannerTests(): Promise<CaseResult[]> {
 
   /* -------------------------------- fill ----------------------------------- */
   openCard("Banner fill");
-  const fillWell = pop()?.querySelector<HTMLInputElement>('[data-banner-fill] input[type="color"]');
   const fillTiles = Array.from(
     pop()?.querySelectorAll<HTMLElement>('[data-banner-fill] [role="listbox"][aria-label="Fill style"] [role="option"]') ?? [],
   );
   out.push({
-    name: "Fill is the body's paint — the ten fills (solid · five gradients · glass · metallic · pattern) as picture tiles, one of them worn right now, the solid one wearing a colour well",
+    name: "Fill is the body's paint — the ten fills (solid · five gradients · glass · metallic · pattern) as picture tiles, one of them worn right now",
     pass:
-      !!fillWell &&
       fillTiles.length === 10 &&
       fillTiles.map((t) => t.textContent?.trim()).join(" · ") ===
         "Solid · Linear · Radial · Angular · Reflected · Multi-Color · Transparent · Glass · Metallic · Pattern" &&
       fillTiles.filter((t) => t.getAttribute("aria-selected") === "true").length === 1,
     detail: `${fillTiles.length} fills · ${fillTiles.filter((t) => t.getAttribute("aria-selected") === "true").length} worn`,
   });
-  act(() => {
-    if (!fillWell) return;
-    const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, "value")?.set;
-    setter?.call(fillWell, "#29b36f");
-    fillWell.dispatchEvent(new win.Event("input", { bubbles: true }));
-  });
-  await frame();
+  const pickedFill = "#00C875";
+  click(Array.from(pop()?.querySelectorAll<HTMLElement>(".font-color-panel > div:first-child button") ?? [])
+    .find((button) => button.textContent?.trim() === "Solid"));
+  const pickedFillButton = Array.from(pop()?.querySelectorAll<HTMLElement>(".font-color-panel button[title]") ?? [])
+    .find((button) => button.getAttribute("title")?.toUpperCase() === pickedFill);
+  click(pickedFillButton);
   await frame();
   out.push({
-    name: "picking a fill colour reaches the plate",
-    pass: styleOf(plate()).toLowerCase().includes("#29b36f") || styleOf(plate()).includes("rgb(41, 179, 111)"),
-    detail: styleOf(plate()).slice(0, 60),
+    name: "picking a fill colour from the text-style palette reaches the plate",
+    pass: !!pickedFillButton && (styleOf(plate()).toLowerCase().includes(pickedFill.toLowerCase()) || styleOf(plate()).includes("rgb(0, 200, 117)")),
+    detail: `${pickedFillButton ? "swatch found" : "swatch missing"} · ${styleOf(plate()).slice(0, 60)}`,
+  });
+  out.push({
+    name: "Fill opens the same Solid / Gradient colour popup as text colour, with the ten banner fills inside it",
+    pass:
+      !!pop()?.querySelector(".font-color-panel") &&
+      Array.from(pop()?.querySelectorAll<HTMLElement>(".font-color-panel > div:first-child button") ?? [])
+        .map((button) => button.textContent?.trim())
+        .join(" · ") === "Solid · Gradient" &&
+      fillTiles.length === 10,
+    detail: `${pop()?.querySelectorAll(".font-color-panel").length} colour card · ${fillTiles.length} fill styles`,
+  });
+  click(popButton("Fill: Transparent Gradient"));
+  await frame();
+  const transparentSides = Array.from(pop()?.querySelectorAll<HTMLElement>('[role="group"][aria-label="Transparent side"] button') ?? []);
+  const leftTransparent = popButton("Transparent side: Left");
+  click(leftTransparent);
+  await frame();
+  out.push({
+    name: "Transparent has an explicit edge control — Left · Right · Top · Bottom — and the chosen edge repaints the fade",
+    pass:
+      transparentSides.length === 4 &&
+      transparentSides.map((button) => button.getAttribute("aria-label")?.replace("Transparent side: ", "")).join(" · ") ===
+        "Left · Right · Top · Bottom" &&
+      leftTransparent?.getAttribute("aria-pressed") === "true" &&
+      (styleOf(plate()).includes("270deg") || styleOf(plate()).includes("to left")),
+    detail: `${transparentSides.length} sides · ${(styleOf(plate()).match(/linear-gradient\([^)]*/)?.[0] ?? "").slice(0, 72)}`,
   });
 
   /* ---- the other nine fills: five ramps + glass · metallic · pattern ------ */
@@ -682,20 +705,13 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   });
   click(popButton("Fill: Solid Color"));
   await frame();
-  /* the flat colour is the banner's own colour well — the plate must wear it */
-  const solidWell = pop()?.querySelector<HTMLInputElement>('[data-banner-fill] input[type="color"]');
-  const wellRgb = (() => {
-    const m = /^#([0-9a-f]{6})$/i.exec(solidWell?.value ?? "");
-    if (!m) return "";
-    return `rgb(${parseInt(m[1].slice(0, 2), 16)}, ${parseInt(m[1].slice(2, 4), 16)}, ${parseInt(m[1].slice(4, 6), 16)})`;
-  })();
+  /* the flat colour is the palette colour picked above — the plate must wear it */
   out.push({
     name: "back on Solid Color the plate wears the flat banner colour again",
     pass:
       popButton("Fill: Solid Color")?.getAttribute("aria-selected") === "true" &&
-      !!wellRgb &&
-      styleOf(plate()).includes(wellRgb),
-    detail: `well ${solidWell?.value} · ${(styleOf(plate()).match(/background:[^;]*/)?.[0] ?? "").slice(0, 48)}`,
+      styleOf(plate()).includes("rgb(0, 200, 117)"),
+    detail: `picked ${pickedFill} · ${(styleOf(plate()).match(/background:[^;]*/)?.[0] ?? "").slice(0, 48)}`,
   });
   closePop();
 

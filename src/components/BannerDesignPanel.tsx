@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { BannerBorderStyle, BannerPatternKind, BannerSettings, BannerShape, Gradient, ThemeSettings } from "../lib/types";
+import type { BannerBorderStyle, BannerPatternKind, BannerSettings, BannerShape, ThemeSettings } from "../lib/types";
 import { BANNER_WIDTH, DEFAULT_BANNER, DEFAULT_BANNER_GLASS, DEFAULT_BANNER_METALLIC, DEFAULT_BANNER_PATTERN } from "../lib/types";
 import {
   BANNER_3D_DEFAULTS,
@@ -49,7 +50,7 @@ import {
 import type { BannerEffects, BannerShapeFx } from "../lib/types";
 import { shade, withAlpha } from "../lib/color";
 import { rotateHue } from "../lib/textEffects";
-import GradientEditor from "./GradientEditor";
+import FontColorPanel, { type Tab as ColorPanelTab } from "./FontColorPanel";
 import { ColorField, Field, Slider, Toggle } from "./ui";
 import { cn } from "../utils/cn";
 
@@ -1365,8 +1366,6 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
 /*  Fill · the plate's ten paints                                      */
 /* ------------------------------------------------------------------ */
 
-const FILL_SWATCHES = ["#1f5fd0", "#7c3aed", "#059669", "#b91c1c", "#b45309", "#0e7490", "#334155", "#0b0b0f"];
-
 /** the metal tones the metallic fill offers on swatches */
 const METAL_SWATCHES = ["#d4af37", "#c9ccd6", "#cd7f32", "#b87333", "#8a93a5", "#e8b4b8"];
 
@@ -1419,20 +1418,65 @@ const PATTERN_KINDS: { value: BannerPatternKind; label: string }[] = [
   { value: "rings", label: "Rings" },
 ];
 
-export function BannerFillPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
+type TransparentSide = "left" | "right" | "top" | "bottom";
+
+const TRANSPARENT_SIDES: { id: TransparentSide; label: string; angle: number; arrow: string }[] = [
+  { id: "left", label: "Left", angle: 270, arrow: "←" },
+  { id: "right", label: "Right", angle: 90, arrow: "→" },
+  { id: "top", label: "Top", angle: 0, arrow: "↑" },
+  { id: "bottom", label: "Bottom", angle: 180, arrow: "↓" },
+];
+
+const cleanPaintColor = (color: string): string => {
+  const c = String(color || "").trim();
+  return /^#[0-9a-f]{8}$/i.test(c) ? c.slice(0, 7) : c;
+};
+
+const angle360 = (angle: number) => ((Math.round(angle) % 360) + 360) % 360;
+
+/** Which physical edge currently owns the transparent end of a linear ramp. */
+const transparentSideOf = (g: BannerSettings["gradient"]): TransparentSide | "" => {
+  if (!g.enabled || g.type !== "linear" || g.stops.length < 2) return "";
+  const stops = [...g.stops].sort((a, b) => a.at - b.at);
+  const firstClear = stopAlpha(stops[0]?.color ?? "") < 0.2;
+  const lastClear = stopAlpha(stops.at(-1)?.color ?? "") < 0.2;
+  if (!firstClear && !lastClear) return "";
+  // CSS angles point towards the final stop. A clear first stop therefore owns
+  // the opposite edge from a clear final stop.
+  const clearAngle = angle360(g.angle + (firstClear && !lastClear ? 180 : 0));
+  return TRANSPARENT_SIDES.find((side) => side.angle === clearAngle)?.id ?? "";
+};
+
+interface BannerFillProps extends Omit<BannerProps, "theme"> {
+  /** the same deduped deck colours the text-colour popup offers */
+  documentColors?: string[];
+}
+
+export function BannerFillPanel({ banner, setBanner, documentColors = [] }: BannerFillProps) {
   const g = banner.gradient;
   const mode = bannerFillMode(banner);
-  /** the plate's own paint — every preview tile and every auto tint reads it */
-  const base = baseColor(g, banner.color || DEFAULT_BANNER.color);
+  const gradOn = mode === "gradient";
+  const faded = gradOn && g.stops.some((s) => stopAlpha(s.color) < 0.2);
+  const multi = gradOn && !faded && g.stops.length >= 4;
+  const [colorTab, setColorTab] = useState<ColorPanelTab>(() => (gradOn ? "gradient" : "solid"));
+
+  // A fill tile is allowed to move the same Solid / Gradient tabs the text
+  // colour popup uses. Merely browsing a tab does not repaint anything.
+  useEffect(() => {
+    setColorTab(gradOn ? "gradient" : "solid");
+  }, [gradOn]);
+
+  /** the plate's own opaque paint — previews and transparent fades read it */
+  const opaqueStop = faded ? g.stops.find((s) => stopAlpha(s.color) >= 0.2)?.color : undefined;
+  const rawBase = opaqueStop ?? baseColor(g, banner.color || DEFAULT_BANNER.color);
+  const cleanedBase = cleanPaintColor(rawBase);
+  const base = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(cleanedBase) ? cleanedBase : banner.color || DEFAULT_BANNER.color;
   const glass = { ...DEFAULT_BANNER_GLASS, ...banner.glass };
   const metal = { ...DEFAULT_BANNER_METALLIC, ...banner.metallic };
   const pat = { ...DEFAULT_BANNER_PATTERN, ...banner.pattern };
 
-  /* which fill is on — the multi-colour and the transparent ramps are read
-     from their stops (four colours or a stop that fades to clear) */
-  const gradOn = mode === "gradient";
-  const faded = gradOn && g.stops.some((s) => stopAlpha(s.color) < 0.2);
-  const multi = gradOn && !faded && g.stops.length >= 4;
+  /* which fill is on — multi-colour and transparent are recognised from the
+     stops, while the ordinary ramps read their gradient type */
   const active: FillTileId | "" =
     mode === "solid" ? "solid"
     : mode === "glass" ? "glass"
@@ -1447,8 +1491,8 @@ export function BannerFillPanel({ banner, setBanner }: Omit<BannerProps, "theme"
     : g.type === "linear" ? "linear"
     : "";
 
-  /* the ten fills, in order — each tile a miniature of the plate's own colour
-     wearing that paint */
+  /* the ten fills, in order — each tile is a miniature of the plate's own
+     colour wearing that paint */
   const tiles: { id: FillTileId; label: string; name: string; hint: string; css: string }[] = [
     { id: "solid", label: "Solid", name: "Solid Color", hint: "One flat colour", css: base },
     {
@@ -1490,7 +1534,7 @@ export function BannerFillPanel({ banner, setBanner }: Omit<BannerProps, "theme"
       id: "transparent",
       label: "Transparent",
       name: "Transparent Gradient",
-      hint: "The colour fades to clear",
+      hint: "Fade one chosen side to clear",
       css: `linear-gradient(90deg, ${base}, ${fadeOut(base)}), ${FILL_CHECKER}`,
     },
     { id: "glass", label: "Glass", name: "Glass / Frosted Fill", hint: "A tinted pane with frost on top", css: glassFillCss(base, glass) },
@@ -1499,14 +1543,22 @@ export function BannerFillPanel({ banner, setBanner }: Omit<BannerProps, "theme"
   ];
 
   const pickFill = (id: FillTileId) => {
+    const gradientTile = ["linear", "radial", "conic", "reflected", "multi", "transparent"].includes(id);
+    setColorTab(gradientTile ? "gradient" : "solid");
     switch (id) {
       case "solid":
         return setBanner({ fillMode: undefined, gradient: { ...g, enabled: false } });
       case "linear":
       case "radial":
       case "conic":
-      case "reflected":
-        return setBanner({ fillMode: undefined, gradient: { ...g, type: id, enabled: true } });
+      case "reflected": {
+        // Leaving Transparent must restore two opaque stops; merely changing its
+        // type would still leave the clear stop and keep Transparent selected.
+        const stops = faded
+          ? [{ color: shade(base, -0.28), at: 0 }, { color: base, at: 100 }]
+          : g.stops;
+        return setBanner({ fillMode: undefined, gradient: { ...g, type: id, enabled: true, stops } });
+      }
       case "multi": {
         const stops =
           g.stops.length >= 4 && !g.stops.some((s) => stopAlpha(s.color) < 0.2)
@@ -1525,6 +1577,7 @@ export function BannerFillPanel({ banner, setBanner }: Omit<BannerProps, "theme"
           gradient: {
             ...g,
             type: "linear",
+            angle: 90,
             enabled: true,
             stops: [
               { color: base, at: 0 },
@@ -1541,6 +1594,23 @@ export function BannerFillPanel({ banner, setBanner }: Omit<BannerProps, "theme"
     }
   };
 
+  const setTransparentSide = (side: (typeof TRANSPARENT_SIDES)[number]) => {
+    setColorTab("gradient");
+    setBanner({
+      fillMode: undefined,
+      gradient: {
+        ...g,
+        enabled: true,
+        type: "linear",
+        angle: side.angle,
+        stops: [
+          { color: base, at: 0 },
+          { color: fadeOut(base), at: 100 },
+        ],
+      },
+    });
+  };
+
   const capHint =
     platePaintLayers(banner) > 1
       ? `${platePaintLayers(banner)} paints stacked on the plate`
@@ -1551,7 +1621,7 @@ export function BannerFillPanel({ banner, setBanner }: Omit<BannerProps, "theme"
           : mode === "pattern"
             ? `pattern · ${PATTERN_KINDS.find((p) => p.value === pat.kind)?.label.toLowerCase()}`
             : faded
-              ? "transparent gradient"
+              ? `transparent · ${transparentSideOf(g) || "custom direction"}`
               : multi
                 ? "multi-colour gradient"
                 : mode === "solid"
@@ -1564,11 +1634,9 @@ export function BannerFillPanel({ banner, setBanner }: Omit<BannerProps, "theme"
                       mesh: "mesh gradient",
                     }[g.type];
 
-  return (
-    <div className="space-y-3" data-banner-fill="">
-      <Cap hint={capHint}>Fill</Cap>
-
-      {/* the ten fills — a picture tile for each, in the order they are filed */}
+  const stylePicker = (
+    <div className="space-y-2">
+      <Cap hint={capHint}>Fill styles</Cap>
       <div className="grid grid-cols-2 gap-1.5" role="listbox" aria-label="Fill style">
         {tiles.map((t) => {
           const chosen = active === t.id;
@@ -1592,135 +1660,161 @@ export function BannerFillPanel({ banner, setBanner }: Omit<BannerProps, "theme"
           );
         })}
       </div>
+    </div>
+  );
 
-      {/* ------------------------- the chosen fill's knobs ------------------- */}
-      {mode === "solid" && (
+  const specialControls =
+    mode === "glass" ? (
+      <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <Cap hint="special fill">Glass / frosted</Cap>
         <ColorField
-          label="Banner colour"
-          value={banner.color}
-          fallback={DEFAULT_BANNER.color}
-          presets={FILL_SWATCHES}
-          autoLabel="Deck"
-          onChange={(v) => setBanner({ color: v || DEFAULT_BANNER.color, gradient: { ...g, enabled: false }, fillMode: undefined })}
+          label="Pane tint"
+          autoHint="Follow the plate's colour"
+          hint={glass.color ? undefined : "the plate's colour"}
+          value={glass.color}
+          fallback={base}
+          presets={["#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f"]}
+          onChange={(v) => setBanner({ glass: { ...glass, color: v || "" } })}
         />
-      )}
-
-      {mode === "gradient" && (
-        <GradientEditor
-          label="Banner gradient"
-          value={g}
-          fallback={banner.color}
-          onChange={(ng: Gradient) => setBanner({ fillMode: undefined, gradient: ng })}
-          presets={[
-            { name: "Blue", angle: 90, stops: [{ color: "#0f3fb8", at: 0 }, { color: "#3b7bff", at: 100 }] },
-            { name: "Purple-cyan", angle: 90, stops: [{ color: "#7c3aed", at: 0 }, { color: "#06b6d4", at: 100 }] },
-            { name: "Gold", angle: 180, stops: [{ color: "#ffd35a", at: 0 }, { color: "#b8860b", at: 100 }] },
-            { name: "Sunset", angle: 90, stops: [{ color: "#f97316", at: 0 }, { color: "#ec4899", at: 100 }] },
-            { name: "Emerald", angle: 135, stops: [{ color: "#065f46", at: 0 }, { color: "#10b981", at: 100 }] },
-            { name: "Steel", angle: 180, stops: [{ color: "#475569", at: 0 }, { color: "#0f172a", at: 100 }] },
-          ]}
+        <Field label="Pane opacity" hint={`${glass.opacity}`}>
+          <Slider min={0} max={100} value={glass.opacity} onChange={(v) => setBanner({ glass: { ...glass, opacity: v } })} ariaLabel="Glass fill: pane opacity" />
+        </Field>
+        <Field label="Frost" hint={`${glass.frost}`}>
+          <Slider min={0} max={100} value={glass.frost} onChange={(v) => setBanner({ glass: { ...glass, frost: v } })} ariaLabel="Glass fill: frost" />
+        </Field>
+      </div>
+    ) : mode === "metallic" ? (
+      <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <Cap hint="special fill">Metallic</Cap>
+        <ColorField
+          label="Metal tone"
+          autoHint="Follow the plate's colour"
+          hint={metal.color ? undefined : "the plate's colour"}
+          value={metal.color}
+          fallback={base}
+          presets={METAL_SWATCHES}
+          onChange={(v) => setBanner({ metallic: { ...metal, color: v || "" } })}
         />
-      )}
-
-      {mode === "glass" && (
-        <div className="space-y-2">
-          <ColorField
-            label="Pane tint"
-            autoHint="Follow the plate's colour"
-            hint={glass.color ? undefined : "the plate's colour"}
-            value={glass.color}
-            fallback={base}
-            presets={["#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f"]}
-            onChange={(v) => setBanner({ glass: { ...glass, color: v || "" } })}
-          />
-          <Field label="Pane opacity" hint={`${glass.opacity}`}>
-            <Slider min={0} max={100} value={glass.opacity} onChange={(v) => setBanner({ glass: { ...glass, opacity: v } })} ariaLabel="Glass fill: pane opacity" />
-          </Field>
-          <Field label="Frost" hint={`${glass.frost}`}>
-            <Slider min={0} max={100} value={glass.frost} onChange={(v) => setBanner({ glass: { ...glass, frost: v } })} ariaLabel="Glass fill: frost" />
-          </Field>
+        <Field label="Sheen direction" hint={`${metal.angle}°`}>
+          <Slider min={0} max={359} value={metal.angle} onChange={(v) => setBanner({ metallic: { ...metal, angle: v } })} ariaLabel="Metallic fill: sheen direction (deg)" />
+        </Field>
+        <Field label="Polish" hint={`${metal.polish}`}>
+          <Slider min={0} max={100} value={metal.polish} onChange={(v) => setBanner({ metallic: { ...metal, polish: v } })} ariaLabel="Metallic fill: polish" />
+        </Field>
+      </div>
+    ) : mode === "pattern" ? (
+      <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <Cap hint="special fill">Pattern</Cap>
+        <div className="grid grid-cols-4 gap-1.5" role="listbox" aria-label="Pattern motif">
+          {PATTERN_KINDS.map((k) => {
+            const chosen = pat.kind === k.value;
+            return (
+              <button
+                key={k.value}
+                type="button"
+                role="option"
+                aria-selected={chosen}
+                aria-label={`Pattern: ${k.label}`}
+                title={`Pattern: ${k.label}`}
+                onClick={() => setBanner({ pattern: { ...pat, kind: k.value } })}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-lg border px-1 pb-1.5 pt-1.5 transition-colors",
+                  chosen ? "border-amber-400 bg-amber-400/15 text-amber-200" : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/25",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-7 w-full rounded border border-black/30"
+                  style={{ background: patternFillCss(base, { ...pat, kind: k.value }) }}
+                />
+                <span className="text-[9px] font-medium leading-none">{k.label}</span>
+              </button>
+            );
+          })}
         </div>
-      )}
+        <ColorField
+          label="Pattern ink"
+          autoHint="Follow the plate's colour"
+          hint={pat.color ? undefined : "the plate's colour"}
+          value={pat.color}
+          fallback={base}
+          presets={["#ffffff", "#ffd633", "#0b0b0f"]}
+          onChange={(v) => setBanner({ pattern: { ...pat, color: v || "" } })}
+        />
+        <ColorField
+          label="Ground"
+          autoHint="Follow the plate's colour"
+          hint={pat.back ? undefined : "the plate's colour"}
+          value={pat.back}
+          fallback={base}
+          presets={["#0b0b0f", "#ffffff", "#1e293b"]}
+          onChange={(v) => setBanner({ pattern: { ...pat, back: v || "" } })}
+        />
+        <Field label="Motif size" hint={`${pat.scale}`}>
+          <Slider min={0} max={100} value={pat.scale} onChange={(v) => setBanner({ pattern: { ...pat, scale: v } })} ariaLabel="Pattern fill: motif size" />
+        </Field>
+      </div>
+    ) : null;
 
-      {mode === "metallic" && (
-        <div className="space-y-2">
-          <ColorField
-            label="Metal tone"
-            autoHint="Follow the plate's colour"
-            hint={metal.color ? undefined : "the plate's colour"}
-            value={metal.color}
-            fallback={base}
-            presets={METAL_SWATCHES}
-            onChange={(v) => setBanner({ metallic: { ...metal, color: v || "" } })}
-          />
-          <Field label="Sheen direction" hint={`${metal.angle}°`}>
-            <Slider min={0} max={359} value={metal.angle} onChange={(v) => setBanner({ metallic: { ...metal, angle: v } })} ariaLabel="Metallic fill: sheen direction (deg)" />
-          </Field>
-          <Field label="Polish" hint={`${metal.polish}`}>
-            <Slider min={0} max={100} value={metal.polish} onChange={(v) => setBanner({ metallic: { ...metal, polish: v } })} ariaLabel="Metallic fill: polish" />
-          </Field>
-        </div>
-      )}
-
-      {mode === "pattern" && (
-        <div className="space-y-2">
-          <div className="grid grid-cols-4 gap-1.5" role="listbox" aria-label="Pattern motif">
-            {PATTERN_KINDS.map((k) => {
-              const chosen = pat.kind === k.value;
-              return (
-                <button
-                  key={k.value}
-                  type="button"
-                  role="option"
-                  aria-selected={chosen}
-                  aria-label={`Pattern: ${k.label}`}
-                  title={`Pattern: ${k.label}`}
-                  onClick={() => setBanner({ pattern: { ...pat, kind: k.value } })}
-                  className={cn(
-                    "flex flex-col items-center gap-1 rounded-lg border px-1 pb-1.5 pt-1.5 transition-colors",
-                    chosen ? "border-amber-400 bg-amber-400/15 text-amber-200" : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/25",
-                  )}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="h-7 w-full rounded border border-black/30"
-                    style={{ background: patternFillCss(base, { ...pat, kind: k.value }) }}
-                  />
-                  <span className="text-[9px] font-medium leading-none">{k.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          <ColorField
-            label="Pattern ink"
-            autoHint="Follow the plate's colour"
-            hint={pat.color ? undefined : "the plate's colour"}
-            value={pat.color}
-            fallback={base}
-            presets={["#ffffff", "#ffd633", "#0b0b0f"]}
-            onChange={(v) => setBanner({ pattern: { ...pat, color: v || "" } })}
-          />
-          <ColorField
-            label="Ground"
-            autoHint="Follow the plate's colour"
-            hint={pat.back ? undefined : "the plate's colour"}
-            value={pat.back}
-            fallback={base}
-            presets={["#0b0b0f", "#ffffff", "#1e293b"]}
-            onChange={(v) => setBanner({ pattern: { ...pat, back: v || "" } })}
-          />
-          <Field label="Motif size" hint={`${pat.scale}`}>
-            <Slider min={0} max={100} value={pat.scale} onChange={(v) => setBanner({ pattern: { ...pat, scale: v } })} ariaLabel="Pattern fill: motif size" />
-          </Field>
-        </div>
-      )}
-
-      <p className="text-[10px] leading-relaxed text-slate-500">
-        The body's paint — ten fills on one plate: a solid colour, five gradient ramps (linear · radial · angular ·
-        reflected · multi-colour · transparent), the frosted pane, brushed metal and a pattern. The gradient's stops and
-        direction live under the ramp itself; the fill's transparency is on the <b>Transparency</b> card, so the outline
-        keeps its own.
+  const transparentControls = faded ? (
+    <div className="space-y-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.05] p-3" data-transparent-side-control="">
+      <Cap hint="choose the clear edge">Transparent side</Cap>
+      <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Transparent side">
+        {TRANSPARENT_SIDES.map((side) => {
+          const chosen = transparentSideOf(g) === side.id;
+          const preview = `linear-gradient(${side.angle}deg, ${base}, ${fadeOut(base)}), ${FILL_CHECKER}`;
+          return (
+            <button
+              key={side.id}
+              type="button"
+              aria-label={`Transparent side: ${side.label}`}
+              aria-pressed={chosen}
+              title={`Make the ${side.label.toLowerCase()} side transparent`}
+              onClick={() => setTransparentSide(side)}
+              className={cn(
+                "flex flex-col items-center gap-1 rounded-lg border p-1.5 text-[10px] font-medium transition-colors",
+                chosen ? "border-cyan-300 bg-cyan-300/15 text-cyan-100" : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/25",
+              )}
+            >
+              <span className="h-7 w-full rounded border border-black/30" style={{ background: preview }} aria-hidden="true" />
+              <span>{side.arrow} {side.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[10px] leading-relaxed text-slate-400">
+        Pick the edge that fades to clear. The direction wheel below is still available for a custom diagonal fade.
       </p>
+    </div>
+  ) : null;
+
+  const useSolid = (hex: string) => {
+    setColorTab("solid");
+    setBanner({ color: hex, gradient: { ...g, enabled: false }, fillMode: undefined });
+  };
+
+  return (
+    <div className="banner-fill-color-panel flex min-h-0 w-full flex-col" data-banner-fill="">
+      <FontColorPanel
+        solid={banner.color || DEFAULT_BANNER.color}
+        gradient={gradOn ? g : { ...g, enabled: false }}
+        onSolid={useSolid}
+        onGradient={(next) => {
+          setColorTab("gradient");
+          setBanner({ fillMode: undefined, gradient: next });
+        }}
+        onClearGradient={() => {
+          setColorTab("solid");
+          setBanner({ fillMode: undefined, gradient: { ...g, enabled: false } });
+        }}
+        documentColors={documentColors}
+        activeTab={colorTab}
+        onTabChange={setColorTab}
+        topContent={stylePicker}
+        solidContent={specialControls}
+        gradientContent={transparentControls}
+        title="Banner fill"
+      />
     </div>
   );
 }

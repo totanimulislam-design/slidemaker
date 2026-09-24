@@ -35,6 +35,31 @@ interface Props {
   patchLayout: (id: ElementId, patch: Partial<Box>, label?: string) => void;
 }
 
+const titleBackgroundDocumentColors = (theme: ThemeSettings, banner: BannerSettings): string[] => {
+  const colors = [
+    theme.accent,
+    theme.board,
+    theme.brandColor,
+    theme.titleColor,
+    theme.questionColor,
+    theme.optionTextColor,
+    theme.badgeColor,
+    theme.optionAccent,
+    theme.brandTopColor,
+    theme.brandBottomColor,
+    theme.noteColor,
+    theme.titleBanner,
+    banner.color,
+  ];
+  const seen = new Set<string>();
+  return colors.flatMap((color) => {
+    const value = String(color || "").toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(value) || seen.has(value)) return [];
+    seen.add(value);
+    return [value];
+  }).slice(0, 12);
+};
+
 export default function TitleBackgroundPanel({ theme, header, setTheme, setHeader, patchLayout }: Props) {
   const b: BannerSettings = bannerOf(theme);
   /**
@@ -102,7 +127,7 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
       <BannerPresetPanel {...cards} />
       <BannerShapePanel {...cards} />
       <BannerEffectsPanel theme={theme} banner={b} setBanner={set} />
-      <BannerFillPanel {...cards} />
+      <BannerFillPanel {...cards} documentColors={titleBackgroundDocumentColors(theme, b)} />
       <BannerBorderPanel banner={b} setBanner={set} />
       <BannerRadiusPanel banner={b} setBanner={set} />
       <BannerBorderStylePanel banner={b} setBanner={set} />
