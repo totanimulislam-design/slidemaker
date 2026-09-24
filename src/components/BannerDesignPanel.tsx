@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { BannerBorderStyle, BannerPatternKind, BannerSettings, BannerShape, ThemeSettings } from "../lib/types";
+import type { BannerBorderStyle, BannerPatternKind, BannerSettings, BannerShape, Gradient, ThemeSettings, TransparentSide } from "../lib/types";
 import { BANNER_WIDTH, DEFAULT_BANNER, DEFAULT_BANNER_GLASS, DEFAULT_BANNER_METALLIC, DEFAULT_BANNER_PATTERN } from "../lib/types";
 import {
   BANNER_3D_DEFAULTS,
@@ -1372,12 +1372,8 @@ const METAL_SWATCHES = ["#d4af37", "#c9ccd6", "#cd7f32", "#b87333", "#8a93a5", "
 /** the checkerboard worn under a see-through preview */
 const FILL_CHECKER = "repeating-conic-gradient(#3a3a44 0% 25%, #1c1c22 0% 50%) 50% / 8px 8px";
 
-/** one of the ten fills on the Fill card */
+/** one of the fills on the Fill card */
 type FillTileId =
-  | "solid"
-  | "linear"
-  | "radial"
-  | "conic"
   | "reflected"
   | "multi"
   | "transparent"
@@ -1418,9 +1414,7 @@ const PATTERN_KINDS: { value: BannerPatternKind; label: string }[] = [
   { value: "rings", label: "Rings" },
 ];
 
-type TransparentSide = "left" | "right" | "top" | "bottom";
-
-const TRANSPARENT_SIDES: { id: TransparentSide; label: string; angle: number; arrow: string }[] = [
+export const TRANSPARENT_SIDES: { id: TransparentSide; label: string; angle: number; arrow: string }[] = [
   { id: "left", label: "Left", angle: 270, arrow: "←" },
   { id: "right", label: "Right", angle: 90, arrow: "→" },
   { id: "top", label: "Top", angle: 0, arrow: "↑" },
@@ -1435,7 +1429,7 @@ const cleanPaintColor = (color: string): string => {
 const angle360 = (angle: number) => ((Math.round(angle) % 360) + 360) % 360;
 
 /** Which physical edge currently owns the transparent end of a linear ramp. */
-const transparentSideOf = (g: BannerSettings["gradient"]): TransparentSide | "" => {
+export const transparentSideOf = (g: BannerSettings["gradient"]): TransparentSide | "" => {
   if (!g.enabled || g.type !== "linear" || g.stops.length < 2) return "";
   const stops = [...g.stops].sort((a, b) => a.at - b.at);
   const firstClear = stopAlpha(stops[0]?.color ?? "") < 0.2;
@@ -1445,6 +1439,242 @@ const transparentSideOf = (g: BannerSettings["gradient"]): TransparentSide | "" 
   // the opposite edge from a clear final stop.
   const clearAngle = angle360(g.angle + (firstClear && !lastClear ? 180 : 0));
   return TRANSPARENT_SIDES.find((side) => side.angle === clearAngle)?.id ?? "";
+};
+
+export function buildTransparentGradient(base: string, sides: TransparentSide[]): Gradient {
+  const set = new Set(sides);
+  const hasL = set.has("left");
+  const hasR = set.has("right");
+  const hasT = set.has("top");
+  const hasB = set.has("bottom");
+  const count = (hasL ? 1 : 0) + (hasR ? 1 : 0) + (hasT ? 1 : 0) + (hasB ? 1 : 0);
+  const clear = fadeOut(base);
+
+  if (count === 4) {
+    return {
+      enabled: true,
+      type: "radial",
+      angle: 0,
+      cx: 50,
+      cy: 50,
+      stops: [
+        { color: base, at: 20 },
+        { color: clear, at: 95 },
+      ],
+    };
+  }
+
+  if (count === 3) {
+    if (!hasB) {
+      return {
+        enabled: true,
+        type: "radial",
+        angle: 0,
+        cx: 50,
+        cy: 95,
+        stops: [
+          { color: base, at: 20 },
+          { color: clear, at: 95 },
+        ],
+      };
+    }
+    if (!hasT) {
+      return {
+        enabled: true,
+        type: "radial",
+        angle: 0,
+        cx: 50,
+        cy: 5,
+        stops: [
+          { color: base, at: 20 },
+          { color: clear, at: 95 },
+        ],
+      };
+    }
+    if (!hasR) {
+      return {
+        enabled: true,
+        type: "radial",
+        angle: 0,
+        cx: 95,
+        cy: 50,
+        stops: [
+          { color: base, at: 20 },
+          { color: clear, at: 95 },
+        ],
+      };
+    }
+    return {
+      enabled: true,
+      type: "radial",
+      angle: 0,
+      cx: 5,
+      cy: 50,
+      stops: [
+        { color: base, at: 20 },
+        { color: clear, at: 95 },
+      ],
+    };
+  }
+
+  if (count === 2) {
+    if (hasL && hasR) {
+      return {
+        enabled: true,
+        type: "linear",
+        angle: 90,
+        stops: [
+          { color: clear, at: 0 },
+          { color: base, at: 25 },
+          { color: base, at: 75 },
+          { color: clear, at: 100 },
+        ],
+      };
+    }
+    if (hasT && hasB) {
+      return {
+        enabled: true,
+        type: "linear",
+        angle: 180,
+        stops: [
+          { color: clear, at: 0 },
+          { color: base, at: 25 },
+          { color: base, at: 75 },
+          { color: clear, at: 100 },
+        ],
+      };
+    }
+    if (hasL && hasT) {
+      return {
+        enabled: true,
+        type: "linear",
+        angle: 315,
+        stops: [
+          { color: base, at: 15 },
+          { color: clear, at: 100 },
+        ],
+      };
+    }
+    if (hasR && hasT) {
+      return {
+        enabled: true,
+        type: "linear",
+        angle: 45,
+        stops: [
+          { color: base, at: 15 },
+          { color: clear, at: 100 },
+        ],
+      };
+    }
+    if (hasR && hasB) {
+      return {
+        enabled: true,
+        type: "linear",
+        angle: 135,
+        stops: [
+          { color: base, at: 15 },
+          { color: clear, at: 100 },
+        ],
+      };
+    }
+    if (hasL && hasB) {
+      return {
+        enabled: true,
+        type: "linear",
+        angle: 225,
+        stops: [
+          { color: base, at: 15 },
+          { color: clear, at: 100 },
+        ],
+      };
+    }
+  }
+
+  if (hasL) {
+    return {
+      enabled: true,
+      type: "linear",
+      angle: 270,
+      stops: [
+        { color: base, at: 0 },
+        { color: clear, at: 100 },
+      ],
+    };
+  }
+  if (hasT) {
+    return {
+      enabled: true,
+      type: "linear",
+      angle: 0,
+      stops: [
+        { color: base, at: 0 },
+        { color: clear, at: 100 },
+      ],
+    };
+  }
+  if (hasB) {
+    return {
+      enabled: true,
+      type: "linear",
+      angle: 180,
+      stops: [
+        { color: base, at: 0 },
+        { color: clear, at: 100 },
+      ],
+    };
+  }
+
+  return {
+    enabled: true,
+    type: "linear",
+    angle: 90,
+    stops: [
+      { color: base, at: 0 },
+      { color: clear, at: 100 },
+    ],
+  };
+}
+
+export const transparentSidesOf = (banner: BannerSettings): TransparentSide[] => {
+  if (banner.transparentSides && banner.transparentSides.length > 0) {
+    return banner.transparentSides;
+  }
+  const g = banner.gradient;
+  if (!g || !g.enabled || g.stops.length < 2) return ["right"];
+  const hasClear = g.stops.some((s) => stopAlpha(s.color) < 0.2);
+  if (!hasClear) return ["right"];
+
+  if (g.type === "radial") {
+    const cx = g.cx ?? 50;
+    const cy = g.cy ?? 50;
+    if (cy >= 75) return ["left", "right", "top"];
+    if (cy <= 25) return ["left", "right", "bottom"];
+    if (cx >= 75) return ["left", "top", "bottom"];
+    if (cx <= 25) return ["right", "top", "bottom"];
+    return ["left", "right", "top", "bottom"];
+  }
+
+  if (g.type === "linear") {
+    const stops = [...g.stops].sort((a, b) => a.at - b.at);
+    const firstClear = stopAlpha(stops[0]?.color ?? "") < 0.2;
+    const lastClear = stopAlpha(stops.at(-1)?.color ?? "") < 0.2;
+    if (firstClear && lastClear) {
+      const a = angle360(g.angle);
+      if ((a >= 45 && a <= 135) || (a >= 225 && a <= 315)) return ["left", "right"];
+      return ["top", "bottom"];
+    }
+    const clearAngle = angle360(g.angle + (firstClear && !lastClear ? 180 : 0));
+    if (clearAngle >= 248 && clearAngle <= 292) return ["left"];
+    if (clearAngle >= 68 && clearAngle <= 112) return ["right"];
+    if (clearAngle <= 22 || clearAngle >= 338) return ["top"];
+    if (clearAngle >= 158 && clearAngle <= 202) return ["bottom"];
+    if (clearAngle > 292 && clearAngle < 338) return ["left", "top"];
+    if (clearAngle > 22 && clearAngle < 68) return ["right", "top"];
+    if (clearAngle > 112 && clearAngle < 158) return ["right", "bottom"];
+    if (clearAngle > 202 && clearAngle < 248) return ["left", "bottom"];
+  }
+
+  return ["right"];
 };
 
 interface BannerFillProps extends Omit<BannerProps, "theme"> {
@@ -1478,44 +1708,18 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
   /* which fill is on — multi-colour and transparent are recognised from the
      stops, while the ordinary ramps read their gradient type */
   const active: FillTileId | "" =
-    mode === "solid" ? "solid"
-    : mode === "glass" ? "glass"
+    mode === "glass" ? "glass"
     : mode === "metallic" ? "metallic"
     : mode === "pattern" ? "pattern"
     : !gradOn ? ""
     : faded ? "transparent"
     : multi ? "multi"
-    : g.type === "radial" ? "radial"
-    : g.type === "conic" ? "conic"
     : g.type === "reflected" ? "reflected"
-    : g.type === "linear" ? "linear"
     : "";
 
-  /* the ten fills, in order — each tile is a miniature of the plate's own
+  /* the six fills, in order — each tile is a miniature of the plate's own
      colour wearing that paint */
   const tiles: { id: FillTileId; label: string; name: string; hint: string; css: string }[] = [
-    { id: "solid", label: "Solid", name: "Solid Color", hint: "One flat colour", css: base },
-    {
-      id: "linear",
-      label: "Linear",
-      name: "Linear Gradient",
-      hint: "One ramp along an angle",
-      css: `linear-gradient(90deg, ${shade(base, 0.45)}, ${base})`,
-    },
-    {
-      id: "radial",
-      label: "Radial",
-      name: "Radial Gradient",
-      hint: "One ramp out from the centre",
-      css: `radial-gradient(circle at 50% 42%, ${shade(base, 0.5)}, ${base} 82%)`,
-    },
-    {
-      id: "conic",
-      label: "Angular",
-      name: "Angular Gradient",
-      hint: "The colour swept round the centre",
-      css: `conic-gradient(from 45deg, ${base}, ${shade(base, 0.5)}, ${shade(base, -0.35)}, ${base})`,
-    },
     {
       id: "reflected",
       label: "Reflected",
@@ -1534,7 +1738,7 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
       id: "transparent",
       label: "Transparent",
       name: "Transparent Gradient",
-      hint: "Fade one chosen side to clear",
+      hint: "Fade one or more chosen sides to clear",
       css: `linear-gradient(90deg, ${base}, ${fadeOut(base)}), ${FILL_CHECKER}`,
     },
     { id: "glass", label: "Glass", name: "Glass / Frosted Fill", hint: "A tinted pane with frost on top", css: glassFillCss(base, glass) },
@@ -1543,14 +1747,9 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
   ];
 
   const pickFill = (id: FillTileId) => {
-    const gradientTile = ["linear", "radial", "conic", "reflected", "multi", "transparent"].includes(id);
+    const gradientTile = ["reflected", "multi", "transparent"].includes(id);
     setColorTab(gradientTile ? "gradient" : "solid");
     switch (id) {
-      case "solid":
-        return setBanner({ fillMode: undefined, gradient: { ...g, enabled: false } });
-      case "linear":
-      case "radial":
-      case "conic":
       case "reflected": {
         // Leaving Transparent must restore two opaque stops; merely changing its
         // type would still leave the clear stop and keep Transparent selected.
@@ -1571,20 +1770,15 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
               ];
         return setBanner({ fillMode: undefined, gradient: { ...g, type: "linear", enabled: true, stops } });
       }
-      case "transparent":
+      case "transparent": {
+        const sides: TransparentSide[] =
+          banner.transparentSides && banner.transparentSides.length > 0 ? banner.transparentSides : ["right"];
         return setBanner({
           fillMode: undefined,
-          gradient: {
-            ...g,
-            type: "linear",
-            angle: 90,
-            enabled: true,
-            stops: [
-              { color: base, at: 0 },
-              { color: fadeOut(base), at: 100 },
-            ],
-          },
+          transparentSides: sides,
+          gradient: buildTransparentGradient(base, sides),
         });
+      }
       case "glass":
         return setBanner({ fillMode: "glass" });
       case "metallic":
@@ -1594,22 +1788,34 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
     }
   };
 
-  const setTransparentSide = (side: (typeof TRANSPARENT_SIDES)[number]) => {
+  const activeSides = transparentSidesOf(banner);
+
+  const toggleTransparentSide = (sideId: TransparentSide) => {
     setColorTab("gradient");
+    const current = transparentSidesOf(banner);
+    let next: TransparentSide[];
+    if (current.includes(sideId)) {
+      if (current.length > 1) {
+        next = current.filter((s) => s !== sideId);
+      } else {
+        next = current;
+      }
+    } else {
+      next = [...current, sideId];
+    }
     setBanner({
       fillMode: undefined,
-      gradient: {
-        ...g,
-        enabled: true,
-        type: "linear",
-        angle: side.angle,
-        stops: [
-          { color: base, at: 0 },
-          { color: fadeOut(base), at: 100 },
-        ],
-      },
+      transparentSides: next,
+      gradient: buildTransparentGradient(base, next),
     });
   };
+
+  const transparentSidesSummary =
+    activeSides.length === 4
+      ? "all 4 sides"
+      : activeSides.length > 1
+        ? activeSides.join(" + ")
+        : activeSides[0] || "custom direction";
 
   const capHint =
     platePaintLayers(banner) > 1
@@ -1621,7 +1827,7 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
           : mode === "pattern"
             ? `pattern · ${PATTERN_KINDS.find((p) => p.value === pat.kind)?.label.toLowerCase()}`
             : faded
-              ? `transparent · ${transparentSideOf(g) || "custom direction"}`
+              ? `transparent · ${transparentSidesSummary}`
               : multi
                 ? "multi-colour gradient"
                 : mode === "solid"
@@ -1758,10 +1964,10 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
 
   const transparentControls = faded ? (
     <div className="space-y-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.05] p-3" data-transparent-side-control="">
-      <Cap hint="choose the clear edge">Transparent side</Cap>
+      <Cap hint="choose one or more clear edges">Transparent sides</Cap>
       <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Transparent side">
         {TRANSPARENT_SIDES.map((side) => {
-          const chosen = transparentSideOf(g) === side.id;
+          const chosen = activeSides.includes(side.id);
           const preview = `linear-gradient(${side.angle}deg, ${base}, ${fadeOut(base)}), ${FILL_CHECKER}`;
           return (
             <button
@@ -1769,11 +1975,11 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
               type="button"
               aria-label={`Transparent side: ${side.label}`}
               aria-pressed={chosen}
-              title={`Make the ${side.label.toLowerCase()} side transparent`}
-              onClick={() => setTransparentSide(side)}
+              title={`Make the ${side.label.toLowerCase()} side transparent (click to toggle)`}
+              onClick={() => toggleTransparentSide(side.id)}
               className={cn(
                 "flex flex-col items-center gap-1 rounded-lg border p-1.5 text-[10px] font-medium transition-colors",
-                chosen ? "border-cyan-300 bg-cyan-300/15 text-cyan-100" : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/25",
+                chosen ? "border-cyan-300 bg-cyan-300/15 text-cyan-100 ring-1 ring-cyan-300/40" : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/25",
               )}
             >
               <span className="h-7 w-full rounded border border-black/30" style={{ background: preview }} aria-hidden="true" />
@@ -1783,7 +1989,7 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
         })}
       </div>
       <p className="text-[10px] leading-relaxed text-slate-400">
-        Pick the edge that fades to clear. The direction wheel below is still available for a custom diagonal fade.
+        Pick one or more edges that fade to clear. You can select multiple sides together.
       </p>
     </div>
   ) : null;

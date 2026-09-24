@@ -574,6 +574,8 @@ export type BannerBorderStyle = "solid" | "dashed" | "dotted" | "double" | "none
  */
 export type BannerFillMode = "solid" | "gradient" | "glass" | "metallic" | "pattern";
 
+export type TransparentSide = "left" | "right" | "top" | "bottom";
+
 /**
  * The pattern paint's motifs — every one is written in repeating CSS
  * gradients, so the whole pattern stays inside a single `background` value
@@ -1012,6 +1014,8 @@ export interface BannerSettings {
   metallic?: BannerMetallicFill;
   /** the pattern paint, worn while `fillMode` is "pattern" */
   pattern?: BannerPatternFill;
+  /** which sides fade to clear when transparent gradient is active */
+  transparentSides?: TransparentSide[];
   /** the SHAPE's own transparency 0–1 — the outline keeps its own below */
   opacity: number;
   /** soft edge / blur strength 0–100 (glow shape) */
