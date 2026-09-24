@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import type { ReactNode } from "react";
 import type { Gradient } from "../lib/types";
 import { ColorWheel } from "./GradientWheel";
 import GradientEditor from "./GradientEditor";
@@ -36,9 +37,20 @@ interface Props {
   documentColors?: string[];
   /** title shown in panel header (optional, parent already has header) */
   title?: string;
+  /**
+   * Optional paint controls that live *inside* the colour popup. The title
+   * background uses these slots for its fill-style tiles and special-paint
+   * knobs, while ordinary text colour keeps the uncluttered default card.
+   */
+  topContent?: ReactNode;
+  solidContent?: ReactNode;
+  gradientContent?: ReactNode;
+  /** A parent may own the active tab when another control selects a fill type. */
+  activeTab?: Tab;
+  onTabChange?: (tab: Tab) => void;
 }
 
-type Tab = "solid" | "gradient";
+export type Tab = "solid" | "gradient";
 
 export default function FontColorPanel({
   solid,
@@ -47,8 +59,18 @@ export default function FontColorPanel({
   onGradient,
   onClearGradient,
   documentColors = [],
+  topContent,
+  solidContent,
+  gradientContent,
+  activeTab,
+  onTabChange,
 }: Props) {
-  const [tab, setTab] = useState<Tab>(() => (gradient?.enabled ? "gradient" : "solid"));
+  const [ownTab, setOwnTab] = useState<Tab>(() => (gradient?.enabled ? "gradient" : "solid"));
+  const tab = activeTab ?? ownTab;
+  const setTab = (next: Tab) => {
+    if (activeTab === undefined) setOwnTab(next);
+    onTabChange?.(next);
+  };
   const [showAllSolids, setShowAllSolids] = useState(false);
   const [showAllGradients, setShowAllGradients] = useState(false);
   const [customHex, setCustomHex] = useState<string>(() => normColor(solid) || "#ffffff");
@@ -117,7 +139,7 @@ export default function FontColorPanel({
   );
 
   return (
-    <div className="font-color-panel flex max-h-[72vh] w-[360px] flex-col gap-0 overflow-hidden rounded-xl border border-white/10 bg-[#1a1d29] shadow-2xl">
+    <div className="font-color-panel flex max-h-[72vh] w-full flex-col gap-0 overflow-hidden rounded-xl border border-white/10 bg-[#1a1d29] shadow-2xl">
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-white/10 bg-[#12141f] p-2">
         <button
@@ -143,8 +165,12 @@ export default function FontColorPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
+        {topContent && <div className="mb-4">{topContent}</div>}
+
         {tab === "solid" && (
           <div className="space-y-4">
+            {solidContent}
+
             {/* Current + Gradient indicator */}
             <div className="flex items-center gap-2">
               <div
@@ -289,6 +315,8 @@ export default function FontColorPanel({
 
         {tab === "gradient" && (
           <div className="space-y-4">
+            {gradientContent}
+
             {/* Current gradient preview */}
             <div className="space-y-2">
               <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Current</h4>
