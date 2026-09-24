@@ -610,13 +610,12 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     pop()?.querySelectorAll<HTMLElement>('[data-banner-fill] [role="listbox"][aria-label="Fill style"] [role="option"]') ?? [],
   );
   out.push({
-    name: "Fill is the body's paint — the ten fills (solid · five gradients · glass · metallic · pattern) as picture tiles, one of them worn right now",
+    name: "Fill is the body's paint — the six fills (reflected · multi-colour · transparent · glass · metallic · pattern) as picture tiles",
     pass:
-      fillTiles.length === 10 &&
+      fillTiles.length === 6 &&
       fillTiles.map((t) => t.textContent?.trim()).join(" · ") ===
-        "Solid · Linear · Radial · Angular · Reflected · Multi-Color · Transparent · Glass · Metallic · Pattern" &&
-      fillTiles.filter((t) => t.getAttribute("aria-selected") === "true").length === 1,
-    detail: `${fillTiles.length} fills · ${fillTiles.filter((t) => t.getAttribute("aria-selected") === "true").length} worn`,
+        "Reflected · Multi-Color · Transparent · Glass · Metallic · Pattern",
+    detail: `${fillTiles.length} fills`,
   });
   const pickedFill = "#00C875";
   click(Array.from(pop()?.querySelectorAll<HTMLElement>(".font-color-panel > div:first-child button") ?? [])
@@ -631,30 +630,41 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     detail: `${pickedFillButton ? "swatch found" : "swatch missing"} · ${styleOf(plate()).slice(0, 60)}`,
   });
   out.push({
-    name: "Fill opens the same Solid / Gradient colour popup as text colour, with the ten banner fills inside it",
+    name: "Fill opens the same Solid / Gradient colour popup as text colour, with the six banner fills inside it",
     pass:
       !!pop()?.querySelector(".font-color-panel") &&
       Array.from(pop()?.querySelectorAll<HTMLElement>(".font-color-panel > div:first-child button") ?? [])
         .map((button) => button.textContent?.trim())
         .join(" · ") === "Solid · Gradient" &&
-      fillTiles.length === 10,
+      fillTiles.length === 6,
     detail: `${pop()?.querySelectorAll(".font-color-panel").length} colour card · ${fillTiles.length} fill styles`,
   });
   click(popButton("Fill: Transparent Gradient"));
   await frame();
   const transparentSides = Array.from(pop()?.querySelectorAll<HTMLElement>('[role="group"][aria-label="Transparent side"] button') ?? []);
   const leftTransparent = popButton("Transparent side: Left");
+  const rightTransparent = popButton("Transparent side: Right");
   click(leftTransparent);
   await frame();
   out.push({
-    name: "Transparent has an explicit edge control — Left · Right · Top · Bottom — and the chosen edge repaints the fade",
+    name: "Transparent has an explicit edge control — Left · Right · Top · Bottom — and multiple sides can be selected together",
     pass:
       transparentSides.length === 4 &&
       transparentSides.map((button) => button.getAttribute("aria-label")?.replace("Transparent side: ", "")).join(" · ") ===
         "Left · Right · Top · Bottom" &&
       leftTransparent?.getAttribute("aria-pressed") === "true" &&
+      rightTransparent?.getAttribute("aria-pressed") === "true",
+    detail: `${transparentSides.length} sides · Left & Right selected`,
+  });
+  click(rightTransparent);
+  await frame();
+  out.push({
+    name: "toggling a transparent side off leaves the other side selected and repaints the fade",
+    pass:
+      leftTransparent?.getAttribute("aria-pressed") === "true" &&
+      rightTransparent?.getAttribute("aria-pressed") === "false" &&
       (styleOf(plate()).includes("270deg") || styleOf(plate()).includes("to left")),
-    detail: `${transparentSides.length} sides · ${(styleOf(plate()).match(/linear-gradient\([^)]*/)?.[0] ?? "").slice(0, 72)}`,
+    detail: `${(styleOf(plate()).match(/linear-gradient\([^)]*/)?.[0] ?? "").slice(0, 72)}`,
   });
 
   /* ---- the other nine fills: five ramps + glass · metallic · pattern ------ */
@@ -703,14 +713,13 @@ export async function runBannerTests(): Promise<CaseResult[]> {
       (special("pattern").length ?? 0) > 0,
     detail: `${pop()?.querySelectorAll('[role="listbox"][aria-label="Pattern motif"] [role="option"]').length} motifs · ${(styleOf(plate()).match(/background:[^;]*/)?.[0] ?? "").slice(0, 80)}`,
   });
-  click(popButton("Fill: Solid Color"));
+  click(Array.from(pop()?.querySelectorAll<HTMLElement>(".font-color-panel > div:first-child button") ?? [])
+    .find((button) => button.textContent?.trim() === "Solid"));
   await frame();
   /* the flat colour is the palette colour picked above — the plate must wear it */
   out.push({
-    name: "back on Solid Color the plate wears the flat banner colour again",
-    pass:
-      popButton("Fill: Solid Color")?.getAttribute("aria-selected") === "true" &&
-      styleOf(plate()).includes("rgb(0, 200, 117)"),
+    name: "back on Solid tab the plate wears the flat banner colour again",
+    pass: styleOf(plate()).includes("rgb(0, 200, 117)"),
     detail: `picked ${pickedFill} · ${(styleOf(plate()).match(/background:[^;]*/)?.[0] ?? "").slice(0, 48)}`,
   });
   closePop();
