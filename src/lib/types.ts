@@ -562,6 +562,51 @@ export interface Gradient {
  */
 export type BannerBorderStyle = "solid" | "dashed" | "dotted" | "double" | "none";
 
+/**
+ * The plate's four corners set one by one (Title background ▸ Border ▸ Border
+ * radius ▸ Each corner), in px: top-left, top-right, bottom-right, bottom-left —
+ * the order CSS reads `border-radius` in.
+ */
+export interface BannerCorners {
+  tl: number;
+  tr: number;
+  br: number;
+  bl: number;
+}
+
+/**
+ * The light the plate's outline gives off (Title background ▸ Border ▸ Border
+ * glow): the line itself blooms, so the glow follows its dashes and dots, its
+ * corners and its transparency.
+ */
+export interface BannerBorderGlow {
+  /** on / off — switched off, the settings wait for the next time */
+  enabled: boolean;
+  /** how far the light reaches, px */
+  size: number;
+  /** how bright it is, 0–100 */
+  intensity: number;
+  /** "" = auto: the line's own colour */
+  color: string;
+}
+
+/**
+ * The plate's outline: its colour, thickness, line style, its own transparency
+ * (0–1, independent of the shape's) and the glow it may give off.
+ */
+export interface BannerBorder {
+  enabled: boolean;
+  color: string;
+  width: number;
+  style?: BannerBorderStyle;
+  opacity?: number;
+  /** left out = no glow (every deck saved before the glow existed) */
+  glow?: BannerBorderGlow;
+}
+
+/** what the Border card's glow starts on the first time it is switched on */
+export const DEFAULT_BANNER_BORDER_GLOW: BannerBorderGlow = { enabled: true, size: 14, intensity: 60, color: "" };
+
 /* ------------------------------ the plate's ten fills ------------------- */
 
 /**
@@ -1031,13 +1076,22 @@ export interface BannerSettings {
    */
   padX: number;
   padY: number;
-  /** corner radius for rounded / rect shapes, px */
+  /** corner radius for rounded / rect shapes, px — every corner alike */
   radius: number;
   /**
-   * The plate's outline: its colour, thickness, line style and its own
-   * transparency (0–1, independent of the shape's).
+   * Each corner on its own (Border ▸ Border radius ▸ Each corner). While
+   * `cornersIndependent` is on, the four values below replace the silhouette's
+   * own corners (the ones `radius` draws) on every plate that has corners to
+   * round; switched off, the plate goes back to `radius` and the four values
+   * wait. Left out on every deck saved before the corners came apart.
    */
-  border: { enabled: boolean; color: string; width: number; style?: BannerBorderStyle; opacity?: number };
+  cornersIndependent?: boolean;
+  corners?: BannerCorners;
+  /**
+   * The plate's outline: its colour, thickness, line style, its own
+   * transparency (0–1, independent of the shape's) and its glow.
+   */
+  border: BannerBorder;
   /**
    * Free plate box in px of the 1280 × 720 stage. Left out, the plate uses the
    * title element's stable frame and its padding; set, the plate is painted at

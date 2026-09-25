@@ -48,6 +48,12 @@ interface Props {
   /** A parent may own the active tab when another control selects a fill type. */
   activeTab?: Tab;
   onTabChange?: (tab: Tab) => void;
+  /**
+   * A channel that only ever takes one flat colour (the title plate's outline
+   * and its glow): the card keeps its solid half — the document colours, the
+   * swatches, the wheel and the hex field — and leaves the Gradient tab out.
+   */
+  solidOnly?: boolean;
 }
 
 export type Tab = "solid" | "gradient";
@@ -64,9 +70,10 @@ export default function FontColorPanel({
   gradientContent,
   activeTab,
   onTabChange,
+  solidOnly = false,
 }: Props) {
   const [ownTab, setOwnTab] = useState<Tab>(() => (gradient?.enabled ? "gradient" : "solid"));
-  const tab = activeTab ?? ownTab;
+  const tab: Tab = solidOnly ? "solid" : activeTab ?? ownTab;
   const setTab = (next: Tab) => {
     if (activeTab === undefined) setOwnTab(next);
     onTabChange?.(next);
@@ -140,29 +147,31 @@ export default function FontColorPanel({
 
   return (
     <div className="font-color-panel flex max-h-[72vh] w-full flex-col gap-0 overflow-hidden rounded-xl border border-white/10 bg-[#1a1d29] shadow-2xl">
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-white/10 bg-[#12141f] p-2">
-        <button
-          type="button"
-          onClick={() => setTab("solid")}
-          className={cn(
-            "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-            tab === "solid" ? "bg-white text-slate-900 shadow" : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
-          )}
-        >
-          Solid
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("gradient")}
-          className={cn(
-            "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-            tab === "gradient" ? "bg-white text-slate-900 shadow" : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
-          )}
-        >
-          Gradient
-        </button>
-      </div>
+      {/* Tabs — a solid-only channel has no second tab to switch to */}
+      {!solidOnly && (
+        <div className="flex items-center gap-1 border-b border-white/10 bg-[#12141f] p-2">
+          <button
+            type="button"
+            onClick={() => setTab("solid")}
+            className={cn(
+              "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              tab === "solid" ? "bg-white text-slate-900 shadow" : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
+            )}
+          >
+            Solid
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("gradient")}
+            className={cn(
+              "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              tab === "gradient" ? "bg-white text-slate-900 shadow" : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
+            )}
+          >
+            Gradient
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-3">
         {topContent && <div className="mb-4">{topContent}</div>}
