@@ -460,22 +460,22 @@ input[type="text"] {
 .ctx-paint.is-on .ctx-paint-drop.is-auto { opacity: .85; }
 .ctx-paint .ctx-caret { font-size: 9px; opacity: .7; }
 
-/* The title background line's own buttons: the two paint wells (Fill · Border)
-   wear what is on right now — the fill's gradient/solid, the line's colour and
-   style — beside the word naming the channel, Canva-style. */
+/* The title background line's own buttons: icon on top, flush left, name
+   underneath. Fill and Border wear the paint that is on right now as that
+   icon — the fill's gradient/solid, the line's colour and style. */
 .ctx-word { font-size: 12px; font-weight: 600; letter-spacing: .01em; }
 .ctx-plate-fill { display: inline-flex; align-items: center; gap: 5px; }
 .ctx-plate-well {
-  width: 22px;
-  height: 11px;
+  width: 18px;
+  height: 12px;
   border-radius: 3px;
   border: 1px solid rgba(255,255,255,.45);
   box-shadow: 0 1px 2px rgba(0,0,0,.45);
   background-size: 100% 100%;
 }
 .ctx-line-well {
-  width: 22px;
-  height: 11px;
+  width: 18px;
+  height: 12px;
   border-radius: 3px;
   border-width: 2px;
   border-color: rgba(255,255,255,.8);
@@ -483,6 +483,47 @@ input[type="text"] {
 .ctx-btn.is-on .ctx-word { color: #0f172a; }
 .ctx-btn.is-on .ctx-plate-well { border-color: rgba(15,23,42,.55); }
 .ctx-btn.is-on .ctx-line-well { box-shadow: none; }
+/* Title background tools: a column, icon flush left, name on the next line. */
+.ctx-pill-vtools { align-items: stretch; gap: 2px 4px; padding: 4px 6px; }
+.ctx-pill-vtools > .ctx-kind,
+.ctx-pill-vtools > .ctx-btn.ctx-default { align-self: center; }
+.ctx-pill-vtools > .ctx-sep { align-self: center; height: 28px; }
+.ctx-btn.ctx-vtool {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 3px;
+  height: auto;
+  min-height: 44px;
+  padding: 5px 8px 4px;
+  line-height: 1;
+}
+.ctx-vtool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 16px;
+  line-height: 1;
+}
+.ctx-vtool-emoji {
+  display: block;
+  width: 16px;
+  font-size: 14px;
+  line-height: 16px;
+  text-align: left;
+}
+.ctx-vtool-name {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  line-height: 1.1;
+}
+.ctx-btn.ctx-vtool .ctx-caret { font-size: 8px; line-height: 1; }
+.ctx-btn.ctx-vtool.is-on .ctx-vtool-name { color: #0f172a; }
 
 /* the slider inside a bullet card (radius · weight · transparency · intensity) */
 .ctx-pop-body input[type="range"] { width: 100%; accent-color: #fbbf24; }

@@ -1327,6 +1327,9 @@ export default function ContextToolbar(p: Props) {
    *   Banner position  free X and Y, on line bars
    *
    * and then the eye that shows/hides the plate and the line's Default.
+   *
+   * Every tool on this line stacks its mark above its name: the icon sits on
+   * top, flush left, and the short name sits underneath it.
    */
   if (optLine("titleBg")) {
     const p = (patch: Partial<typeof banner>) => patchBanner(patch);
@@ -1615,10 +1618,47 @@ export default function ContextToolbar(p: Props) {
         /**
          * The plate's line. Every channel is one button — the bar reads in the
          * order a plate is dressed, and each button opens exactly the card it
-         * names (see the panel block above).
+         * names (see the panel block above). The mark sits on top, flush left;
+         * the short name sits under it. The accessible name stays the full
+         * channel, so the pop-up and the tests still key off it.
          */
         const shown = p.header?.showBanner ?? true;
-        /** the little well each colour button wears */
+        /** icon on top (left), name underneath — a menu tool */
+        const stackToggle = (name: string, label: string, icon: ReactNode) => {
+          const open = panel === name;
+          return (
+            <button
+              type="button"
+              className={cn("ctx-btn ctx-toggle ctx-vtool", open && "is-on")}
+              title={name}
+              aria-label={name}
+              aria-pressed={open}
+              aria-expanded={open}
+              onClick={() => setPanel(open ? null : name)}
+            >
+              <span className="ctx-vtool-icon" aria-hidden="true">{icon}</span>
+              <span className="ctx-vtool-name">
+                {label}
+                <span className="ctx-caret" aria-hidden="true">▾</span>
+              </span>
+            </button>
+          );
+        };
+        /** the same stack for a direct action (the eye) — no caret */
+        const stackAction = (name: string, label: string, icon: ReactNode, action: () => void, active?: boolean) => (
+          <button
+            type="button"
+            className={cn("ctx-btn ctx-vtool", active && "is-on")}
+            title={name}
+            aria-label={name}
+            aria-pressed={active}
+            onClick={action}
+          >
+            <span className="ctx-vtool-icon" aria-hidden="true">{icon}</span>
+            <span className="ctx-vtool-name">{label}</span>
+          </button>
+        );
+        /** the little well each colour button wears, now the icon above the name */
         const plateWell = (
           <span
             className="ctx-plate-well"
@@ -1643,37 +1683,24 @@ export default function ContextToolbar(p: Props) {
         );
         return (
           <>
-            {toggle(
-              "Design presets",
-              PRESET_GLYPH,
-              <span className="ctx-word">
-                {PRESET_GLYPH}
-                <span>Presets</span>
-              </span>,
-            )}
-            {toggle("Banner shape", <ShapeGlyph shape={banner.shape} />)}
-            {toggle("Banner effects", <span aria-hidden="true">✨</span>)}
-            {toggle(
-              "Banner fill",
-              <span className="ctx-plate-fill" aria-hidden="true">
-                <span className="ctx-word">Fill</span>
-                {plateWell}
-              </span>,
-            )}
+            {stackToggle("Design presets", "Presets", PRESET_GLYPH)}
+            {stackToggle("Banner shape", "Shape", <ShapeGlyph shape={banner.shape} />)}
+            {stackToggle("Banner effects", "Effects", <span className="ctx-vtool-emoji" aria-hidden="true">✨</span>)}
+            {stackToggle("Banner fill", "Fill", plateWell)}
             {/* ONE button for the whole outline — colour, style, weight,
                 transparency, corners and glow all live in its card */}
-            {toggle(
-              "Banner border",
-              <span className="ctx-plate-fill" aria-hidden="true">
-                <span className="ctx-word">Border</span>
-                {lineWell}
-              </span>,
-            )}
-            {toggle("Banner transparency", <BannerTransparencyIcon size={16} />)}
-            {toggle("Banner size", <BannerSizeIcon size={16} />)}
-            {toggle("Banner position", <BannerPositionIcon size={16} />)}
+            {stackToggle("Banner border", "Border", lineWell)}
+            {stackToggle("Banner transparency", "Transparency", <BannerTransparencyIcon size={16} />)}
+            {stackToggle("Banner size", "Size", <BannerSizeIcon size={16} />)}
+            {stackToggle("Banner position", "Position", <BannerPositionIcon size={16} />)}
             {sep()}
-            {button(<span aria-hidden="true">👁</span>, () => p.patchHeader?.({ showBanner: !shown }), shown, "Show / hide the banner behind the title")}
+            {stackAction(
+              "Show / hide the banner behind the title",
+              "Show",
+              <span className="ctx-vtool-emoji" aria-hidden="true">👁</span>,
+              () => p.patchHeader?.({ showBanner: !shown }),
+              shown,
+            )}
           </>
         );
       }
@@ -1952,7 +1979,7 @@ export default function ContextToolbar(p: Props) {
               key={id}
               role="toolbar"
               aria-label={MERGED_LINE[id].aria}
-              className={cn("ctx-pill", activeLine === id && "ctx-pill-active")}
+              className={cn("ctx-pill", id === "titleBg" && "ctx-pill-vtools", activeLine === id && "ctx-pill-active")}
             >
               <span className="ctx-kind">{MERGED_LINE[id].chip}</span>
               {lineControls(id)}
