@@ -144,6 +144,17 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     pass: ORDER.every((l, i) => labels[i] === l) && !!line()?.querySelector("[data-toolbar-default]"),
     detail: labels.slice(0, ORDER.length + 1).join(" › "),
   });
+  const NAMES = ["Presets", "Shape", "Effects", "Fill", "Border", "Transparency", "Size", "Position", "Show"];
+  const vtools = lineButtons().slice(0, NAMES.length);
+  const visibleName = (b: HTMLElement) => b.querySelector(".ctx-vtool-name")?.childNodes[0]?.textContent?.trim() ?? b.querySelector(".ctx-vtool-name")?.textContent?.trim() ?? "";
+  out.push({
+    name: "each Title background tool stacks its icon flush left over its name",
+    pass:
+      line()?.classList.contains("ctx-pill-vtools") === true &&
+      vtools.length === NAMES.length &&
+      vtools.every((b, i) => b.classList.contains("ctx-vtool") && visibleName(b) === NAMES[i] && b.firstElementChild?.classList.contains("ctx-vtool-icon") === true),
+    detail: vtools.map((b) => `${b.classList.contains("ctx-vtool") ? "stack" : "flat"}:${visibleName(b) || b.getAttribute("aria-label")}`).join(" · "),
+  });
 
   /* ------------------------- the factory plate's box ------------------------ */
   const auto0 = { left: plate()?.style.left ?? "", top: plate()?.style.top ?? "", w: plate()?.style.width ?? "", h: plate()?.style.height ?? "" };
