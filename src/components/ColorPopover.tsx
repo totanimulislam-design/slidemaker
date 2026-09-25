@@ -29,6 +29,7 @@ export function AnchoredPopover({
   width = 380,
   label,
   title,
+  accent,
 }: {
   anchor: HTMLElement;
   onClose: () => void;
@@ -38,6 +39,8 @@ export function AnchoredPopover({
   label?: string;
   /** the words in the card's own title bar — defaults to `label` */
   title?: string;
+  /** the paint the card is about — worn as a little chip in the title bar */
+  accent?: string;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; maxH: number } | null>(null);
@@ -157,15 +160,24 @@ export function AnchoredPopover({
       style={{ top: pos.top, left: pos.left, width, zIndex: z, maxHeight: pos.maxH }}
     >
       <div className="color-pop-head">
-        <span className="color-pop-title">{heading}</span>
+        <span className="color-pop-title">
+          <span
+            className="color-pop-chip"
+            style={{ background: accent ?? "linear-gradient(135deg,#fcd34d,#f59e0b)" }}
+            aria-hidden="true"
+          />
+          {heading}
+        </span>
         <button
           type="button"
-          className="ctx-btn"
+          className="color-pop-close"
           aria-label="Close colour card"
           title="Close this colour card — the popup underneath stays open"
           onClick={onClose}
         >
-          ✕
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
       <div className="color-pop-body" style={{ maxHeight: Math.max(160, pos.maxH - 42) }}>

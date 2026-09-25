@@ -42,6 +42,8 @@ import {
   BANNER_SHADOW_DEFAULTS,
   BANNER_SHADOW_EFFECTS,
   bannerBorderGlowColor,
+  bannerBorderGlowFilter,
+  bannerBorderPaintColor,
   bannerCorners,
   bannerCornersNow,
   bannerCss,
@@ -73,7 +75,7 @@ import {
   type BannerShapeFamily,
 } from "../lib/banner";
 import type { BannerEffects, BannerShapeFx } from "../lib/types";
-import { shade } from "../lib/color";
+import { shade, withAlpha } from "../lib/color";
 import { rotateHue } from "../lib/textEffects";
 import FontColorPanel, { type Tab as ColorPanelTab } from "./FontColorPanel";
 import PaintPopoverField, { AnchoredPopover } from "./ColorPopover";
@@ -2131,19 +2133,56 @@ function ColorRow({
       title={`${label} — open the colour card`}
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors",
-        open ? "border-amber-400/70 bg-amber-400/10" : "border-white/10 bg-slate-900/60 hover:border-white/25",
+        "group/colorrow flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-all",
+        open
+          ? "border-amber-400/70 bg-amber-400/10 shadow-[0_0_0_1px_rgba(251,191,36,0.15)]"
+          : "border-white/10 bg-slate-900/60 hover:border-white/25 hover:bg-slate-900/80",
       )}
     >
-      <span className="h-7 w-10 shrink-0 rounded-md border border-white/20 shadow-inner" style={{ background: color }} aria-hidden="true" />
+      <span
+        className="h-8 w-11 shrink-0 rounded-lg shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)] ring-1 ring-white/20 transition-transform group-hover/colorrow:scale-[1.04]"
+        style={{ background: color }}
+        aria-hidden="true"
+      />
       <span className="min-w-0 flex-1">
-        <span className="block text-[12px] font-medium text-slate-200">{label}</span>
+        <span className="block text-[12px] font-semibold text-slate-200">{label}</span>
         <span className="block truncate font-mono text-[10.5px] text-slate-400">{caption}</span>
       </span>
-      <span className="shrink-0 text-base leading-none text-slate-400" aria-hidden="true">
-        ›
-      </span>
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0 text-slate-500 transition-colors group-hover/colorrow:text-slate-300" aria-hidden="true">
+        <path d="m6 3.5 4.5 4.5L6 12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
     </button>
+  );
+}
+
+/** the see-through checker painted under the line's live preview tile */
+const LINE_PREVIEW_CHECKER = "repeating-conic-gradient(#343746 0% 25%, #1b1d28 0% 50%) 50% / 9px 9px";
+
+/** a small left arrow for the chip that walks back to the Border card */
+function BackArrowIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M9.5 3.5 5 8l4.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** the glow channel's mark — a four-point spark */
+function SparkIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M8 1.5c.4 2.9 1.6 4.1 4.5 4.5-2.9.4-4.1 1.6-4.5 4.5-.4-2.9-1.6-4.1-4.5-4.5 2.9-.4 4.1-1.6 4.5-4.5Z" />
+      <path d="M12.6 9.6c.2 1.5.8 2.1 2.3 2.3-1.5.2-2.1.8-2.3 2.3-.2-1.5-.8-2.1-2.3-2.3 1.5-.2 2.1-.8 2.3-2.3Z" opacity=".7" />
+    </svg>
+  );
+}
+
+/** the border channel's mark — a rounded plate wearing its outline */
+function PlateIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="1.75" y="4.25" width="12.5" height="7.5" rx="2.5" stroke="currentColor" strokeWidth="2" />
+    </svg>
   );
 }
 
@@ -2154,6 +2193,12 @@ function ColorRow({
  * state, **Auto**: the line's own colour, followed as the line is repainted.
  * The card is its own pop-up, stacked on the Border pop-up — closing it leaves
  * the Border pop-up open.
+ *
+ * The head is dressed the way the editing platforms dress a stroke card: a
+ * live tile that wears the line itself — its style, weight, colour and
+ * transparency, and the glow's bloom when it is the glow's card — the paint's
+ * hex big under it, and a strip where the real line runs edge to edge, so a
+ * dashed line is seen dashing while its colour changes.
  */
 export function BannerLineColorPanel({
   channel,
@@ -2195,43 +2240,119 @@ export function BannerLineColorPanel({
         ? { ...border, glow: { ...glowOf(border), gradient: gradOff(border.glow?.gradient) } }
         : { ...border, gradient: gradOff(border.gradient) },
     });
+  /* ---- the live head: the line as it really is right now ----------------- */
+  const style = bannerBorderStyle(banner);
+  const opacity = clampOpacity(border.opacity);
+  const opacityPct = Math.round(opacity * 100);
+  /** the tile wears the paint itself — a gradient paints the ring whole */
+  const tilePaint = swatch;
+  /** the ring's thickness on the preview tile, kept between a hair and a beam */
+  const ring = Math.max(2, Math.min(border.width, 8));
+  /** the strip runs the real line edge to edge — one blended colour for the border */
+  const stripColor = glow ? value : bannerBorderPaintColor(banner);
+  /* a double line only reads as two lines from 4px up */
+  const stripWidth = Math.max(style === "double" ? 4 : 2, Math.min(border.width, 7));
+  const lineHidden = style === "none" || border.width <= 0 || !bannerHasLine(banner);
+  const glowFilter = glow
+    ? bannerBorderGlowFilter(banner) ?? `drop-shadow(0 0 8px ${withAlpha(value, 0.85)})`
+    : undefined;
+  const meta = glow
+    ? `${glowOf(border).size}px bloom · ${glowOf(border).intensity}% strength`
+    : `${style} · ${border.width}px${opacityPct < 100 ? ` · ${opacityPct}% visible` : ""}`;
+
   return (
     <div className="banner-line-color-panel flex w-full flex-col" data-banner-line-color={channel}>
-      <div className="flex items-center gap-2 border-b border-white/10 bg-[#12141f] px-3 py-2">
-        {onBack && (
-          <button
-            type="button"
-            aria-label="Back to the Border card"
-            title="Back to the Border card"
-            onClick={onBack}
-            className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-white/10"
-          >
-            ← Border
-          </button>
+      {/* ------------------------- the hero head --------------------------- */}
+      <div className="banner-line-head shrink-0 space-y-2.5 border-b border-white/[0.08] bg-gradient-to-b from-white/[0.05] to-transparent px-3.5 pb-3 pt-2.5">
+        {/* chip row — the way back, and the glow's Auto */}
+        {(onBack || glow) && (
+        <div className="flex items-center justify-between gap-2">
+          {onBack ? (
+            <button
+              type="button"
+              aria-label="Back to the Border card"
+              title="Back to the Border card"
+              onClick={onBack}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] py-1 pl-2 pr-2.5 text-[10.5px] font-semibold text-slate-300 transition-colors hover:border-white/25 hover:bg-white/10 hover:text-white"
+            >
+              <BackArrowIcon />
+              Border
+            </button>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+          {glow && (
+            <button
+              type="button"
+              aria-label="Glow colour: auto (the line's own colour)"
+              aria-pressed={auto}
+              title="Auto — the glow wears the line's own colour"
+              onClick={() => setBanner({ border: { ...border, glow: { ...glowOf(border), color: "", gradient: gradOff(border.glow?.gradient) } } })}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wide transition-all",
+                auto
+                  ? "border-amber-300/90 bg-amber-400 text-slate-950 shadow-[0_0_16px_rgba(251,191,36,0.35)]"
+                  : "border-white/10 bg-white/[0.05] text-slate-300 hover:border-white/25 hover:bg-white/10",
+              )}
+            >
+              <SparkIcon size={10} />
+              Auto
+            </button>
+          )}
+        </div>
         )}
-        <span className="h-9 w-12 shrink-0 rounded-lg border border-white/15 shadow-inner" style={{ background: swatch }} aria-hidden="true" />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
-          <span className="block truncate font-mono text-[11px] text-slate-300">
-            {gradOn ? "gradient" : auto ? `auto · the line's ${value.toUpperCase()}` : value.toUpperCase()}
+
+        {/* hero row — the tile wears the line; the hex reads big under the name */}
+        <div className="flex items-center gap-3">
+          <span
+            className="relative block h-[54px] w-[54px] shrink-0 rounded-2xl shadow-[0_4px_14px_rgba(0,0,0,0.4)] ring-1 ring-white/15"
+            style={{ background: tilePaint, padding: ring, filter: glowFilter }}
+            aria-hidden="true"
+          >
+            {/* the checker inside follows the ring's own curve */}
+            <span
+              className="block h-full w-full"
+              style={{ background: LINE_PREVIEW_CHECKER, borderRadius: Math.max(4, 16 - ring) }}
+            />
           </span>
-        </span>
-        {glow && (
-          <button
-            type="button"
-            aria-label="Glow colour: auto (the line's own colour)"
-            aria-pressed={auto}
-            title="Auto — the glow wears the line's own colour"
-            onClick={() => setBanner({ border: { ...border, glow: { ...glowOf(border), color: "", gradient: gradOff(border.glow?.gradient) } } })}
-            className={cn(
-              "shrink-0 rounded-lg border px-2 py-1 text-[11px] transition-colors",
-              auto ? "border-amber-300 bg-amber-400 font-semibold text-slate-950" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10",
-            )}
-          >
-            Auto
-          </button>
-        )}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+              {glow ? <SparkIcon size={10} /> : <PlateIcon size={11} />}
+              {glow ? "The line's light" : "The plate's outline"}
+              <span
+                className="inline-block h-2 w-2 rounded-[3px] ring-1 ring-white/25"
+                style={{ background: gradOn ? gradientCss(gradient!, value) : value }}
+                aria-hidden="true"
+              />
+            </span>
+            <span className="mt-0.5 block truncate font-mono text-[17px] font-semibold leading-tight text-slate-100">
+              {gradOn ? "Gradient" : auto ? "Auto" : value.toUpperCase()}
+            </span>
+            <span className="block truncate font-mono text-[10.5px] text-slate-400">
+              {auto ? `follows the line's ${value.toUpperCase()}` : meta}
+            </span>
+          </span>
+        </div>
+
+        {/* the line itself, running edge to edge in its real style */}
+        <div
+          className="flex h-8 items-center overflow-hidden rounded-lg bg-black/25 px-4 ring-1 ring-white/[0.06]"
+          title={`The line as it paints now — ${meta}`}
+        >
+          <div
+            className="w-full"
+            style={{
+              borderTop: lineHidden
+                ? "2px dashed rgba(255,255,255,0.18)"
+                : `${stripWidth}px ${style} ${withAlpha(stripColor, opacity)}`,
+              filter: glowFilter,
+            }}
+            aria-hidden="true"
+          />
+        </div>
+        {lineHidden && <p className="-mt-1.5 text-center text-[9.5px] text-slate-500">the outline is off — the line paints once it is back</p>}
       </div>
+
       <FontColorPanel
         solid={/^#[0-9a-f]{3,8}$/i.test(value) ? value : "#ffffff"}
         gradient={gradient}
@@ -2310,17 +2431,30 @@ export function BannerBorderPanel({
       return [...stack, { channel, anchor }];
     });
   };
-  const colorCard = colorStack.map((layer, i) => (
-    <AnchoredPopover
-      key={`${layer.channel}-${i}`}
-      anchor={layer.anchor}
-      onClose={() => setColorStack((stack) => stack.slice(0, i))}
-      label={layer.channel === "glow" ? "Glow colour — colour card" : "Border colour — colour card"}
-      title={layer.channel === "glow" ? "Glow colour" : "Border colour"}
-    >
-      <BannerLineColorPanel channel={layer.channel} banner={banner} setBanner={setBanner} documentColors={documentColors} />
-    </AnchoredPopover>
-  ));
+  const colorCard = colorStack.map((layer, i) => {
+    const glowCh = layer.channel === "glow";
+    const glowNow = glowOf(border);
+    /* the card's title-bar chip wears the very paint the card is about */
+    const accent = glowCh
+      ? glowNow.gradient?.enabled
+        ? gradientCss(glowNow.gradient, bannerBorderGlowColor(banner))
+        : bannerBorderGlowColor(banner)
+      : border.gradient?.enabled
+        ? gradientCss(border.gradient, border.color)
+        : border.color;
+    return (
+      <AnchoredPopover
+        key={`${layer.channel}-${i}`}
+        anchor={layer.anchor}
+        onClose={() => setColorStack((stack) => stack.slice(0, i))}
+        label={glowCh ? "Glow colour — colour card" : "Border colour — colour card"}
+        title={glowCh ? "Glow colour" : "Border colour"}
+        accent={accent}
+      >
+        <BannerLineColorPanel channel={layer.channel} banner={banner} setBanner={setBanner} documentColors={documentColors} />
+      </AnchoredPopover>
+    );
+  });
 
   const radiusHint = !cornered
     ? banner.shape === "none"
@@ -2349,7 +2483,7 @@ export function BannerBorderPanel({
         hint={outlinable ? undefined : "No plate to outline — pick a shape first"}
       />
 
-      <div className={cn("space-y-3", !outlinable && "opacity-50")}>
+      <div className={cn("space-y-3.5 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3", !outlinable && "opacity-50")}>
         {/* ------------------------------ colour ------------------------------ */}
         <div className="space-y-1.5" data-banner-border-color="">
           <ColorRow
@@ -2427,7 +2561,7 @@ export function BannerBorderPanel({
       </div>
 
       {/* ------------------------------ radius -------------------------------- */}
-      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-radius="" data-corners={each ? "each" : "all"}>
+      <div className="space-y-2 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3" data-banner-radius="" data-corners={each ? "each" : "all"}>
         <Cap
           hint={!cornered ? "no corners" : each ? `${corners.tl} · ${corners.tr} · ${corners.br} · ${corners.bl} px` : follows ? `${banner.radius}px` : "the shape's own"}
           action={
@@ -2522,7 +2656,7 @@ export function BannerBorderPanel({
       </div>
 
       {/* ------------------------------- glow --------------------------------- */}
-      <div className={cn("space-y-2 border-t border-white/10 pt-3", !outlinable && "opacity-50")} data-banner-border-glow="">
+      <div className={cn("space-y-2 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3", !outlinable && "opacity-50")} data-banner-border-glow="">
         <Cap hint={glow.enabled ? `${glow.size}px · ${glow.intensity}%` : "off"}>Border glow</Cap>
         <LineSwitch
           label="Border glow"
