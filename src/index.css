@@ -377,8 +377,8 @@ input[type="text"] {
 }
 
 /* Title background ▸ Border's two colour cards (the line's and its glow's):
-   a head strip with the way back to the Border card, over the very same
-   colour card — solid colours only, since a line is one flat colour */
+   Solid and Gradient, the same card the text colour opens, in a pop-up of
+   their own stacked on the Border card */
 .ctx-pop-color .banner-line-color-panel {
   flex: 1 1 auto;
   min-height: 0;
@@ -388,6 +388,55 @@ input[type="text"] {
   flex: 1 1 auto;
   min-height: 0;
 }
+/* A colour card stacked on a toolbar pop-up (Title background ▸ colour).
+   Its own title bar and ✕ sit above the colour panel; the panel underneath
+   keeps its title visible because this card is shifted down and left. */
+.color-pop {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #161821;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.62);
+}
+.color-pop-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 7px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.color-pop-title {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fcd34d;
+}
+.color-pop-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.color-pop .font-color-panel,
+.color-pop .paint-color-panel,
+.color-pop .banner-line-color-panel {
+  width: 100%;
+}
+.color-pop .font-color-panel {
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 /* …and opened in place in the inspector: one rounded card, the head strip on
    top — the colour card inside drops its own frame so it is not drawn twice */
 .banner-line-color-inline .font-color-panel {
