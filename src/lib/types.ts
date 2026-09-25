@@ -588,6 +588,8 @@ export interface BannerBorderGlow {
   intensity: number;
   /** "" = auto: the line's own colour */
   color: string;
+  /** a gradient picked for the glow — wins over `color` while enabled (a glow is one light, so it blooms in the gradient's blended tone) */
+  gradient?: Gradient;
 }
 
 /**
@@ -602,6 +604,8 @@ export interface BannerBorder {
   opacity?: number;
   /** left out = no glow (every deck saved before the glow existed) */
   glow?: BannerBorderGlow;
+  /** a gradient painted along the line — wins over `color` while enabled */
+  gradient?: Gradient;
 }
 
 /** what the Border card's glow starts on the first time it is switched on */
@@ -644,6 +648,8 @@ export interface BannerGlassFill {
   opacity: number;
   /** how hard the frost gathers (the white sheen), 0–100 */
   frost: number;
+  /** a gradient picked for the tint — wins over `color` while enabled (the pane blends it to one tone) */
+  gradient?: Gradient;
 }
 
 /** the brushed-metal paint — lit and shaded bands brushed along one angle */
@@ -654,6 +660,8 @@ export interface BannerMetallicFill {
   angle: number;
   /** the contrast between the bright and the dark bands, 0–100 */
   polish: number;
+  /** a gradient picked for the tint — wins over `color` while enabled (the metal blends it to one tone) */
+  gradient?: Gradient;
 }
 
 /** the pattern paint — one motif inked over one ground */
@@ -665,6 +673,10 @@ export interface BannerPatternFill {
   back: string;
   /** the motif's tile size, 0–100 */
   scale: number;
+  /** a gradient picked for the ink — wins over `color` while enabled (the motif inks in its blended tone) */
+  gradient?: Gradient;
+  /** a gradient painted as the ground — wins over `back` while enabled (the ground really paints the ramp) */
+  backGradient?: Gradient;
 }
 
 export const DEFAULT_BANNER_GLASS: BannerGlassFill = { color: "", opacity: 60, frost: 55 };
@@ -737,6 +749,8 @@ export interface BannerShadowFx {
   /** 0–100 */
   opacity: number;
   color: string;
+  /** a gradient picked for this colour — wins over `color` while enabled (the effect paints its blended tone) */
+  gradient?: Gradient;
 }
 
 /* --------------------------------- glow ---------------------------------- */
@@ -751,6 +765,8 @@ export interface BannerGlowFx {
   /** px — the bloom's reach, on top of the intensity's own */
   blur: number;
   color: string;
+  /** a gradient picked for this colour — wins over `color` while enabled (the effect paints its blended tone) */
+  gradient?: Gradient;
 }
 
 /* --------------------------------- blur ---------------------------------- */
@@ -767,6 +783,8 @@ export interface BannerBlurFx {
   /** degrees — the way a motion, zoom or feather blur runs */
   angle: number;
   color: string;
+  /** a gradient picked for this colour — wins over `color` while enabled (the effect paints its blended tone) */
+  gradient?: Gradient;
 }
 
 /* --------------------------------- glass --------------------------------- */
@@ -781,6 +799,8 @@ export interface BannerGlassFx {
   /** px — the backdrop blur the pane frosts the board with */
   blur: number;
   color: string;
+  /** a gradient picked for this colour — wins over `color` while enabled (the effect paints its blended tone) */
+  gradient?: Gradient;
 }
 
 /* --------------------------------- bevel --------------------------------- */
@@ -797,6 +817,8 @@ export interface BannerBevelFx {
   /** degrees — where the light comes from (0 = straight above, clockwise) */
   angle: number;
   color: string;
+  /** a gradient picked for this colour — wins over `color` while enabled (the effect paints its blended tone) */
+  gradient?: Gradient;
 }
 
 /* ---------------------------------- 3D ----------------------------------- */
@@ -822,6 +844,8 @@ export interface Banner3DFx {
   /** degrees — the way the depth runs (0 = straight up, 90 = down, 180 = up) */
   angle: number;
   color: string;
+  /** a gradient picked for this colour — wins over `color` while enabled (the effect paints its blended tone) */
+  gradient?: Gradient;
 }
 
 /* ------------------------------- highlight ------------------------------- */
@@ -848,6 +872,8 @@ export interface BannerHighlightFx {
   /** degrees — the way the light runs */
   angle: number;
   color: string;
+  /** a gradient picked for this colour — wins over `color` while enabled (the effect paints its blended tone) */
+  gradient?: Gradient;
 }
 
 /* ---------------------------- the shape's own ---------------------------- */
@@ -923,6 +949,8 @@ export interface BannerDecorFx {
   /** 0–100 */
   intensity: number;
   color: string;
+  /** a gradient picked for this colour — wins over `color` while enabled (the effect paints its blended tone) */
+  gradient?: Gradient;
 }
 
 /**
@@ -940,6 +968,8 @@ export interface BannerModernFx {
   color: string;
   /** a little extra blur the finish may lay over the body, px */
   blur: number;
+  /** a gradient picked for this colour — wins over `color` while enabled (the effect paints its blended tone) */
+  gradient?: Gradient;
 }
 
 /**

@@ -385,8 +385,15 @@ export function bannerBorderGlow(b: BannerSettings): BannerBorderGlow | undefine
   return { enabled: true, size, intensity, color: typeof g.color === "string" ? g.color.trim() : "" };
 }
 
-/** the glow's colour: its own, or the line's while it is left on Auto */
-export const bannerBorderGlowColor = (b: BannerSettings): string => b.border.glow?.color?.trim() || b.border.color;
+/** the line's own paint as ONE colour — its gradient blended while one is on */
+export const bannerBorderPaintColor = (b: BannerSettings): string => channelPaint(b.border.color, b.border.gradient) || b.border.color;
+
+/** the glow's colour: its own (a picked gradient blends), or the line's while it is left on Auto */
+export const bannerBorderGlowColor = (b: BannerSettings): string => {
+  const g = b.border.glow;
+  const own = g?.gradient?.enabled ? gradientPaintColor(g.gradient, g.color?.trim() ?? "") : g?.color?.trim() ?? "";
+  return own || bannerBorderPaintColor(b);
+};
 
 /**
  * The glow as a filter on the outline's own layer: a tight bloom hugging the
@@ -398,7 +405,7 @@ export const bannerBorderGlowColor = (b: BannerSettings): string => b.border.glo
 export function bannerBorderGlowFilter(b: BannerSettings): string | undefined {
   const g = bannerBorderGlow(b);
   if (!g) return undefined;
-  const color = g.color || b.border.color;
+  const color = bannerBorderGlowColor(b);
   const i = g.intensity / 100;
   const near = Math.max(1, Math.round(g.size * 3.5) / 10);
   const a = (v: number) => Math.round(Math.min(1, v) * 100) / 100;
@@ -945,7 +952,7 @@ export function bannerEffectsOf(b: BannerSettings): BannerEffects {
         intensity: c.intensity,
         blur: BANNER_GLOW_DEFAULTS[glowKind].blur,
         /* neon with an outline blooms in the outline's colour, the way it always did */
-        color: color || (c.kind === "neon" && b.border.enabled ? b.border.color : ""),
+        color: color || (c.kind === "neon" && b.border.enabled ? bannerBorderPaintColor(b) : ""),
       };
     else if (highlightKind)
       out.highlight ??= {
@@ -1056,9 +1063,18 @@ export const bannerFxColor = (b: BannerSettings): string => {
   /* a special paint hands the effects its own tint when it carries one, so an
      auto effect follows the frosted pane / the metal / the pattern's ink */
   const mode = bannerFillMode(b);
-  if (mode === "glass" && b.glass?.color) return b.glass.color;
-  if (mode === "metallic" && b.metallic?.color) return b.metallic.color;
-  if (mode === "pattern" && b.pattern?.color) return b.pattern.color;
+  if (mode === "glass") {
+    const c = channelPaint(b.glass?.color ?? "", b.glass?.gradient);
+    if (c) return c;
+  }
+  if (mode === "metallic") {
+    const c = channelPaint(b.metallic?.color ?? "", b.metallic?.gradient);
+    if (c) return c;
+  }
+  if (mode === "pattern") {
+    const c = channelPaint(b.pattern?.color ?? "", b.pattern?.gradient);
+    if (c) return c;
+  }
   return base;
 };
 
@@ -1444,8 +1460,30 @@ export function fxCornerRadius(t: BannerShapeFx): string | undefined {
   return t.radius > 0 ? `${t.radius}px` : undefined;
 }
 
+/**
+ * An effect whose colour carries a picked gradient paints the gradient's
+ * blended tone — a shadow, a glow or a tint is one flat colour in CSS, so the
+ * gradient is folded to one honest mix of its stops before the builders run.
+ */
+function resolveFxPaint(fx: BannerEffects): BannerEffects {
+  const one = <T extends { color: string; gradient?: Gradient }>(g: T | undefined): T | undefined =>
+    g?.gradient?.enabled ? { ...g, color: gradientPaintColor(g.gradient, g.color) } : g;
+  return {
+    ...fx,
+    shadow: one(fx.shadow),
+    glow: one(fx.glow),
+    blur: one(fx.blur),
+    glass: one(fx.glass),
+    bevel: one(fx.bevel),
+    threeD: one(fx.threeD),
+    highlight: one(fx.highlight),
+    decor: one(fx.decor),
+    modern: one(fx.modern),
+  };
+}
+
 export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffectPaint {
-  const fx = bannerEffectsOf(b);
+  const fx = resolveFxPaint(bannerEffectsOf(b));
   const shapeOpacity = clampOpacity(b.opacity);
   /**
    * What an effect paints when its own colour is left on Auto: the shape's
@@ -2529,6 +2567,59 @@ export function gradientCss(g: Gradient, fallback: string): string {
 /** The dominant colour of a gradient (first stop) — used for glows/halos. */
 export const baseColor = (g: Gradient, fallback: string) => (g.enabled && g.stops[0] ? g.stops[0].color : fallback);
 
+/** `#rgb` / `#rrggbb` / `#rrggbbaa` / `rgb()` / `rgba()` → [r, g, b, a]; null when unreadable */
+function parsePaint(c: string): [number, number, number, number] | null {
+  const v = String(c ?? "").trim();
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(v)?.[1];
+  if (hex) {
+    const h = hex.length === 3 ? hex.split("").map((x) => x + x).join("") : hex;
+    return [
+      parseInt(h.slice(0, 2), 16),
+      parseInt(h.slice(2, 4), 16),
+      parseInt(h.slice(4, 6), 16),
+      h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1,
+    ];
+  }
+  const fn = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(v);
+  if (fn) return [Number(fn[1]), Number(fn[2]), Number(fn[3]), fn[4] === undefined ? 1 : Number(fn[4])];
+  return null;
+}
+
+/**
+ * The ONE flat colour a gradient stands for, where a channel can only paint
+ * one — a shadow, a glow, a pane's tint. The stops are blended together
+ * (each weighted by its own alpha), so a red → blue ramp throws a violet
+ * shadow instead of ignoring half the pick.
+ */
+export function gradientPaintColor(g: Gradient | undefined, fallback: string): string {
+  if (!g?.enabled || !g.stops.length) return fallback;
+  let r = 0;
+  let gr = 0;
+  let bl = 0;
+  let w = 0;
+  for (const s of g.stops) {
+    const p = parsePaint(s.color);
+    if (!p) continue;
+    const a = Math.max(0, Math.min(1, p[3]));
+    if (a <= 0.02) continue; // a clear stop paints nothing — it must not pull the blend toward black
+    r += p[0] * a;
+    gr += p[1] * a;
+    bl += p[2] * a;
+    w += a;
+  }
+  if (w <= 0) return fallback;
+  const hex = (n: number) => Math.max(0, Math.min(255, Math.round(n / w))).toString(16).padStart(2, "0");
+  return `#${hex(r)}${hex(gr)}${hex(bl)}`;
+}
+
+/**
+ * What a single-colour channel paints: the gradient's blended tone while one
+ * is enabled, else the channel's own `color` (which may be "" = auto).
+ */
+export function channelPaint(color: string, gradient?: Gradient): string {
+  return gradient?.enabled ? gradientPaintColor(gradient, color) : color;
+}
+
 /* ------------------------------------------------------------------ */
 /*  The plate's ten fills                                              */
 /* ------------------------------------------------------------------ */
@@ -2553,7 +2644,7 @@ export function bannerFillMode(b: BannerSettings): BannerFillMode {
  */
 export function glassFillCss(base: string, glass?: BannerGlassFill): string {
   const g = { ...DEFAULT_BANNER_GLASS, ...glass };
-  const c = g.color || base;
+  const c = channelPaint(g.color, g.gradient) || base;
   const o = Math.max(0, Math.min(100, g.opacity)) / 100;
   const f = Math.max(0, Math.min(100, g.frost)) / 100;
   const pane = (a: number) => withAlpha(c, Math.max(0, Math.min(1, a)));
@@ -2571,7 +2662,7 @@ export function glassFillCss(base: string, glass?: BannerGlassFill): string {
  */
 export function metallicFillCss(base: string, metal?: BannerMetallicFill): string {
   const m = { ...DEFAULT_BANNER_METALLIC, ...metal };
-  const c = m.color || base;
+  const c = channelPaint(m.color, m.gradient) || base;
   const p = Math.max(0, Math.min(100, m.polish)) / 100;
   const hi = shade(c, 0.5 + 0.35 * p);
   const light = shade(c, 0.18 + 0.2 * p);
@@ -2587,12 +2678,15 @@ export function metallicFillCss(base: string, metal?: BannerMetallicFill): strin
  */
 export function patternFillCss(base: string, pattern?: BannerPatternFill): string {
   const p = { ...DEFAULT_BANNER_PATTERN, ...pattern };
-  const ink = p.color || base;
-  const ground = p.back || base;
+  const ink = channelPaint(p.color, p.gradient) || base;
+  const ground = channelPaint(p.back, p.backGradient) || base;
   const t = Math.max(0, Math.min(100, p.scale)) / 100;
   const tile = Math.round(10 + 26 * t); // the motif tile, 10–36 px
   const clear = withAlpha(ink, 0);
-  const baseLayer = `linear-gradient(${ground}, ${ground})`;
+  /* a gradient ground really paints its ramp — the ground is a full layer of its own */
+  const baseLayer = p.backGradient?.enabled
+    ? gradientCss(p.backGradient, ground)
+    : `linear-gradient(${ground}, ${ground})`;
   switch (p.kind) {
     case "dots": {
       const r = Math.max(1.5, tile * 0.16);
@@ -2891,11 +2985,24 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
    * the line gives off, never a second copy of the plate.
    */
   const lineMask = joinMasks(plateMask(b), fx.maskFade);
+  /**
+   * A gradient picked for the line paints the line itself: the layer wears a
+   * transparent border and a gradient background, and two mask layers
+   * (padding-box XOR border-box) keep only the ring between them — corners,
+   * radius and the cut silhouette's clip all follow as before. A silhouette
+   * that already needs its own mask (a wave, a blob) keeps it and paints the
+   * gradient's blended tone instead, so the two masks never fight.
+   */
+  const lineGradient = b.border.gradient?.enabled && b.border.width > 0 ? b.border.gradient : undefined;
+  const lineRing = !!lineGradient && !lineMask.value;
+  const lineColor = lineGradient && !lineRing ? gradientPaintColor(lineGradient, b.border.color) : b.border.color;
   const borderLine: React.CSSProperties | undefined = bannerHasLine(b)
     ? {
         ...common,
         ...(b.shape === "underline" ? ruleRect(b) : plateRect(b)),
-        border: `${b.border.width}px ${bannerBorderStyle(b)} ${withAlpha(b.border.color, clampOpacity(b.border.opacity))}`,
+        border: lineRing
+          ? `${b.border.width}px solid transparent`
+          : `${b.border.width}px ${bannerBorderStyle(b)} ${withAlpha(lineColor, clampOpacity(b.border.opacity))}`,
         borderRadius: fx.radius ?? radius,
         boxSizing: "border-box",
         filter: bannerBorderGlowFilter(b),
@@ -2905,9 +3012,20 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
         // or the blob instead of running off its curve; a common effect's
         // fade runs the line out with the plate
         clipPath: plateClipPath(b),
-        maskImage: lineMask.value,
-        WebkitMaskImage: lineMask.value,
-        ...lineMask.composite,
+        ...(lineRing
+          ? {
+              background: `${gradientCss(lineGradient!, b.border.color)} border-box`,
+              opacity: clampOpacity(b.border.opacity),
+              WebkitMask: "linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0)",
+              WebkitMaskComposite: "xor",
+              mask: "linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0)",
+              maskComposite: "exclude",
+            }
+          : {
+              maskImage: lineMask.value,
+              WebkitMaskImage: lineMask.value,
+              ...lineMask.composite,
+            }),
       }
     : undefined;
 
