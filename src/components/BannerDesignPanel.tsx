@@ -2127,6 +2127,7 @@ function ColorRow({
       type="button"
       aria-label={label}
       aria-expanded={open}
+      aria-haspopup="dialog"
       title={`${label} — open the colour card`}
       onClick={onClick}
       className={cn(
@@ -2148,11 +2149,11 @@ function ColorRow({
 
 /**
  * The colour card behind the Border card's two colour buttons — the SAME card
- * every other colour in the editor opens (the document colours, the Canva
- * swatches, the wheel and the hex field). A line is one flat colour, so the
- * card is its solid half only. The glow's card has one more state, **Auto**:
- * the line's own colour, followed as the line is repainted. On the toolbar the
- * card takes the Border card's place in the pop-up, with a way back to it.
+ * the text colour opens (Solid colour and Gradient, the document colours, the
+ * Canva swatches, the wheel and the hex field). The glow's card has one more
+ * state, **Auto**: the line's own colour, followed as the line is repainted.
+ * The card is its own pop-up, stacked on the Border pop-up — closing it leaves
+ * the Border pop-up open.
  */
 export function BannerLineColorPanel({
   channel,
@@ -2249,7 +2250,7 @@ export function BannerLineColorPanel({
  * card, in the order a line is drawn:
  *
  *   Outline the plate     on / off                                `border.enabled`
- *   Border colour         opens the colour card (solid colours)   `border.color`
+ *   Border colour         opens the colour card (solid + gradient) `border.color`
  *   Border style          solid · dashed · dotted · double · none `border.style`
  *   Border weight         the line's thickness, no ceiling        `border.width`
  *   Border transparency   the line's own, apart from the shape's  `border.opacity`
@@ -2259,23 +2260,22 @@ export function BannerLineColorPanel({
  *   Border glow           on / off · size · strength · colour     `border.glow`
  *                         (Auto = the line's own colour)
  *
- * On the toolbar a colour button hands the pop-up over to the colour card
- * (`onPickColor`); in the inspector, where there is no pop-up, the same card
- * opens right under the button.
+ * A colour button opens the colour card as its own pop-up, stacked on this one
+ * (Solid colour · Gradient, the same card the text colour opens). Closing that
+ * card — its ✕ — leaves this Border card open. A second colour (the glow's,
+ * while the line's card is still up) stacks on top of the first; closing the
+ * top one leaves the one underneath.
  */
 export function BannerBorderPanel({
   theme,
   banner,
   setBanner,
-  onPickColor,
   documentColors,
 }: BannerProps & {
-  /** the toolbar's colour card — "line" is Border colour, "glow" the glow's */
-  onPickColor?: (channel: BannerLineColorChannel) => void;
-  /** the deck's colours, for the colour card opened in place (the inspector) */
+  /** the deck's colours, offered inside the colour card */
   documentColors?: string[];
 }) {
-  const [colorPop, setColorPop] = useState<{ channel: BannerLineColorChannel; anchor: HTMLElement } | null>(null);
+  const [colorStack, setColorStack] = useState<{ channel: BannerLineColorChannel; anchor: HTMLElement }[]>([]);
   const border = banner.border;
   const setBorder = (next: BannerBorder) => setBanner({ border: next });
   const outlinable = canOutline(banner.shape);
@@ -2298,25 +2298,29 @@ export function BannerBorderPanel({
   const fxCorners = fxCornerRadius(fx.shape);
 
   /**
-   * A colour button opens the colour card as a POP-UP anchored to the button
-   * (Solid colour · Gradient in one card) — on the toolbar it hands the card
-   * to the toolbar's own pop-up instead.
+   * A colour button opens the colour card as its own pop-up, stacked on this
+   * one (Solid colour · Gradient). Clicking the button that opened the top
+   * card folds that card away; a different colour stacks another card on top.
    */
   const openColor = (channel: BannerLineColorChannel, e: React.MouseEvent<HTMLButtonElement>) => {
-    if (onPickColor) return onPickColor(channel);
     const anchor = e.currentTarget;
-    setColorPop((c) => (c?.channel === channel ? null : { channel, anchor }));
+    setColorStack((stack) => {
+      const top = stack[stack.length - 1];
+      if (top?.channel === channel && top.anchor === anchor) return stack.slice(0, -1);
+      return [...stack, { channel, anchor }];
+    });
   };
-  const colorCard =
-    !onPickColor && colorPop ? (
-      <AnchoredPopover
-        anchor={colorPop.anchor}
-        onClose={() => setColorPop(null)}
-        label={colorPop.channel === "glow" ? "Glow colour — colour card" : "Border colour — colour card"}
-      >
-        <BannerLineColorPanel channel={colorPop.channel} banner={banner} setBanner={setBanner} documentColors={documentColors} />
-      </AnchoredPopover>
-    ) : null;
+  const colorCard = colorStack.map((layer, i) => (
+    <AnchoredPopover
+      key={`${layer.channel}-${i}`}
+      anchor={layer.anchor}
+      onClose={() => setColorStack((stack) => stack.slice(0, i))}
+      label={layer.channel === "glow" ? "Glow colour — colour card" : "Border colour — colour card"}
+      title={layer.channel === "glow" ? "Glow colour" : "Border colour"}
+    >
+      <BannerLineColorPanel channel={layer.channel} banner={banner} setBanner={setBanner} documentColors={documentColors} />
+    </AnchoredPopover>
+  ));
 
   const radiusHint = !cornered
     ? banner.shape === "none"
@@ -2352,7 +2356,7 @@ export function BannerBorderPanel({
             label="Border colour"
             color={border.gradient?.enabled ? gradientCss(border.gradient, border.color) : border.color}
             caption={border.gradient?.enabled ? "gradient" : border.color.toUpperCase()}
-            open={colorPop?.channel === "line"}
+            open={colorStack.some((s) => s.channel === "line")}
             onClick={(e) => openColor("line", e)}
           />
         </div>
@@ -2558,7 +2562,7 @@ export function BannerBorderPanel({
                     ? glowColor.toUpperCase()
                     : `auto · the line's ${border.color.toUpperCase()}`
               }
-              open={colorPop?.channel === "glow"}
+              open={colorStack.some((s) => s.channel === "glow")}
               onClick={(e) => openColor("glow", e)}
             />
           </div>

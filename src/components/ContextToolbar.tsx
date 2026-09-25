@@ -48,7 +48,6 @@ import {
   BannerBorderPanel,
   BannerEffectsPanel,
   BannerFillPanel,
-  BannerLineColorPanel,
   BannerPositionPanel,
   BannerPresetPanel,
   BannerShapePanel,
@@ -473,24 +472,16 @@ interface PaintCtx {
   onNone?: () => void;
 }
 
-/** the Title background ▸ Border card's two colour cards (the line's, the glow's) */
-const BANNER_BORDER_COLOUR = "Banner border colour";
-const BANNER_GLOW_COLOUR = "Banner glow colour";
-/** the Border button stays lit while either of its colour cards has the pop-up */
-const BANNER_BORDER_FAMILY = ["Banner border", BANNER_BORDER_COLOUR, BANNER_GLOW_COLOUR];
-
 /**
  * The pop-ups that need the wide card (a colour grid, a design gallery, the
- * effects' tile groups) — and the Border card, which hands the pop-up over to
- * its colour cards: the two share one width, so the hand-over never jumps.
+ * effects' tile groups, the Border card). A colour clicked inside one of them
+ * does not take this card's place — it opens its own colour pop-up on top.
  */
 const WIDE_PANELS = new Set([
   "TextColor",
   "Paint",
   "Banner fill",
   "Banner border",
-  BANNER_BORDER_COLOUR,
-  BANNER_GLOW_COLOUR,
   "Bullet design",
   "Design",
   "Numbering",
@@ -498,7 +489,7 @@ const WIDE_PANELS = new Set([
 ]);
 const widePanel = (panel: string | null) => !!panel && WIDE_PANELS.has(panel);
 /** the pop-ups that ARE a colour card, run edge to edge under the pinned head */
-const COLOR_PANELS = new Set(["TextColor", "Paint", "Banner fill", BANNER_BORDER_COLOUR, BANNER_GLOW_COLOUR]);
+const COLOR_PANELS = new Set(["TextColor", "Paint", "Banner fill"]);
 
 /** the droplet a paint button wears over its current colour */
 const PAINT_GLYPH = (
@@ -766,7 +757,7 @@ export default function ContextToolbar(p: Props) {
    * toolbar on one line without making repeated part names consume its width.
    */
   const toggle = (name: string, icon?: ReactNode, display?: ReactNode, family?: readonly string[]) => {
-    /** a card that hands the pop-up to cards of its own (a colour card) keeps its button lit */
+    /** a card that hands the pop-up to cards of its own keeps its button lit */
     const open = panel === name || (!!panel && !!family?.includes(panel));
     return (
       <button
@@ -776,8 +767,8 @@ export default function ContextToolbar(p: Props) {
         aria-label={name}
         aria-pressed={open}
         aria-expanded={open}
-        /* a hand-over card of this one's own (a colour card) is dismissed back
-           onto the card it came from — only the card itself closes the pop-up */
+        /* clicking the button that opened this card closes it; a colour card
+           stacked on top has its own ✕ and is not this pop-up */
         onClick={() => setPanel(panel === name ? null : name)}
       >
         {display ?? icon ?? name}
@@ -1326,10 +1317,11 @@ export default function ContextToolbar(p: Props) {
    *                    style, weight, transparency, the corner radius (all
    *                    four at once, or each corner on its own) and the
    *                    line's glow. Its two colour buttons (the line's, the
-   *                    glow's) hand the pop-up over to the shared colour card,
-   *                    which has a way back to the Border card — and closing
-   *                    it (the ✕, or the still-lit Border button) keeps the
-   *                    Border pop-up open on its own card.
+   *                    glow's) each open the shared colour card — Solid and
+   *                    Gradient, the same card the text colour opens — as its
+   *                    own pop-up stacked on this one. Closing that card (its
+   *                    ✕) leaves the Border pop-up open; a second colour
+   *                    stacks on top of the first the same way.
    *   Transparency     the SHAPE's own, on a line bar
    *   Banner size      free width and height, on line bars
    *   Banner position  free X and Y, on line bars
@@ -1344,21 +1336,7 @@ export default function ContextToolbar(p: Props) {
       "Banner effects": <BannerEffectsPanel theme={theme} banner={banner} setBanner={p} />,
       "Banner fill": <BannerFillPanel banner={banner} setBanner={p} documentColors={docColors} />,
       "Banner border": (
-        <BannerBorderPanel
-          theme={theme}
-          banner={banner}
-          setBanner={p}
-          onPickColor={(channel) => setPanel(channel === "glow" ? BANNER_GLOW_COLOUR : BANNER_BORDER_COLOUR)}
-        />
-      ),
-      // the Border card's two colour buttons open the colour card every other
-      // colour on the bar opens, in the same pop-up — with a way back, and a
-      // close that leaves the Border pop-up itself standing
-      [BANNER_BORDER_COLOUR]: (
-        <BannerLineColorPanel channel="line" banner={banner} setBanner={p} documentColors={docColors} onBack={() => setPanel("Banner border")} />
-      ),
-      [BANNER_GLOW_COLOUR]: (
-        <BannerLineColorPanel channel="glow" banner={banner} setBanner={p} documentColors={docColors} onBack={() => setPanel("Banner border")} />
+        <BannerBorderPanel theme={theme} banner={banner} setBanner={p} documentColors={docColors} />
       ),
       "Banner transparency": <BannerTransparencyPanel banner={banner} setBanner={p} />,
       "Banner size": <BannerSizePanel theme={theme} banner={banner} setBanner={p} />,
@@ -1466,13 +1444,7 @@ export default function ContextToolbar(p: Props) {
   const toolbarLabel = `${ak ? "answer" : themePill ? "theme" : layoutPill ? "layout" : layering ? "layers" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
 
   const vhNow = () => (typeof window === "undefined" ? 800 : window.innerHeight);
-  /**
-   * The Border card's two colour cards take the Border pop-up's place in the
-   * frame — closing one of them (the ✕) must NOT close the pop-up they were
-   * opened from: it hands the frame back to the Border card, which stays open.
-   */
-  const lineColorOpen = panel === BANNER_BORDER_COLOUR || panel === BANNER_GLOW_COLOUR;
-  const closePanel = () => setPanel(lineColorOpen ? "Banner border" : null);
+  const closePanel = () => setPanel(null);
   const popNode = content && (
     <div
       ref={popRef}
@@ -1536,7 +1508,7 @@ export default function ContextToolbar(p: Props) {
               ⌖
             </button>
           )}
-          {button('✕', closePanel, undefined, lineColorOpen ? 'Close the colour card — back to the Border card' : 'Close toolbar panel')}
+          {button('✕', closePanel, undefined, 'Close toolbar panel')}
         </span>
       </div>
       <div className="ctx-pop-body">{content}</div>
@@ -1696,8 +1668,6 @@ export default function ContextToolbar(p: Props) {
                 <span className="ctx-word">Border</span>
                 {lineWell}
               </span>,
-              undefined,
-              BANNER_BORDER_FAMILY,
             )}
             {toggle("Banner transparency", <BannerTransparencyIcon size={16} />)}
             {toggle("Banner size", <BannerSizeIcon size={16} />)}

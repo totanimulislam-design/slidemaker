@@ -7,7 +7,8 @@
  *
  * These tests pin that order, and then walk every channel to the slide:
  * the fill repaints the plate; the ONE Border card paints the outline on a
- * layer of its own — its colour (through the shared colour card, and back),
+ * layer of its own — its colour (through the shared colour card, stacked on
+ * the Border pop-up, closed on its own),
  * style, weight and transparency, the corner radius for all four corners or
  * each corner on its own, and the line's glow (size · strength · colour, auto
  * to the line's); the shape's transparency is a line bar of its own; the size
@@ -736,11 +737,19 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   const borderToggle = () => doc.querySelector<HTMLElement>('.context-toolbar [role="toolbar"] [aria-label="Banner border"]');
   const switchOf = (label: string) => pop()?.querySelector<HTMLElement>(`button[role="switch"][aria-label="${label}"]`) ?? null;
   const popInput = (label: string) => pop()?.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`) ?? null;
+  /** every colour card currently stacked, highest z-index last */
+  const colorPops = () => Array.from(doc.querySelectorAll<HTMLElement>("[data-color-popover]"));
+  const topColorPop = () =>
+    colorPops().reduce<HTMLElement | null>((best, el) => {
+      if (!best) return el;
+      return (Number(el.style.zIndex) || 0) >= (Number(best.style.zIndex) || 0) ? el : best;
+    }, null);
   /** a swatch in the open colour card, by its hex */
   const swatch = (hex: string) =>
-    Array.from(pop()?.querySelectorAll<HTMLElement>(".font-color-panel button[title]") ?? []).find(
+    Array.from((topColorPop() ?? pop())?.querySelectorAll<HTMLElement>(".font-color-panel button[title]") ?? []).find(
       (b) => (b.getAttribute("title") ?? "").toLowerCase() === hex.toLowerCase(),
     ) ?? null;
+  const closeTopColor = () => click(topColorPop()?.querySelector<HTMLElement>('[aria-label="Close colour card"]') ?? null);
 
   openCard("Banner border");
   const outlineSwitch = Array.from(pop()?.querySelectorAll<HTMLElement>("button") ?? []).find((b) =>
@@ -832,20 +841,23 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   type(popInput("Banner border radius: bottom-left (px)"), "0");
   const leafCorners = cornersOf(plate()).join(",");
 
-  /* ---- the colour opens the colour card, in the same pop-up ---------------- */
+  /* ---- the colour opens its own card, stacked on the Border pop-up --------- */
   click(popButton("Border colour"));
-  const colourCard = pop();
+  const colourCard = topColorPop();
   const cardTabs = Array.from(colourCard?.querySelectorAll<HTMLElement>(".font-color-panel button") ?? []).map((b) => b.textContent?.trim());
   out.push({
-    name: "clicking Border colour opens the colour card in the same pop-up — Solid and Gradient in one card, the Border button stays lit",
+    name: "clicking Border colour opens a separate colour popup on top — Solid and Gradient like text colour — and the Border popup stays open underneath",
     pass:
-      colourCard?.getAttribute("data-pop-panel") === "Banner border colour" &&
+      pop()?.getAttribute("data-pop-panel") === "Banner border" &&
+      colourCard !== pop() &&
       !!colourCard?.querySelector(".font-color-panel") &&
       !!colourCard?.querySelector('input[placeholder="FFFFFF"]') &&
+      !!colourCard?.querySelector('[aria-label="Close colour card"]') &&
       cardTabs.includes("Solid") &&
       cardTabs.includes("Gradient") &&
-      borderToggle()?.getAttribute("aria-pressed") === "true",
-    detail: `${colourCard?.getAttribute("data-pop-panel")} · gradient tab ${cardTabs.includes("Gradient")} · toggle ${borderToggle()?.getAttribute("aria-pressed")}`,
+      borderToggle()?.getAttribute("aria-pressed") === "true" &&
+      !!popInput("Banner border weight (px)"),
+    detail: `tool ${pop()?.getAttribute("data-pop-panel")} · colour ${colourCard?.getAttribute("aria-label")} · tabs ${cardTabs.filter((t) => t === "Solid" || t === "Gradient").join(" · ")}`,
   });
   click(swatch("#FF0000"));
   out.push({
@@ -853,31 +865,24 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     pass: styleOf(plateLine()).includes("255, 0, 0"),
     detail: plateLine()?.style.border ?? "no line",
   });
-  click(popButton("Back to the Border card"));
   out.push({
-    name: "the colour card's way back returns to the Border card, with the new colour on its button",
+    name: "the Border popup stays open under the colour card, and its button already wears the new colour",
     pass: pop()?.getAttribute("data-pop-panel") === "Banner border" && (popButton("Border colour")?.textContent ?? "").includes("#FF0000"),
     detail: `${pop()?.getAttribute("data-pop-panel")} · ${popButton("Border colour")?.textContent ?? ""}`,
   });
 
   /* ---- closing the colour card keeps the Border pop-up open ---------------- */
-  click(popButton("Border colour"));
-  click(pop()?.querySelector<HTMLElement>('[aria-label="Close the colour card — back to the Border card"]') ?? null);
+  closeTopColor();
   out.push({
-    name: "closing the colour card with ✕ leaves the Border pop-up open — it lands back on the Border card",
+    name: "closing the colour card with ✕ leaves the Border pop-up open — only the colour card goes",
     pass:
+      !topColorPop() &&
       !!pop() &&
       pop()?.getAttribute("data-pop-panel") === "Banner border" &&
       !!popButton("Border colour") &&
-      (popButton("Border colour")?.textContent ?? "").includes("#FF0000"),
-    detail: `panel ${pop()?.getAttribute("data-pop-panel") ?? "gone"} · ${(popButton("Border colour")?.textContent ?? "").trim()}`,
-  });
-  click(popButton("Border colour"));
-  click(borderToggle());
-  out.push({
-    name: "and the still-lit Border button dismisses its colour card the same way — the Border pop-up stays, only the colour card closes",
-    pass: !!pop() && pop()?.getAttribute("data-pop-panel") === "Banner border" && !!popInput("Banner border weight (px)"),
-    detail: `panel ${pop()?.getAttribute("data-pop-panel") ?? "gone"}`,
+      (popButton("Border colour")?.textContent ?? "").includes("#FF0000") &&
+      !!popInput("Banner border weight (px)"),
+    detail: `panel ${pop()?.getAttribute("data-pop-panel") ?? "gone"} · colour cards ${colorPops().length} · ${(popButton("Border colour")?.textContent ?? "").trim()}`,
   });
 
   /* ---- the line's own transparency, in the Border card --------------------- */
@@ -916,23 +921,52 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     detail: glowFilter().slice(0, 100),
   });
   click(popButton("Glow colour"));
+  const glowCard = topColorPop();
+  const glowTabs = Array.from(glowCard?.querySelectorAll<HTMLElement>(".font-color-panel button") ?? []).map((b) => b.textContent?.trim());
   out.push({
-    name: "Glow colour opens the colour card too, on Auto — the line's own colour",
+    name: "Glow colour opens its own colour card on top of the Border popup, on Auto — Solid and Gradient, the line's own colour",
     pass:
-      pop()?.getAttribute("data-pop-panel") === "Banner glow colour" &&
-      popButton("Glow colour: auto (the line's own colour)")?.getAttribute("aria-pressed") === "true" &&
-      !!pop()?.querySelector(".font-color-panel"),
-    detail: `${pop()?.getAttribute("data-pop-panel")} · auto ${popButton("Glow colour: auto (the line's own colour)")?.getAttribute("aria-pressed")}`,
+      pop()?.getAttribute("data-pop-panel") === "Banner border" &&
+      glowCard !== pop() &&
+      glowCard?.querySelector('[aria-label="Glow colour: auto (the line\'s own colour)"]')?.getAttribute("aria-pressed") === "true" &&
+      !!glowCard?.querySelector(".font-color-panel") &&
+      glowTabs.includes("Solid") &&
+      glowTabs.includes("Gradient"),
+    detail: `tool ${pop()?.getAttribute("data-pop-panel")} · auto ${glowCard?.querySelector('[aria-label="Glow colour: auto (the line\'s own colour)"]')?.getAttribute("aria-pressed")}`,
+  });
+  /* a second colour stacks on the first; closing the top one leaves the one below */
+  click(popButton("Border colour"));
+  const stacked = colorPops();
+  const stackedTop = topColorPop();
+  out.push({
+    name: "a colour opened from the popup underneath stacks a second colour card on top — both stay, and the Border popup stays too",
+    pass:
+      stacked.length === 2 &&
+      stackedTop?.getAttribute("aria-label") === "Border colour — colour card" &&
+      (Number(stackedTop?.style.zIndex) || 0) > (Number(glowCard?.style.zIndex) || 0) &&
+      pop()?.getAttribute("data-pop-panel") === "Banner border" &&
+      !!popInput("Banner border weight (px)"),
+    detail: `${stacked.length} colour cards · top ${stackedTop?.getAttribute("aria-label")} z ${stackedTop?.style.zIndex} · tool ${pop()?.getAttribute("data-pop-panel")}`,
+  });
+  closeTopColor();
+  out.push({
+    name: "closing the top colour card with ✕ leaves the colour card underneath, and the Border popup under that",
+    pass:
+      colorPops().length === 1 &&
+      topColorPop() === glowCard &&
+      !!topColorPop()?.querySelector(".font-color-panel") &&
+      pop()?.getAttribute("data-pop-panel") === "Banner border",
+    detail: `${colorPops().length} colour card · top ${topColorPop()?.getAttribute("aria-label")} · tool ${pop()?.getAttribute("data-pop-panel")}`,
   });
   click(swatch("#00FF00"));
   const greenGlow = glowFilter();
-  click(popButton("Glow colour: auto (the line's own colour)"));
+  click(topColorPop()?.querySelector<HTMLElement>('[aria-label="Glow colour: auto (the line\'s own colour)"]') ?? null);
   out.push({
     name: "a colour of its own paints the glow (the line keeps its own); Auto hands it back to the line's colour",
     pass: greenGlow.includes("0, 255, 0") && styleOf(plateLine()).includes("255, 0, 0") && glowFilter().includes("255, 0, 0") && !glowFilter().includes("0, 255, 0"),
     detail: `own ${greenGlow.slice(0, 50)} · auto ${glowFilter().slice(0, 50)}`,
   });
-  click(popButton("Back to the Border card"));
+  closeTopColor();
   click(popButton("Banner border style: Dotted"));
   out.push({
     name: "the glow follows the line's style — a dotted line glows as dots, on the same layer",
