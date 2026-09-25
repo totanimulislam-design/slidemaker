@@ -147,15 +147,18 @@ export default function FontColorPanel({
 
   return (
     <div className="font-color-panel flex max-h-[72vh] w-full flex-col gap-0 overflow-hidden rounded-xl border border-white/10 bg-[#1a1d29] shadow-2xl">
-      {/* Tabs — a solid-only channel has no second tab to switch to */}
+      {/* Tabs — a segmented switch in the card's own accent; a solid-only
+          channel has no second tab to switch to */}
       {!solidOnly && (
-        <div className="flex items-center gap-1 border-b border-white/10 bg-[#12141f] p-2">
+        <div className="flex items-center gap-1 border-b border-white/[0.08] bg-[#10121c] p-1.5">
           <button
             type="button"
             onClick={() => setTab("solid")}
             className={cn(
-              "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-              tab === "solid" ? "bg-white text-slate-900 shadow" : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
+              "flex-1 rounded-[9px] px-3 py-[7px] text-[12.5px] font-semibold transition-all",
+              tab === "solid"
+                ? "bg-amber-400 text-slate-950 shadow-[0_2px_10px_rgba(251,191,36,0.28)]"
+                : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-100"
             )}
           >
             Solid
@@ -164,8 +167,10 @@ export default function FontColorPanel({
             type="button"
             onClick={() => setTab("gradient")}
             className={cn(
-              "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-              tab === "gradient" ? "bg-white text-slate-900 shadow" : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
+              "flex-1 rounded-[9px] px-3 py-[7px] text-[12.5px] font-semibold transition-all",
+              tab === "gradient"
+                ? "bg-amber-400 text-slate-950 shadow-[0_2px_10px_rgba(251,191,36,0.28)]"
+                : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-100"
             )}
           >
             Gradient
@@ -181,21 +186,21 @@ export default function FontColorPanel({
             {solidContent}
 
             {/* Current + Gradient indicator */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] px-2.5 py-2">
               <div
-                className="h-9 w-16 shrink-0 rounded-lg border border-white/15 shadow-inner"
+                className="h-9 w-14 shrink-0 rounded-lg shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)] ring-1 ring-white/20"
                 style={{ background: currentSolid }}
                 title={currentSolid}
               />
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Current</p>
-                <p className="truncate font-mono text-xs text-slate-200">{currentSolid.toUpperCase()}</p>
+                <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-slate-500">Current</p>
+                <p className="truncate font-mono text-[13px] font-medium text-slate-100">{currentSolid.toUpperCase()}</p>
               </div>
               {isGradientActive && onClearGradient && (
                 <button
                   type="button"
                   onClick={onClearGradient}
-                  className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] text-slate-300 hover:bg-white/10"
+                  className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-300 transition-colors hover:border-white/25 hover:bg-white/10 hover:text-white"
                 >
                   Use solid
                 </button>
@@ -205,7 +210,7 @@ export default function FontColorPanel({
             {/* Document colors */}
             {documentColors.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Document colors</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Document colors</h4>
                 <div className="grid grid-cols-7 gap-1.5">
                   {documentColors.slice(0, 14).map((c, i) => {
                     const hex = normColor(c) || c;
@@ -231,10 +236,10 @@ export default function FontColorPanel({
             {/* Default solids */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                   {showAllSolids ? `All colors (${CANVA_SOLID_ALL.length})` : `Default colors`}
                 </h4>
-                <span className="text-[10px] text-slate-500">{solidList.length} colors</span>
+                <span className="font-mono text-[10px] text-slate-600">{solidList.length}</span>
               </div>
               <div className="grid grid-cols-7 gap-1.5">
                 {solidList.map((hex, i) => {
@@ -257,17 +262,17 @@ export default function FontColorPanel({
               <button
                 type="button"
                 onClick={() => setShowAllSolids((v) => !v)}
-                className="w-full rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:border-white/30 hover:bg-white/[0.05] hover:text-white"
+                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11.5px] font-semibold text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
               >
                 {showAllSolids ? "Show less" : `See all ${CANVA_SOLID_ALL.length} colors`}
               </button>
             </div>
 
             {/* Solid color picker – Canva style */}
-            <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="space-y-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Custom color</h4>
-                <span className="text-[10px] text-slate-500">Pick any color</span>
+                <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Custom color</h4>
+                <span className="text-[10px] text-slate-600">Pick any color</span>
               </div>
 
               <ColorWheel
@@ -279,8 +284,8 @@ export default function FontColorPanel({
               />
 
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1">
-                  <span className="text-[10px] text-slate-500">#</span>
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 transition-colors focus-within:border-amber-300/60 focus-within:ring-1 focus-within:ring-amber-300/40">
+                  <span className="text-[10px] font-semibold text-slate-500">#</span>
                   <input
                     value={hexDraft ?? customHex.replace("#", "").toUpperCase()}
                     onChange={(e) => setHexDraft(e.target.value)}
@@ -290,7 +295,7 @@ export default function FontColorPanel({
                     }}
                     spellCheck={false}
                     placeholder="FFFFFF"
-                    className="w-[84px] bg-transparent font-mono text-xs text-slate-200 outline-none"
+                    className="w-[84px] bg-transparent font-mono text-xs tracking-wide text-slate-100 outline-none placeholder:text-slate-600"
                   />
                 </div>
                 <div className="flex flex-1 flex-wrap gap-1">
@@ -312,7 +317,7 @@ export default function FontColorPanel({
                         setCustomHex(c);
                         onSolid(c);
                       }}
-                      className="h-6 w-6 rounded border border-white/15 hover:border-white/40"
+                      className="h-6 w-6 rounded-md border border-white/15 transition-transform hover:scale-110 hover:border-white/50"
                       style={{ background: c }}
                     />
                   ))}
@@ -328,9 +333,9 @@ export default function FontColorPanel({
 
             {/* Current gradient preview */}
             <div className="space-y-2">
-              <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Current</h4>
+              <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Current</h4>
               <div
-                className="h-12 w-full rounded-lg border border-white/15"
+                className="h-12 w-full rounded-lg shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)] ring-1 ring-white/15"
                 style={{
                   background: activeGradientCss || currentSolid,
                 }}
@@ -354,10 +359,10 @@ export default function FontColorPanel({
             {/* Default gradients */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
                   {showAllGradients ? `All gradients (${CANVA_GRADIENT_ALL.length})` : "Default gradients"}
                 </h4>
-                <span className="text-[10px] text-slate-500">{gradientList.length} gradients</span>
+                <span className="font-mono text-[10px] text-slate-600">{gradientList.length}</span>
               </div>
 
               {/* swatches only — names are tooltips, the grid is short on room */}
@@ -389,7 +394,7 @@ export default function FontColorPanel({
               <button
                 type="button"
                 onClick={() => setShowAllGradients((v) => !v)}
-                className="w-full rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:border-white/30 hover:bg-white/[0.05] hover:text-white"
+                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11.5px] font-semibold text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
               >
                 {showAllGradients ? "Show less" : `See all ${CANVA_GRADIENT_ALL.length} gradients`}
               </button>
@@ -409,8 +414,8 @@ export default function FontColorPanel({
       </div>
 
       {/* Footer hint */}
-      <div className="border-t border-white/10 bg-[#12141f] px-3 py-2">
-        <p className="text-[10px] leading-relaxed text-slate-500">
+      <div className="border-t border-white/[0.07] bg-[#10121c] px-3.5 py-2">
+        <p className="text-[10px] leading-relaxed text-slate-600">
           {tab === "solid"
             ? "Click any color to apply. Use the picker for custom shades."
             : "Pick a swatch, or build your own below — linear, radial or mesh, with extra colour stops on the bar (up to 8)."}
