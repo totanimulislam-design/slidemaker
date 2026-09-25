@@ -376,6 +376,26 @@ input[type="text"] {
   min-height: 0;
 }
 
+/* Title background ▸ Border's two colour cards (the line's and its glow's):
+   a head strip with the way back to the Border card, over the very same
+   colour card — solid colours only, since a line is one flat colour */
+.ctx-pop-color .banner-line-color-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+.ctx-pop-color .banner-line-color-panel .font-color-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* …and opened in place in the inspector: one rounded card, the head strip on
+   top — the colour card inside drops its own frame so it is not drawn twice */
+.banner-line-color-inline .font-color-panel {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 /* the paint button — a shape channel's colour, named in words (Canva-style).
    The droplet wears the paint that is on: solid, gradient, the checker of
    "none", or hollow while the marker design paints its own. */

@@ -2,16 +2,13 @@ import { BANNER_AUTO_FRAME_HEIGHT, DEFAULT_BANNER, cloneBanner, type BannerSetti
 import { bannerCss } from "../lib/banner";
 import {
   BannerBorderPanel,
-  BannerBorderStylePanel,
   BannerEffectsPanel,
   BannerFillPanel,
   BannerPositionPanel,
   BannerPresetPanel,
-  BannerRadiusPanel,
   BannerShapePanel,
   BannerSizePanel,
   BannerTransparencyPanel,
-  BannerWeightPanel,
   bannerOf,
 } from "./BannerDesignPanel";
 import { boxStack } from "../lib/boxFonts";
@@ -22,8 +19,9 @@ import { PanelHead, Toggle } from "./ui";
  * Navigation ▸ "Title background".
  *
  * The plate painted *behind* the heading, in the same order the toolbar's line
- * reads: the design presets, the silhouette, the effects, the fill and the
- * border (colour · radius · style · weight), the two transparencies, and then
+ * reads: the design presets, the silhouette, the effects, the fill, the one
+ * Border card (on / off · colour · style · weight · transparency · corner
+ * radius, all four or each corner · glow), the shape's transparency, and then
  * the plate's own free size and place on the board. The glyphs themselves live
  * in the sibling "Title text" panel.
  */
@@ -128,10 +126,7 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
       <BannerShapePanel {...cards} />
       <BannerEffectsPanel theme={theme} banner={b} setBanner={set} />
       <BannerFillPanel {...cards} documentColors={titleBackgroundDocumentColors(theme, b)} />
-      <BannerBorderPanel banner={b} setBanner={set} />
-      <BannerRadiusPanel banner={b} setBanner={set} />
-      <BannerBorderStylePanel banner={b} setBanner={set} />
-      <BannerWeightPanel banner={b} setBanner={set} />
+      <BannerBorderPanel {...cards} documentColors={titleBackgroundDocumentColors(theme, b)} />
       <BannerTransparencyPanel banner={b} setBanner={set} />
       <BannerSizePanel {...cards} />
       <BannerPositionPanel banner={b} setBanner={set} />
@@ -141,9 +136,21 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
       <div className="flex gap-2 border-t border-white/10 pt-3">
         <button
           type="button"
-          /* `fillMode` is named as undefined so the merge cannot keep a
-             special fill (glass · metallic · pattern) the plate was wearing */
-          onClick={() => setTheme({ banner: { ...cloneBanner(DEFAULT_BANNER), fillMode: undefined } })}
+          /* `fillMode`, the corners set one by one and the line's glow are
+             named as undefined so the merge cannot keep a special fill (glass ·
+             metallic · pattern), a hand-set corner or a glow the plate wore */
+          onClick={() => {
+            const fresh = cloneBanner(DEFAULT_BANNER);
+            setTheme({
+              banner: {
+                ...fresh,
+                fillMode: undefined,
+                cornersIndependent: undefined,
+                corners: undefined,
+                border: { ...fresh.border, glow: undefined },
+              },
+            });
+          }}
           className="rounded-lg border border-rose-400/30 bg-rose-500/15 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/25"
         >
           Reset banner design

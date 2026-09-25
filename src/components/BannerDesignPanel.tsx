@@ -1,7 +1,25 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { BannerBorderStyle, BannerPatternKind, BannerSettings, BannerShape, Gradient, ThemeSettings, TransparentSide } from "../lib/types";
-import { BANNER_WIDTH, DEFAULT_BANNER, DEFAULT_BANNER_GLASS, DEFAULT_BANNER_METALLIC, DEFAULT_BANNER_PATTERN } from "../lib/types";
+import type {
+  BannerBorder,
+  BannerBorderGlow,
+  BannerBorderStyle,
+  BannerCorners,
+  BannerPatternKind,
+  BannerSettings,
+  BannerShape,
+  Gradient,
+  ThemeSettings,
+  TransparentSide,
+} from "../lib/types";
+import {
+  BANNER_WIDTH,
+  DEFAULT_BANNER,
+  DEFAULT_BANNER_BORDER_GLOW,
+  DEFAULT_BANNER_GLASS,
+  DEFAULT_BANNER_METALLIC,
+  DEFAULT_BANNER_PATTERN,
+} from "../lib/types";
 import {
   BANNER_3D_DEFAULTS,
   BANNER_3D_EFFECTS,
@@ -23,6 +41,9 @@ import {
   BANNER_PRESET_GROUPS,
   BANNER_SHADOW_DEFAULTS,
   BANNER_SHADOW_EFFECTS,
+  bannerBorderGlowColor,
+  bannerCorners,
+  bannerCornersNow,
   bannerCss,
   bannerFillMode,
   bannerFxColor,
@@ -35,6 +56,7 @@ import {
   baseColor,
   canOutline,
   clampOpacity,
+  fxCornerRadius,
   glassFillCss,
   isClippedShape,
   isMaskedShape,
@@ -42,13 +64,15 @@ import {
   patternFillCss,
   plateHeightFactor,
   platePaintLayers,
+  radiusFollowsBar,
+  takesCorners,
   type BannerEffectDef,
   type BannerPreset,
   type BannerPresetGroup,
   type BannerShapeFamily,
 } from "../lib/banner";
 import type { BannerEffects, BannerShapeFx } from "../lib/types";
-import { shade, withAlpha } from "../lib/color";
+import { shade } from "../lib/color";
 import { rotateHue } from "../lib/textEffects";
 import FontColorPanel, { type Tab as ColorPanelTab } from "./FontColorPanel";
 import { ColorField, Field, Slider, Toggle } from "./ui";
@@ -87,11 +111,13 @@ import { cn } from "../utils/cn";
  *                     angular · reflected · multi-colour ·      `metallic` · `pattern`
  *                     transparent), frosted glass, brushed
  *                     metal and a pattern
- *   Border colour     the outline's paint                       `border.color`
- *   Border style      solid · dashed · dotted · double · none    `border.style`
- *   Border radius     the corners, straight to a full pill       `radius`
- *   Border weight     the line's thickness                       `border.width`
- *   Transparency      the SHAPE and the BORDER, each on a slider `opacity` · `border.opacity`
+ *   Border            the whole outline in ONE card: on / off,   `border` · `radius` ·
+ *                     its colour (the shared colour card),      `cornersIndependent` ·
+ *                     style, weight, transparency, the corner    `corners`
+ *                     radius — all four at once or each corner
+ *                     on its own — and the line's glow (size ·
+ *                     strength · colour, auto to the line's)
+ *   Transparency      the SHAPE's own, on a slider               `opacity`
  *   Banner size       free width / height in px of the board     `size`
  *   Banner position   free X / Y nudge in px of the board        `pos`
  *
@@ -2025,173 +2051,502 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
   );
 }
 
-export function BannerBorderPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
+/* ------------------------------------------------------------------ */
+/*  Border — ONE card for the whole outline                            */
+/* ------------------------------------------------------------------ */
+
+/** which of the outline's two colours a colour card is painting */
+export type BannerLineColorChannel = "line" | "glow";
+
+/**
+ * A line the teacher just asked for must be SEEN: the outline switched on, a
+ * style that paints (None → Solid), a weight above 0 and a transparency short of
+ * fully clear. Picking a colour, switching the outline or its glow on, picking a
+ * style or dragging the weight up all go through here, so no control ever
+ * answers with an invisible line.
+ */
+function lineVisible(border: BannerBorder): BannerBorder {
+  return {
+    ...border,
+    enabled: true,
+    style: border.style === "none" ? "solid" : border.style,
+    width: border.width > 0 ? border.width : DEFAULT_BANNER.border.width,
+    opacity: border.opacity !== undefined && border.opacity <= 0 ? 1 : border.opacity,
+  };
+}
+
+/** the glow's settings with the factory values filled in — most decks carry none */
+const glowOf = (border: BannerBorder): BannerBorderGlow => ({
+  ...DEFAULT_BANNER_BORDER_GLOW,
+  enabled: false,
+  ...(border.glow ?? {}),
+});
+
+/** the four corners as the card lays them out — a 2 × 2 grid, each where it sits on the plate */
+const CORNERS: { key: keyof BannerCorners; label: string; aria: string }[] = [
+  { key: "tl", label: "Top left", aria: "top-left" },
+  { key: "tr", label: "Top right", aria: "top-right" },
+  { key: "bl", label: "Bottom left", aria: "bottom-left" },
+  { key: "br", label: "Bottom right", aria: "bottom-right" },
+];
+
+/** one corner, pulled round — turned to face the corner it names */
+function CornerGlyph({ corner, size = 13 }: { corner: keyof BannerCorners; size?: number }) {
+  const turn = { tl: 0, tr: 90, br: 180, bl: 270 }[corner];
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" style={{ transform: `rotate(${turn}deg)` }}>
+      <path d="M3 14V8.5A5.5 5.5 0 0 1 8.5 3H14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** an on / off row that says what it switches — a real switch to assistive technology */
+function LineSwitch({ label, checked, onChange, hint }: { label: string; checked: boolean; onChange: (v: boolean) => void; hint?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-left text-sm text-slate-300 hover:bg-slate-900"
+    >
+      <span className="min-w-0">
+        <span className="block">{label}</span>
+        {hint && <span className="block text-[10px] leading-snug text-slate-500">{hint}</span>}
+      </span>
+      <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", checked ? "bg-amber-400" : "bg-white/15")} aria-hidden="true">
+        <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all", checked ? "left-[18px]" : "left-0.5")} />
+      </span>
+    </button>
+  );
+}
+
+/** the button that opens a colour card: the swatch, the channel's name and the colour it paints */
+function ColorRow({ label, color, caption, open, onClick }: { label: string; color: string; caption: string; open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-expanded={open}
+      title={`${label} — open the colour card`}
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors",
+        open ? "border-amber-400/70 bg-amber-400/10" : "border-white/10 bg-slate-900/60 hover:border-white/25",
+      )}
+    >
+      <span className="h-7 w-10 shrink-0 rounded-md border border-white/20 shadow-inner" style={{ background: color }} aria-hidden="true" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[12px] font-medium text-slate-200">{label}</span>
+        <span className="block truncate font-mono text-[10.5px] text-slate-400">{caption}</span>
+      </span>
+      <span className="shrink-0 text-base leading-none text-slate-400" aria-hidden="true">
+        ›
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The colour card behind the Border card's two colour buttons — the SAME card
+ * every other colour in the editor opens (the document colours, the Canva
+ * swatches, the wheel and the hex field). A line is one flat colour, so the
+ * card is its solid half only. The glow's card has one more state, **Auto**:
+ * the line's own colour, followed as the line is repainted. On the toolbar the
+ * card takes the Border card's place in the pop-up, with a way back to it.
+ */
+export function BannerLineColorPanel({
+  channel,
+  banner,
+  setBanner,
+  documentColors,
+  onBack,
+}: {
+  channel: BannerLineColorChannel;
+  banner: BannerSettings;
+  setBanner: (patch: Partial<BannerSettings>) => void;
+  documentColors?: string[];
+  /** the toolbar's way back to the Border card */
+  onBack?: () => void;
+}) {
+  const border = banner.border;
+  const glow = channel === "glow";
+  const label = glow ? "Glow colour" : "Border colour";
+  const auto = glow && !border.glow?.color?.trim();
+  const value = glow ? bannerBorderGlowColor(banner) : border.color;
+  const pick = (hex: string) =>
+    setBanner({
+      border: glow
+        ? { ...lineVisible(border), glow: { ...glowOf(border), enabled: true, color: hex } }
+        : { ...lineVisible(border), color: hex },
+    });
+  return (
+    <div className="banner-line-color-panel flex w-full flex-col" data-banner-line-color={channel}>
+      <div className="flex items-center gap-2 border-b border-white/10 bg-[#12141f] px-3 py-2">
+        {onBack && (
+          <button
+            type="button"
+            aria-label="Back to the Border card"
+            title="Back to the Border card"
+            onClick={onBack}
+            className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-white/10"
+          >
+            ← Border
+          </button>
+        )}
+        <span className="h-9 w-12 shrink-0 rounded-lg border border-white/15 shadow-inner" style={{ background: value }} aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+          <span className="block truncate font-mono text-[11px] text-slate-300">
+            {auto ? `auto · the line's ${value.toUpperCase()}` : value.toUpperCase()}
+          </span>
+        </span>
+        {glow && (
+          <button
+            type="button"
+            aria-label="Glow colour: auto (the line's own colour)"
+            aria-pressed={auto}
+            title="Auto — the glow wears the line's own colour"
+            onClick={() => setBanner({ border: { ...border, glow: { ...glowOf(border), color: "" } } })}
+            className={cn(
+              "shrink-0 rounded-lg border px-2 py-1 text-[11px] transition-colors",
+              auto ? "border-amber-300 bg-amber-400 font-semibold text-slate-950" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10",
+            )}
+          >
+            Auto
+          </button>
+        )}
+      </div>
+      <FontColorPanel solidOnly solid={value} onSolid={pick} onGradient={() => undefined} documentColors={documentColors} title={label} />
+    </div>
+  );
+}
+
+/**
+ * Title background ▸ **Border** — every setting of the plate's outline in one
+ * card, in the order a line is drawn:
+ *
+ *   Outline the plate     on / off                                `border.enabled`
+ *   Border colour         opens the colour card (solid colours)   `border.color`
+ *   Border style          solid · dashed · dotted · double · none `border.style`
+ *   Border weight         the line's thickness, no ceiling        `border.width`
+ *   Border transparency   the line's own, apart from the shape's  `border.opacity`
+ *   Border radius         All corners — one bar for the four      `radius`
+ *                         Each corner — top-left · top-right ·    `cornersIndependent`
+ *                         bottom-left · bottom-right on their own · `corners`
+ *   Border glow           on / off · size · strength · colour     `border.glow`
+ *                         (Auto = the line's own colour)
+ *
+ * On the toolbar a colour button hands the pop-up over to the colour card
+ * (`onPickColor`); in the inspector, where there is no pop-up, the same card
+ * opens right under the button.
+ */
+export function BannerBorderPanel({
+  theme,
+  banner,
+  setBanner,
+  onPickColor,
+  documentColors,
+}: BannerProps & {
+  /** the toolbar's colour card — "line" is Border colour, "glow" the glow's */
+  onPickColor?: (channel: BannerLineColorChannel) => void;
+  /** the deck's colours, for the colour card opened in place (the inspector) */
+  documentColors?: string[];
+}) {
+  const [inline, setInline] = useState<BannerLineColorChannel | null>(null);
+  const border = banner.border;
+  const setBorder = (next: BannerBorder) => setBanner({ border: next });
+  const outlinable = canOutline(banner.shape);
+  const lineOn = bannerHasLine(banner);
+  const style = bannerBorderStyle(banner);
+  const opacityPct = Math.round(clampOpacity(border.opacity) * 100);
+  const weightMax = rangeMax(24, border.width);
+
+  const glow = glowOf(border);
+  const glowColor = bannerBorderGlowColor(banner);
+  const glowMax = rangeMax(60, glow.size);
+
+  const cornered = takesCorners(banner.shape);
+  const each = !!banner.cornersIndependent;
+  const corners = bannerCorners(banner);
+  const radiusMax = rangeMax(120, banner.radius);
+  const follows = radiusFollowsBar(banner);
+  const shapeName = BANNER_SHAPES.find((s) => s.id === banner.shape)?.label ?? "This shape";
+  const fx = bannerEffectsOf(banner);
+  const fxCorners = fxCornerRadius(fx.shape);
+
+  const openColor = (channel: BannerLineColorChannel) => {
+    if (onPickColor) onPickColor(channel);
+    else setInline((c) => (c === channel ? null : channel));
+  };
+  const inlineCard = (channel: BannerLineColorChannel) =>
+    !onPickColor && inline === channel ? (
+      <div className="banner-line-color-inline overflow-hidden rounded-xl border border-white/10">
+        <BannerLineColorPanel channel={channel} banner={banner} setBanner={setBanner} documentColors={documentColors} />
+      </div>
+    ) : null;
+
+  const radiusHint = !cornered
+    ? banner.shape === "none"
+      ? "There is no plate to round — pick a shape under Shape first."
+      : isClippedShape(banner.shape)
+        ? "This silhouette is cut, not rounded — its tips and notches keep their straight edges. Pick a plate, a tab or a pill to round the corners."
+        : isMaskedShape(banner.shape)
+          ? "This silhouette is drawn by its own curve — a wave, a blob, a stroke — so it has no corner to round."
+          : "An oval is one curve all the way round — it has no corner to round."
+    : each
+      ? "Each corner on its own. Past the plate's half height a corner turns into a full round end."
+      : follows
+        ? "One radius for all four corners. Drag past the plate's half height and it becomes a full round end."
+        : `${shapeName} keeps its own corners on this bar — pick Each corner to round them one by one.`;
+
   return (
     <div className="space-y-3" data-banner-border="">
-      <Cap hint={canOutline(banner.shape) ? (banner.border.enabled ? "on" : "off") : "pick a plate shape"}>Border colour</Cap>
-      <Toggle
+      <Cap hint={!outlinable ? "pick a plate shape" : lineOn ? `${style} · ${border.width}px${glow.enabled ? " · glow" : ""}` : "off"}>
+        Border
+      </Cap>
+      <BannerPlatePreview banner={banner} theme={theme} standIn="rounded" size={{ w: 520, h: 84 }} shrink={0.6} height={82} />
+      <LineSwitch
         label="Outline the plate"
-        checked={banner.border.enabled}
-        onChange={(v) => setBanner({ border: { ...banner.border, enabled: v } })}
+        checked={border.enabled}
+        onChange={(v) => setBorder(v ? lineVisible(border) : { ...border, enabled: false })}
+        hint={outlinable ? undefined : "No plate to outline — pick a shape first"}
       />
-      <ColorField
-        label="Border colour"
-        value={banner.border.color}
-        fallback="#ffd633"
-        presets={["#ffffff", "#ffd633", "#0b0b0f", banner.color]}
-        autoLabel="Auto"
-        onChange={(v) => setBanner({ border: { ...banner.border, color: v || "#ffffff", enabled: true } })}
-      />
-      <p className="text-[10px] leading-relaxed text-slate-500">
-        {canOutline(banner.shape)
-          ? "The line is painted on a layer of its own: it fades with Border transparency and leaves the fill alone."
-          : "The soft glow and the underline rule cannot wear an outline — pick Pill, Rounded, Box or Ribbon under Shape."}
-      </p>
-    </div>
-  );
-}
 
-/* ------------------------------------------------------------------ */
-/*  Border style — pictures, nothing else                              */
-/* ------------------------------------------------------------------ */
+      <div className={cn("space-y-3", !outlinable && "opacity-50")}>
+        {/* ------------------------------ colour ------------------------------ */}
+        <div className="space-y-1.5" data-banner-border-color="">
+          <ColorRow label="Border colour" color={border.color} caption={border.color.toUpperCase()} open={inline === "line"} onClick={() => openColor("line")} />
+          {inlineCard("line")}
+        </div>
 
-export function BannerBorderStylePanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
-  const current = bannerBorderStyle(banner);
-  return (
-    <div className="space-y-2" data-banner-border-style="">
-      <Cap hint={BANNER_BORDER_STYLES.find((b) => b.value === current)?.hint}>Border style</Cap>
-      <div className="grid grid-cols-3 gap-1.5" role="listbox" aria-label="Border style">
-        {BANNER_BORDER_STYLES.map((b) => {
-          const chosen = current === b.value;
-          return (
+        {/* ------------------------------ style ------------------------------- */}
+        <div className="space-y-1.5" data-banner-border-style="">
+          <Cap hint={BANNER_BORDER_STYLES.find((b) => b.value === style)?.hint}>Border style</Cap>
+          <div className="grid grid-cols-5 gap-1.5" role="listbox" aria-label="Border style">
+            {BANNER_BORDER_STYLES.map((b) => {
+              const chosen = style === b.value;
+              return (
+                <button
+                  key={b.value}
+                  type="button"
+                  role="option"
+                  aria-selected={chosen}
+                  aria-label={`Banner border style: ${b.label}`}
+                  title={b.hint}
+                  onClick={() => setBorder(b.value === "none" ? { ...border, style: "none", enabled: false } : { ...lineVisible(border), style: b.value })}
+                  className={cn(
+                    "flex flex-col items-center gap-1 rounded-lg border px-1 pb-1.5 pt-2 transition-colors",
+                    chosen ? "border-amber-400 bg-amber-400/15 text-amber-200" : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/25",
+                  )}
+                >
+                  <BorderStyleIcon style={b.value} size={20} />
+                  <span className="text-[9.5px] font-medium leading-none">{b.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ------------------------------ weight ------------------------------ */}
+        <div className="space-y-1.5" data-banner-weight="">
+          <Cap
+            hint={`${border.width}px`}
+            action={
+              <AutoBtn
+                on={border.width !== DEFAULT_BANNER.border.width}
+                onClick={() => setBorder({ ...border, width: DEFAULT_BANNER.border.width })}
+                label="Border weight: back to the plate's own line"
+              />
+            }
+          >
+            Border weight
+          </Cap>
+          <Slider
+            value={Math.min(border.width, weightMax)}
+            min={0}
+            max={weightMax}
+            step={0.5}
+            onChange={(v) => setBorder(v > 0 ? lineVisible({ ...border, width: v }) : { ...border, width: v })}
+            ariaLabel="Banner border weight (px)"
+          />
+        </div>
+
+        {/* --------------------------- transparency --------------------------- */}
+        <div className="space-y-1.5" data-banner-border-opacity="">
+          <Cap hint={opacityPct >= 100 ? "fully visible" : `${100 - opacityPct}% see-through`}>Border transparency</Cap>
+          <Slider
+            value={opacityPct}
+            min={0}
+            max={100}
+            onChange={(v) => setBorder({ ...border, opacity: v / 100 })}
+            ariaLabel="Banner border transparency (100 = fully visible)"
+          />
+        </div>
+      </div>
+
+      {/* ------------------------------ radius -------------------------------- */}
+      <div className="space-y-2 border-t border-white/10 pt-3" data-banner-radius="" data-corners={each ? "each" : "all"}>
+        <Cap
+          hint={!cornered ? "no corners" : each ? `${corners.tl} · ${corners.tr} · ${corners.br} · ${corners.bl} px` : follows ? `${banner.radius}px` : "the shape's own"}
+          action={
+            <AutoBtn
+              on={each || banner.radius !== DEFAULT_BANNER.radius}
+              onClick={() => setBanner({ radius: DEFAULT_BANNER.radius, cornersIndependent: false })}
+              label="Border radius: back to the plate's own corners"
+            />
+          }
+        >
+          Border radius
+        </Cap>
+        <div className="flex gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1" role="group" aria-label="Border radius corners">
+          {[
+            { on: !each, label: "All corners", aria: "Border radius: all corners", pick: () => setBanner({ cornersIndependent: false }) },
+            // the four start where the plate's corners are right now, so flipping
+            // to Each corner never moves one
+            { on: each, label: "Each corner", aria: "Border radius: each corner", pick: () => setBanner({ cornersIndependent: true, corners: bannerCornersNow(banner) }) },
+          ].map((m) => (
             <button
-              key={b.value}
+              key={m.label}
               type="button"
-              role="option"
-              aria-selected={chosen}
-              aria-label={`Banner border style: ${b.label}`}
-              title={b.hint}
-              onClick={() => setBanner({ border: { ...banner.border, style: b.value, enabled: b.value !== "none" } })}
+              aria-label={m.aria}
+              aria-pressed={m.on}
+              onClick={() => {
+                if (!m.on) m.pick();
+              }}
               className={cn(
-                "flex flex-col items-center gap-1 rounded-lg border px-1 pb-1.5 pt-2 transition-colors",
-                chosen ? "border-amber-400 bg-amber-400/15 text-amber-200" : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/25",
+                "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                m.on ? "bg-amber-400 text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
               )}
             >
-              <BorderStyleIcon style={b.value} size={22} />
-              <span className="text-[9.5px] font-medium leading-none">{b.label}</span>
+              {m.label}
             </button>
-          );
-        })}
+          ))}
+        </div>
+        <div className={cn(!cornered && "opacity-50")}>
+          {each ? (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2" data-banner-corners="">
+              {CORNERS.map((c) => {
+                const max = rangeMax(120, corners[c.key]);
+                return (
+                  <div key={c.key} className="min-w-0 space-y-1" data-banner-corner={c.key}>
+                    <span className="flex items-center gap-1.5 text-[10.5px] font-medium text-slate-300">
+                      <CornerGlyph corner={c.key} />
+                      {c.label}
+                    </span>
+                    <Slider
+                      value={Math.min(corners[c.key], max)}
+                      min={0}
+                      max={max}
+                      step={1}
+                      onChange={(v) => setBanner({ cornersIndependent: true, corners: { ...corners, [c.key]: v } })}
+                      ariaLabel={`Banner border radius: ${c.aria} (px)`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className={cn(cornered && !follows && "opacity-60")}>
+              <Slider
+                value={Math.min(banner.radius, radiusMax)}
+                min={0}
+                max={radiusMax}
+                step={1}
+                onChange={(v) => setBanner({ radius: v })}
+                ariaLabel="Banner border radius (px)"
+              />
+            </div>
+          )}
+        </div>
+        <p className="text-[10px] leading-relaxed text-slate-500">{radiusHint}</p>
+        {fxCorners && cornered && (
+          <div
+            className="flex items-center justify-between gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-2 text-[10.5px] leading-snug text-amber-100"
+            data-banner-fx-corners=""
+          >
+            <span>Effects ▸ Shape Effects rounds the corners itself ({fxCorners}) and wins over these.</span>
+            <button
+              type="button"
+              aria-label="Border radius: take the corners back from Shape Effects"
+              onClick={() =>
+                setBanner({ effects: { ...fx, shape: { ...fx.shape, radius: 0, independent: false, cornerTL: 0, cornerTR: 0, cornerBR: 0, cornerBL: 0 } } })
+              }
+              className="shrink-0 rounded border border-amber-300/50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-100 hover:bg-amber-400/20"
+            >
+              Use these
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* ------------------------------- glow --------------------------------- */}
+      <div className={cn("space-y-2 border-t border-white/10 pt-3", !outlinable && "opacity-50")} data-banner-border-glow="">
+        <Cap hint={glow.enabled ? `${glow.size}px · ${glow.intensity}%` : "off"}>Border glow</Cap>
+        <LineSwitch
+          label="Border glow"
+          checked={glow.enabled}
+          onChange={(v) => setBorder({ ...(v ? lineVisible(border) : border), glow: { ...glow, enabled: v } })}
+          hint={glow.enabled && !lineOn ? "The glow comes back with the outline" : undefined}
+        />
+        {glow.enabled && (
+          <div className="space-y-2.5">
+            <Field label="Glow size" hint={`${glow.size}px`}>
+              <Slider
+                value={Math.min(glow.size, glowMax)}
+                min={0}
+                max={glowMax}
+                step={1}
+                onChange={(v) => setBorder({ ...border, glow: { ...glow, size: v } })}
+                ariaLabel="Banner border glow size (px)"
+              />
+            </Field>
+            <Field label="Glow strength" hint={`${glow.intensity}%`}>
+              <Slider
+                value={glow.intensity}
+                min={0}
+                max={100}
+                step={1}
+                onChange={(v) => setBorder({ ...border, glow: { ...glow, intensity: v } })}
+                ariaLabel="Banner border glow strength (0–100)"
+              />
+            </Field>
+            <ColorRow
+              label="Glow colour"
+              color={glowColor}
+              caption={glow.color.trim() ? glowColor.toUpperCase() : `auto · the line's ${border.color.toUpperCase()}`}
+              open={inline === "glow"}
+              onClick={() => openColor("glow")}
+            />
+            {inlineCard("glow")}
+          </div>
+        )}
+      </div>
+
       <p className="text-[10px] leading-relaxed text-slate-500">
-        {banner.border.enabled
-          ? "The style rides on the line's own layer, so Border colour, weight and transparency all apply to it."
-          : "None takes the outline away. Pick any other style to bring the line back in its own colour."}
+        The line is painted on a layer of its own: it fades with Border transparency and never covers the fill. Its glow is the
+        line's own light — it follows the dashes, the dots and the corners, and on a cut or curved silhouette it stays inside the
+        cut.
       </p>
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Border radius — a live corner and one slider                       */
-/* ------------------------------------------------------------------ */
-
-export function BannerRadiusPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
-  // a cut silhouette has no corners to round — the clip-path or the mask
-  // decides its shape
-  const clipped = isClippedShape(banner.shape) || isMaskedShape(banner.shape);
-  const shapes = (canOutline(banner.shape) || banner.shape === "underline") && !clipped;
-  const max = rangeMax(120, banner.radius);
-  const preview: CSSProperties = {
-    width: 44,
-    height: 30,
-    background: `linear-gradient(90deg, ${banner.color}, ${withAlpha(banner.color, 0.75)})`,
-    borderRadius: Math.min(banner.radius, max),
-    border: bannerHasLine(banner) ? `${Math.max(1, banner.border.width)}px ${bannerBorderStyle(banner)} ${banner.border.color}` : undefined,
-    boxSizing: "border-box",
-  };
-  return (
-    <div className="space-y-2" data-banner-radius="">
-      <div className="flex items-center gap-3">
-        <span className="flex h-[52px] w-[58px] items-center justify-center rounded-lg border border-white/10 bg-slate-950/60" aria-hidden="true">
-          <span style={preview} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <Cap hint={banner.shape === "underline" ? "the rule's ends" : clipped ? "cut silhouette" : `${banner.radius}px`}>Border radius</Cap>
-          <div className={cn(!shapes && "opacity-50")}>
-            <Slider value={Math.min(banner.radius, max)} min={0} max={max} step={1} onChange={(v) => setBanner({ radius: v })} ariaLabel="Banner border radius (px)" />
-          </div>
-        </span>
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] leading-relaxed text-slate-500">
-          {clipped
-            ? "This silhouette is cut, not rounded — the hexagon's tips and the chevron's arrow keep their straight edges. Pick a plate, a tab or an arch to round the corners again."
-            : "Drag past the plate's own half and it becomes a full round end — the slider keeps going well beyond it. Tab and Arch round the top edge only."}
-        </p>
-        <AutoBtn on={banner.radius !== DEFAULT_BANNER.radius} onClick={() => setBanner({ radius: DEFAULT_BANNER.radius })} label="Border radius: back to the plate's own corners" />
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Border weight — one slider                                         */
-/* ------------------------------------------------------------------ */
-
-export function BannerWeightPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
-  const max = rangeMax(24, banner.border.width);
-  const w = Math.min(banner.border.width, max);
-  const style = bannerBorderStyle(banner);
-  return (
-    <div className="space-y-2" data-banner-weight="">
-      <div className="flex items-center gap-3">
-        <span className="flex h-[52px] w-[52px] items-center justify-center rounded-lg border border-white/10 bg-slate-950/60" aria-hidden="true">
-          <span
-            style={{
-              width: 40,
-              height: 30,
-              borderRadius: 4,
-              boxSizing: "border-box",
-              border: `${w}px ${style === "none" ? "solid" : style} ${banner.border.color}`,
-              background: banner.gradient.enabled ? undefined : withAlpha(banner.color, 0.35),
-            }}
-          />
-        </span>
-        <span className="min-w-0 flex-1">
-          <Cap hint={`${banner.border.width}px`}>Border weight</Cap>
-          <Slider value={w} min={0} max={max} step={0.5} onChange={(v) => setBanner({ border: { ...banner.border, width: v, ...(v > 0 && !banner.border.enabled ? { enabled: true } : {}) } })} ariaLabel="Banner border weight (px)" />
-        </span>
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] leading-relaxed text-slate-500">
-          0 takes the line away; anything above paints it in the Border colour, in the style you picked. The slider has no
-          ceiling.
-        </p>
-        <AutoBtn on={banner.border.width !== DEFAULT_BANNER.border.width} onClick={() => setBanner({ border: { ...banner.border, width: DEFAULT_BANNER.border.width } })} label="Border weight: back to the plate's own line" />
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Transparency — one slider each for the shape and the line          */
+/*  Transparency — the SHAPE's (the line's lives in the Border card)   */
 /* ------------------------------------------------------------------ */
 
 export function BannerTransparencyPanel({ banner, setBanner }: Omit<BannerProps, "theme">) {
   const shapePct = Math.round(clampOpacity(banner.opacity) * 100);
-  const borderPct = Math.round(clampOpacity(banner.border.opacity) * 100);
   return (
     <div className="space-y-3" data-banner-transparency="">
       <Field label="Shape transparency" hint={shapePct >= 100 ? "fully visible" : `${100 - shapePct}% see-through`}>
         <Slider value={shapePct} min={0} max={100} onChange={(v) => setBanner({ opacity: v / 100 })} ariaLabel="Banner shape transparency (100 = fully visible)" />
       </Field>
-      <Field label="Border transparency" hint={borderPct >= 100 ? "fully visible" : `${100 - borderPct}% see-through`}>
-        <Slider value={borderPct} min={0} max={100} onChange={(v) => setBanner({ border: { ...banner.border, opacity: v / 100 } })} ariaLabel="Banner border transparency (100 = fully visible)" />
-      </Field>
       <p className="text-[10px] leading-relaxed text-slate-500">
-        100 = fully visible on both. The shape fades the body and its glow, the border fades the line alone — each is painted on
-        its own layer, so the two never drag each other down.
+        100 = fully visible. The shape fades the body, its layers and its halo — never the outline, which is painted on its own
+        layer and keeps its own transparency in the Border card.
       </p>
     </div>
   );

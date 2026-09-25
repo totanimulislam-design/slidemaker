@@ -16,7 +16,7 @@ import {
   resetToolbarLine,
   type ToolbarResetPatch,
 } from "../lib/toolbarReset";
-import { TEXT_GRADIENT_PRESETS, bannerBorderStyle, bannerFillCss, gradientCss } from "../lib/banner";
+import { TEXT_GRADIENT_PRESETS, bannerBorderGlow, bannerBorderGlowColor, bannerBorderStyle, bannerFillCss, gradientCss } from "../lib/banner";
 import {
   TEXT_PART_LABELS, WEIGHTS, boxFontLabel, boxTypeface, elementInk, opacityAlpha, opacityPercent, patchTextPart, setBoxFont, setElementInk, textPartDeckFamily, textPartTypeface,
 } from "../lib/boxFonts";
@@ -46,21 +46,17 @@ import {
 import BulletDesignPanel from "./BulletDesignPanel";
 import {
   BannerBorderPanel,
-  BannerBorderStylePanel,
   BannerEffectsPanel,
   BannerFillPanel,
+  BannerLineColorPanel,
   BannerPositionPanel,
   BannerPresetPanel,
-  BannerRadiusPanel,
   BannerShapePanel,
   BannerSizePanel,
   BannerTransparencyPanel,
-  BannerWeightPanel,
-  BorderStyleIcon as BannerBorderStyleIcon,
   PositionIcon as BannerPositionIcon,
   SizeIcon as BannerSizeIcon,
   TransparencyIcon as BannerTransparencyIcon,
-  WeightIcon as BannerWeightIcon,
   bannerOf,
 } from "./BannerDesignPanel";
 import QuestionBulletNumberingPanel from "./QuestionBulletNumberingPanel";
@@ -477,9 +473,32 @@ interface PaintCtx {
   onNone?: () => void;
 }
 
-/** the pop-ups that need the wide card (a colour grid, a design gallery, the effects' tile groups) */
-const WIDE_PANELS = new Set(["TextColor", "Paint", "Banner fill", "Bullet design", "Design", "Numbering", "Banner effects"]);
+/** the Title background ▸ Border card's two colour cards (the line's, the glow's) */
+const BANNER_BORDER_COLOUR = "Banner border colour";
+const BANNER_GLOW_COLOUR = "Banner glow colour";
+/** the Border button stays lit while either of its colour cards has the pop-up */
+const BANNER_BORDER_FAMILY = ["Banner border", BANNER_BORDER_COLOUR, BANNER_GLOW_COLOUR];
+
+/**
+ * The pop-ups that need the wide card (a colour grid, a design gallery, the
+ * effects' tile groups) — and the Border card, which hands the pop-up over to
+ * its colour cards: the two share one width, so the hand-over never jumps.
+ */
+const WIDE_PANELS = new Set([
+  "TextColor",
+  "Paint",
+  "Banner fill",
+  "Banner border",
+  BANNER_BORDER_COLOUR,
+  BANNER_GLOW_COLOUR,
+  "Bullet design",
+  "Design",
+  "Numbering",
+  "Banner effects",
+]);
 const widePanel = (panel: string | null) => !!panel && WIDE_PANELS.has(panel);
+/** the pop-ups that ARE a colour card, run edge to edge under the pinned head */
+const COLOR_PANELS = new Set(["TextColor", "Paint", "Banner fill", BANNER_BORDER_COLOUR, BANNER_GLOW_COLOUR]);
 
 /** the droplet a paint button wears over its current colour */
 const PAINT_GLYPH = (
@@ -746,20 +765,24 @@ export default function ContextToolbar(p: Props) {
    * available to assistive technology and as a hover tooltip; this keeps every
    * toolbar on one line without making repeated part names consume its width.
    */
-  const toggle = (name: string, icon?: ReactNode, display?: ReactNode) => (
-    <button
-      type="button"
-      className={cn("ctx-btn ctx-toggle", icon && "ctx-icon-toggle", panel === name && "is-on")}
-      title={name}
-      aria-label={name}
-      aria-pressed={panel === name}
-      aria-expanded={panel === name}
-      onClick={() => setPanel(panel === name ? null : name)}
-    >
-      {display ?? icon ?? name}
-      <span className="ctx-caret" aria-hidden="true">▾</span>
-    </button>
-  );
+  const toggle = (name: string, icon?: ReactNode, display?: ReactNode, family?: readonly string[]) => {
+    /** a card that hands the pop-up to cards of its own (a colour card) keeps its button lit */
+    const open = panel === name || (!!panel && !!family?.includes(panel));
+    return (
+      <button
+        type="button"
+        className={cn("ctx-btn ctx-toggle", icon && "ctx-icon-toggle", open && "is-on")}
+        title={name}
+        aria-label={name}
+        aria-pressed={open}
+        aria-expanded={open}
+        onClick={() => setPanel(open ? null : name)}
+      >
+        {display ?? icon ?? name}
+        <span className="ctx-caret" aria-hidden="true">▾</span>
+      </button>
+    );
+  };
   /**
    * "Background shape" — the plate painted behind a text part. One button on
    * every text toolbar, right before its Default, opening the pop-up with the
@@ -1297,11 +1320,13 @@ export default function ContextToolbar(p: Props) {
    *   Fill             the body's paint — ten fills: solid colour, five
    *                    gradient ramps (linear · radial · angular · reflected ·
    *                    multi-colour · transparent), glass, metal and pattern
-   *   Border           the outline's paint
-   *   Border radius    the corners, one slider with no ceiling
-   *   Border style     solid · dashed · dotted · double · none
-   *   Border weight    the line's thickness
-   *   Transparency     the SHAPE and the BORDER, each on a line bar
+   *   Border           the whole outline in ONE card — on / off, colour,
+   *                    style, weight, transparency, the corner radius (all
+   *                    four at once, or each corner on its own) and the
+   *                    line's glow. Its two colour buttons (the line's, the
+   *                    glow's) hand the pop-up over to the shared colour card,
+   *                    which has a way back to the Border card.
+   *   Transparency     the SHAPE's own, on a line bar
    *   Banner size      free width and height, on line bars
    *   Banner position  free X and Y, on line bars
    *
@@ -1314,10 +1339,22 @@ export default function ContextToolbar(p: Props) {
       "Banner shape": <BannerShapePanel theme={theme} banner={banner} setBanner={p} />,
       "Banner effects": <BannerEffectsPanel theme={theme} banner={banner} setBanner={p} />,
       "Banner fill": <BannerFillPanel banner={banner} setBanner={p} documentColors={docColors} />,
-      "Banner border": <BannerBorderPanel banner={banner} setBanner={p} />,
-      "Banner radius": <BannerRadiusPanel banner={banner} setBanner={p} />,
-      "Banner border style": <BannerBorderStylePanel banner={banner} setBanner={p} />,
-      "Banner weight": <BannerWeightPanel banner={banner} setBanner={p} />,
+      "Banner border": (
+        <BannerBorderPanel
+          theme={theme}
+          banner={banner}
+          setBanner={p}
+          onPickColor={(channel) => setPanel(channel === "glow" ? BANNER_GLOW_COLOUR : BANNER_BORDER_COLOUR)}
+        />
+      ),
+      // the Border card's two colour buttons open the colour card every other
+      // colour on the bar opens, in the same pop-up — with a way back
+      [BANNER_BORDER_COLOUR]: (
+        <BannerLineColorPanel channel="line" banner={banner} setBanner={p} documentColors={docColors} onBack={() => setPanel("Banner border")} />
+      ),
+      [BANNER_GLOW_COLOUR]: (
+        <BannerLineColorPanel channel="glow" banner={banner} setBanner={p} documentColors={docColors} onBack={() => setPanel("Banner border")} />
+      ),
       "Banner transparency": <BannerTransparencyPanel banner={banner} setBanner={p} />,
       "Banner size": <BannerSizePanel theme={theme} banner={banner} setBanner={p} />,
       "Banner position": <BannerPositionPanel banner={banner} setBanner={p} />,
@@ -1435,7 +1472,7 @@ export default function ContextToolbar(p: Props) {
         popPos ? "ctx-pop-floating" : "ctx-pop-docked",
         widePanel(panel) && "ctx-pop-wide",
         (panel === "Bullet design" || panel === "Design") && "ctx-pop-xl",
-        (panel === "TextColor" || panel === "Paint" || panel === "Banner fill") && "ctx-pop-color",
+        !!panel && COLOR_PANELS.has(panel) && "ctx-pop-color",
         panel === "Numbering" && "ctx-pop-wide",
       )}
       style={
@@ -1605,6 +1642,8 @@ export default function ContextToolbar(p: Props) {
             style={{ background: bannerFillCss(banner) }}
           />
         );
+        /** the line's well wears its colour, style, weight — and its glow while it has one */
+        const lineGlow = bannerBorderGlow(banner);
         const lineWell = (
           <span
             className="ctx-line-well"
@@ -1614,6 +1653,7 @@ export default function ContextToolbar(p: Props) {
               borderStyle: bannerBorderStyle(banner) === "none" ? "dashed" : bannerBorderStyle(banner),
               borderWidth: Math.max(1, Math.min(6, banner.border.width)),
               opacity: banner.border.enabled ? 1 : 0.4,
+              boxShadow: lineGlow ? `0 0 ${3 + Math.round(lineGlow.intensity / 25)}px ${bannerBorderGlowColor(banner)}` : undefined,
             }}
           />
         );
@@ -1636,16 +1676,17 @@ export default function ContextToolbar(p: Props) {
                 {plateWell}
               </span>,
             )}
+            {/* ONE button for the whole outline — colour, style, weight,
+                transparency, corners and glow all live in its card */}
             {toggle(
               "Banner border",
               <span className="ctx-plate-fill" aria-hidden="true">
                 <span className="ctx-word">Border</span>
                 {lineWell}
               </span>,
+              undefined,
+              BANNER_BORDER_FAMILY,
             )}
-            {toggle("Banner radius", RADIUS_GLYPH)}
-            {toggle("Banner border style", <BannerBorderStyleIcon style={bannerBorderStyle(banner)} size={16} />)}
-            {toggle("Banner weight", <BannerWeightIcon size={16} />)}
             {toggle("Banner transparency", <BannerTransparencyIcon size={16} />)}
             {toggle("Banner size", <BannerSizeIcon size={16} />)}
             {toggle("Banner position", <BannerPositionIcon size={16} />)}

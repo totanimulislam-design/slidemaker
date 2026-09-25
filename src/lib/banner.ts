@@ -2,6 +2,7 @@ import {
   BANNER_AUTO_FRAME_HEIGHT,
   BANNER_WIDTH,
   DEFAULT_BANNER,
+  DEFAULT_BANNER_BORDER_GLOW,
   DEFAULT_BANNER_EFFECTS,
   DEFAULT_BANNER_GLASS,
   DEFAULT_BANNER_METALLIC,
@@ -12,7 +13,9 @@ import {
   type BannerBevelKind,
   type BannerBlurFx,
   type BannerBlurKind,
+  type BannerBorderGlow,
   type BannerBorderStyle,
+  type BannerCorners,
   type BannerDecorFx,
   type BannerDecorKind,
   type BannerDepthKind,
@@ -33,6 +36,7 @@ import {
   type BannerShape,
   type BannerShadowFx,
   type BannerShadowKind,
+  type BannerShapeFx,
   type Gradient,
   type TextBgEffectKind,
 } from "./types";
@@ -294,6 +298,113 @@ export const bannerHasLine = (b: BannerSettings): boolean =>
 export const clampOpacity = (v: number | undefined, fallback = 1): number =>
   Math.max(0, Math.min(1, Number.isFinite(v) ? (v as number) : fallback));
 
+/* ------------------------------------------------------------------ */
+/*  Border ▸ Border radius — the four corners, one by one              */
+/* ------------------------------------------------------------------ */
+
+/** the full ovals: their "corners" are the whole curve, so there is none to set */
+const OVAL_SHAPES: ReadonlySet<BannerShape> = new Set<BannerShape>(["capsule", "ovalPlate", "circlePlate", "ellipseBanner"]);
+
+/**
+ * Can this silhouette's corners be set one by one? Every plate with four
+ * corners to round can — the box, the pill, the tab, the cards, the soft glow's
+ * outline. The cut silhouettes are shaped by a clip-path and the smooth ones by
+ * a mask, so a radius has nothing to say to them, and the full ovals have no
+ * corner at all.
+ */
+export const takesCorners = (shape: BannerShape): boolean =>
+  shape !== "none" && !isClippedShape(shape) && !isMaskedShape(shape) && !OVAL_SHAPES.has(shape);
+
+/** the largest corner "Each corner" starts from — past the plate's half height a corner is a full curve anyway */
+export const CORNER_SEED_MAX = 120;
+
+const cornerPx = (v: unknown, fallback = 0): number =>
+  Math.max(0, typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : fallback);
+
+/**
+ * The corners the plate paints right now, one px value each — what the Border
+ * card's *Each corner* starts from, so flipping it on never moves a corner: a
+ * tab keeps its square bottom, a half-round its square top, the soft plates
+ * their wide curve, and a pill its round ends (capped at CORNER_SEED_MAX, where
+ * a corner on a chip this tall is a half circle already).
+ */
+export function bannerCornersNow(b: BannerSettings): BannerCorners {
+  const cap = (v: number) => Math.min(CORNER_SEED_MAX, cornerPx(v));
+  const r = plateRadius({ ...b, cornersIndependent: false });
+  if (typeof r === "number") {
+    const v = cap(r);
+    return { tl: v, tr: v, br: v, bl: v };
+  }
+  if (typeof r === "string" && !r.includes("%")) {
+    // "14px 14px 0 0" — CSS reads one to four values, clockwise from top-left
+    const parts = r.split("/")[0].trim().split(/\s+/).map((p) => Number.parseFloat(p));
+    if (parts.length && parts.every((p) => Number.isFinite(p))) {
+      const [tl, tr = tl, br = tl, bl = tr] = parts;
+      return { tl: cap(tl), tr: cap(tr), br: cap(br), bl: cap(bl) };
+    }
+  }
+  return { tl: 0, tr: 0, br: 0, bl: 0 };
+}
+
+/** the four corners the Border card holds — the ones it set, else the ones the plate paints */
+export function bannerCorners(b: BannerSettings): BannerCorners {
+  const c = b.corners;
+  if (!c) return bannerCornersNow(b);
+  return { tl: cornerPx(c.tl), tr: cornerPx(c.tr), br: cornerPx(c.br), bl: cornerPx(c.bl) };
+}
+
+/** is the plate wearing corners set one by one right now? */
+export const bannerCornersOn = (b: BannerSettings): boolean => !!b.cornersIndependent && takesCorners(b.shape);
+
+/**
+ * Does the silhouette's own corner move with the *All corners* bar? The rounded
+ * plates and the cards do; the pill, the arch and the underline keep their
+ * round ends, the classic bar its tight corner, the box its square one — those
+ * only answer to *Each corner*.
+ */
+export const radiusFollowsBar = (b: BannerSettings): boolean => {
+  const at = (radius: number) => String(plateRadius({ ...b, radius, cornersIndependent: false }));
+  return at(14) !== at(24);
+};
+
+/* ------------------------------------------------------------------ */
+/*  Border ▸ Border glow                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The outline's glow, read safely (older decks never saved one, and a deck
+ * written by hand may carry anything) — undefined while it is off, or while
+ * there is no line to give it off.
+ */
+export function bannerBorderGlow(b: BannerSettings): BannerBorderGlow | undefined {
+  const g = b.border.glow;
+  if (!g?.enabled || !bannerHasLine(b)) return undefined;
+  const size = Number.isFinite(g.size) ? Math.max(0, g.size) : DEFAULT_BANNER_BORDER_GLOW.size;
+  const intensity = Number.isFinite(g.intensity) ? Math.max(0, Math.min(100, g.intensity)) : DEFAULT_BANNER_BORDER_GLOW.intensity;
+  if (size <= 0 || intensity <= 0) return undefined;
+  return { enabled: true, size, intensity, color: typeof g.color === "string" ? g.color.trim() : "" };
+}
+
+/** the glow's colour: its own, or the line's while it is left on Auto */
+export const bannerBorderGlowColor = (b: BannerSettings): string => b.border.glow?.color?.trim() || b.border.color;
+
+/**
+ * The glow as a filter on the outline's own layer: a tight bloom hugging the
+ * line and a wide soft one around it, both in the glow's colour. A filter
+ * follows what the layer really paints, so the light traces the dashes and the
+ * dots, rounds the corners with the line, and fades with Border transparency
+ * (the shadow is cast from the line's own alpha).
+ */
+export function bannerBorderGlowFilter(b: BannerSettings): string | undefined {
+  const g = bannerBorderGlow(b);
+  if (!g) return undefined;
+  const color = g.color || b.border.color;
+  const i = g.intensity / 100;
+  const near = Math.max(1, Math.round(g.size * 3.5) / 10);
+  const a = (v: number) => Math.round(Math.min(1, v) * 100) / 100;
+  return `drop-shadow(0 0 ${near}px ${withAlpha(color, a(0.35 + 0.65 * i))}) drop-shadow(0 0 ${g.size}px ${withAlpha(color, a(0.2 + 0.7 * i))})`;
+}
+
 /** `+ 12px` / `- 12px` — a signed nudge inside a calc() */
 const nudge = (v: number) => (v < 0 ? `- ${Math.abs(v)}px` : `+ ${v}px`);
 
@@ -433,8 +544,17 @@ export function plateRect(b: BannerSettings): Pick<React.CSSProperties, "left" |
  * circle, ellipse banner), and nothing at all for the cut and the masked
  * silhouettes — their corners are cut by a clip-path or a mask, so a radius
  * would have nothing to say.
+ *
+ * The Border card's *Each corner* wins over all of that on every plate that
+ * has corners to round (`takesCorners`): the four px values it holds, clockwise
+ * from the top-left — the plate's layers, its effects and its outline all read
+ * the corners from here, so they turn together.
  */
 export function plateRadius(b: BannerSettings): number | string | undefined {
+  if (bannerCornersOn(b)) {
+    const c = bannerCorners(b);
+    return `${c.tl}px ${c.tr}px ${c.br}px ${c.bl}px`;
+  }
   switch (b.shape) {
     case "pill":
     case "badgeBanner":
@@ -1312,6 +1432,18 @@ function slantMaskPath(v: number): string {
   return `M${s.toFixed(2)} 0 L100 0 L${(100 - s).toFixed(2)} 40 L0 40 Z`;
 }
 
+/**
+ * The corners the Effects card's Shape Effects set — they win over the
+ * silhouette's own and over the Border card's, on the body and on its outline
+ * alike. Undefined while the card leaves the corners to the plate.
+ */
+export function fxCornerRadius(t: BannerShapeFx): string | undefined {
+  if (t.independent && t.cornerTL + t.cornerTR + t.cornerBR + t.cornerBL > 0) {
+    return `${t.cornerTL}px ${t.cornerTR}px ${t.cornerBR}px ${t.cornerBL}px`;
+  }
+  return t.radius > 0 ? `${t.radius}px` : undefined;
+}
+
 export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffectPaint {
   const fx = bannerEffectsOf(b);
   const shapeOpacity = clampOpacity(b.opacity);
@@ -1331,12 +1463,7 @@ export function bannerEffectsPaint(b: BannerSettings, base: string): BannerEffec
   const geo = b.shape === "underline" ? ruleRect(b) : plateRect(b);
   const t = fx.shape;
   /** the shape effects' own corners, else the silhouette's */
-  const fxRadius: number | string | undefined =
-    t.independent && t.cornerTL + t.cornerTR + t.cornerBR + t.cornerBL > 0
-      ? `${t.cornerTL}px ${t.cornerTR}px ${t.cornerBR}px ${t.cornerBL}px`
-      : t.radius > 0
-        ? `${t.radius}px`
-        : undefined;
+  const fxRadius = fxCornerRadius(t);
   const radius = fxRadius ?? plateRadius(b);
   const clip = plateClipPath(b);
   /** the shape effects cut the edge where the silhouette does not — wave wins, then curve, then slant */
@@ -2687,7 +2814,8 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
         ...common,
         ...ruleRect(b),
         background: fill,
-        borderRadius: fx.radius ?? 999,
+        // a full round end (plateRadius: 999) — or the Border card's own corners
+        borderRadius: fx.radius ?? radius,
         maskImage: ruleMask.value,
         WebkitMaskImage: ruleMask.value,
         ...ruleMask.composite,
@@ -2758,6 +2886,9 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
   /**
    * The outline is its own layer: a transparent box wearing only a border, so
    * Border transparency fades the line alone and never the paint behind it.
+   * It rounds exactly the corners the body wears (the Effects card's shape
+   * corners included), and its glow is a filter on this layer alone — the light
+   * the line gives off, never a second copy of the plate.
    */
   const lineMask = joinMasks(plateMask(b), fx.maskFade);
   const borderLine: React.CSSProperties | undefined = bannerHasLine(b)
@@ -2765,8 +2896,9 @@ export function bannerCss(b: BannerSettings, titleColor: string): BannerCss {
         ...common,
         ...(b.shape === "underline" ? ruleRect(b) : plateRect(b)),
         border: `${b.border.width}px ${bannerBorderStyle(b)} ${withAlpha(b.border.color, clampOpacity(b.border.opacity))}`,
-        borderRadius: radius,
+        borderRadius: fx.radius ?? radius,
         boxSizing: "border-box",
+        filter: bannerBorderGlowFilter(b),
         // the outline follows the cut silhouette — the ribbon's notch, the
         // hexagon's tips, the chevron's arrow — and the masked silhouette
         // clips it to the very same mask, so the line stays inside the wave

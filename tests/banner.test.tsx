@@ -3,15 +3,17 @@
  *
  * The toolbar's Title background line is one button per channel, in the order a
  * plate is dressed: Design presets · Shape · Effects · Fill · Border ·
- * Border radius · Border style · Border weight · Transparency · Banner size ·
- * Banner position · show/hide · Default.
+ * Transparency · Banner size · Banner position · show/hide · Default.
  *
  * These tests pin that order, and then walk every channel to the slide:
- * the fill repaints the plate, the border paints on a layer of its own (colour,
- * radius, style and weight), the two transparencies are line bars that reach
- * the plate and the line separately, the size and the position are free px on
- * the board, the eye takes the plate away, and Default hands the plate back its
- * factory size (a 630px-wide chip) and place.
+ * the fill repaints the plate; the ONE Border card paints the outline on a
+ * layer of its own — its colour (through the shared colour card, and back),
+ * style, weight and transparency, the corner radius for all four corners or
+ * each corner on its own, and the line's glow (size · strength · colour, auto
+ * to the line's); the shape's transparency is a line bar of its own; the size
+ * and the position are free px on the board; the eye takes the plate away; and
+ * Default hands the plate back its factory size (a 630px-wide chip) and place,
+ * with no hand-set corners and no glow.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -130,9 +132,6 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     "Banner effects",
     "Banner fill",
     "Banner border",
-    "Banner radius",
-    "Banner border style",
-    "Banner weight",
     "Banner transparency",
     "Banner size",
     "Banner position",
@@ -140,7 +139,7 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   ];
   const labels = lineButtons().map((b) => b.getAttribute("aria-label") ?? "");
   out.push({
-    name: "the Title background line reads presets · shape · effects · fill · border · radius · style · weight · transparency · size · position · eye · Default",
+    name: "the Title background line reads presets · shape · effects · fill · border · transparency · size · position · eye · Default — the whole outline is ONE button",
     pass: ORDER.every((l, i) => labels[i] === l) && !!line()?.querySelector("[data-toolbar-default]"),
     detail: labels.slice(0, ORDER.length + 1).join(" › "),
   });
@@ -725,19 +724,51 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   closePop();
 
   /* ------------------------------- border ---------------------------------- */
+  /** the four corners a `border-radius` spells, clockwise from the top-left (px) */
+  const cornersOf = (el: HTMLElement | null): number[] => {
+    const v = (el?.style.borderRadius ?? "").split("/")[0].trim();
+    const n = v ? v.split(/\s+/).map((p) => Number.parseFloat(p)) : [];
+    if (!n.length || n.some((x) => !Number.isFinite(x))) return [];
+    const [tl, tr = tl, br = tl, bl = tr] = n;
+    return [tl, tr, br, bl];
+  };
+  const sameCorners = (el: HTMLElement | null, want: number[]) => cornersOf(el).join(",") === want.join(",");
+  const borderToggle = () => doc.querySelector<HTMLElement>('.context-toolbar [role="toolbar"] [aria-label="Banner border"]');
+  const switchOf = (label: string) => pop()?.querySelector<HTMLElement>(`button[role="switch"][aria-label="${label}"]`) ?? null;
+  const popInput = (label: string) => pop()?.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`) ?? null;
+  /** a swatch in the open colour card, by its hex */
+  const swatch = (hex: string) =>
+    Array.from(pop()?.querySelectorAll<HTMLElement>(".font-color-panel button[title]") ?? []).find(
+      (b) => (b.getAttribute("title") ?? "").toLowerCase() === hex.toLowerCase(),
+    ) ?? null;
+
   openCard("Banner border");
   const outlineSwitch = Array.from(pop()?.querySelectorAll<HTMLElement>("button") ?? []).find((b) =>
     (b.textContent ?? "").includes("Outline the plate"),
   );
   click(outlineSwitch);
   out.push({
-    name: "Border colour puts an outline on the plate, on a layer of its own",
-    pass: !!plateLine() && styleOf(plateLine()).includes("solid"),
-    detail: styleOf(plateLine()).slice(0, 60),
+    name: "Border puts an outline on the plate, on a layer of its own",
+    pass: !!plateLine() && styleOf(plateLine()).includes("solid") && outlineSwitch?.getAttribute("aria-checked") === "true",
+    detail: plateLine()?.style.border ?? "no line",
   });
-  closePop();
 
-  openCard("Banner border style");
+  /* ---- ONE card: every border setting lives in the Border pop-up ---------- */
+  out.push({
+    name: "the one Border card holds colour · style · weight · transparency · corner radius · glow — and the line has no separate radius / style / weight buttons",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Banner border" &&
+      !!popButton("Border colour") &&
+      (pop()?.querySelectorAll('[role="listbox"][aria-label="Border style"] [role="option"]').length ?? 0) === 5 &&
+      !!popInput("Banner border weight (px)") &&
+      !!popInput("Banner border transparency (100 = fully visible)") &&
+      !!popInput("Banner border radius (px)") &&
+      !!popButton("Border radius: each corner") &&
+      !!switchOf("Border glow") &&
+      ["Banner radius", "Banner border style", "Banner weight"].every((l) => !line()?.querySelector(`[aria-label="${l}"]`)),
+    detail: `${pop()?.getAttribute("data-pop-panel")} · line: ${lineButtons().map((b) => b.getAttribute("aria-label")).join(" / ")}`,
+  });
+
   out.push({
     name: "Border style is five line styles as pictures — solid · dashed · dotted · double · none",
     pass:
@@ -749,57 +780,198 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   out.push({
     name: "picking a style paints the line that way",
     pass: styleOf(plateLine()).includes("dashed"),
-    detail: styleOf(plateLine()).slice(0, 60),
+    detail: plateLine()?.style.border ?? "no line",
   });
-  closePop();
 
-  openCard("Banner weight");
-  const weightInput = pop()?.querySelector<HTMLInputElement>('input[aria-label="Banner border weight (px)"]');
+  const weightInput = popInput("Banner border weight (px)");
   type(weightInput, "6");
   out.push({
     name: "Border weight is one line bar with no ceiling, and it thickens the line",
     pass: weightInput?.type === "range" && Number(weightInput?.max) >= 24 && styleOf(plateLine()).includes("6px"),
-    detail: `${weightInput?.value} of 0–${weightInput?.max} · ${styleOf(plateLine()).slice(0, 48)}`,
+    detail: `${weightInput?.value} of 0–${weightInput?.max} · ${plateLine()?.style.border ?? "no line"}`,
   });
-  closePop();
 
-  openCard("Banner radius");
-  const radiusInput = pop()?.querySelector<HTMLInputElement>('input[aria-label="Banner border radius (px)"]');
+  const radiusInput = popInput("Banner border radius (px)");
   type(radiusInput, "40");
   out.push({
-    name: "Border radius is one line bar and rounds the plate's corners",
-    pass: radiusInput?.type === "range" && plate()?.style.borderRadius === "40px",
-    detail: `${radiusInput?.value} · radius ${plate()?.style.borderRadius}`,
+    name: "Border radius (all corners) is one line bar and rounds the plate's corners — the line follows",
+    pass: radiusInput?.type === "range" && plate()?.style.borderRadius === "40px" && sameCorners(plateLine(), [40, 40, 40, 40]),
+    detail: `${radiusInput?.value} · plate ${plate()?.style.borderRadius} · line ${plateLine()?.style.borderRadius}`,
+  });
+
+  /* ---- each corner on its own ---------------------------------------------- */
+  click(popButton("Border radius: each corner"));
+  const cornerInputs = ["top-left", "top-right", "bottom-right", "bottom-left"].map((c) => popInput(`Banner border radius: ${c} (px)`));
+  out.push({
+    name: "Each corner brings four bars — top-left · top-right · bottom-right · bottom-left — starting where the corners are, so nothing moves",
+    pass:
+      popButton("Border radius: each corner")?.getAttribute("aria-pressed") === "true" &&
+      cornerInputs.every((i) => i?.type === "range" && i.value === "40") &&
+      !popInput("Banner border radius (px)") &&
+      sameCorners(plate(), [40, 40, 40, 40]),
+    detail: `${cornerInputs.map((i) => i?.value ?? "–").join(" · ")} · plate ${plate()?.style.borderRadius}`,
+  });
+  type(popInput("Banner border radius: top-left (px)"), "0");
+  type(popInput("Banner border radius: bottom-right (px)"), "60");
+  out.push({
+    name: "…and each bar rounds its own corner only — on the plate and on its outline alike",
+    pass: sameCorners(plate(), [0, 40, 60, 40]) && sameCorners(plateLine(), [0, 40, 60, 40]),
+    detail: `plate ${plate()?.style.borderRadius} · line ${plateLine()?.style.borderRadius}`,
+  });
+  click(popButton("Border radius: all corners"));
+  const backToAll = plate()?.style.borderRadius ?? "";
+  click(popButton("Border radius: each corner"));
+  out.push({
+    name: "All corners hands the plate back its one radius; Each corner starts again from there",
+    pass:
+      backToAll === "40px" &&
+      ["top-left", "top-right", "bottom-right", "bottom-left"].every((c) => popInput(`Banner border radius: ${c} (px)`)?.value === "40"),
+    detail: `all → ${backToAll} · each → ${["top-left", "top-right", "bottom-right", "bottom-left"].map((c) => popInput(`Banner border radius: ${c} (px)`)?.value).join(" · ")}`,
+  });
+  type(popInput("Banner border radius: top-right (px)"), "0");
+  type(popInput("Banner border radius: bottom-left (px)"), "0");
+  const leafCorners = cornersOf(plate()).join(",");
+
+  /* ---- the colour opens the colour card, in the same pop-up ---------------- */
+  click(popButton("Border colour"));
+  const colourCard = pop();
+  const cardTabs = Array.from(colourCard?.querySelectorAll<HTMLElement>(".font-color-panel button") ?? []).map((b) => b.textContent?.trim());
+  out.push({
+    name: "clicking Border colour opens the colour card in the same pop-up — the Border button stays lit",
+    pass:
+      colourCard?.getAttribute("data-pop-panel") === "Banner border colour" &&
+      !!colourCard?.querySelector(".font-color-panel") &&
+      !!colourCard?.querySelector('input[placeholder="FFFFFF"]') &&
+      !cardTabs.includes("Gradient") &&
+      borderToggle()?.getAttribute("aria-pressed") === "true",
+    detail: `${colourCard?.getAttribute("data-pop-panel")} · gradient tab ${cardTabs.includes("Gradient")} · toggle ${borderToggle()?.getAttribute("aria-pressed")}`,
+  });
+  click(swatch("#FF0000"));
+  out.push({
+    name: "a swatch in the colour card repaints the line",
+    pass: styleOf(plateLine()).includes("255, 0, 0"),
+    detail: plateLine()?.style.border ?? "no line",
+  });
+  click(popButton("Back to the Border card"));
+  out.push({
+    name: "the colour card's way back returns to the Border card, with the new colour on its button",
+    pass: pop()?.getAttribute("data-pop-panel") === "Banner border" && (popButton("Border colour")?.textContent ?? "").includes("#FF0000"),
+    detail: `${pop()?.getAttribute("data-pop-panel")} · ${popButton("Border colour")?.textContent ?? ""}`,
+  });
+
+  /* ---- the line's own transparency, in the Border card --------------------- */
+  const lineOpacity = popInput("Banner border transparency (100 = fully visible)");
+  type(lineOpacity, "30");
+  out.push({
+    name: "Border transparency lives in the Border card and fades the line alone",
+    pass: lineOpacity?.type === "range" && lineOpacity.min === "0" && styleOf(plateLine()).includes("0.3") && plate()?.style.opacity === "1",
+    detail: `line ${plateLine()?.style.border ?? "none"} · body opacity ${plate()?.style.opacity}`,
+  });
+  type(lineOpacity, "100");
+
+  /* ---- the line's glow ------------------------------------------------------- */
+  const glowFilter = () => plateLine()?.style.filter ?? "";
+  out.push({
+    name: "no glow until it is asked for",
+    pass: !glowFilter() && switchOf("Border glow")?.getAttribute("aria-checked") === "false" && !popInput("Banner border glow size (px)"),
+    detail: glowFilter() || "no filter",
+  });
+  click(switchOf("Border glow"));
+  out.push({
+    name: "Border glow makes the line give off light in its own colour — a filter on the line's layer, not on the plate",
+    pass:
+      glowFilter().includes("drop-shadow") &&
+      glowFilter().includes("255, 0, 0") &&
+      !(plate()?.style.filter ?? "").includes("255, 0, 0") &&
+      !!popInput("Banner border glow size (px)") &&
+      !!popInput("Banner border glow strength (0–100)"),
+    detail: glowFilter().slice(0, 90),
+  });
+  type(popInput("Banner border glow size (px)"), "30");
+  type(popInput("Banner border glow strength (0–100)"), "100");
+  out.push({
+    name: "the glow's size reaches further and its strength brightens it",
+    pass: glowFilter().includes("30px") && glowFilter().includes("rgba(255, 0, 0, 1)"),
+    detail: glowFilter().slice(0, 100),
+  });
+  click(popButton("Glow colour"));
+  out.push({
+    name: "Glow colour opens the colour card too, on Auto — the line's own colour",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Banner glow colour" &&
+      popButton("Glow colour: auto (the line's own colour)")?.getAttribute("aria-pressed") === "true" &&
+      !!pop()?.querySelector(".font-color-panel"),
+    detail: `${pop()?.getAttribute("data-pop-panel")} · auto ${popButton("Glow colour: auto (the line's own colour)")?.getAttribute("aria-pressed")}`,
+  });
+  click(swatch("#00FF00"));
+  const greenGlow = glowFilter();
+  click(popButton("Glow colour: auto (the line's own colour)"));
+  out.push({
+    name: "a colour of its own paints the glow (the line keeps its own); Auto hands it back to the line's colour",
+    pass: greenGlow.includes("0, 255, 0") && styleOf(plateLine()).includes("255, 0, 0") && glowFilter().includes("255, 0, 0") && !glowFilter().includes("0, 255, 0"),
+    detail: `own ${greenGlow.slice(0, 50)} · auto ${glowFilter().slice(0, 50)}`,
+  });
+  click(popButton("Back to the Border card"));
+  click(popButton("Banner border style: Dotted"));
+  out.push({
+    name: "the glow follows the line's style — a dotted line glows as dots, on the same layer",
+    pass: styleOf(plateLine()).includes("dotted") && glowFilter().includes("drop-shadow"),
+    detail: `${plateLine()?.style.border ?? "no line"} · ${glowFilter().slice(0, 40)}`,
   });
   closePop();
+  out.push({
+    name: "…and the corners set one by one are still on the plate after all of that",
+    pass: cornersOf(plate()).join(",") === leafCorners && leafCorners === "40,0,40,0",
+    detail: `${plate()?.style.borderRadius} (was ${leafCorners})`,
+  });
 
   /* --------------------------- transparency -------------------------------- */
   openCard("Banner transparency");
   const shapeOpacity = pop()?.querySelector<HTMLInputElement>('input[aria-label="Banner shape transparency (100 = fully visible)"]');
-  const lineOpacity = pop()?.querySelector<HTMLInputElement>('input[aria-label="Banner border transparency (100 = fully visible)"]');
   out.push({
-    name: "Transparency holds TWO line bars — the shape's and the border's — not ± steppers",
+    name: "Transparency is the SHAPE's line bar — the border's own moved into the Border card",
     pass:
       shapeOpacity?.type === "range" &&
-      lineOpacity?.type === "range" &&
       shapeOpacity?.min === "0" &&
-      lineOpacity?.min === "0",
-    detail: `shape ${shapeOpacity?.min}–${shapeOpacity?.max} · border ${lineOpacity?.min}–${lineOpacity?.max}`,
+      !pop()?.querySelector('input[aria-label="Banner border transparency (100 = fully visible)"]'),
+    detail: `shape ${shapeOpacity?.min}–${shapeOpacity?.max} · inputs ${pop()?.querySelectorAll("input").length}`,
   });
-  type(lineOpacity, "30");
-  const lineFaded = styleOf(plateLine());
-  type(shapeOpacity, "40");
+  type(shapeOpacity ?? null, "40");
   out.push({
-    name: "the two fade apart: the border's slider moves the line only, the shape's the body only",
-    pass:
-      lineFaded.includes("0.3") &&
-      plate()?.style.opacity === "0.4" &&
-      (styleOf(plateLine()).includes("0.3") || styleOf(plateLine()).includes("0.30")),
-    detail: `line ${lineFaded.slice(0, 44)} · body opacity ${plate()?.style.opacity}`,
+    name: "the shape's slider fades the body only — the line keeps its own",
+    pass: plate()?.style.opacity === "0.4" && !!plateLine() && !plateLine()?.style.opacity && styleOf(plateLine()).includes("255, 0, 0"),
+    detail: `body opacity ${plate()?.style.opacity} · line opacity ${plateLine()?.style.opacity || "–"} · ${plateLine()?.style.border ?? "no line"}`,
   });
-  type(shapeOpacity, "100");
-  type(lineOpacity, "100");
+  type(shapeOpacity ?? null, "100");
   closePop();
+
+  /* ---- the inspector's Border card: the same card, its colour card in place */
+  const asideBorder = () => doc.querySelector<HTMLElement>("aside [data-banner-border]");
+  const asideColour = () => asideBorder()?.querySelector<HTMLElement>('[data-banner-border-color] button[aria-label="Border colour"]') ?? null;
+  click(asideColour());
+  const inlineCard = asideBorder()?.querySelector<HTMLElement>('[data-banner-line-color="line"]') ?? null;
+  const blue = Array.from(inlineCard?.querySelectorAll<HTMLElement>(".font-color-panel button[title]") ?? []).find(
+    (b) => (b.getAttribute("title") ?? "").toLowerCase() === "#0000ff",
+  );
+  click(blue);
+  out.push({
+    name: "the inspector's Border card is the same one card — its colour opens the same colour card in place (nothing to go back from), and a swatch repaints the line",
+    pass:
+      !!asideBorder()?.querySelector('[data-banner-corners], [data-banner-radius]') &&
+      !!asideBorder()?.querySelector('[data-banner-border-glow]') &&
+      !!inlineCard?.querySelector(".font-color-panel") &&
+      !inlineCard.querySelector('[aria-label="Back to the Border card"]') &&
+      asideColour()?.getAttribute("aria-expanded") === "true" &&
+      styleOf(plateLine()).includes("0, 0, 255") &&
+      !pop(),
+    detail: `card ${!!inlineCard} · expanded ${asideColour()?.getAttribute("aria-expanded")} · ${plateLine()?.style.border ?? "no line"}`,
+  });
+  click(asideColour());
+  out.push({
+    name: "…and a second click folds the colour card away again",
+    pass: !asideBorder()?.querySelector("[data-banner-line-color]") && asideColour()?.getAttribute("aria-expanded") === "false",
+    detail: `expanded ${asideColour()?.getAttribute("aria-expanded")}`,
+  });
 
   /* ----------------------------- position ---------------------------------- */
   openCard("Banner position");
@@ -882,6 +1054,22 @@ export async function runBannerTests(): Promise<CaseResult[]> {
       plate()?.style.borderRadius !== "40px",
     detail: `${fresh.slice(0, 64)} · line ${!!plateLine()}`,
   });
+  openCard("Banner shape");
+  click(popButton("Banner shape: Rounded Rectangle"));
+  closePop();
+  openCard("Banner border");
+  click(switchOf("Outline the plate"));
+  out.push({
+    name: "…and it clears the corners set one by one and the line's glow — a rounded plate is back on its own 14px corner, and its line glows no more",
+    pass:
+      plate()?.style.borderRadius === "14px" &&
+      !!plateLine() &&
+      !glowFilter() &&
+      popButton("Border radius: all corners")?.getAttribute("aria-pressed") === "true" &&
+      switchOf("Border glow")?.getAttribute("aria-checked") === "false",
+    detail: `radius ${plate()?.style.borderRadius} · line ${!!plateLine()} · filter ${glowFilter() || "none"}`,
+  });
+  closePop();
 
   out.push({ name: "no uncaught errors while dressing the title plate", pass: errors.length === 0, detail: errors.slice(0, 3).join(" | ") });
 

@@ -886,14 +886,18 @@ function themeOf(p: Palette, k: Kit): Partial<ThemeSettings> {
     padX: BANNER_PAD_X,
     padY: k.bannerPadY,
     radius: k.bannerRadius,
+    // the design's radius is the corner — hand-set corners step aside
+    cornersIndependent: undefined,
+    corners: undefined,
     // a design is the plate's WHOLE look: the outline names every one of its
-    // channels (so a hand-tuned style cannot follow it onto the next design),
-    // and the plate's place is handed back to auto
+    // channels (so a hand-tuned style — or a glow — cannot follow it onto the
+    // next design), and the plate's place is handed back to auto
     border: {
       ...cloneBanner().border,
       enabled: k.bannerBorder,
       color: k.bannerBorderInk ?? titleInk,
       width: k.bannerBorderWidth,
+      glow: undefined,
     },
     // the plate's width is not a look: every design paints the same 630 px chip
     // (BANNER_WIDTH), centred on the heading, with the height hugging the line

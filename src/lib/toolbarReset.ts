@@ -93,8 +93,12 @@ function resetTitleBg(theme: ThemeSettings): ToolbarResetPatch {
         // writes this patch keeps whatever the old object had
         pos: undefined,
         // the special fills (glass · metallic · pattern) are named here for the
-        // same reason — a key the patch leaves out would survive the merge
+        // same reason — a key the patch leaves out would survive the merge —
+        // and so are the corners set one by one and the line's glow
         fillMode: undefined,
+        cornersIndependent: undefined,
+        corners: undefined,
+        border: { ...fresh.border, glow: undefined },
         textGradient: banner.textGradient,
         textGlow: banner.textGlow,
         textShadow: banner.textShadow,
@@ -389,6 +393,7 @@ export function resetShapeStyle(s: ShapeItem, accent: string): Partial<ShapeItem
  * at the values the app ships with (`DESIGN_ASPECTS` lists the same fields).
  */
 export function resetThemeToolbar(): ToolbarResetPatch {
+  const plate = cloneBanner();
   return {
     theme: {
       /* board background + frame */
@@ -402,7 +407,9 @@ export function resetThemeToolbar(): ToolbarResetPatch {
       titleColor: D.titleColor,
       titleSize: D.titleSize,
       titleBanner: D.titleBanner,
-      banner: cloneBanner(),
+      // the corners set one by one and the line's glow are not in the factory
+      // plate, so they are named — a merge keeps whatever a patch leaves out
+      banner: { ...plate, cornersIndependent: undefined, corners: undefined, border: { ...plate.border, glow: undefined } },
       /* badges 1 · 2 · 3 */
       brandColor: D.brandColor,
       brandTopColor: D.brandTopColor,
