@@ -68,7 +68,7 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
     setTheme({ banner: { ...b, ...p }, ...(p.color ? { titleBanner: p.color } : {}) });
   const css = bannerCss(b, theme.titleColor);
 
-  const cards = { theme, banner: b, setBanner: set };
+  const cards = { theme, banner: b, setBanner: set, documentColors: titleBackgroundDocumentColors(theme, b) };
 
   return (
     <div className="space-y-4">
@@ -124,9 +124,9 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
       {/* ------------------------- the plate, channel by channel ------------- */}
       <BannerPresetPanel {...cards} />
       <BannerShapePanel {...cards} />
-      <BannerEffectsPanel theme={theme} banner={b} setBanner={set} />
-      <BannerFillPanel {...cards} documentColors={titleBackgroundDocumentColors(theme, b)} />
-      <BannerBorderPanel {...cards} documentColors={titleBackgroundDocumentColors(theme, b)} />
+      <BannerEffectsPanel {...cards} />
+      <BannerFillPanel {...cards} />
+      <BannerBorderPanel {...cards} />
       <BannerTransparencyPanel banner={b} setBanner={set} />
       <BannerSizePanel {...cards} />
       <BannerPositionPanel banner={b} setBanner={set} />

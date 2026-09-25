@@ -28,7 +28,10 @@ interface Props {
   onSolid: (hex: string) => void;
   onGradient: (g: Gradient) => void;
   onClearGradient: () => void;
-  onAuto: () => void;
+  /** left out = the channel has no Auto state and the button is not shown */
+  onAuto?: () => void;
+  /** what Auto inherits, in the panel's own words — the button's tooltip */
+  autoHint?: string;
   onNone?: () => void;
 }
 
@@ -44,6 +47,7 @@ export default function PaintColorPanel({
   onGradient,
   onClearGradient,
   onAuto,
+  autoHint,
   onNone,
 }: Props) {
   const isNone = value === "transparent";
@@ -68,19 +72,21 @@ export default function PaintColorPanel({
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            aria-label={`${label}: auto (the design's own paint)`}
-            aria-pressed={isAuto && !gradOn}
-            title="Auto — let the marker design paint its own"
-            onClick={onAuto}
-            className={cn(
-              "rounded-lg border px-2 py-1 text-[11px] transition-colors",
-              isAuto && !gradOn ? "border-amber-300 bg-amber-400 font-semibold text-slate-950" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10",
-            )}
-          >
-            Auto
-          </button>
+          {onAuto && (
+            <button
+              type="button"
+              aria-label={`${label}: auto (the design's own paint)`}
+              aria-pressed={isAuto && !gradOn}
+              title={autoHint ?? "Auto — let the marker design paint its own"}
+              onClick={onAuto}
+              className={cn(
+                "rounded-lg border px-2 py-1 text-[11px] transition-colors",
+                isAuto && !gradOn ? "border-amber-300 bg-amber-400 font-semibold text-slate-950" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10",
+              )}
+            >
+              Auto
+            </button>
+          )}
           {onNone && (
             <button
               type="button"

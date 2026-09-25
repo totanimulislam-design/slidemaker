@@ -84,15 +84,24 @@ const tilesOf = (group: string) => pop()?.querySelectorAll(`[data-banner-fx-grou
 const previewsOf = (group: string) => pop()?.querySelectorAll(`[data-banner-fx-group="${group}"] [data-banner-preview]`).length ?? 0;
 /** the controls a category shows, by the labels the card gives them */
 const ctrl = (group: string, label: string) => pop()?.querySelector<HTMLInputElement>(`[data-banner-fx-group="${group}"] input[aria-label="${label}"]`) ?? null;
-/** the colour well of a category */
-const well = (group: string) => pop()?.querySelector<HTMLInputElement>(`[data-banner-fx-group="${group}"] input[type="color"]`) ?? null;
-const setColor = (el: HTMLInputElement | null, hex: string) => {
-  if (!el) return;
-  const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, "value")?.set;
+/**
+ * The colour well of a category — since the pop-up rework it is a BUTTON that
+ * opens the shared colour card (Solid colour · Gradient) in a floating pop-up
+ * of its own, portalled to <body> as `[data-color-popover]`.
+ */
+const well = (group: string) =>
+  pop()?.querySelector<HTMLButtonElement>(`[data-banner-fx-group="${group}"] [data-paint-popover-field] button[aria-haspopup="dialog"]`) ?? null;
+/** the floating colour card the well opened */
+const colorCard = () => doc.querySelector<HTMLElement>("[data-color-popover]");
+/** pick a colour for a category: open its card, commit the hex, toggle the card away again */
+const setColor = (group: string, hex: string) => {
+  click(well(group));
+  const input = colorCard()?.querySelector<HTMLInputElement>('input[placeholder="FFFFFF"]') ?? null;
+  type(input, hex.replace("#", ""));
   act(() => {
-    setter?.call(el, hex);
-    el.dispatchEvent(new win.Event("input", { bubbles: true }));
+    input?.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
+  click(well(group));
 };
 /** the deck's plate colour as the effects read it, in both spellings — jsdom
     normalizes a colour inside a gradient, so a style string may carry either */
@@ -108,9 +117,20 @@ const painted = (el: HTMLElement | null, hex: string) => {
 };
 /** how many paints a background string stacks, one per `…-gradient(` */
 const paints = (s: string) => (s.match(/gradient\(/g) ?? []).length;
-/** the Auto button a category's colour well carries */
-const hasAuto = (group: string) =>
-  Array.from(pop()?.querySelectorAll(`[data-banner-fx-group="${group}"] button`) ?? []).some((b) => b.textContent?.trim() === "Auto");
+/** the Auto button a category's colour card carries — inside the floating card the well opens */
+const hasAuto = (group: string) => {
+  click(well(group));
+  const has = Array.from(colorCard()?.querySelectorAll("button") ?? []).some((b) => b.textContent?.trim() === "Auto");
+  click(well(group));
+  return has;
+};
+/** …and both paints in one card: the Solid colour and the Gradient tab */
+const hasBothTabs = (group: string) => {
+  click(well(group));
+  const tabs = Array.from(colorCard()?.querySelectorAll(".font-color-panel button") ?? []).map((b) => b.textContent?.trim());
+  click(well(group));
+  return tabs.includes("Solid") && tabs.includes("Gradient");
+};
 
 const CATEGORIES = ["shadow", "glow", "blur", "glass", "bevel", "threeD", "highlight", "decor", "modern", "shape"];
 /** every category and the tiles it holds, plus the None that turns it off */
@@ -302,8 +322,8 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
   });
   out.push({
     name: "the shadow's colour well reads Auto and shows the shape's colour — the plate's paint is what the effect wears",
-    pass: (well("shadow")?.value ?? "").toLowerCase() === PLATE && hasAuto("shadow"),
-    detail: `${well("shadow")?.value} + Auto`,
+    pass: (well("shadow")?.textContent ?? "").toLowerCase().includes(`auto · ${PLATE}`) && hasAuto("shadow") && hasBothTabs("shadow"),
+    detail: `${well("shadow")?.textContent?.trim()} + Auto`,
   });
   out.push({
     name: "the shadow's controls are exactly X · Y · Blur · Spread · Opacity and a colour well",
@@ -324,7 +344,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     pass: shadowOf() === "20px -12px 40px 6px rgba(31, 95, 208, 0.8)",
     detail: shadowOf(),
   });
-  setColor(well("shadow"), "#29b36f");
+  setColor("shadow", "#29b36f");
   await frame();
   out.push({
     name: "Colored Shadow wears the picked colour — the well repaints the shadow itself",
@@ -452,7 +472,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     pass: (shadowOf().match(/rgba\(/g) ?? []).length === 2 && /0 0 1[0-9][0-9]px/.test(shadowOf()),
     detail: shadowOf(),
   });
-  setColor(well("glow"), "#22d3ee");
+  setColor("glow", "#22d3ee");
   await frame();
   out.push({
     name: "the glow's colour well repaints the light — #22d3ee reaches the plate",
@@ -531,7 +551,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     pass: filterOf().includes("blur(") && !!overlays()[0]?.style.backdropFilter,
     detail: `${filterOf()} · ${overlays()[0]?.style.backdropFilter ?? ""}`,
   });
-  setColor(well("blur"), "#a78bfa");
+  setColor("blur", "#a78bfa");
   await frame();
   out.push({
     name: "the blur's colour follows its own well — the frost repaints in the picked tint",
@@ -584,7 +604,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     detail: `${(overlays()[0]?.style.border ?? "").slice(0, 26)} · ${(overlays()[0]?.style.boxShadow ?? "").slice(0, 34)}`,
   });
   const glassBefore = styleOf(overlays()[0] ?? null);
-  setColor(well("glass"), "#fbcfe8");
+  setColor("glass", "#fbcfe8");
   await frame();
   out.push({
     name: "the glass Tint repaints the pane — the picked tint reaches the plate's own tones",
@@ -659,7 +679,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     pass: (shadowOf().match(/inset/g) ?? []).length === 2 && Number(ctrl("bevel", "Banner fx: bevel blur (px)")?.value) === 4,
     detail: shadowOf(),
   });
-  setColor(well("bevel"), "#000000");
+  setColor("bevel", "#000000");
   await frame();
   out.push({
     name: "the bevel's colour well repaints the cut — a picked black shades the plate's own edge",
@@ -750,7 +770,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     detail: shadowOf(),
   });
   const pressedBefore = shadowOf();
-  setColor(well("threeD"), "#7c3aed");
+  setColor("threeD", "#7c3aed");
   await frame();
   out.push({
     name: "the 3D colour repaints the pressed edge — a picked colour reaches the body",
@@ -843,7 +863,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     pass: (overlays()[0]?.style.background ?? "").includes("linear-gradient"),
     detail: (overlays()[0]?.style.background ?? "").slice(0, 48),
   });
-  setColor(well("highlight"), "#ffd633");
+  setColor("highlight", "#ffd633");
   await frame();
   out.push({
     name: "the highlight's colour well repaints the light",
@@ -954,7 +974,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
   });
   click(popButton("Banner decor: Pattern Overlay"));
   const decorBefore = styleOf(overlays()[0] ?? null);
-  setColor(well("decor"), "#22d3ee");
+  setColor("decor", "#22d3ee");
   await frame();
   out.push({
     name: "the decoration's colour well repaints it — the accent follows the picked colour",
@@ -1031,7 +1051,7 @@ export async function runBannerFxTests(): Promise<CaseResult[]> {
     detail: `${liftBefore.slice(0, 40)} → ${shadowOf().slice(0, 40)}`,
   });
   const tintBefore = shadowOf();
-  setColor(well("modern"), "#d8b4fe");
+  setColor("modern", "#d8b4fe");
   await frame();
   out.push({
     name: "the finish's tint repaints the lift — a picked tint reaches the shadows",

@@ -58,6 +58,7 @@ import {
   clampOpacity,
   fxCornerRadius,
   glassFillCss,
+  gradientCss,
   isClippedShape,
   isMaskedShape,
   metallicFillCss,
@@ -75,8 +76,12 @@ import type { BannerEffects, BannerShapeFx } from "../lib/types";
 import { shade } from "../lib/color";
 import { rotateHue } from "../lib/textEffects";
 import FontColorPanel, { type Tab as ColorPanelTab } from "./FontColorPanel";
-import { ColorField, Field, Slider, Toggle } from "./ui";
+import PaintPopoverField, { AnchoredPopover } from "./ColorPopover";
+import { Field, Slider, Toggle } from "./ui";
 import { cn } from "../utils/cn";
+
+/** the channel's gradient switched off (kept for the next time), never invented */
+const gradOff = (g?: Gradient): Gradient | undefined => (g ? { ...g, enabled: false } : undefined);
 
 /**
  * The title background plate's own controls — one card per channel, so the
@@ -130,6 +135,8 @@ interface BannerProps {
   banner: BannerSettings;
   /** one writer for the plate — it keeps `theme.titleBanner` in step */
   setBanner: (patch: Partial<BannerSettings>) => void;
+  /** the deck's own colours, offered inside every colour pop-up */
+  documentColors?: string[];
 }
 
 /** the plate the deck is painting right now, with the legacy colour folded in */
@@ -898,7 +905,7 @@ function FxGroup({
  * category each effect belongs to — so an old deck opens with its effect already
  * selected in the right place, and this card never writes the old groups again.
  */
-export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
+export function BannerEffectsPanel({ theme, banner, setBanner, documentColors }: BannerProps) {
   const fx = bannerEffectsOf(banner);
   const setFx = (patch: Partial<BannerEffects>) => setBanner({ effects: { ...fx, ...patch } });
   const setShape = (patch: Partial<BannerShapeFx>) => setBanner({ effects: { ...fx, shape: { ...fx.shape, ...patch } } });
@@ -908,6 +915,36 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
   const dress = <G extends keyof BannerEffects>(key: G, on: BannerEffects[G]) => ({ ...fx, [key]: on } as BannerEffects);
   /** the deck's own colour first in every well, so an effect can wear it back */
   const swatches = (...extra: string[]) => Array.from(new Set([shapeColor, ...extra]));
+  /** the pop-up's document row: the deck's colours, the shape's own, then this channel's classics */
+  const docColors = (...extra: string[]) =>
+    Array.from(new Set([...(documentColors ?? []), ...swatches(...extra)].map((c) => String(c || "").toLowerCase()))).filter((c) =>
+      /^#[0-9a-f]{6}$/.test(c),
+    );
+  /**
+   * One colour channel of one effect group, as the button that opens the
+   * colour pop-up (Solid colour · Gradient · Auto) — the user asked every
+   * colour under Title background to open the same two-tab card.
+   */
+  const fxPaint = (
+    key: "shadow" | "glow" | "blur" | "glass" | "bevel" | "threeD" | "highlight" | "decor" | "modern",
+    label: string,
+    group: { color: string; gradient?: Gradient },
+    ...extra: string[]
+  ) => (
+    <PaintPopoverField
+      label={label}
+      hint={group.color || group.gradient?.enabled ? undefined : "the shape's colour"}
+      value={group.color}
+      gradient={group.gradient}
+      fallback={shapeColor}
+      documentColors={docColors(...extra)}
+      onSolid={(v) => setFx({ [key]: { ...group, color: v, gradient: gradOff(group.gradient) } } as Partial<BannerEffects>)}
+      onGradient={(gr) => setFx({ [key]: { ...group, gradient: gr } } as Partial<BannerEffects>)}
+      onClearGradient={() => setFx({ [key]: { ...group, gradient: gradOff(group.gradient) } } as Partial<BannerEffects>)}
+      onAuto={() => setFx({ [key]: { ...group, color: "", gradient: gradOff(group.gradient) } } as Partial<BannerEffects>)}
+      autoHint="Auto — follow the shape's colour"
+    />
+  );
   const s = fx.shadow;
   const g = fx.glow;
   const b = fx.blur;
@@ -978,15 +1015,7 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
                 <Slider min={0} max={100} step={1} value={s.opacity} onChange={(v) => setFx({ shadow: { ...s, opacity: v } })} ariaLabel="Banner fx: shadow opacity (%)" />
               </Field>
             </div>
-            <ColorField
-              label="Shadow colour"
-              autoHint="Follow the shape's colour"
-              hint={s.color ? undefined : "the shape's colour"}
-              value={s.color}
-              fallback={shapeColor}
-              presets={swatches("#000000", "#1f5fd0", "#7c3aed", "#b91c1c", "#059669", "#b45309")}
-              onChange={(v) => setFx({ shadow: { ...s, color: v || "" } })}
-            />
+            {fxPaint("shadow", "Shadow colour", s, "#000000", "#1f5fd0", "#7c3aed", "#b91c1c", "#059669", "#b45309")}
           </div>
         )}
       </FxGroup>
@@ -1016,15 +1045,7 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
             <Field label="Blur" hint={`${g.blur}px`}>
               <Slider min={0} max={60} step={1} value={g.blur} onChange={(v) => setFx({ glow: { ...g, blur: v } })} ariaLabel="Banner fx: glow blur (px)" />
             </Field>
-            <ColorField
-              label="Glow colour"
-              autoHint="Follow the shape's colour"
-              hint={g.color ? undefined : "the shape's colour"}
-              value={g.color}
-              fallback={shapeColor}
-              presets={swatches("#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6", "#4ade80")}
-              onChange={(v) => setFx({ glow: { ...g, color: v || "" } })}
-            />
+            {fxPaint("glow", "Glow colour", g, "#ffffff", "#ffd633", "#22d3ee", "#a78bfa", "#f472b6", "#4ade80")}
           </div>
         )}
       </FxGroup>
@@ -1057,15 +1078,7 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
             <Field label="Direction °" hint={`${b.angle}°`}>
               <Slider min={-180} max={180} step={1} value={b.angle} onChange={(v) => setFx({ blur: { ...b, angle: v } })} ariaLabel="Banner fx: blur direction (deg)" />
             </Field>
-            <ColorField
-              label="Blur colour"
-              autoHint="Follow the shape's colour"
-              hint={b.color ? undefined : "the shape's colour"}
-              value={b.color}
-              fallback={shapeColor}
-              presets={swatches("#ffffff", "#000000", "#22d3ee", "#a78bfa", "#f472b6", "#94a3b8")}
-              onChange={(v) => setFx({ blur: { ...b, color: v || "" } })}
-            />
+            {fxPaint("blur", "Blur colour", b, "#ffffff", "#000000", "#22d3ee", "#a78bfa", "#f472b6", "#94a3b8")}
           </div>
         )}
       </FxGroup>
@@ -1095,15 +1108,7 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
             <Field label="Intensity" hint={`${gl.intensity}`}>
               <Slider min={0} max={100} step={1} value={gl.intensity} onChange={(v) => setFx({ glass: { ...gl, intensity: v } })} ariaLabel="Banner fx: glass intensity" />
             </Field>
-            <ColorField
-              label="Glass tint"
-              autoHint="Follow the shape's colour"
-              hint={gl.color ? undefined : "the shape's colour"}
-              value={gl.color}
-              fallback={shapeColor}
-              presets={swatches("#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f")}
-              onChange={(v) => setFx({ glass: { ...gl, color: v || "" } })}
-            />
+            {fxPaint("glass", "Glass tint", gl, "#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f")}
             <p className="text-[10px] leading-relaxed text-slate-500">
               The glass family blurs the board through the plate in the browser; exports carry the tint and the rim instead.
             </p>
@@ -1139,15 +1144,7 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
             <Field label="Angle °" hint={`${bv.angle}°`}>
               <Slider min={0} max={360} step={5} value={bv.angle} onChange={(v) => setFx({ bevel: { ...bv, angle: v } })} ariaLabel="Banner fx: bevel angle (deg)" />
             </Field>
-            <ColorField
-              label="Bevel colour"
-              autoHint="Follow the shape's colour"
-              hint={bv.color ? undefined : "the shape's colour"}
-              value={bv.color}
-              fallback={shapeColor}
-              presets={swatches("#ffffff", "#000000", "#ffd633", "#22d3ee", "#a78bfa", "#94a3b8")}
-              onChange={(v) => setFx({ bevel: { ...bv, color: v || "" } })}
-            />
+            {fxPaint("bevel", "Bevel colour", bv, "#ffffff", "#000000", "#ffd633", "#22d3ee", "#a78bfa", "#94a3b8")}
             <p className="text-[10px] leading-relaxed text-slate-500">
               0° is light from straight above; walk the angle round and the bevel's lit edge follows it.
             </p>
@@ -1183,15 +1180,7 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
             <Field label="Angle °" hint={`${d.angle}°`}>
               <Slider min={0} max={360} step={5} value={d.angle} onChange={(v) => setFx({ threeD: { ...d, angle: v } })} ariaLabel="Banner fx: 3D angle (deg)" />
             </Field>
-            <ColorField
-              label="3D colour"
-              autoHint="Follow the shape's colour"
-              hint={d.color ? undefined : "the shape's colour"}
-              value={d.color}
-              fallback={shapeColor}
-              presets={swatches("#000000", "#ffffff", "#1f5fd0", "#7c3aed", "#059669", "#b91c1c")}
-              onChange={(v) => setFx({ threeD: { ...d, color: v || "" } })}
-            />
+            {fxPaint("threeD", "3D colour", d, "#000000", "#ffffff", "#1f5fd0", "#7c3aed", "#059669", "#b91c1c")}
             <p className="text-[10px] leading-relaxed text-slate-500">
               The slabs and the shadows are the shape's own paint, shaded; the turns (Perspective · Tilt · Pop out) leave the paint alone
               and tip the plate in space. 90° runs the depth straight down, 0° straight up.
@@ -1228,15 +1217,7 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
             <Field label="Angle °" hint={`${h.angle}°`}>
               <Slider min={0} max={360} step={5} value={h.angle} onChange={(v) => setFx({ highlight: { ...h, angle: v } })} ariaLabel="Banner fx: highlight angle (deg)" />
             </Field>
-            <ColorField
-              label="Highlight colour"
-              autoHint="Follow the shape's colour"
-              hint={h.color ? undefined : "the shape's colour"}
-              value={h.color}
-              fallback={shapeColor}
-              presets={swatches("#ffffff", "#ffd633", "#22d3ee", "#f472b6", "#a78bfa", "#000000")}
-              onChange={(v) => setFx({ highlight: { ...h, color: v || "" } })}
-            />
+            {fxPaint("highlight", "Highlight colour", h, "#ffffff", "#ffd633", "#22d3ee", "#f472b6", "#a78bfa", "#000000")}
             <p className="text-[10px] leading-relaxed text-slate-500">
               0° lays the light on from the top edge, 90° from the right — walk the angle and the sheen follows it.
             </p>
@@ -1266,15 +1247,7 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
             <Field label="Intensity" hint={`${dc.intensity}`}>
               <Slider min={0} max={100} step={1} value={dc.intensity} onChange={(v) => setFx({ decor: { ...dc, intensity: v } })} ariaLabel="Banner fx: decorative intensity" />
             </Field>
-            <ColorField
-              label="Decorative colour"
-              autoHint="Follow the shape's colour"
-              hint={dc.color ? undefined : "the shape's colour"}
-              value={dc.color}
-              fallback={shapeColor}
-              presets={swatches("#ffffff", "#000000", "#ffd633", "#22d3ee", "#f472b6", "#94a3b8")}
-              onChange={(v) => setFx({ decor: { ...dc, color: v || "" } })}
-            />
+            {fxPaint("decor", "Decorative colour", dc, "#ffffff", "#000000", "#ffd633", "#22d3ee", "#f472b6", "#94a3b8")}
           </div>
         )}
       </FxGroup>
@@ -1304,15 +1277,7 @@ export function BannerEffectsPanel({ theme, banner, setBanner }: BannerProps) {
             <Field label="Blur" hint={`${m.blur}px`}>
               <Slider min={0} max={40} step={1} value={m.blur} onChange={(v) => setFx({ modern: { ...m, blur: v } })} ariaLabel="Banner fx: modern blur (px)" />
             </Field>
-            <ColorField
-              label="Finish tint"
-              autoHint="Follow the shape's colour"
-              hint={m.color ? undefined : "the shape's colour"}
-              value={m.color}
-              fallback={shapeColor}
-              presets={swatches("#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f")}
-              onChange={(v) => setFx({ modern: { ...m, color: v || "" } })}
-            />
+            {fxPaint("modern", "Finish tint", m, "#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f")}
           </div>
         )}
       </FxGroup>
@@ -1730,6 +1695,11 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
   const glass = { ...DEFAULT_BANNER_GLASS, ...banner.glass };
   const metal = { ...DEFAULT_BANNER_METALLIC, ...banner.metallic };
   const pat = { ...DEFAULT_BANNER_PATTERN, ...banner.pattern };
+  /** a special paint's pop-up offers the deck's colours, the plate's own, then the paint's classics */
+  const fillDocColors = (...extra: string[]) =>
+    Array.from(new Set([...documentColors, base, ...extra].map((c) => String(c || "").toLowerCase()))).filter((c) =>
+      /^#[0-9a-f]{6}$/.test(c),
+    );
 
   /* which fill is on — multi-colour and transparent are recognised from the
      stops, while the ordinary ramps read their gradient type */
@@ -1899,14 +1869,18 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
     mode === "glass" ? (
       <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
         <Cap hint="special fill">Glass / frosted</Cap>
-        <ColorField
+        <PaintPopoverField
           label="Pane tint"
-          autoHint="Follow the plate's colour"
-          hint={glass.color ? undefined : "the plate's colour"}
+          hint={glass.color || glass.gradient?.enabled ? undefined : "the plate's colour"}
           value={glass.color}
+          gradient={glass.gradient}
           fallback={base}
-          presets={["#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f"]}
-          onChange={(v) => setBanner({ glass: { ...glass, color: v || "" } })}
+          documentColors={fillDocColors("#ffffff", "#93c5fd", "#a5f3fc", "#d8b4fe", "#fbcfe8", "#0b0b0f")}
+          onSolid={(v) => setBanner({ glass: { ...glass, color: v, gradient: gradOff(glass.gradient) } })}
+          onGradient={(gr) => setBanner({ glass: { ...glass, gradient: gr } })}
+          onClearGradient={() => setBanner({ glass: { ...glass, gradient: gradOff(glass.gradient) } })}
+          onAuto={() => setBanner({ glass: { ...glass, color: "", gradient: gradOff(glass.gradient) } })}
+          autoHint="Auto — follow the plate's colour"
         />
         <Field label="Pane opacity" hint={`${glass.opacity}`}>
           <Slider min={0} max={100} value={glass.opacity} onChange={(v) => setBanner({ glass: { ...glass, opacity: v } })} ariaLabel="Glass fill: pane opacity" />
@@ -1918,14 +1892,18 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
     ) : mode === "metallic" ? (
       <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
         <Cap hint="special fill">Metallic</Cap>
-        <ColorField
+        <PaintPopoverField
           label="Metal tone"
-          autoHint="Follow the plate's colour"
-          hint={metal.color ? undefined : "the plate's colour"}
+          hint={metal.color || metal.gradient?.enabled ? undefined : "the plate's colour"}
           value={metal.color}
+          gradient={metal.gradient}
           fallback={base}
-          presets={METAL_SWATCHES}
-          onChange={(v) => setBanner({ metallic: { ...metal, color: v || "" } })}
+          documentColors={fillDocColors(...METAL_SWATCHES)}
+          onSolid={(v) => setBanner({ metallic: { ...metal, color: v, gradient: gradOff(metal.gradient) } })}
+          onGradient={(gr) => setBanner({ metallic: { ...metal, gradient: gr } })}
+          onClearGradient={() => setBanner({ metallic: { ...metal, gradient: gradOff(metal.gradient) } })}
+          onAuto={() => setBanner({ metallic: { ...metal, color: "", gradient: gradOff(metal.gradient) } })}
+          autoHint="Auto — follow the plate's colour"
         />
         <Field label="Sheen direction" hint={`${metal.angle}°`}>
           <Slider min={0} max={359} value={metal.angle} onChange={(v) => setBanner({ metallic: { ...metal, angle: v } })} ariaLabel="Metallic fill: sheen direction (deg)" />
@@ -1964,23 +1942,31 @@ export function BannerFillPanel({ banner, setBanner, documentColors = [] }: Bann
             );
           })}
         </div>
-        <ColorField
+        <PaintPopoverField
           label="Pattern ink"
-          autoHint="Follow the plate's colour"
-          hint={pat.color ? undefined : "the plate's colour"}
+          hint={pat.color || pat.gradient?.enabled ? undefined : "the plate's colour"}
           value={pat.color}
+          gradient={pat.gradient}
           fallback={base}
-          presets={["#ffffff", "#ffd633", "#0b0b0f"]}
-          onChange={(v) => setBanner({ pattern: { ...pat, color: v || "" } })}
+          documentColors={fillDocColors("#ffffff", "#ffd633", "#0b0b0f")}
+          onSolid={(v) => setBanner({ pattern: { ...pat, color: v, gradient: gradOff(pat.gradient) } })}
+          onGradient={(gr) => setBanner({ pattern: { ...pat, gradient: gr } })}
+          onClearGradient={() => setBanner({ pattern: { ...pat, gradient: gradOff(pat.gradient) } })}
+          onAuto={() => setBanner({ pattern: { ...pat, color: "", gradient: gradOff(pat.gradient) } })}
+          autoHint="Auto — follow the plate's colour"
         />
-        <ColorField
+        <PaintPopoverField
           label="Ground"
-          autoHint="Follow the plate's colour"
-          hint={pat.back ? undefined : "the plate's colour"}
+          hint={pat.back || pat.backGradient?.enabled ? undefined : "the plate's colour"}
           value={pat.back}
+          gradient={pat.backGradient}
           fallback={base}
-          presets={["#0b0b0f", "#ffffff", "#1e293b"]}
-          onChange={(v) => setBanner({ pattern: { ...pat, back: v || "" } })}
+          documentColors={fillDocColors("#0b0b0f", "#ffffff", "#1e293b")}
+          onSolid={(v) => setBanner({ pattern: { ...pat, back: v, backGradient: gradOff(pat.backGradient) } })}
+          onGradient={(gr) => setBanner({ pattern: { ...pat, backGradient: gr } })}
+          onClearGradient={() => setBanner({ pattern: { ...pat, backGradient: gradOff(pat.backGradient) } })}
+          onAuto={() => setBanner({ pattern: { ...pat, back: "", backGradient: gradOff(pat.backGradient) } })}
+          autoHint="Auto — follow the plate's colour"
         />
         <Field label="Motif size" hint={`${pat.scale}`}>
           <Slider min={0} max={100} value={pat.scale} onChange={(v) => setBanner({ pattern: { ...pat, scale: v } })} ariaLabel="Pattern fill: motif size" />
@@ -2123,7 +2109,19 @@ function LineSwitch({ label, checked, onChange, hint }: { label: string; checked
 }
 
 /** the button that opens a colour card: the swatch, the channel's name and the colour it paints */
-function ColorRow({ label, color, caption, open, onClick }: { label: string; color: string; caption: string; open: boolean; onClick: () => void }) {
+function ColorRow({
+  label,
+  color,
+  caption,
+  open,
+  onClick,
+}: {
+  label: string;
+  color: string;
+  caption: string;
+  open: boolean;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
   return (
     <button
       type="button"
@@ -2173,13 +2171,28 @@ export function BannerLineColorPanel({
   const border = banner.border;
   const glow = channel === "glow";
   const label = glow ? "Glow colour" : "Border colour";
-  const auto = glow && !border.glow?.color?.trim();
+  const gradient = glow ? border.glow?.gradient : border.gradient;
+  const gradOn = !!gradient?.enabled;
+  const auto = glow && !gradOn && !border.glow?.color?.trim();
   const value = glow ? bannerBorderGlowColor(banner) : border.color;
+  const swatch = gradOn ? gradientCss(gradient!, value) : value;
   const pick = (hex: string) =>
     setBanner({
       border: glow
-        ? { ...lineVisible(border), glow: { ...glowOf(border), enabled: true, color: hex } }
-        : { ...lineVisible(border), color: hex },
+        ? { ...lineVisible(border), glow: { ...glowOf(border), enabled: true, color: hex, gradient: gradOff(border.glow?.gradient) } }
+        : { ...lineVisible(border), color: hex, gradient: gradOff(border.gradient) },
+    });
+  const pickGradient = (gr: Gradient) =>
+    setBanner({
+      border: glow
+        ? { ...lineVisible(border), glow: { ...glowOf(border), enabled: true, gradient: gr } }
+        : { ...lineVisible(border), gradient: gr },
+    });
+  const clearGradient = () =>
+    setBanner({
+      border: glow
+        ? { ...border, glow: { ...glowOf(border), gradient: gradOff(border.glow?.gradient) } }
+        : { ...border, gradient: gradOff(border.gradient) },
     });
   return (
     <div className="banner-line-color-panel flex w-full flex-col" data-banner-line-color={channel}>
@@ -2195,11 +2208,11 @@ export function BannerLineColorPanel({
             ← Border
           </button>
         )}
-        <span className="h-9 w-12 shrink-0 rounded-lg border border-white/15 shadow-inner" style={{ background: value }} aria-hidden="true" />
+        <span className="h-9 w-12 shrink-0 rounded-lg border border-white/15 shadow-inner" style={{ background: swatch }} aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
           <span className="block truncate font-mono text-[11px] text-slate-300">
-            {auto ? `auto · the line's ${value.toUpperCase()}` : value.toUpperCase()}
+            {gradOn ? "gradient" : auto ? `auto · the line's ${value.toUpperCase()}` : value.toUpperCase()}
           </span>
         </span>
         {glow && (
@@ -2208,7 +2221,7 @@ export function BannerLineColorPanel({
             aria-label="Glow colour: auto (the line's own colour)"
             aria-pressed={auto}
             title="Auto — the glow wears the line's own colour"
-            onClick={() => setBanner({ border: { ...border, glow: { ...glowOf(border), color: "" } } })}
+            onClick={() => setBanner({ border: { ...border, glow: { ...glowOf(border), color: "", gradient: gradOff(border.glow?.gradient) } } })}
             className={cn(
               "shrink-0 rounded-lg border px-2 py-1 text-[11px] transition-colors",
               auto ? "border-amber-300 bg-amber-400 font-semibold text-slate-950" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10",
@@ -2218,7 +2231,15 @@ export function BannerLineColorPanel({
           </button>
         )}
       </div>
-      <FontColorPanel solidOnly solid={value} onSolid={pick} onGradient={() => undefined} documentColors={documentColors} title={label} />
+      <FontColorPanel
+        solid={/^#[0-9a-f]{3,8}$/i.test(value) ? value : "#ffffff"}
+        gradient={gradient}
+        onSolid={pick}
+        onGradient={pickGradient}
+        onClearGradient={clearGradient}
+        documentColors={documentColors}
+        title={label}
+      />
     </div>
   );
 }
@@ -2254,7 +2275,7 @@ export function BannerBorderPanel({
   /** the deck's colours, for the colour card opened in place (the inspector) */
   documentColors?: string[];
 }) {
-  const [inline, setInline] = useState<BannerLineColorChannel | null>(null);
+  const [colorPop, setColorPop] = useState<{ channel: BannerLineColorChannel; anchor: HTMLElement } | null>(null);
   const border = banner.border;
   const setBorder = (next: BannerBorder) => setBanner({ border: next });
   const outlinable = canOutline(banner.shape);
@@ -2276,15 +2297,25 @@ export function BannerBorderPanel({
   const fx = bannerEffectsOf(banner);
   const fxCorners = fxCornerRadius(fx.shape);
 
-  const openColor = (channel: BannerLineColorChannel) => {
-    if (onPickColor) onPickColor(channel);
-    else setInline((c) => (c === channel ? null : channel));
+  /**
+   * A colour button opens the colour card as a POP-UP anchored to the button
+   * (Solid colour · Gradient in one card) — on the toolbar it hands the card
+   * to the toolbar's own pop-up instead.
+   */
+  const openColor = (channel: BannerLineColorChannel, e: React.MouseEvent<HTMLButtonElement>) => {
+    if (onPickColor) return onPickColor(channel);
+    const anchor = e.currentTarget;
+    setColorPop((c) => (c?.channel === channel ? null : { channel, anchor }));
   };
-  const inlineCard = (channel: BannerLineColorChannel) =>
-    !onPickColor && inline === channel ? (
-      <div className="banner-line-color-inline overflow-hidden rounded-xl border border-white/10">
-        <BannerLineColorPanel channel={channel} banner={banner} setBanner={setBanner} documentColors={documentColors} />
-      </div>
+  const colorCard =
+    !onPickColor && colorPop ? (
+      <AnchoredPopover
+        anchor={colorPop.anchor}
+        onClose={() => setColorPop(null)}
+        label={colorPop.channel === "glow" ? "Glow colour — colour card" : "Border colour — colour card"}
+      >
+        <BannerLineColorPanel channel={colorPop.channel} banner={banner} setBanner={setBanner} documentColors={documentColors} />
+      </AnchoredPopover>
     ) : null;
 
   const radiusHint = !cornered
@@ -2317,8 +2348,13 @@ export function BannerBorderPanel({
       <div className={cn("space-y-3", !outlinable && "opacity-50")}>
         {/* ------------------------------ colour ------------------------------ */}
         <div className="space-y-1.5" data-banner-border-color="">
-          <ColorRow label="Border colour" color={border.color} caption={border.color.toUpperCase()} open={inline === "line"} onClick={() => openColor("line")} />
-          {inlineCard("line")}
+          <ColorRow
+            label="Border colour"
+            color={border.gradient?.enabled ? gradientCss(border.gradient, border.color) : border.color}
+            caption={border.gradient?.enabled ? "gradient" : border.color.toUpperCase()}
+            open={colorPop?.channel === "line"}
+            onClick={(e) => openColor("line", e)}
+          />
         </div>
 
         {/* ------------------------------ style ------------------------------- */}
@@ -2514,15 +2550,22 @@ export function BannerBorderPanel({
             </Field>
             <ColorRow
               label="Glow colour"
-              color={glowColor}
-              caption={glow.color.trim() ? glowColor.toUpperCase() : `auto · the line's ${border.color.toUpperCase()}`}
-              open={inline === "glow"}
-              onClick={() => openColor("glow")}
+              color={glow.gradient?.enabled ? gradientCss(glow.gradient, glowColor) : glowColor}
+              caption={
+                glow.gradient?.enabled
+                  ? "gradient"
+                  : glow.color.trim()
+                    ? glowColor.toUpperCase()
+                    : `auto · the line's ${border.color.toUpperCase()}`
+              }
+              open={colorPop?.channel === "glow"}
+              onClick={(e) => openColor("glow", e)}
             />
-            {inlineCard("glow")}
           </div>
         )}
       </div>
+
+      {colorCard}
 
       <p className="text-[10px] leading-relaxed text-slate-500">
         The line is painted on a layer of its own: it fades with Border transparency and never covers the fill. Its glow is the

@@ -837,12 +837,13 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   const colourCard = pop();
   const cardTabs = Array.from(colourCard?.querySelectorAll<HTMLElement>(".font-color-panel button") ?? []).map((b) => b.textContent?.trim());
   out.push({
-    name: "clicking Border colour opens the colour card in the same pop-up — the Border button stays lit",
+    name: "clicking Border colour opens the colour card in the same pop-up — Solid and Gradient in one card, the Border button stays lit",
     pass:
       colourCard?.getAttribute("data-pop-panel") === "Banner border colour" &&
       !!colourCard?.querySelector(".font-color-panel") &&
       !!colourCard?.querySelector('input[placeholder="FFFFFF"]') &&
-      !cardTabs.includes("Gradient") &&
+      cardTabs.includes("Solid") &&
+      cardTabs.includes("Gradient") &&
       borderToggle()?.getAttribute("aria-pressed") === "true",
     detail: `${colourCard?.getAttribute("data-pop-panel")} · gradient tab ${cardTabs.includes("Gradient")} · toggle ${borderToggle()?.getAttribute("aria-pressed")}`,
   });
@@ -965,31 +966,35 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   type(shapeOpacity ?? null, "100");
   closePop();
 
-  /* ---- the inspector's Border card: the same card, its colour card in place */
+  /* ---- the inspector's Border card: the same card, its colour card as a pop-up */
   const asideBorder = () => doc.querySelector<HTMLElement>("aside [data-banner-border]");
   const asideColour = () => asideBorder()?.querySelector<HTMLElement>('[data-banner-border-color] button[aria-label="Border colour"]') ?? null;
   click(asideColour());
-  const inlineCard = asideBorder()?.querySelector<HTMLElement>('[data-banner-line-color="line"]') ?? null;
-  const blue = Array.from(inlineCard?.querySelectorAll<HTMLElement>(".font-color-panel button[title]") ?? []).find(
+  const popCard = () => doc.querySelector<HTMLElement>('[data-color-popover] [data-banner-line-color="line"]');
+  const openedCard = popCard();
+  const blue = Array.from(openedCard?.querySelectorAll<HTMLElement>(".font-color-panel button[title]") ?? []).find(
     (b) => (b.getAttribute("title") ?? "").toLowerCase() === "#0000ff",
   );
   click(blue);
+  const cardTabs2 = Array.from(popCard()?.querySelectorAll<HTMLElement>(".font-color-panel button") ?? []).map((b) => b.textContent?.trim());
   out.push({
-    name: "the inspector's Border card is the same one card — its colour opens the same colour card in place (nothing to go back from), and a swatch repaints the line",
+    name: "the inspector's Border card is the same one card — its colour opens the same colour card in a pop-up of its own (Solid and Gradient, nothing to go back from), and a swatch repaints the line",
     pass:
       !!asideBorder()?.querySelector('[data-banner-corners], [data-banner-radius]') &&
       !!asideBorder()?.querySelector('[data-banner-border-glow]') &&
-      !!inlineCard?.querySelector(".font-color-panel") &&
-      !inlineCard.querySelector('[aria-label="Back to the Border card"]') &&
+      !!openedCard?.querySelector(".font-color-panel") &&
+      !openedCard.querySelector('[aria-label="Back to the Border card"]') &&
+      cardTabs2.includes("Solid") &&
+      cardTabs2.includes("Gradient") &&
       asideColour()?.getAttribute("aria-expanded") === "true" &&
       styleOf(plateLine()).includes("0, 0, 255") &&
       !pop(),
-    detail: `card ${!!inlineCard} · expanded ${asideColour()?.getAttribute("aria-expanded")} · ${plateLine()?.style.border ?? "no line"}`,
+    detail: `card ${!!openedCard} · expanded ${asideColour()?.getAttribute("aria-expanded")} · ${plateLine()?.style.border ?? "no line"}`,
   });
   click(asideColour());
   out.push({
     name: "…and a second click folds the colour card away again",
-    pass: !asideBorder()?.querySelector("[data-banner-line-color]") && asideColour()?.getAttribute("aria-expanded") === "false",
+    pass: !popCard() && asideColour()?.getAttribute("aria-expanded") === "false",
     detail: `expanded ${asideColour()?.getAttribute("aria-expanded")}`,
   });
 
