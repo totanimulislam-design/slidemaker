@@ -776,7 +776,9 @@ export default function ContextToolbar(p: Props) {
         aria-label={name}
         aria-pressed={open}
         aria-expanded={open}
-        onClick={() => setPanel(open ? null : name)}
+        /* a hand-over card of this one's own (a colour card) is dismissed back
+           onto the card it came from — only the card itself closes the pop-up */
+        onClick={() => setPanel(panel === name ? null : name)}
       >
         {display ?? icon ?? name}
         <span className="ctx-caret" aria-hidden="true">▾</span>
@@ -1325,7 +1327,9 @@ export default function ContextToolbar(p: Props) {
    *                    four at once, or each corner on its own) and the
    *                    line's glow. Its two colour buttons (the line's, the
    *                    glow's) hand the pop-up over to the shared colour card,
-   *                    which has a way back to the Border card.
+   *                    which has a way back to the Border card — and closing
+   *                    it (the ✕, or the still-lit Border button) keeps the
+   *                    Border pop-up open on its own card.
    *   Transparency     the SHAPE's own, on a line bar
    *   Banner size      free width and height, on line bars
    *   Banner position  free X and Y, on line bars
@@ -1348,7 +1352,8 @@ export default function ContextToolbar(p: Props) {
         />
       ),
       // the Border card's two colour buttons open the colour card every other
-      // colour on the bar opens, in the same pop-up — with a way back
+      // colour on the bar opens, in the same pop-up — with a way back, and a
+      // close that leaves the Border pop-up itself standing
       [BANNER_BORDER_COLOUR]: (
         <BannerLineColorPanel channel="line" banner={banner} setBanner={p} documentColors={docColors} onBack={() => setPanel("Banner border")} />
       ),
@@ -1461,6 +1466,13 @@ export default function ContextToolbar(p: Props) {
   const toolbarLabel = `${ak ? "answer" : themePill ? "theme" : layoutPill ? "layout" : layering ? "layers" : inserting ? "insert" : surface || (multi ? 'Group' : text ? 'Text' : s?.kind || 'Image')} tools`;
 
   const vhNow = () => (typeof window === "undefined" ? 800 : window.innerHeight);
+  /**
+   * The Border card's two colour cards take the Border pop-up's place in the
+   * frame — closing one of them (the ✕) must NOT close the pop-up they were
+   * opened from: it hands the frame back to the Border card, which stays open.
+   */
+  const lineColorOpen = panel === BANNER_BORDER_COLOUR || panel === BANNER_GLOW_COLOUR;
+  const closePanel = () => setPanel(lineColorOpen ? "Banner border" : null);
   const popNode = content && (
     <div
       ref={popRef}
@@ -1524,7 +1536,7 @@ export default function ContextToolbar(p: Props) {
               ⌖
             </button>
           )}
-          {button('✕', () => setPanel(null), undefined, 'Close toolbar panel')}
+          {button('✕', closePanel, undefined, lineColorOpen ? 'Close the colour card — back to the Border card' : 'Close toolbar panel')}
         </span>
       </div>
       <div className="ctx-pop-body">{content}</div>
