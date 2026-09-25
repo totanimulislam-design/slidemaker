@@ -859,6 +859,26 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     detail: `${pop()?.getAttribute("data-pop-panel")} · ${popButton("Border colour")?.textContent ?? ""}`,
   });
 
+  /* ---- closing the colour card keeps the Border pop-up open ---------------- */
+  click(popButton("Border colour"));
+  click(pop()?.querySelector<HTMLElement>('[aria-label="Close the colour card — back to the Border card"]') ?? null);
+  out.push({
+    name: "closing the colour card with ✕ leaves the Border pop-up open — it lands back on the Border card",
+    pass:
+      !!pop() &&
+      pop()?.getAttribute("data-pop-panel") === "Banner border" &&
+      !!popButton("Border colour") &&
+      (popButton("Border colour")?.textContent ?? "").includes("#FF0000"),
+    detail: `panel ${pop()?.getAttribute("data-pop-panel") ?? "gone"} · ${(popButton("Border colour")?.textContent ?? "").trim()}`,
+  });
+  click(popButton("Border colour"));
+  click(borderToggle());
+  out.push({
+    name: "and the still-lit Border button dismisses its colour card the same way — the Border pop-up stays, only the colour card closes",
+    pass: !!pop() && pop()?.getAttribute("data-pop-panel") === "Banner border" && !!popInput("Banner border weight (px)"),
+    detail: `panel ${pop()?.getAttribute("data-pop-panel") ?? "gone"}`,
+  });
+
   /* ---- the line's own transparency, in the Border card --------------------- */
   const lineOpacity = popInput("Banner border transparency (100 = fully visible)");
   type(lineOpacity, "30");
