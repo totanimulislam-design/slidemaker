@@ -2,6 +2,9 @@ import katex from "katex";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import AnswerKeyModal from "../src/components/AnswerKeyModal";
+import MathText from "../src/components/MathText";
+import { balanceBraces } from "../src/lib/braceSafe";
+import { MATH_SPAN } from "../src/lib/mathSpans";
 import { normalizeSource } from "../src/lib/richPaste";
 import { reflowLayout } from "../src/lib/reflow";
 import { mapAnswers, parseAnswerKey } from "../src/lib/answerKey";
@@ -33,7 +36,8 @@ function renderDelimited(source: string) {
   else if (source.startsWith(String.raw`\(`) && source.endsWith(String.raw`\)`)) tex = source.slice(2, -2);
   else if (source.startsWith(String.raw`\[`) && source.endsWith(String.raw`\]`)) tex = source.slice(2, -2);
   else throw new Error(`No complete math delimiter: ${source}`);
-  return katex.renderToString(tex, { throwOnError: true });
+  // the app renders through MathText, which sanitises before KaTeX sees it
+  return katex.renderToString(balanceBraces(tex), { throwOnError: true });
 }
 
 export function runMathPasteTests(): Result[] {
@@ -72,6 +76,68 @@ export function runMathPasteTests(): Result[] {
     const output = normalizeSource(input, { reflow: false }).text;
     equal(output, expected);
     renderDelimited(output.slice(3));
+  });
+
+  test("balanceBraces leaves sound TeX untouched", () => {
+    equal(balanceBraces(String.raw`\frac{a}{b}`), String.raw`\frac{a}{b}`);
+    equal(balanceBraces(String.raw`x^{a}_{b}`), String.raw`x^{a}_{b}`);
+    equal(balanceBraces(String.raw`A = \{5, 6, 7\}`), String.raw`A = \{5, 6, 7\}`);
+  });
+
+  test("a stray closing brace prints instead of killing the formula", () => {
+    equal(balanceBraces(String.raw`5 \leq y \leq 10}`), String.raw`5 \leq y \leq 10\}`);
+  });
+
+  test("an unclosed set brace prints instead of killing the formula", () => {
+    equal(balanceBraces(String.raw`D = {y: y \in N`), String.raw`D = \{y: y \in N`);
+  });
+
+  test("a command's unfinished argument group is closed, not printed", () => {
+    equal(balanceBraces(String.raw`\frac{a}{b`), String.raw`\frac{a}{b}`);
+    equal(balanceBraces(String.raw`x^{2`), String.raw`x^{2}`);
+    equal(balanceBraces(String.raw`\mathbb{N`), String.raw`\mathbb{N}`);
+    equal(balanceBraces(String.raw`{a\frac{b`), String.raw`\{a\frac{b}`);
+  });
+
+  test("a set split across two $…$ spans renders with its braces showing", () => {
+    const text = "$D = {y: y \\in N$ এবং $5 \\leq y \\leq 10}$";
+    let html = "";
+    for (const part of text.split(MATH_SPAN).filter((p) => p !== undefined && p !== "")) {
+      if (part.startsWith("$")) html += renderDelimited(part);
+    }
+    if (!html) throw new Error("no math span was found");
+    if (html.includes("katex-error")) throw new Error("KaTeX reported an error");
+    const visible = html.replace(/<[^>]*>/g, "");
+    for (const glyph of ["{", "}", "∈", "≤"]) {
+      if (!visible.includes(glyph)) throw new Error(`expected ${glyph} in the render, got: ${visible}`);
+    }
+  });
+
+  test("MathText renders the split set-builder line without red error text", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    try {
+      act(() => {
+        root.render(createElement(MathText, { text: "$D = {y: y \\in N$ এবং $5 \\leq y \\leq 10}$" }));
+      });
+      if (!host.querySelector(".katex")) throw new Error("math was not rendered with KaTeX");
+      if (host.querySelector(".katex-error")) throw new Error("rendered as raw red source");
+      const visible = host.textContent ?? "";
+      for (const glyph of ["{", "}", "∈", "≤"]) {
+        if (!visible.includes(glyph)) throw new Error(`expected ${glyph} in the render, got: ${visible}`);
+      }
+    } finally {
+      act(() => root.unmount());
+      host.remove();
+    }
+  });
+
+  test("paste answers matches a raw-brace set to the escaped option", () => {
+    const slide = slideWithOptions([String.raw`$D = \{5, 6, 7, 8, 9, 10\}$`, String.raw`$D = \{5, 7, 9\}$`]);
+    const mapping = mapAnswers([slide], parseAnswerKey("1. D = {5, 6, 7, 8, 9, 10}"));
+    equal(mapping[0]?.status, "ok");
+    equal(mapping[0]?.resolved, "ক");
   });
 
   test("reflow ignores option-like markers inside \\(…\\)", () => {

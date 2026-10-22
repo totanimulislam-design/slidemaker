@@ -66,8 +66,10 @@ export function parseAnswerKey(input: string): AnswerPair[] {
   const pairs: AnswerPair[] = [];
 
   // ---- 1. numbered pairs:  1. ঘ | ১) ঘ | 1-ঘ | Q1: d | 1 | ঘ | ১ নং ঘ ------
+  // A key followed by `=` is the start of a literal answer, not a marker
+  // (`1. D = {5, 6, 7}` — D is the set's name), so that shape stays prose.
   const numbered = new RegExp(
-    `(?:^|[\\s,;|।])(?:q|Q|প্রশ্ন)?\\s*(${NUM})\\s*(?:নং|no\\.?)?\\s*[.)।:\\-–|=>]*\\s*[(\\[]?\\s*([${KEY_CHARS}])\\s*[)\\]]?(?=$|[\\s,;|।.])`,
+    `(?:^|[\\s,;|।])(?:q|Q|প্রশ্ন)?\\s*(${NUM})\\s*(?:নং|no\\.?)?\\s*[.)।:\\-–|=>]*\\s*[(\\[]?\\s*([${KEY_CHARS}])(?!\\s*[)\\]]?\\s*=)\\s*[)\\]]?(?=$|[\\s,;|।.])`,
     "gu",
   );
   let m: RegExpExecArray | null;
@@ -89,9 +91,15 @@ export function parseAnswerKey(input: string): AnswerPair[] {
 
   // merge: literal lines fill in numbers the key-pass could not read
   if (pairs.length || lits.length) {
+    // a line both passes read keeps its prose too — `1. D {5, 6, 7}` reads as
+    // key D, but the fuller literal is what the resolver should try first
+    const prose = new Map<number, string>();
+    lits.forEach((p) => {
+      if (p.text) prose.set(p.number!, p.text);
+    });
     const merged = new Map<number, AnswerPair>();
     lits.forEach((p) => merged.set(p.number!, p));
-    pairs.forEach((p) => merged.set(p.number!, p)); // explicit keys win over prose
+    pairs.forEach((p) => merged.set(p.number!, prose.has(p.number!) ? { ...p, text: prose.get(p.number!) } : p)); // explicit keys win over prose
     // corrections: a later duplicate in the *raw* pair list overrides
     const out = dedupe([...merged.values(), ...pairs]);
     if (out.length) return out;
@@ -129,6 +137,7 @@ function literalAnswerNorm(raw: string): { text: string; math: boolean } {
   const math = /[$\\^_{}]/.test(source);
   const text = source
     .replace(/\$\$?|\\\[|\\\]|\\\(|\\\)/g, "")
+    .replace(/\\([{}])/g, "$1") // a set's braces: \{5, 6, 7\} and {5, 6, 7} are the same answer
     .replace(/\\not\s*\\in\b/g, "\\notin")
     .replace(/\\(?:le|leqslant)\b/g, "\\leq")
     .replace(/\\(?:ge|geqslant)\b/g, "\\geq")
@@ -146,13 +155,6 @@ function literalAnswerNorm(raw: string): { text: string; math: boolean } {
 export function resolveOnSlide(slide: SlideData, pair: AnswerPair): string | null {
   const opts = slide.options;
   if (!opts.length) return null;
-  if (pair.key) {
-    const direct = opts.find((o) => o.key === pair.key || o.key.toLowerCase() === pair.key.toLowerCase());
-    if (direct) return direct.key;
-    const idx = keyIndex(pair.key);
-    if (idx >= 0 && idx < opts.length) return opts[idx].key;
-    return null;
-  }
   if (pair.text) {
     const pasted = literalAnswerNorm(pair.text);
     const candidates = opts.map((option) => ({ option, ...literalAnswerNorm(option.text) }));
@@ -170,7 +172,15 @@ export function resolveOnSlide(slide: SlideData, pair: AnswerPair): string | nul
       );
       if (partial) return partial.option.key;
     }
-    return null;
+    if (!pair.key) return null;
+    // the prose didn't land — a numbered read like `1. D {5, 6, 7}` still has
+    // its marker letter to offer
+  }
+  {
+    const direct = opts.find((o) => o.key === pair.key || o.key.toLowerCase() === (pair.key ?? "").toLowerCase());
+    if (direct) return direct.key;
+    const idx = keyIndex(pair.key ?? "");
+    if (idx >= 0 && idx < opts.length) return opts[idx].key;
   }
   return null;
 }

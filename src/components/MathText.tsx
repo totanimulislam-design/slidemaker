@@ -1,16 +1,24 @@
 import { useMemo, type ReactNode } from "react";
 import katex from "katex";
 import { MATH_SPAN } from "../lib/mathSpans";
+import { balanceBraces } from "../lib/braceSafe";
 
 function renderMath(src: string, display: boolean) {
   try {
-    return katex.renderToString(src, {
+    return katex.renderToString(balanceBraces(src), {
       displayMode: display,
       throwOnError: false,
       output: "html",
       strict: false,
       trust: true,
-      macros: { "\\bn": "\\text" },
+      macros: {
+        "\\bn": "\\text",
+        // number sets — the usuals of set-theory questions, one backslash each
+        "\\N": "\\mathbb{N}",
+        "\\Z": "\\mathbb{Z}",
+        "\\Q": "\\mathbb{Q}",
+        "\\R": "\\mathbb{R}",
+      },
     });
   } catch {
     return `<span class="katex-error">${src}</span>`;
