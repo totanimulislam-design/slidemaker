@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { mapAnswers, parseAnswerKey, type AnswerMapping } from "../lib/answerKey";
+import { handleSmartPaste, normalizeSource } from "../lib/richPaste";
 import type { SlideData } from "../lib/types";
 import { Btn, SegButtons, TextArea, Toggle } from "./ui";
 import ResizableDialog, { SplitPane } from "./ResizableDialog";
+import MathText from "./MathText";
 import { cn } from "../utils/cn";
 
 interface Props {
@@ -26,6 +28,16 @@ export default function AnswerKeyModal({ open, slides, currentIndex, onClose, on
   const [startMode, setStartMode] = useState<"first" | "current">("first");
   const [overwrite, setOverwrite] = useState(true);
   const [reveal, setReveal] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    // Answer keys can be literal option text, not only ক/a/1. Keep their math
+    // intact and convert Unicode relations such as ∈, ∉ and ≤ as well.
+    const res = handleSmartPaste(e, { reflow: false });
+    if (!res) return;
+    setText(res.value);
+    window.setTimeout(() => inputRef.current?.setSelectionRange(res.caret, res.caret), 0);
+  };
 
   const pairs = useMemo(() => parseAnswerKey(text), [text]);
   const isBare = pairs.length > 0 && pairs.every((p) => p.number === null);
@@ -52,8 +64,10 @@ export default function AnswerKeyModal({ open, slides, currentIndex, onClose, on
           {/* ------------------------------ input ------------------------------ */}
           
             <TextArea
+              ref={inputRef}
               autoFocus
               value={text}
+              onPaste={onPaste}
               onChange={(e) => setText(e.target.value)}
               placeholder={`1. ঘ  2. গ  3. b  4. a\n\nor one per line:\n১) ঘ\n২) গ\n\nor a table from Excel / Word:\n1 | ঘ\n2 | গ\n\nor just the sequence:\nঘ গ খ ক ঘ\n\nor text answers:\n1. Dhaka\n2. পদ্মা`}
               className="min-h-0 flex-1 resize-none font-mono text-[13px]"
@@ -136,12 +150,24 @@ export default function AnswerKeyModal({ open, slides, currentIndex, onClose, on
                       return (
                         <tr key={i} className={cn("border-t border-white/5", skipped && "opacity-40")}>
                           <td className="px-2 py-1.5 font-mono text-amber-300">{m.number}</td>
-                          <td className="px-2 py-1.5 text-slate-300">{m.pair.key || <em>{m.pair.text}</em>}</td>
+                          <td className="max-w-[220px] truncate px-2 py-1.5 text-slate-300" title={m.pair.text}>
+                            {m.pair.key || (m.pair.text ? (
+                              <MathText text={normalizeSource(m.pair.text, { reflow: false }).text} />
+                            ) : null)}
+                          </td>
                           <td className="px-2 py-1.5">
                             {m.resolved ? (
                               <span className="text-slate-100">
                                 <b className="text-emerald-300">{m.resolved}</b>
-                                {opt?.text ? <span className="text-slate-400"> ) {opt.text.slice(0, 22)}</span> : null}
+                                {opt?.text ? (
+                                  <span className="text-slate-400">
+                                    {" ) "}
+                                    <MathText
+                                      className="inline-block max-w-[180px] truncate align-bottom"
+                                      text={normalizeSource(opt.text, { reflow: false }).text}
+                                    />
+                                  </span>
+                                ) : null}
                               </span>
                             ) : (
                               <span className="text-rose-400">—</span>

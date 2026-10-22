@@ -1,4 +1,5 @@
 import { AR_KEYS, BN_KEYS, toLatinDigits } from "./parse";
+import { normalizeSource } from "./richPaste";
 import type { SlideData } from "./types";
 
 /**
@@ -117,6 +118,30 @@ function dedupe(pairs: AnswerPair[]): AnswerPair[] {
   return [...seen.values()].sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
 }
 
+/**
+ * Canonical source for literal answer matching. Smart paste normally performs
+ * the Unicode conversion already, but old decks, typed answers and \(…\) input
+ * must compare equal too. Math ignores insignificant whitespace; prose keeps
+ * word boundaries intact.
+ */
+function literalAnswerNorm(raw: string): { text: string; math: boolean } {
+  const source = normalizeSource(raw, { reflow: false }).text;
+  const math = /[$\\^_{}]/.test(source);
+  const text = source
+    .replace(/\$\$?|\\\[|\\\]|\\\(|\\\)/g, "")
+    .replace(/\\not\s*\\in\b/g, "\\notin")
+    .replace(/\\(?:le|leqslant)\b/g, "\\leq")
+    .replace(/\\(?:ge|geqslant)\b/g, "\\geq")
+    .replace(/\\ne\b/g, "\\neq")
+    .replace(/\\varnothing\b/g, "\\emptyset")
+    .replace(/\\(?:left|right)\b/g, "")
+    .replace(/\\(?:quad|qquad)\b/g, "")
+    .replace(/\\[,;:!]/g, "")
+    .trim()
+    .toLowerCase();
+  return { text: math ? text.replace(/\s+/g, "") : text.replace(/\s+/g, " "), math };
+}
+
 /** Finds the matching option key on a slide for a raw answer. */
 export function resolveOnSlide(slide: SlideData, pair: AnswerPair): string | null {
   const opts = slide.options;
@@ -129,12 +154,23 @@ export function resolveOnSlide(slide: SlideData, pair: AnswerPair): string | nul
     return null;
   }
   if (pair.text) {
-    const norm = (s: string) => s.replace(/\$/g, "").replace(/\s+/g, " ").trim().toLowerCase();
-    const t = norm(pair.text);
-    const exact = opts.find((o) => norm(o.text) === t);
-    if (exact) return exact.key;
-    const partial = opts.find((o) => norm(o.text).includes(t) || t.includes(norm(o.text)));
-    return partial ? partial.key : null;
+    const pasted = literalAnswerNorm(pair.text);
+    const candidates = opts.map((option) => ({ option, ...literalAnswerNorm(option.text) }));
+    const exact = candidates.find((candidate) => candidate.text === pasted.text);
+    if (exact) return exact.option.key;
+
+    // A sub-expression is not an answer to a longer equation. Keep the
+    // convenient partial match for prose only, and never match an empty option.
+    if (!pasted.math) {
+      const partial = candidates.find(
+        (candidate) =>
+          !candidate.math &&
+          !!candidate.text &&
+          (candidate.text.includes(pasted.text) || pasted.text.includes(candidate.text)),
+      );
+      if (partial) return partial.option.key;
+    }
+    return null;
   }
   return null;
 }

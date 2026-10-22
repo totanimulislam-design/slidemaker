@@ -62,6 +62,7 @@ const FUNCS = new Set([
 ]);
 
 import { reflowLayout } from "./reflow";
+import { outsideMath } from "./mathSpans";
 
 export interface ConvertResult {
   text: string;
@@ -98,14 +99,6 @@ function tidy(text: string): string {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/^\n+|\n+$/g, "");
-}
-
-/** Applies `fn` only outside existing $…$ / $$…$$ spans so real LaTeX is never touched. */
-function outsideMath(text: string, fn: (chunk: string) => string): string {
-  return text
-    .split(/(\$\$[\s\S]*?\$\$|\$[^$\n]*\$)/g)
-    .map((part, i) => (i % 2 === 1 ? part : fn(part)))
-    .join("");
 }
 
 /* ------------------------------------------------- unicode math → LaTeX */
@@ -166,7 +159,7 @@ function unicodeToLatex(chunk: string, c: Counters): string {
 
 /* --------------------------------------------- wrap math runs in $ … $ */
 
-const MATH_CHAR = /[A-Za-z0-9^_{}\\+\-*/=<>()[\].,'|! ]/;
+const MATH_CHAR = /[A-Za-z0-9^_{}\\+\-*/=<>()[\].,'|!:; ]/;
 const HAS_MARKER = /\^\{|_\{|\\[a-zA-Z]+|\\sqrt/;
 
 /** question / option markers that must never be pulled inside $…$ */
@@ -176,7 +169,9 @@ function isMathyWord(w: string, side: "left" | "right"): boolean {
   if (!w) return false;
   if (HAS_MARKER.test(w)) return true;
   // never absorb list markers / stray closers such as ")" "1." "iii."
-  if (/^[)\].,;:।]+$/.test(w)) return false;
+  // Colons and semicolons stay eligible inside a run: set-builder notation
+  // commonly writes {x ∈ R : x ≤ 5}, and splitting at ':' breaks its braces.
+  if (/^[)\].,।]+$/.test(w)) return false;
   const opens = (w.match(/[([{]/g) ?? []).length;
   const closes = (w.match(/[)\]}]/g) ?? []).length;
   if (side === "left" && closes > opens) return false;

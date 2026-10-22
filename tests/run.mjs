@@ -32,6 +32,7 @@ const pdfStubPlugin = {
 };
 
 const suites = [
+  ["math paste (LaTeX delimiters, set relations and literal answer matching)", "mathpaste.test.ts", "runMathPasteTests"],
   ["drag interaction (Slide + ShapeLayer, deck shapes included)", "drag.test.tsx", "runDragTests"],
   ["gesture leak (legacy pattern vs drag session)", "leak.test.tsx", "runLeakTests"],
   ["pointer state machine (lib/dragSession)", "session.test.ts", "runSessionTests"],
