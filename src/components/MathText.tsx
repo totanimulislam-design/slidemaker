@@ -1,7 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import katex from "katex";
-
-const TOKEN = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^$\n]*?\$|\\\([\s\S]+?\\\))/g;
+import { MATH_SPAN } from "../lib/mathSpans";
 
 function renderMath(src: string, display: boolean) {
   try {
@@ -41,7 +40,7 @@ interface Props {
 export default function MathText({ text, className, style, inlineStyle, wrap }: Props) {
   const lines = useMemo(() => {
     return (text ?? "").split("\n").map((line) => {
-      const parts = line.split(TOKEN).filter((p) => p !== undefined && p !== "");
+      const parts = line.split(MATH_SPAN).filter((p) => p !== undefined && p !== "");
       return parts.map((part) => {
         if (/^\$\$[\s\S]*\$\$$/.test(part)) return { type: "math" as const, html: renderMath(part.slice(2, -2), true) };
         if (/^\\\[[\s\S]*\\\]$/.test(part)) return { type: "math" as const, html: renderMath(part.slice(2, -2), true) };

@@ -17,12 +17,12 @@
  *
  *   ২. …
  *
- * Everything inside $…$ is skipped, so "P(a, b, c)" is never mistaken for an
- * option marker "c)". Markers are only accepted when they form an ascending
+ * Everything inside $…$, $$…$$, \(…\) or \[…\] is skipped, so "P(a, b, c)"
+ * is never mistaken for an option marker "c)". Markers are only accepted when they form an ascending
  * run (ক→খ→গ→ঘ, a→b→c, 1→2→3), which keeps stray "(ক)" inside a sentence safe.
  */
 
-const MATH_SPLIT = /(\$\$[\s\S]*?\$\$|\$[^$\n]*\$)/g;
+import { MATH_SPAN } from "./mathSpans";
 
 const DIGITS: Record<string, string> = {
   "০": "0", "১": "1", "২": "2", "৩": "3", "৪": "4", "৫": "5", "৬": "6", "৭": "7", "৮": "8", "৯": "9",
@@ -124,7 +124,7 @@ export function reflowLayout(input: string): ReflowResult {
   /* ---------- 1. collect candidates outside math spans ---------- */
   const cands: Cand[] = [];
   let pos = 0;
-  input.split(MATH_SPLIT).forEach((part, i) => {
+  input.split(MATH_SPAN).forEach((part, i) => {
     if (part === undefined) return;
     if (i % 2 === 0) scan(part, pos, cands);
     pos += part.length;
