@@ -232,7 +232,7 @@ interface Props {
     onRemove: (id: string) => void;
     onDuplicate: (id: string) => void;
     onToggleScope: (id: string) => void;
-    onAddImage: (src: string, ratio: number, scope: InsertScope) => void;
+    onAddImage: (src: string, ratio: number, scope: InsertScope, imageId?: string, name?: string) => void;
     onCopyShapeTo: (id: string, scope: InsertScope) => void;
     onReorder: (id: string, op: ZOp) => void;
     onApplyDesign: (style: Partial<ShapeItem>, kind: ShapeItem["kind"] | null, exceptId: string) => void;
@@ -743,7 +743,8 @@ export default function Inspector({
             globalShapes={shapes.global}
             selectedId={shapes.selectedId}
             onSelect={shapes.onSelect}
-            onAddImage={(src, ratio) => shapes.onAddImage(src, ratio, { mode: "this" })}
+            onAddImage={(src, ratio, imageId, name) =>
+  shapes.onAddImage(src, ratio, { mode: "this" }, imageId, name)}
             onChange={shapes.onChange}
             onRemove={shapes.onRemove}
             onDuplicate={shapes.onDuplicate}

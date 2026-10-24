@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { deleteDoc, fileFingerprint, loadDoc, saveDoc } from "./docStore";
+import { objectUrlFor } from "./imageStore";
 import type { ShapeItem } from "./shapes";
 import type { Deck } from "./types";
 
@@ -25,11 +26,15 @@ export interface UploadedDoc {
 
 export interface UploadedItem {
   id: string;
-  /** a picture's own data URL; for a document, the small cover picture of page 1 */
+  /** a picture's own data URL; for a document, the small cover picture of page 1.
+   *  For pictures kept in IndexedDB this is a session `blob:` URL rehydrated on
+   *  load — localStorage keeps only the id and metadata, never the bitmap. */
   src: string;
   ratio: number;
   name?: string;
   createdAt: number;
+  /** stable id of the stored bitmap in lib/imageStore, for pictures from this store */
+  imageId?: string;
   /** present when the entry is a saved PDF / PowerPoint rather than a picture */
   doc?: UploadedDoc;
 }
@@ -106,19 +111,28 @@ export function useUploads(): UploadedItem[] {
 
 const newId = () => `upl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-export function addUpload(src: string, ratio = 1, name?: string): UploadedItem {
+export function addUpload(
+  src: string,
+  ratio = 1,
+  name?: string,
+  imageId?: string,
+): UploadedItem {
   if (!src) {
     throw new Error("Image src is required");
   }
 
   const cleanRatio = Number.isFinite(ratio) && ratio > 0 ? Math.round(ratio * 1000) / 1000 : 1;
 
-  // Deduplicate by src: move to top if existing
-  const existingIdx = currentUploads.findIndex((u) => u.src === src);
+  // Deduplicate: by imageId for store-backed pictures, otherwise by src.
+  // Moving the entry to the top keeps the library's "recent first" order.
+  const existingIdx = imageId
+    ? currentUploads.findIndex((u) => u.imageId === imageId)
+    : currentUploads.findIndex((u) => u.src === src);
   if (existingIdx !== -1) {
     const existing = currentUploads[existingIdx];
     const updated: UploadedItem = {
       ...existing,
+      src,
       ratio: cleanRatio,
       name: name && name !== "Image" && name !== "Slide image" ? name : existing.name,
       createdAt: Date.now(),
@@ -134,6 +148,7 @@ export function addUpload(src: string, ratio = 1, name?: string): UploadedItem {
     ratio: cleanRatio,
     name: name || "Uploaded image",
     createdAt: Date.now(),
+    ...(imageId ? { imageId } : {}),
   };
 
   currentUploads = [newItem, ...currentUploads];
@@ -217,10 +232,32 @@ export async function documentAsFile(item: UploadedItem): Promise<File | null> {
   return new File([blob], name, { type: item.doc.mime });
 }
 
+/**
+ * Rehydrates the session `blob:` URLs of library pictures whose bitmap lives
+ * in IndexedDB. Called once after load: entries stored with a dead blob URL
+ * (blob: URLs do not survive a reload) get a fresh URL from the store.
+ */
+export async function rehydrateUploads(): Promise<void> {
+  let changed = false;
+  for (const item of currentUploads) {
+    // a picture backed by the store; a legacy data URL or http(s) src is left alone
+    if (!item.imageId || (!!item.src && !item.src.startsWith("blob:"))) continue;
+    const url = await objectUrlFor(item.imageId);
+    if (url) {
+      item.src = url;
+      changed = true;
+    }
+  }
+  if (changed) persist();
+}
+
 export function removeUpload(id: string): void {
   const gone = currentUploads.find((u) => u.id === id);
   currentUploads = currentUploads.filter((u) => u.id !== id);
   persist();
+  // only the document's bytes are stored outside localStorage; a picture's
+  // bitmap stays in the store until the site data is cleared, so an image
+  // still shown on a slide is never destroyed by deleting a library entry.
   if (gone?.doc) void deleteDoc(id);
 }
 
@@ -241,7 +278,7 @@ export function clearUploads(): void {
  */
 export function seedUploadsFromDeck(deck?: Deck | null): void {
   if (!deck) return;
-  const found: { src: string; ratio: number; name?: string }[] = [];
+  const found: { src: string; ratio: number; name?: string; imageId?: string }[] = [];
   const check = (list?: ShapeItem[]) => {
     if (!list) return;
     for (const sh of list) {
@@ -264,13 +301,18 @@ export function seedUploadsFromDeck(deck?: Deck | null): void {
 
   let added = false;
   for (const item of found) {
-    if (!currentUploads.some((u) => u.src === item.src)) {
+    const has =
+      item.imageId
+        ? currentUploads.some((u) => u.imageId === item.imageId)
+        : currentUploads.some((u) => u.src === item.src);
+    if (!has) {
       currentUploads.push({
         id: newId(),
         src: item.src,
         ratio: item.ratio,
         name: item.name || "Slide image",
         createdAt: Date.now(),
+        ...(item.imageId ? { imageId: item.imageId } : {}),
       });
       added = true;
     }

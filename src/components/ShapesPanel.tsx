@@ -1,5 +1,15 @@
 import { useEffect, useRef } from "react";
-import { SHAPE_ICONS, SHAPE_LABELS, inlineRemoteImage, loadImageFile, shrinkDataUrl, type ShapeItem, type ShapeKind } from "../lib/shapes";
+import {
+  SHAPE_ICONS,
+  SHAPE_LABELS,
+  dataUrlToBlob,
+  inlineRemoteImage,
+  loadImageFile,
+  shrinkDataUrl,
+  type ShapeItem,
+  type ShapeKind,
+} from "../lib/shapes";
+import { objectUrlFor, saveImage } from "../lib/imageStore";
 import { DECK_ACCEPT, isDeckFile } from "../lib/pdf";
 import { openDeckUpload } from "../lib/uploadDocs";
 import { addUpload } from "../lib/uploads";
@@ -36,7 +46,7 @@ interface Props {
   onSnapChange: (v: boolean) => void;
   smartGuides: boolean;
   onSmartGuidesChange: (v: boolean) => void;
-  onAddImage: (src: string, ratio: number, scope: InsertScope) => void;
+  onAddImage: (src: string, ratio: number, scope: InsertScope, imageId?: string, name?: string) => void;
   /** slide list for the "selected slides" picker */
   slides: { id: string; number: string; question: string }[];
   currentSlideId: string | null;
@@ -121,11 +131,25 @@ export default function ShapesPanel({
     setImgBusy(`Loading ${list.length} image${list.length > 1 ? "s" : ""}…`);
     try {
       for (const f of list) {
-        const { src, ratio } = await loadImageFile(f);
-        const small = await shrinkDataUrl(src);
-        addUpload(small, ratio, f.name);
-        if (replaceId) onChange(replaceId, { src: small, naturalRatio: ratio });
-        else onAddImage(small, ratio, sc);
+        const { src: dataUrl, ratio } = await loadImageFile(f);
+        const small = await shrinkDataUrl(dataUrl);
+        const blob = dataUrlToBlob(small);
+        let src = small;
+        let imageId: string | undefined;
+        try {
+          const { id, ok } = await saveImage(blob, { filename: f.name, mime: blob.type });
+          if (ok) {
+            imageId = id;
+            src = (await objectUrlFor(id)) || small;
+          } else {
+            console.warn("Image storage write refused; keeping session copy");
+          }
+        } catch (err) {
+          console.warn("Failed to store image:", err);
+        }
+        addUpload(src, ratio, f.name, imageId);
+        if (replaceId) onChange(replaceId, { src, imageId, naturalRatio: ratio });
+        else onAddImage(src, ratio, sc, imageId, f.name);
       }
     } catch {
       alert("That file could not be read as an image.");
@@ -140,11 +164,31 @@ export default function ShapesPanel({
     setImgBusy("Fetching image…");
     try {
       const { src, ratio } = await inlineRemoteImage(url);
-      const small = await shrinkDataUrl(src);
       const name = url.split("/").pop()?.split("?")[0] || "Web image";
-      addUpload(small, ratio, name);
-      if (replaceId) onChange(replaceId, { src: small, naturalRatio: ratio });
-      else onAddImage(small, ratio, scope);
+      // remote URLs are kept as-is (backward compatible); data URLs are stored
+      // in IndexedDB like any other upload
+      let finalSrc = src;
+      let imageId: string | undefined;
+      if (src.startsWith("data:")) {
+        const small = await shrinkDataUrl(src);
+        const blob = dataUrlToBlob(small);
+        try {
+          const { id, ok } = await saveImage(blob, { filename: name, mime: blob.type });
+          if (ok) {
+            imageId = id;
+            finalSrc = (await objectUrlFor(id)) || small;
+          } else {
+            console.warn("Image storage write refused; keeping session copy");
+          }
+        } catch (err) {
+          console.warn("Failed to store image:", err);
+        }
+        addUpload(finalSrc, ratio, name, imageId);
+      } else {
+        addUpload(src, ratio, name);
+      }
+      if (replaceId) onChange(replaceId, { src: finalSrc, imageId, naturalRatio: ratio });
+      else onAddImage(finalSrc, ratio, scope, imageId, name);
       setUrlInput("");
     } catch {
       alert("Could not load an image from that URL.");

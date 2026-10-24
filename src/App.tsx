@@ -23,7 +23,16 @@ import Presenter from "./components/Presenter";
 import ExportModal, { type ExportSettings } from "./components/ExportModal";
 import type { InspectorTab } from "./components/Inspector";
 import type { InsertScope } from "./components/ShapesPanel";
-import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, shrinkDataUrl, shapeId, type ShapeItem, type ShapeKind } from "./lib/shapes";
+import {
+  SHAPE_ICONS,
+  SHAPE_LABELS,
+  dataUrlToBlob,
+  loadImageFile,
+  shrinkDataUrl,
+  shapeId,
+  type ShapeItem,
+  type ShapeKind,
+} from "./lib/shapes";
 import type { AlignOp } from "./lib/shapeAlign";
 import { type ZOp } from "./lib/zorder";
 import { paintedStack, parseLayerKey, visibleStack, type LayerPatch, type LayerRef } from "./lib/layers";
@@ -39,7 +48,14 @@ import HistoryPanel from "./components/HistoryPanel";
 import AnswerKeyModal from "./components/AnswerKeyModal";
 import { Btn } from "./components/ui";
 import { normalizeDeckZ, useDeck } from "./lib/useDeck";
-import { addUpload, seedUploadsFromDeck } from "./lib/uploads";
+import { addUpload, rehydrateUploads, seedUploadsFromDeck } from "./lib/uploads";
+import {
+  objectUrlFor,
+  prepareForStorage,
+  rehydrateImages,
+  revokeAllObjectUrls,
+  saveImage,
+} from "./lib/imageStore";
 
 /** glyph / names for the right-click Layer submenu (mirrors lib/zorder) */
 const Z_LABEL_Glyph: Record<ZOp, string> = {
@@ -127,6 +143,8 @@ function AppContent() {
     canUndo,
     canRedo,
     history,
+    /** true once stored images have been restored onto the deck (client only) */
+    rehydrated,
   } = useDeck();
 
   const { preview } = useFontPreview();
@@ -201,6 +219,33 @@ function AppContent() {
     seedUploadsFromDeck(deck);
   }, [deck]);
 
+  // Rehydrate library picture URLs from IndexedDB once after load (blob: URLs
+  // do not survive a reload, so their src is refreshed from the stored blob).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await rehydrateUploads();
+      if (!cancelled) seedUploadsFromDeck(deck);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Busy state while stored images are restored onto the deck.
+  useEffect(() => {
+    if (rehydrated) setBusy(null);
+    else setBusy("Restoring images…");
+  }, [rehydrated]);
+
+  // Revoke session object URLs when the editor unmounts.
+  useEffect(
+    () => () => {
+      void revokeAllObjectUrls();
+    },
+    [],
+  );
+
   /**
    * The slide rail's ticked slides. One list feeds every bulk action: the
    * rail's own duplicate / delete bar and the inspector's “Selected slides”
@@ -254,9 +299,16 @@ function AppContent() {
   );
 
   const insertImage = useCallback(
-    (src: string, ratio: number, scope: InsertScope | boolean, at?: { x: number; y: number }, name?: string) => {
-      addUpload(src, ratio, name);
-      const id = addImage(src, ratio, resolveScope(scope), at);
+    (
+      src: string,
+      ratio: number,
+      scope: InsertScope | boolean,
+      at?: { x: number; y: number },
+      name?: string,
+      imageId?: string,
+    ) => {
+      addUpload(src, ratio, name, imageId);
+      const id = addImage(src, ratio, resolveScope(scope), at, { imageId, name });
       setSurface(null);
       setSelectedEl(null);
       setSelectedShapes([id]);
@@ -456,7 +508,12 @@ function AppContent() {
     [selectedLayer, deck.slides, current, alignLayerOp],
   );
 
-  /** image files from clipboard / drag-drop → slide */
+  /**
+   * Image files (clipboard / drag-drop / upload button) → slide.
+   * Each bitmap is downscaled and stored in IndexedDB before the slide
+   * references it, so the image survives reloads; the deck only keeps the
+   * stable image id. Falling back to a plain data URL if storage fails.
+   */
   const importImageFiles = useCallback(
     async (files: File[], at?: { x: number; y: number }) => {
       // a PDF / PPTX is saved to Uploads as the document itself and opens its
@@ -468,10 +525,28 @@ function AppContent() {
       setBusy(`Loading ${imgs.length} image${imgs.length > 1 ? "s" : ""}…`);
       try {
         for (const f of imgs) {
-          const { src, ratio } = await loadImageFile(f);
-          const small = await shrinkDataUrl(src);
-          addUpload(small, ratio, f.name);
-          insertImage(small, ratio, false, at, f.name);
+          const { src: dataUrl, ratio } = await loadImageFile(f);
+          const small = await shrinkDataUrl(dataUrl);
+          const blob = dataUrlToBlob(small);
+          // keep a session-only fallback if the store refuses the write
+          let src = small;
+          let imageId: string | undefined;
+          try {
+            const { id, ok } = await saveImage(blob, {
+              filename: f.name,
+              mime: blob.type,
+            });
+            if (ok) {
+              imageId = id;
+              src = (await objectUrlFor(id)) || small;
+            } else {
+              console.warn("Image storage write refused; keeping session copy");
+            }
+          } catch (err) {
+            console.warn("Failed to store image:", err);
+          }
+          addUpload(src, ratio, f.name, imageId);
+          insertImage(src, ratio, false, at, f.name, imageId);
         }
       } finally {
         setBusy(null);
@@ -508,21 +583,35 @@ function AppContent() {
    * top of them, ready to be drawn on.
    */
   const importPdfPages = useCallback(
-    (res: PdfImportResult) => {
+    async (res: PdfImportResult) => {
       const pptx = /\.pptx$/i.test(res.name);
       if (res.placement === "current-slide") {
         const sl = deck.slides[Math.min(current, Math.max(0, deck.slides.length - 1))];
         if (!sl) return;
         let last: string | null = null;
-        res.pages.forEach((p, i) => {
+        for (const [i, p] of res.pages.entries()) {
           // cascade so several pages don't land exactly on top of each other;
           // `importedPage` keeps the page out of the Uploads library, where the
           // document itself is what is saved
+          let imageId: string | undefined;
+          try {
+            const blob = dataUrlToBlob(p.src);
+            const { id, ok } = await saveImage(blob, {
+              filename: importPageLabel(res.name, p.page),
+              mime: "image/png",
+            });
+            if (ok) imageId = id;
+            // the page's data URL stays the render src (as before); the stored
+            // bitmap is what brings it back after a reload
+          } catch {
+            // keep the original data URL if storage is unavailable
+          }
           last = addImage(p.src, p.ratio, sl.id, i ? { x: 50 + i * 2, y: 50 + i * 2 } : undefined, {
             importedPage: true,
             name: importPageLabel(res.name, p.page),
+            imageId,
           });
-        });
+        }
         if (last) {
           setSurface(null);
           setSelectedEl(null);
@@ -994,7 +1083,8 @@ function AppContent() {
   );
 
   const saveJson = () => {
-    const blob = new Blob([JSON.stringify(deck, null, 2)], { type: "application/json" });
+    // store the stable image ids; bitmaps stay in IndexedDB in this browser
+    const blob = new Blob([JSON.stringify(prepareForStorage(deck), null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     downloadDataUrl(url, "mcq-deck.json");
     window.setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -1003,40 +1093,42 @@ function AppContent() {
   const loadJson = (file?: File | null) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const data = JSON.parse(String(reader.result));
         if (!data?.slides?.length) throw new Error("bad file");
+        // restore stored bitmaps for any image id this browser still holds
+        const restored = await rehydrateImages(data);
         setDeck(
           normalizeDeckZ({
-            header: { ...deck.header, ...data.header },
+            header: { ...deck.header, ...restored.header },
             theme: {
               ...deck.theme,
-              ...data.theme,
+              ...restored.theme,
               layout: {
                 ...deck.theme.layout,
-                ...(data.theme?.layout ?? {}),
-                bullet: { ...deck.theme.layout.bullet, ...(data.theme?.layout?.bullet ?? {}) },
+                ...(restored.theme?.layout ?? {}),
+                bullet: { ...deck.theme.layout.bullet, ...(restored.theme?.layout?.bullet ?? {}) },
               },
               banner: {
                 ...deck.theme.banner,
-                ...(data.theme?.banner ?? {}),
-                color: data.theme?.banner?.color ?? data.theme?.titleBanner ?? deck.theme.banner.color,
+                ...(restored.theme?.banner ?? {}),
+                color: restored.theme?.banner?.color ?? restored.theme?.titleBanner ?? deck.theme.banner.color,
               },
-              background: { ...deck.theme.background, ...(data.theme?.background ?? {}) },
-              boxFonts: { ...deck.theme.boxFonts, ...(data.theme?.boxFonts ?? {}) },
+              background: { ...deck.theme.background, ...(restored.theme?.background ?? {}) },
+              boxFonts: { ...deck.theme.boxFonts, ...(restored.theme?.boxFonts ?? {}) },
               frame: (() => {
                 const f = {
                   ...deck.theme.frame,
-                  ...(data.theme?.frame ?? {}),
-                  color: data.theme?.frame?.color ?? data.theme?.frameInner ?? deck.theme.frame.color,
+                  ...(restored.theme?.frame ?? {}),
+                  color: restored.theme?.frame?.color ?? restored.theme?.frameInner ?? deck.theme.frame.color,
                 };
                 f.image = resolveFrameImageSrc(f.image);
                 return f;
               })(),
             },
-            slides: data.slides,
-            globalShapes: data.globalShapes ?? [],
+            slides: restored.slides,
+            globalShapes: restored.globalShapes ?? [],
           }),
           "Open deck file",
         );
@@ -1536,7 +1628,14 @@ function AppContent() {
                       try {
                         const parsed = JSON.parse(json);
                         if (parsed?.type === "slidemaker-upload" && parsed.src) {
-                          insertImage(parsed.src, parsed.ratio || 1, false, at, parsed.name);
+                          insertImage(
+                            parsed.src,
+                            parsed.ratio || 1,
+                            false,
+                            at,
+                            parsed.name,
+                            parsed.imageId,
+                          );
                           return;
                         }
                       } catch {
@@ -1797,7 +1896,8 @@ function AppContent() {
                 if (n) setSelectedShapes([n]);
               },
               onToggleScope: (id) => slide && toggleShapeScope(id, slide.id),
-              onAddImage: (src, ratio) => insertImage(src, ratio, { mode: "this" }),
+              onAddImage: (src, ratio, scope, imageId, name) =>
+                insertImage(src, ratio, scope, undefined, name, imageId),
               onCopyShapeTo: (id, scope) => copyShapeTo(id, resolveScope(scope)),
               onReorder: (id, op) => reorderShape(id, op, slide?.id ?? null),
               onApplyDesign: (style, kind, exceptId) => applyShapeDesign(style, kind, exceptId, slide?.id ?? null),

@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { inlineRemoteImage, loadImageFile, shrinkDataUrl, type ShapeItem } from "../lib/shapes";
+import {
+  dataUrlToBlob,
+  inlineRemoteImage,
+  loadImageFile,
+  shrinkDataUrl,
+  type ShapeItem,
+} from "../lib/shapes";
+import { objectUrlFor, saveImage } from "../lib/imageStore";
 import { canMove, Z_LABELS, type ZOp } from "../lib/zorder";
 import { addUpload, documentAsFile, removeUpload, useUploads, type UploadedItem } from "../lib/uploads";
 import { DECK_ACCEPT, isDeckFile, requestPdfImport } from "../lib/pdf";
@@ -26,7 +33,6 @@ interface Props {
   globalShapes: ShapeItem[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  onAddImage: (src: string, ratio: number) => void;
   onChange: (id: string, patch: Partial<ShapeItem>) => void;
   onRemove: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -35,6 +41,8 @@ interface Props {
   onOpenDesign: () => void;
   /** promote this picture to the slide background instead */
   onUseAsBackground?: (src: string) => void;
+  /** add a library picture to the slide; imageId names its stored bitmap */
+  onAddImage: (src: string, ratio: number, imageId?: string, name?: string) => void;
 }
 
 const MASKS = ["none", "rounded", "circle", "diamond", "triangle", "star"] as const;
@@ -73,7 +81,15 @@ export default function ImagesPanel({
   const isGlobal = !!sel && globalShapes.some((x) => x.id === sel.id);
   const set = (p: Partial<ShapeItem>) => sel && onChange(sel.id, p);
 
-  const importFiles = async (files: FileList | File[] | null | undefined, replaceId?: string) => {
+  /**
+   * Import image files into the library and/or onto the slide. Each bitmap is
+   * downscaled and stored in IndexedDB before anything references it, so the
+   * image survives reloads; only the stable image id travels with the slide.
+   */
+  const importFiles = async (
+    files: FileList | File[] | null | undefined,
+    replaceId?: string,
+  ) => {
     if (!files) return;
     const all = Array.from(files);
     // a PDF / PPTX is saved to the library as the document itself and opens its
@@ -85,12 +101,27 @@ export default function ImagesPanel({
     setBusy(`Loading ${list.length} file${list.length > 1 ? "s" : ""}…`);
     try {
       for (const f of list) {
-        const { src, ratio } = await loadImageFile(f);
-        const small = await shrinkDataUrl(src);
+        const { src: dataUrl, ratio } = await loadImageFile(f);
+        const small = await shrinkDataUrl(dataUrl);
+        const blob = dataUrlToBlob(small);
+        // keep a session-only fallback if the store refuses the write
+        let src = small;
+        let imageId: string | undefined;
+        try {
+          const { id, ok } = await saveImage(blob, { filename: f.name, mime: blob.type });
+          if (ok) {
+            imageId = id;
+            src = (await objectUrlFor(id)) || small;
+          } else {
+            console.warn("Image storage write refused; keeping session copy");
+          }
+        } catch (err) {
+          console.warn("Failed to store image:", err);
+        }
         // Save to uploads library (Canva-style)
-        addUpload(small, ratio, f.name);
-        if (replaceId) onChange(replaceId, { src: small, naturalRatio: ratio });
-        else onAddImage(small, ratio);
+        addUpload(src, ratio, f.name, imageId);
+        if (replaceId) onChange(replaceId, { src, imageId, naturalRatio: ratio });
+        else onAddImage(src, ratio, imageId, f.name);
       }
     } catch {
       alert("That file could not be read as an image.");
@@ -287,12 +318,13 @@ export default function ImagesPanel({
                             src: item.src,
                             ratio: item.ratio,
                             name: item.name,
+                            imageId: item.imageId,
                           }),
                         );
                         e.dataTransfer.effectAllowed = "copy";
                       }}
                       onClick={() => {
-                        onAddImage(item.src, item.ratio);
+                        onAddImage(item.src, item.ratio, item.imageId, item.name);
                         setJustAddedId(item.id);
                         setTimeout(() => setJustAddedId(null), 1200);
                       }}

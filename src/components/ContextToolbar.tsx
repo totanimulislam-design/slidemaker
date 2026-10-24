@@ -20,7 +20,16 @@ import { TEXT_GRADIENT_PRESETS, bannerBorderGlow, bannerBorderGlowColor, bannerB
 import {
   TEXT_PART_LABELS, WEIGHTS, boxFontLabel, boxTypeface, elementInk, opacityAlpha, opacityPercent, patchTextPart, setBoxFont, setElementInk, textPartDeckFamily, textPartTypeface,
 } from "../lib/boxFonts";
-import { SHAPE_ICONS, SHAPE_LABELS, loadImageFile, type ShapeItem, type ShapeKind } from "../lib/shapes";
+import {
+  SHAPE_ICONS,
+  SHAPE_LABELS,
+  dataUrlToBlob,
+  loadImageFile,
+  shrinkDataUrl,
+  type ShapeItem,
+  type ShapeKind,
+} from "../lib/shapes";
+import { objectUrlFor, saveImage } from "../lib/imageStore";
 import type { AlignOp } from "../lib/shapeAlign";
 import { usePointerDrag } from "../lib/dragSession";
 import { Z_LABELS, type ZOp } from "../lib/zorder";
@@ -2146,7 +2155,7 @@ export default function ContextToolbar(p: Props) {
           {stepper("Border width", s.strokeWidth, strokeWidth => patch({ strokeWidth }), 0, 30, 1, { prefix: "Border" })}
         </>}
         {s?.kind === 'image' && !multi && <>
-          <label className="ctx-btn ctx-upload" title="Replace image"><span aria-hidden="true">🖼</span><span className="sr-only">Replace image</span><input aria-label="Replace image" type="file" accept="image/*" className="ctx-file" onChange={async e => { const file = e.target.files?.[0]; if (file) { try { const { src, ratio } = await loadImageFile(file); patch({ src, naturalRatio: ratio }); } catch { alert('Could not read this image.'); } } }} /></label>
+          <label className="ctx-btn ctx-upload" title="Replace image"><span aria-hidden="true">🖼</span><span className="sr-only">Replace image</span><input aria-label="Replace image" type="file" accept="image/*" className="ctx-file" onChange={async e => { const file = e.target.files?.[0]; if (file) { try { const { src: dataUrl, ratio } = await loadImageFile(file); const small = await shrinkDataUrl(dataUrl); const blob = dataUrlToBlob(small); let src = small; let imageId; try { const { id, ok } = await saveImage(blob, { filename: file.name, mime: blob.type }); if (ok) { imageId = id; src = (await objectUrlFor(id)) || small; } } catch (err) { console.warn('Failed to store replacement image:', err); } patch({ src, imageId, naturalRatio: ratio }); } catch { alert('Could not read this image.'); } } }} /></label>
           <select aria-label="Image fit" title="Image fit" className="ctx-select" value={s.fit ?? 'contain'} onChange={e => patch({ fit: e.target.value as ShapeItem['fit'] })}><option value="contain">Fit</option><option value="cover">Fill / crop to box</option><option value="fill">Stretch</option></select>
           {button(<span aria-hidden="true">⇋</span>, () => patch({ flipH: !s.flipH }), undefined, "Flip horizontal")}
         </>}

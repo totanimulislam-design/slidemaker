@@ -38,6 +38,12 @@ import type { AlignOp } from "./shapeAlign";
 import type { BackgroundSettings, Box, ElementId, LayoutMap } from "./types";
 import { DEFAULT_LAYOUT as LAYOUT_DEFAULTS } from "./types";
 import { measureElement } from "./layoutMeasure";
+import {
+  applyImageUrlPairs,
+  collectImageUrlPairs,
+  prepareForStorage,
+  revokeObjectUrl,
+} from "./imageStore";
 
 const KEY = "mcq-slide-studio-v2";
 
@@ -196,20 +202,52 @@ const THEME_LABELS: Partial<Record<keyof ThemeSettings, string>> = {
 
 export function useDeck() {
   const history = useHistory<Deck>(initialDeck, { limit: 150, coalesceMs: 800 });
-  const { present: deck, set: setDeckH, undo, redo, canUndo, canRedo } = history;
+  const { present: deck, set: setDeckH, replace, undo, redo, canUndo, canRedo } =
+    history;
   const [current, setCurrent] = useState(0);
+  const [rehydrated, setRehydrated] = useState(false);
+  const deckRef = useRef<Deck>(deck);
+  useEffect(() => {
+    deckRef.current = deck;
+  }, [deck]);
   const saveTimer = useRef<number | null>(null);
 
+  /** Restores stored bitmaps onto the deck without recording an undo step. */
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const pairs = await collectImageUrlPairs(deck);
+        if (cancelled) {
+          await Promise.all(pairs.map(([id]) => revokeObjectUrl(id)));
+          return;
+        }
+        replace(applyImageUrlPairs(deckRef.current, pairs));
+      } catch (err) {
+        console.error("Failed to restore stored images:", err);
+      } finally {
+        if (!cancelled) setRehydrated(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!rehydrated) return;
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       try {
-        localStorage.setItem(KEY, JSON.stringify(deck));
+        localStorage.setItem(KEY, JSON.stringify(prepareForStorage(deck)));
       } catch {
         /* quota */
       }
     }, 400);
-  }, [deck]);
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+  }, [deck, rehydrated]);
 
   /** raw setter kept for callers that build a whole deck (load JSON etc.) */
   const setDeck = useCallback(
@@ -1435,5 +1473,7 @@ export function useDeck() {
     canUndo,
     canRedo,
     history,
+    /** true once stored images have been restored onto the deck (client only) */
+    rehydrated,
   };
 }
