@@ -122,6 +122,81 @@ the same renderer the exporter uses (`src/lib/pptx.ts`). Slides therefore come
 in as **visual snapshots**: the text on them is not editable. Charts, video and
 audio have no renderer and are drawn as a labelled placeholder.
 
+## Sending a project to someone else
+
+**🔗 Share** in the toolbar (and **Share** on any saved project card) turns the
+deck into one **portable project** that another person opens in this same
+editor and keeps editing on their own device. Two forms of the same snapshot:
+
+- **a link** — `https://…/editor/#share=…`. The project travels in the URL
+  itself: it is serialized, deflated with `CompressionStream` when the browser
+  has it and encoded as base64url. Nothing is uploaded to a server, nothing is
+  stored outside the message the sender sends, and the link works on the static
+  single-file build exactly as it does in development.
+- **a `.mcqdeck` file** — the same bundle as JSON, for the decks whose pictures
+  make a link impractical and for sending through e-mail attachments. It is
+  opened with **Open** (or dropped on the board); the Open field accepts it next
+  to `.json`.
+
+### What is inside a project
+
+A deck alone would arrive incomplete, because the editor keeps uploaded bitmaps
+in IndexedDB and custom font files in localStorage — the deck only stores their
+ids and names. `src/lib/shareBundle.ts` therefore packages:
+
+| part | why |
+| --- | --- |
+| `deck` | the deck through `prepareForStorage` — slides, designs, drawn shapes, backgrounds, answer states, image **ids** |
+| `assets` | every picture the deck references, as base64 data URLs keyed by its `imageId` |
+| `fonts` | the custom fonts the deck actually uses — **opt-in**, because a face's licence may not allow passing the file on |
+
+A picture still kept as a data URL on the shape (an import from an older build
+that never reached the image store) is left in the deck, and a `blob:` session
+URL is fetched and inlined first — so no local-only address is ever shipped.
+A bitmap that is gone from the browser is reported in the dialog instead of
+being silently dropped.
+
+### Opening one
+
+A `#share=` link is read once when the editor starts (and on `hashchange`), and
+opens the **Shared project** dialog rather than replacing the editor: name,
+slide count, pictures, size, and a preview of the first slide, with *Open for
+editing* / *Not now*. It never touches the recipient's work unless they accept.
+
+Accepting installs the project:
+
+- every picture is written into the recipient's own image store under a **fresh
+  id** and the deck is pointed at it (`src` = its new `blob:` URL), so a shared
+  deck can never collide with — or overwrite — a picture the recipient already
+  has;
+- a font is installed only when the recipient does not already have that family;
+- the deck then loads like any other file: undo is cleared, the editor jumps to
+  the slide the sender was on, the URL drops the share data (`replaceState`, so
+  a reload does not re-open it) and the result is an **unsaved copy** — the
+  recipient names it in **My project** when they want to keep it.
+
+The copy is independent from the moment it opens: editing it never changes the
+sender's project, and the way to send changes back is the same **Share** action.
+A damaged or truncated link is explained in the same dialog (“copy the whole
+link again, or use the project file”) and leaves the editor untouched.
+
+### How much fits in a link
+
+`LINK_SAFE_CHARS` (60 000 characters) is the point where a link is as reliable
+as a chat app will keep it; between that and `LINK_MAX_CHARS` (250 000) the
+dialog warns that some apps cut long links; above it, the link is refused and
+the project file is offered instead. Custom fonts are dropped from the link
+first when they are what pushes it past the limit, and the dialog says so. An
+editor opened from a local `file://` page has no web address to build a link
+from, so it offers only the file — and a link built on `localhost` is flagged,
+because it would open on that machine only.
+
+`npm run test:drag` covers the whole path in `tests/share.test.tsx`: bundle
+metadata and byte-for-byte picture round trips, link trimming and friendly
+errors, `j` (uncompressed) links, file parsing, fresh image ids on every open,
+font opt-in, and the real editor dialog from link → preview → editable copy
+(including the cleared hash and the damaged-link case).
+
 ## Slide designs — the Design destination
 
 The **Design** tile no longer holds a handful of colour presets, the deck's base

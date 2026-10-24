@@ -57,21 +57,38 @@ export function dataUrl(font: CustomFont): string {
 
 /** Registers a font with the browser so CSS can use it immediately. */
 export function registerFont(font: CustomFont): Promise<void> {
-  const face = new FontFace(font.family, `url(${dataUrl(font)})`, {
-    display: "swap",
-    weight: "100 900",
-  });
-  return face
-    .load()
-    .then((loaded) => {
-      document.fonts.add(loaded);
-      markLoaded([font.family]);
-      listeners.forEach((l) => l(listCustomFonts()));
-    })
-    .catch(() => {
-      // still mark it so the UI stays consistent; the browser falls back
-      markLoaded([font.family]);
+  const settled = () => {
+    // mark it even when the browser refuses, so the UI stays consistent and
+    // the text simply falls back to the next family in the stack
+    markLoaded([font.family]);
+    listeners.forEach((l) => l(listCustomFonts()));
+  };
+  // environments without the FontFace API (old browsers, jsdom in the tests)
+  // must not break an import: the payload is kept and used where possible
+  if (typeof FontFace === "undefined") {
+    settled();
+    return Promise.resolve();
+  }
+  try {
+    const face = new FontFace(font.family, `url(${dataUrl(font)})`, {
+      display: "swap",
+      weight: "100 900",
     });
+    return face
+      .load()
+      .then((loaded) => {
+        try {
+          document.fonts?.add(loaded);
+        } catch {
+          /* document.fonts can be missing or refuse the face */
+        }
+        settled();
+      })
+      .catch(settled);
+  } catch {
+    settled();
+    return Promise.resolve();
+  }
 }
 
 /** Registers every saved font — called once at start-up. */
@@ -94,6 +111,28 @@ function notify() {
 /** Removes a font and unregisters it from the document. */
 export function removeCustomFont(family: string) {
   save(listCustomFonts().filter((f) => f.family !== family));
+  notify();
+}
+
+/**
+ * Installs a font that arrived inside a shared project.
+ *
+ * A family the recipient already has is left untouched (the same Bangla face
+ * may be a different build on each machine, and replacing it would silently
+ * restyle the recipient's own decks). When localStorage refuses the payload the
+ * font is still registered for this session, so the shared deck looks right
+ * while it is open.
+ */
+export async function installCustomFont(font: CustomFont): Promise<void> {
+  const family = String(font.family ?? "").trim();
+  if (!family || !font.data) throw new Error("invalid font");
+  const list = listCustomFonts().filter((f) => f.family.toLowerCase() !== family.toLowerCase());
+  try {
+    save([...list, { ...font, family }]);
+  } catch (err) {
+    if ((err as Error)?.message !== "storage-full") throw err;
+  }
+  await registerFont({ ...font, family });
   notify();
 }
 
