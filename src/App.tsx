@@ -5,6 +5,7 @@ import {
   FREE_MAX,
   FREE_MIN,
   type Box,
+  type Deck,
   type DeckHeader,
   type ElementId,
   type LayoutMap,
@@ -45,7 +46,14 @@ import {
   setShapeClipboard,
 } from "./lib/clipboard";
 import HistoryPanel from "./components/HistoryPanel";
+import ProjectsModal from "./components/ProjectsModal";
 import AnswerKeyModal from "./components/AnswerKeyModal";
+import {
+  getProject,
+  projectFingerprint,
+  type ProjectIdentity,
+  type SavedProject,
+} from "./lib/projectStore";
 import { Btn } from "./components/ui";
 import { normalizeDeckZ, useDeck } from "./lib/useDeck";
 import { addUpload, rehydrateUploads, seedUploadsFromDeck } from "./lib/uploads";
@@ -82,6 +90,17 @@ import { exportPdf } from "./lib/exportPdf";
 import { normalizeSource } from "./lib/richPaste";
 import { cn } from "./utils/cn";
 import { FontPreviewProvider, useFontPreview } from "./lib/fontPreview";
+
+const ACTIVE_PROJECT_KEY = "mcq-slide-studio-active-project";
+
+function readActiveProject(): ProjectIdentity | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(ACTIVE_PROJECT_KEY) ?? "null");
+    return value && typeof value.id === "string" && typeof value.name === "string" ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 function AppContent() {
   const {
@@ -163,6 +182,23 @@ function AppContent() {
   const [exportOpen, setExportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [activeProject, setActiveProject] = useState<ProjectIdentity | null>(readActiveProject);
+  const [projectDirty, setProjectDirty] = useState(false);
+  /** a project open/replace is not an edit to the project that was just opened */
+  const skipProjectDirty = useRef<Deck | null>(null);
+  const projectDirtyReady = useRef(false);
+  const latestProjectDeck = useRef(deck);
+  latestProjectDeck.current = deck;
+  const updateActiveProject = useCallback((project: ProjectIdentity | null) => {
+    setActiveProject(project);
+    try {
+      if (project) localStorage.setItem(ACTIVE_PROJECT_KEY, JSON.stringify({ id: project.id, name: project.name }));
+      else localStorage.removeItem(ACTIVE_PROJECT_KEY);
+    } catch {
+      /* storage can be unavailable; the in-memory association still works */
+    }
+  }, []);
   const [presenting, setPresenting] = useState(false);
   const [activeField, setActiveField] = useState<SlideField | null>(null);
   const [selectedEl, setSelectedEl] = useState<ElementId | null>(null);
@@ -237,6 +273,45 @@ function AppContent() {
     if (rehydrated) setBusy(null);
     else setBusy("Restoring images…");
   }, [rehydrated]);
+
+  /* Track unsaved project work without serialising the whole deck on every
+     keystroke. Opening a file/project marks its incoming deck explicitly so
+     that replace is not mistaken for a subsequent edit. */
+  useEffect(() => {
+    if (!rehydrated) return;
+    if (!projectDirtyReady.current) {
+      projectDirtyReady.current = true;
+      return;
+    }
+    if (skipProjectDirty.current === deck) {
+      skipProjectDirty.current = null;
+      return;
+    }
+    setProjectDirty(true);
+  }, [deck, rehydrated]);
+
+  /* A reload restores the draft autosave, which may be newer than the last
+     explicit project save. Compare once against the active snapshot so the
+     saved/unsaved indicator stays truthful across reloads too. */
+  useEffect(() => {
+    if (!rehydrated || !activeProject) return;
+    let cancelled = false;
+    void getProject(activeProject.id).then((saved) => {
+      if (cancelled) return;
+      if (!saved) {
+        updateActiveProject(null);
+        return;
+      }
+      try {
+        if (projectFingerprint(saved.deck) !== projectFingerprint(latestProjectDeck.current)) setProjectDirty(true);
+      } catch {
+        setProjectDirty(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [rehydrated, activeProject?.id, updateActiveProject]);
 
   // Revoke session object URLs when the editor unmounts.
   useEffect(
@@ -559,7 +634,7 @@ function AppContent() {
   // Ctrl+V with an image on the clipboard drops it onto the current slide
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      if (presenting || pasteOpen || exportOpen) return;
+      if (presenting || pasteOpen || exportOpen || projectsOpen) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       const files = Array.from(e.clipboardData?.files ?? []);
@@ -570,7 +645,7 @@ function AppContent() {
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [importImageFiles, presenting, pasteOpen, exportOpen]);
+  }, [importImageFiles, presenting, pasteOpen, exportOpen, projectsOpen]);
 
   /**
    * PDF pages / PPTX slides picked in the import dialog → deck. The pages arrive
@@ -843,7 +918,7 @@ function AppContent() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (presenting || pasteOpen || answersOpen) return;
+      if (presenting || pasteOpen || answersOpen || projectsOpen) return;
       const inField = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
 
       // ---- undo / redo: Ctrl/⌘+Z, Ctrl/⌘+Shift+Z, Ctrl/⌘+Y -------------------
@@ -1004,6 +1079,7 @@ function AppContent() {
     presenting,
     pasteOpen,
     answersOpen,
+    projectsOpen,
     selectedEl,
     selectedShapes,
     currentStack,
@@ -1090,6 +1166,56 @@ function AppContent() {
     window.setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
 
+  /** Shared restorer for JSON backups and named projects. */
+  const restoreDeckData = async (data: Deck, label: string): Promise<Deck> => {
+    if (!data || !Array.isArray(data.slides)) throw new Error("bad file");
+    // restore stored bitmaps for any image id this browser still holds
+    const restored = await rehydrateImages(data);
+    const next = normalizeDeckZ({
+      header: { ...deck.header, ...restored.header },
+      theme: {
+        ...deck.theme,
+        ...restored.theme,
+        layout: {
+          ...deck.theme.layout,
+          ...(restored.theme?.layout ?? {}),
+          bullet: { ...deck.theme.layout.bullet, ...(restored.theme?.layout?.bullet ?? {}) },
+        },
+        banner: {
+          ...deck.theme.banner,
+          ...(restored.theme?.banner ?? {}),
+          color: restored.theme?.banner?.color ?? restored.theme?.titleBanner ?? deck.theme.banner.color,
+        },
+        background: { ...deck.theme.background, ...(restored.theme?.background ?? {}) },
+        boxFonts: { ...deck.theme.boxFonts, ...(restored.theme?.boxFonts ?? {}) },
+        frame: (() => {
+          const f = {
+            ...deck.theme.frame,
+            ...(restored.theme?.frame ?? {}),
+            color: restored.theme?.frame?.color ?? restored.theme?.frameInner ?? deck.theme.frame.color,
+          };
+          f.image = resolveFrameImageSrc(f.image);
+          return f;
+        })(),
+      },
+      slides: restored.slides,
+      globalShapes: restored.globalShapes ?? [],
+    });
+    skipProjectDirty.current = next;
+    setDeck(next, label);
+    return next;
+  };
+
+  const clearBoardForAnotherDeck = () => {
+    setSelectedShapes([]);
+    setSelectedEl(null);
+    setSurface(null);
+    setActiveField(null);
+    setActiveNav(null);
+    setScopeSlideIds([]);
+    setCtxMenu(null);
+  };
+
   const loadJson = (file?: File | null) => {
     if (!file) return;
     const reader = new FileReader();
@@ -1097,47 +1223,26 @@ function AppContent() {
       try {
         const data = JSON.parse(String(reader.result));
         if (!data?.slides?.length) throw new Error("bad file");
-        // restore stored bitmaps for any image id this browser still holds
-        const restored = await rehydrateImages(data);
-        setDeck(
-          normalizeDeckZ({
-            header: { ...deck.header, ...restored.header },
-            theme: {
-              ...deck.theme,
-              ...restored.theme,
-              layout: {
-                ...deck.theme.layout,
-                ...(restored.theme?.layout ?? {}),
-                bullet: { ...deck.theme.layout.bullet, ...(restored.theme?.layout?.bullet ?? {}) },
-              },
-              banner: {
-                ...deck.theme.banner,
-                ...(restored.theme?.banner ?? {}),
-                color: restored.theme?.banner?.color ?? restored.theme?.titleBanner ?? deck.theme.banner.color,
-              },
-              background: { ...deck.theme.background, ...(restored.theme?.background ?? {}) },
-              boxFonts: { ...deck.theme.boxFonts, ...(restored.theme?.boxFonts ?? {}) },
-              frame: (() => {
-                const f = {
-                  ...deck.theme.frame,
-                  ...(restored.theme?.frame ?? {}),
-                  color: restored.theme?.frame?.color ?? restored.theme?.frameInner ?? deck.theme.frame.color,
-                };
-                f.image = resolveFrameImageSrc(f.image);
-                return f;
-              })(),
-            },
-            slides: restored.slides,
-            globalShapes: restored.globalShapes ?? [],
-          }),
-          "Open deck file",
-        );
+        await restoreDeckData(data, "Open deck file");
+        clearBoardForAnotherDeck();
+        updateActiveProject(null);
+        setProjectDirty(false);
         setCurrent(0);
       } catch {
         alert("That file could not be read as a deck.");
       }
     };
     reader.readAsText(file);
+  };
+
+  const openSavedProject = async (project: SavedProject) => {
+    await restoreDeckData(project.deck, `Open project: ${project.name}`);
+    // Undo must never cross the boundary between two named projects.
+    history.clear();
+    clearBoardForAnotherDeck();
+    updateActiveProject({ id: project.id, name: project.name });
+    setProjectDirty(false);
+    setCurrent(Math.max(0, Math.min(project.currentSlide, project.deck.slides.length - 1)));
   };
 
   const stats = useMemo(() => {
@@ -1504,6 +1609,16 @@ function AppContent() {
             {busy && (
               <span className="rounded-lg bg-amber-400/15 px-3 py-1.5 text-xs text-amber-200">{busy}</span>
             )}
+            <Btn
+              variant="soft"
+              onClick={() => setProjectsOpen(true)}
+              title={activeProject
+                ? `${activeProject.name} — ${projectDirty ? "unsaved changes" : "saved"}. Open the project library.`
+                : "Save named projects in this browser and reopen them later"}
+            >
+              ▣ My project
+              {activeProject && <span className={projectDirty ? "text-amber-300" : "text-emerald-300"} aria-hidden="true">{projectDirty ? "●" : "✓"}</span>}
+            </Btn>
             <Btn onClick={saveJson} title="Download the deck as a .json project file">
               Save
             </Btn>
@@ -1513,7 +1628,10 @@ function AppContent() {
                 type="file"
                 accept="application/json,.json"
                 className="hidden"
-                onChange={(e) => loadJson(e.target.files?.[0])}
+                onChange={(e) => {
+                  loadJson(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
               />
             </label>
             <Btn
@@ -1947,6 +2065,21 @@ function AppContent() {
         menu={ctxMenu ? { x: ctxMenu.x, y: ctxMenu.y } : null}
         actions={ctxActions}
         onClose={() => setCtxMenu(null)}
+      />
+
+      <ProjectsModal
+        open={projectsOpen}
+        deck={deck}
+        currentSlide={index}
+        activeProject={activeProject}
+        dirty={projectDirty}
+        onClose={() => setProjectsOpen(false)}
+        onOpen={openSavedProject}
+        onSaved={(project) => {
+          updateActiveProject({ id: project.id, name: project.name });
+          setProjectDirty(false);
+        }}
+        onActiveChange={updateActiveProject}
       />
 
       <ExportModal
