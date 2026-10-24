@@ -47,6 +47,18 @@ import {
 } from "./lib/clipboard";
 import HistoryPanel from "./components/HistoryPanel";
 import ProjectsModal from "./components/ProjectsModal";
+import ShareModal from "./components/ShareModal";
+import SharedProjectModal, { type IncomingShare } from "./components/SharedProjectModal";
+import {
+  SHARE_HASH_KEY,
+  decodeShareBundle,
+  installShareBundle,
+  isShareBundle,
+  isShareFileName,
+  parseShareFile,
+  readShareToken,
+  type ShareBundle,
+} from "./lib/shareBundle";
 import AnswerKeyModal from "./components/AnswerKeyModal";
 import {
   getProject,
@@ -183,6 +195,13 @@ function AppContent() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
+  /** “Share project” dialog (link + portable file) */
+  const [shareOpen, setShareOpen] = useState(false);
+  /** a link / project file waiting for the recipient to accept it */
+  const [incomingShare, setIncomingShare] = useState<IncomingShare | null>(null);
+  const [incomingBusy, setIncomingBusy] = useState(false);
+  /** name a shared project arrived with, offered when it is saved as a project */
+  const [suggestedProjectName, setSuggestedProjectName] = useState<string | null>(null);
   const [activeProject, setActiveProject] = useState<ProjectIdentity | null>(readActiveProject);
   const [projectDirty, setProjectDirty] = useState(false);
   /** a project open/replace is not an edit to the project that was just opened */
@@ -634,7 +653,7 @@ function AppContent() {
   // Ctrl+V with an image on the clipboard drops it onto the current slide
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      if (presenting || pasteOpen || exportOpen || projectsOpen) return;
+      if (presenting || pasteOpen || exportOpen || projectsOpen || shareOpen || incomingShare) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       const files = Array.from(e.clipboardData?.files ?? []);
@@ -645,7 +664,7 @@ function AppContent() {
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [importImageFiles, presenting, pasteOpen, exportOpen, projectsOpen]);
+  }, [importImageFiles, presenting, pasteOpen, exportOpen, projectsOpen, shareOpen, incomingShare]);
 
   /**
    * PDF pages / PPTX slides picked in the import dialog → deck. The pages arrive
@@ -918,7 +937,7 @@ function AppContent() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (presenting || pasteOpen || answersOpen || projectsOpen) return;
+      if (presenting || pasteOpen || answersOpen || projectsOpen || shareOpen || incomingShare) return;
       const inField = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
 
       // ---- undo / redo: Ctrl/⌘+Z, Ctrl/⌘+Shift+Z, Ctrl/⌘+Y -------------------
@@ -1080,6 +1099,8 @@ function AppContent() {
     pasteOpen,
     answersOpen,
     projectsOpen,
+    shareOpen,
+    incomingShare,
     selectedEl,
     selectedShapes,
     currentStack,
@@ -1216,17 +1237,122 @@ function AppContent() {
     setCtxMenu(null);
   };
 
+  /** Drops `#share=…` from the address bar without reloading, so a reload
+   *  never re-opens a project the recipient already accepted. */
+  const clearShareToken = useCallback(() => {
+    try {
+      const url = new URL(window.location.href);
+      const hadHash = readShareToken(url.href) !== null;
+      const hadQuery = url.searchParams.has(SHARE_HASH_KEY);
+      url.hash = "";
+      url.searchParams.delete(SHARE_HASH_KEY);
+      if (hadHash || hadQuery) window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+    } catch {
+      /* an environment without history simply keeps its URL */
+    }
+  }, []);
+
+  /**
+   * Opens a shared project as an independent, editable copy.
+   *
+   * `installShareBundle` first writes the bundle's pictures into this browser's
+   * image store (under fresh ids) and registers the fonts it carries, so the
+   * deck that reaches `restoreDeckData` is complete and local. The recipient's
+   * editor then behaves exactly as if they had opened one of their own files:
+   * the shared deck is not linked to the sender, and nothing about their
+   * existing projects is touched.
+   */
+  const openShareBundle = async (bundle: ShareBundle) => {
+    setIncomingBusy(true);
+    try {
+      const installed = await installShareBundle(bundle);
+      await restoreDeckData(installed.deck, `Open shared project: ${bundle.name}`);
+      // undo never crosses the boundary into a different project
+      history.clear();
+      clearBoardForAnotherDeck();
+      updateActiveProject(null);
+      setProjectDirty(false);
+      const last = Math.max(0, installed.deck.slides.length - 1);
+      setCurrent(Math.max(0, Math.min(bundle.currentSlide ?? 0, last)));
+      setIncomingShare(null);
+      setShareOpen(false);
+      setSuggestedProjectName(bundle.name);
+      clearShareToken();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "That shared project could not be opened.");
+    } finally {
+      setIncomingBusy(false);
+    }
+  };
+
+  /** A `.mcqdeck` file picked with “Open” or dropped on the board. */
+  const openShareFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        void openShareBundle(parseShareFile(String(reader.result)));
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "That file could not be read as a shared project.");
+      }
+    };
+    reader.onerror = () => alert("That file could not be read.");
+    reader.readAsText(file);
+  };
+
+  /**
+   * A shared link opens the project it carries. The reader runs once at start-up
+   * (a shared URL is normally how the page is reached) and again when the hash
+   * changes, so pasting a link into the address bar of an open tab works too.
+   * Each token is read once: dismissing the dialog clears it from the URL.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    let handled: string | null = null;
+    const read = async () => {
+      const token = readShareToken(window.location.href);
+      if (!token || token === handled) return;
+      handled = token;
+      try {
+        const bundle = await decodeShareBundle(token);
+        if (!cancelled) setIncomingShare({ bundle, error: null });
+      } catch (err) {
+        if (!cancelled) {
+          setIncomingShare({
+            bundle: null,
+            error: err instanceof Error ? err.message : "This share link could not be read.",
+          });
+        }
+      }
+    };
+    void read();
+    const onHash = () => {
+      handled = null;
+      void read();
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("hashchange", onHash);
+    };
+  }, []);
+
   const loadJson = (file?: File | null) => {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async () => {
       try {
         const data = JSON.parse(String(reader.result));
+        // a portable project (.mcqdeck) carries its pictures and fonts with it
+        if (isShareBundle(data)) {
+          await openShareBundle(data);
+          return;
+        }
         if (!data?.slides?.length) throw new Error("bad file");
         await restoreDeckData(data, "Open deck file");
         clearBoardForAnotherDeck();
         updateActiveProject(null);
         setProjectDirty(false);
+        setSuggestedProjectName(null);
         setCurrent(0);
       } catch {
         alert("That file could not be read as a deck.");
@@ -1242,6 +1368,7 @@ function AppContent() {
     clearBoardForAnotherDeck();
     updateActiveProject({ id: project.id, name: project.name });
     setProjectDirty(false);
+    setSuggestedProjectName(null);
     setCurrent(Math.max(0, Math.min(project.currentSlide, project.deck.slides.length - 1)));
   };
 
@@ -1619,14 +1746,25 @@ function AppContent() {
               ▣ My project
               {activeProject && <span className={projectDirty ? "text-amber-300" : "text-emerald-300"} aria-hidden="true">{projectDirty ? "●" : "✓"}</span>}
             </Btn>
-            <Btn onClick={saveJson} title="Download the deck as a .json project file">
+            <Btn
+              variant="soft"
+              onClick={() => setShareOpen(true)}
+              disabled={!deck.slides.length}
+              title="Send this project to another person — they open it here and edit their own copy"
+            >
+              🔗 Share
+            </Btn>
+            <Btn onClick={saveJson} title="Download the deck as a .json backup for this browser (pictures stay here) — use Share to send the whole project to someone">
               Save
             </Btn>
-            <label className="cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/10">
+            <label
+              className="cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/10"
+              title="Open a .json deck or a shared .mcqdeck project — pictures and fonts travel with it"
+            >
               Open
               <input
                 type="file"
-                accept="application/json,.json"
+                accept="application/json,.json,.mcqdeck"
                 className="hidden"
                 onChange={(e) => {
                   loadJson(e.target.files?.[0]);
@@ -1762,6 +1900,11 @@ function AppContent() {
                     }
 
                     const files = Array.from(e.dataTransfer.files);
+                    const sharedFile = files.find((file) => isShareFileName(file.name));
+                    if (sharedFile) {
+                      openShareFile(sharedFile);
+                      return;
+                    }
                     if (e.shiftKey && files[0]?.type.startsWith("image/") && slide) {
                       void (async () => {
                         const { loadImageFile, shrinkDataUrl } = await import("./lib/shapes");
@@ -2078,8 +2221,39 @@ function AppContent() {
         onSaved={(project) => {
           updateActiveProject({ id: project.id, name: project.name });
           setProjectDirty(false);
+          setSuggestedProjectName(null);
         }}
         onActiveChange={updateActiveProject}
+        suggestedName={suggestedProjectName}
+        onShare={async (project) => {
+          // sharing a saved project loads that snapshot, so the editor's
+          // unsaved work must not be thrown away by a stray click
+          if (activeProject?.id !== project.id && projectDirty) {
+            if (!confirm(`Open “${project.name}” and share that saved version? Unsaved changes in the editor will be discarded.`)) return;
+          }
+          await openSavedProject(project);
+          setProjectsOpen(false);
+          setShareOpen(true);
+        }}
+      />
+
+      <ShareModal
+        open={shareOpen}
+        deck={deck}
+        name={activeProject?.name || deck.header.title || "My project"}
+        currentSlide={index}
+        onClose={() => setShareOpen(false)}
+      />
+
+      <SharedProjectModal
+        incoming={incomingShare}
+        busy={incomingBusy}
+        onOpen={(bundle) => void openShareBundle(bundle)}
+        onDismiss={() => {
+          if (incomingBusy) return;
+          setIncomingShare(null);
+          clearShareToken();
+        }}
       />
 
       <ExportModal

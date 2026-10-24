@@ -24,10 +24,14 @@ interface Props {
   activeProject: ProjectIdentity | null;
   /** edits made in this session since the last project save/open */
   dirty: boolean;
+  /** name to offer when this deck arrived from a shared project */
+  suggestedName?: string | null;
   onClose: () => void;
   onOpen: (project: SavedProject) => Promise<void>;
   onSaved: (project: SavedProject) => void;
   onActiveChange: (project: ProjectIdentity | null) => void;
+  /** opens that project and offers it through “Share project” */
+  onShare?: (project: SavedProject) => Promise<void> | void;
 }
 
 const formatDate = (timestamp: number) => {
@@ -75,10 +79,12 @@ export default function ProjectsModal({
   currentSlide,
   activeProject,
   dirty,
+  suggestedName,
   onClose,
   onOpen,
   onSaved,
   onActiveChange,
+  onShare,
 }: Props) {
   const [projects, setProjects] = useState<SavedProject[]>([]);
   const [name, setName] = useState("");
@@ -114,8 +120,9 @@ export default function ProjectsModal({
   }, [open, refresh]);
 
   useEffect(() => {
-    if (open) setName(activeProject?.name ?? (deck.header.title.trim() || "Untitled project"));
-  }, [open, activeProject?.id, activeProject?.name, deck.header.title]);
+    if (!open) return;
+    setName(activeProject?.name ?? (suggestedName?.trim() || deck.header.title.trim() || "Untitled project"));
+  }, [open, activeProject?.id, activeProject?.name, suggestedName, deck.header.title]);
 
   /* A stale active id can remain after browser data was cleared. */
   useEffect(() => {
@@ -431,6 +438,16 @@ export default function ProjectsModal({
                     {!renaming && (
                       <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:max-w-[150px] sm:justify-end">
                         <Btn size="sm" variant="soft" disabled={!!busy} onClick={() => void openSavedProject(project)}>Open</Btn>
+                        {onShare && (
+                          <Btn
+                            size="sm"
+                            disabled={!!busy}
+                            title="Send this saved project to someone — they open it and edit their own copy"
+                            onClick={() => void onShare(project)}
+                          >
+                            Share
+                          </Btn>
+                        )}
                         <Btn
                           size="sm"
                           disabled={!!busy}
@@ -455,7 +472,9 @@ export default function ProjectsModal({
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 px-5 py-3">
-          <span className="text-[11px] text-slate-600" role="status">{busy ?? "Reopening restores slides, designs, text, shapes and image references."}</span>
+          <span className="text-[11px] text-slate-600" role="status">
+            {busy ?? "Reopening restores slides, designs, text, shapes and image references. Share sends a copy to another person."}
+          </span>
           <Btn disabled={!!busy} onClick={onClose}>Close</Btn>
         </div>
       </div>
