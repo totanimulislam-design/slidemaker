@@ -33,6 +33,7 @@ const pdfStubPlugin = {
 
 const suites = [
   ["persistent image store (IndexedDB with memory fallback) and deck rehydration", "imageStore.test.ts", "runImageStoreTests"],
+  ["named projects (save, update, rename, copy, delete and reopen in the real editor)", "projects.test.tsx", "runProjectTests"],
   ["math paste (LaTeX delimiters, set relations and literal answer matching)", "mathpaste.test.ts", "runMathPasteTests"],
   ["drag interaction (Slide + ShapeLayer, deck shapes included)", "drag.test.tsx", "runDragTests"],
   ["gesture leak (legacy pattern vs drag session)", "leak.test.tsx", "runLeakTests"],
