@@ -110,8 +110,10 @@ export interface ShapeItem {
   strikethrough?: boolean;
 
   /* ---------------------------- image only ---------------------------- */
-  /** data-URL or http(s) URL */
+  /** data-URL or http(s) URL; a `blob:` URL while the image lives in the editor session */
   src?: string;
+  /** stable id of the stored bitmap in lib/imageStore (IndexedDB) */
+  imageId?: string;
   /** natural aspect ratio (w / h) captured at insert time */
   naturalRatio?: number;
   /**
@@ -235,6 +237,24 @@ export function loadImageFile(file: Blob): Promise<{ src: string; ratio: number 
     };
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Turns a data URL back into a Blob, so a downscaled picture can be stored
+ * in IndexedDB instead of being kept as a Base64 string.
+ */
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, body] = String(dataUrl).split(",");
+  const mime = header.match(/:\s*([^;]*)/)?.[1] ?? "application/octet-stream";
+  let bin = "";
+  try {
+    bin = header.includes("base64") ? atob(body ?? "") : decodeURIComponent(body ?? "");
+  } catch {
+    /* unreadable data URL → empty blob, caller keeps its fallback */
+  }
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
 }
 
 /** Resolves the natural aspect ratio of any image source. */
