@@ -184,7 +184,7 @@ export async function runTextBgTests(): Promise<CaseResult[]> {
 
   /* ------------------------- painting the title ---------------------------- */
   const titleBox = () => el('[data-el="title"]');
-  click(popButton("Background shape preset: ACS violet pill"));
+  click(popButton("Background shape preset: Violet pill"));
   const titlePlate = plates(titleBox())[0];
   out.push({
     name: "picking a preset paints ONE plate behind the title, on a layer under the glyphs",
@@ -207,7 +207,7 @@ export async function runTextBgTests(): Promise<CaseResult[]> {
   const titleBtn = () => line("Title text tools")?.querySelector<HTMLElement>('button[aria-label="Title text background shape"]');
   out.push({
     name: "the toolbar button shows the plate is on (and names the preset in its tooltip)",
-    pass: titleBtn()?.getAttribute("data-bg-shape") === "on" && (titleBtn()?.getAttribute("title") ?? "").includes("ACS violet pill"),
+    pass: titleBtn()?.getAttribute("data-bg-shape") === "on" && (titleBtn()?.getAttribute("title") ?? "").includes("Violet pill"),
     detail: `${titleBtn()?.getAttribute("data-bg-shape")} · ${titleBtn()?.getAttribute("title")}`,
   });
 
@@ -299,7 +299,7 @@ export async function runTextBgTests(): Promise<CaseResult[]> {
   /* --------------------- per line vs whole block --------------------------- */
   nav("questionText");
   click(line("Question text tools")?.querySelector('button[aria-label="Question text background shape"]'));
-  click(popButton("Background shape preset: Udvash steel card"));
+  click(popButton("Background shape preset: Steel card"));
   const stem = () => el('[data-el="question"] > span');
   out.push({
     name: "the question gets one plate behind the whole (two-line) text by default",
@@ -323,7 +323,7 @@ export async function runTextBgTests(): Promise<CaseResult[]> {
   /* ------------------------ the other parts -------------------------------- */
   nav("badge1");
   click(line("Badge 1 tools")?.querySelector('button[aria-label="Badge 1 background shape"]'));
-  click(popButton("Background shape preset: 10MS red chevron"));
+  click(popButton("Background shape preset: Crimson chevron"));
   const brandLines = () => Array.from(doc.querySelectorAll<HTMLElement>('.slide-editable [data-el="brand"] > div'));
   out.push({
     name: "Badge 1's plate wraps Badge 1's line only — Badge 2 stays bare",

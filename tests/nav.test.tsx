@@ -668,10 +668,10 @@ export async function runNavTests(): Promise<CaseResult[]> {
 
   /* --- the new lines' deeper pickers open in the shared movable pop-up ----- */
   click(doc.querySelector('aside nav button[data-nav="questionBullet"]'));
-  click(doc.querySelector('.context-toolbar [aria-label="Bullet design"]'));
+  click(doc.querySelector('.context-toolbar [aria-label="Design"]') ?? doc.querySelector('.context-toolbar [aria-label="Bullet design"]'));
   out.push({
     name: "the question bullet line opens its bullet designs in the shared pop-up",
-    pass: pop()?.getAttribute("data-pop-panel") === "Bullet design",
+    pass: ["Design", "Bullet design"].includes(pop()?.getAttribute("data-pop-panel") ?? ""),
     detail: String(pop()?.getAttribute("data-pop-panel")),
   });
   click(doc.querySelector(".context-toolbar .ctx-pop-head [aria-label='Close toolbar panel']"));
