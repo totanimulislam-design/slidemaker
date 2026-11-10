@@ -46,7 +46,7 @@ import { rotateHue } from "./textEffects";
 import { shapeEffectPasses, type ShapeEffectBehind, type ShapeEffectPasses } from "./shapeEffects";
 import { STUDIO_TITLE_GROUP_HINTS, STUDIO_TITLE_PRESETS, STUDIO_TITLE_PRESET_GROUPS } from "./titleBackgroundDesigns";
 
-export { STUDIO_TITLE_PRESET_COUNT } from "./titleBackgroundDesigns";
+export { STUDIO_TITLE_COLOURWAY_COUNT, STUDIO_TITLE_PRESET_COUNT } from "./titleBackgroundDesigns";
 
 /* ---------------------------------------------------- silhouette families */
 
@@ -3121,6 +3121,24 @@ export interface BannerPreset {
   /** search words for the larger gallery — materials, moods and colourways */
   hint?: string;
   banner: Partial<BannerSettings>;
+  /**
+   * The same **design** in other colourways. The studio collection used to
+   * publish all ten as separate presets, so the gallery showed the same plate
+   * ten times over; now each design is ONE preset and these are the ten looks
+   * it can wear — the tile's colour dots. Picking one applies exactly the
+   * preset it used to be (`titleBackgroundDesigns` builds each colourway with
+   * the same recipe that once shipped as its own tile).
+   */
+  colourways?: BannerPresetColourway[];
+}
+
+/** one colourway of a design preset — the recipe dressed in another palette */
+export interface BannerPresetColourway {
+  /** the palette's name, e.g. "Violet Haze" */
+  name: string;
+  /** the little dot's paint */
+  swatch: string;
+  banner: Partial<BannerSettings>;
 }
 
 /**
@@ -4583,8 +4601,9 @@ export const BANNER_PRESETS: BannerPreset[] = [
       textShadow: true,
     },
   },
-  /* 120 studio looks — twelve families × ten colourways, each a full plate
-     recipe generated in `lib/titleBackgroundDesigns` */
+  /* twelve studio designs — one tile per family, each carrying its ten
+     colourways as dots, so the gallery never shows the same design twice.
+     Generated in `lib/titleBackgroundDesigns`. */
   ...STUDIO_TITLE_PRESETS,
 ];
 

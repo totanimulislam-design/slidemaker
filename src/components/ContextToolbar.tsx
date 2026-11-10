@@ -57,6 +57,7 @@ import {
   BannerBorderPanel,
   BannerEffectsPanel,
   BannerFillPanel,
+  BannerPartsPanel,
   BannerPositionPanel,
   BannerPresetPanel,
   BannerShapePanel,
@@ -1305,10 +1306,14 @@ export default function ContextToolbar(p: Props) {
    * The title background line — one button per channel, in the order a plate is
    * dressed:
    *
-   *   Design presets   180 looks in 26 groups — the original 60 Bangladeshi
-   *                    EdTech / classroom / online-platform plates, plus 120
-   *                    studio looks in twelve new families. The larger gallery
-   *                    has search and a chip per group.
+   *   Design presets   72 designs in 26 groups — the original 60 Bangladeshi
+   *                    EdTech / classroom / online-platform plates, plus twelve
+   *                    studio designs, each carrying its ten colourways as dots
+   *                    (120 one-click looks) instead of ten repeated tiles.
+   *                    The gallery has search and a chip per group.
+   *   Design parts     the controlling system behind a preset — every layer of
+   *                    the design in one list, each one changeable (its card
+   *                    opens), removable, and restorable exactly as it was.
    *   Shape            the silhouettes in thirteen groups — the shape
    *                    library (Basic & Clean · Banner Style · Cut & Corner ·
    *                    Modern · Curved & Wave · Organic / Decorative ·
@@ -1344,6 +1349,31 @@ export default function ContextToolbar(p: Props) {
     const p = (patch: Partial<typeof banner>) => patchBanner(patch);
     const cards: Record<string, ReactNode> = {
       "Design presets": <BannerPresetPanel theme={theme} banner={banner} setBanner={p} />,
+      // the controlling system behind a preset — every part of the design in
+      // one list, each one removable and each one a doorway to its own card
+      "Design parts": (
+        <BannerPartsPanel
+          theme={theme}
+          banner={banner}
+          setBanner={p}
+          documentColors={docColors}
+          onEdit={(card, part) => {
+            setPanel(card);
+            // a part that lives inside another card (an effect family) opens
+            // the card and lights the category it belongs to, so "Change
+            // Shadow" lands on Shadow and not at the top of twelve families
+            const target = part === "distortion" ? "shape" : part;
+            if (!target) return;
+            window.setTimeout(() => {
+              const el = document.querySelector<HTMLElement>(`.ctx-pop [data-banner-fx-group="${target}"]`);
+              if (!el) return;
+              el.scrollIntoView?.({ behavior: "smooth", block: "start" });
+              el.classList.add("banner-card-flash");
+              window.setTimeout(() => el.classList.remove("banner-card-flash"), 900);
+            }, 60);
+          }}
+        />
+      ),
       "Banner shape": <BannerShapePanel theme={theme} banner={banner} setBanner={p} />,
       "Banner effects": <BannerEffectsPanel theme={theme} banner={banner} setBanner={p} />,
       "Banner fill": <BannerFillPanel banner={banner} setBanner={p} documentColors={docColors} />,
@@ -1693,6 +1723,7 @@ export default function ContextToolbar(p: Props) {
         return (
           <>
             {stackToggle("Design presets", "Presets", PRESET_GLYPH)}
+            {stackToggle("Design parts", "Parts", <span className="ctx-vtool-emoji" aria-hidden="true">🧩</span>)}
             {stackToggle("Banner shape", "Shape", <ShapeGlyph shape={banner.shape} />)}
             {stackToggle("Banner effects", "Effects", <span className="ctx-vtool-emoji" aria-hidden="true">✨</span>)}
             {stackToggle("Banner fill", "Fill", plateWell)}

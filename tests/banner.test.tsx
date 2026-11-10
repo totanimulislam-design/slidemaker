@@ -6,7 +6,10 @@
  * Transparency · Banner size · Banner position · show/hide · Default.
  *
  * These tests pin that order, and then walk every channel to the slide:
- * the expanded Design presets gallery (180 looks in 26 groups), the fill
+ * the expanded Design presets gallery (72 designs in 26 groups — each studio
+ * design carrying its ten colourways as dots, so no plate fills the shelf
+ * twice) and the Design parts card that changes, removes and restores any one
+ * of them, the fill
  * repaints the plate; the ONE Border card paints the outline on a
  * layer of its own — its colour (through the shared colour card, stacked on
  * the Border pop-up, closed on its own),
@@ -32,6 +35,7 @@ import {
   BANNER_PRESETS,
   BANNER_PRESET_COUNT,
   BANNER_PRESET_GROUPS,
+  STUDIO_TITLE_COLOURWAY_COUNT,
   STUDIO_TITLE_PRESET_COUNT,
   BANNER_SHADOW_EFFECTS,
   bannerCss,
@@ -148,6 +152,7 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   /* ------------------------- the redesigned line --------------------------- */
   const ORDER = [
     "Design presets",
+    "Design parts",
     "Banner shape",
     "Banner effects",
     "Banner fill",
@@ -163,7 +168,7 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     pass: ORDER.every((l, i) => labels[i] === l) && !!line()?.querySelector("[data-toolbar-default]"),
     detail: labels.slice(0, ORDER.length + 1).join(" › "),
   });
-  const NAMES = ["Presets", "Shape", "Effects", "Fill", "Border", "Transparency", "Size", "Position", "Show"];
+  const NAMES = ["Presets", "Parts", "Shape", "Effects", "Fill", "Border", "Transparency", "Size", "Position", "Show"];
   const vtools = lineButtons().slice(0, NAMES.length);
   const visibleName = (b: HTMLElement) => b.querySelector(".ctx-vtool-name")?.childNodes[0]?.textContent?.trim() ?? b.querySelector(".ctx-vtool-name")?.textContent?.trim() ?? "";
   out.push({
@@ -212,43 +217,65 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   openCard("Design presets");
   const presetTiles = () => Array.from(pop()?.querySelectorAll<HTMLElement>('button[aria-label^="Banner preset: "]') ?? []);
   const PRESET_GROUPS = BANNER_PRESET_GROUPS;
+  /** the colour dots a studio design's tile carries */
+  const colourDots = (name: string) =>
+    Array.from(pop()?.querySelectorAll<HTMLElement>(`[data-banner-preset-design="${name}"] button[aria-label*=" colourway: "]`) ?? []);
+  const STUDIO_DESIGNS = BANNER_PRESETS.filter((p) => !!p.colourways?.length);
   out.push({
-    name: "Design presets opens 100+ additional studio looks alongside the academy and platform plates, each painted as the plate it brings",
+    name: "Design presets shows each design ONCE — the academy and platform plates plus twelve studio designs, each studio tile carrying its ten colourways as dots instead of ten repeated tiles",
     pass:
       pop()?.getAttribute("data-pop-panel") === "Design presets" &&
       presetTiles().length === BANNER_PRESET_COUNT &&
-      BANNER_PRESET_COUNT >= 160 &&
-      STUDIO_TITLE_PRESET_COUNT >= 100 &&
+      BANNER_PRESET_COUNT === 72 &&
+      STUDIO_TITLE_PRESET_COUNT === 12 &&
+      STUDIO_TITLE_COLOURWAY_COUNT === 120 &&
+      STUDIO_DESIGNS.length === 12 &&
+      STUDIO_DESIGNS.every((p) => colourDots(p.name).length === 10) &&
       PRESET_GROUPS.every((g) => !!pop()?.querySelector(`[data-banner-preset-group="${g}"]`)) &&
-      PRESET_GROUPS.every((g) => (pop()?.querySelectorAll(`[data-banner-preset-group="${g}"] button[aria-label^="Banner preset: "]`)?.length ?? 0) >= 4) &&
       presetTiles().every((t) => !!t.querySelector("span span")),
-    detail: `${presetTiles().length} presets · ${pop()?.querySelectorAll("[data-banner-preset-group]").length ?? 0} groups · ${STUDIO_TITLE_PRESET_COUNT} studio looks`,
+    detail: `${presetTiles().length} designs · ${pop()?.querySelectorAll("[data-banner-preset-group]").length ?? 0} groups · ${STUDIO_DESIGNS.length} studio designs · ${STUDIO_DESIGNS.reduce((n, p) => n + (p.colourways?.length ?? 0), 0)} colourways`,
   });
 
   const searchInput = () => pop()?.querySelector<HTMLInputElement>('input[aria-label="Search title background designs"]');
   type(searchInput(), "Lagoon");
   out.push({
-    name: "search narrows the expanded gallery to the colourway across all twelve studio families",
+    name: "search narrows the gallery to the colourway across all twelve studio families — the palette's name stays searchable even though the tiles are designs now",
     pass:
       presetTiles().length === 12 &&
-      presetTiles().every((t) => /Lagoon/.test(t.getAttribute("aria-label") ?? "")),
-    detail: `${presetTiles().length} Lagoon looks`,
+      presetTiles().every((t) => {
+        const tile = t.closest<HTMLElement>("[data-banner-preset-design]");
+        return !!tile?.querySelector('button[aria-label*=" colourway: Lagoon Mint"]');
+      }),
+    detail: `${presetTiles().length} designs carry Lagoon Mint`,
   });
   type(searchInput(), "");
   click(popButton("Title background designs: Neon Arcade"));
   out.push({
-    name: "a family chip narrows the gallery to that family's ten looks",
+    name: "a family chip narrows the gallery to that family's ONE design, still offering its ten colourways",
     pass:
-      presetTiles().length === 10 &&
+      presetTiles().length === 1 &&
+      colourDots("Arcade Flash").length === 10 &&
       !!pop()?.querySelector('[data-banner-preset-group="Neon Arcade"]') &&
       !pop()?.querySelector('[data-banner-preset-group="Aurora Glass"]'),
-    detail: `${presetTiles().length} neon looks`,
+    detail: `${presetTiles().length} neon design · ${colourDots("Arcade Flash").length} colourways`,
   });
   click(popButton("Title background designs: All"));
   out.push({
-    name: "All brings the whole 180-look gallery back",
-    pass: presetTiles().length === BANNER_PRESET_COUNT,
-    detail: `${presetTiles().length} looks`,
+    name: "All brings the whole gallery back — one tile per design, 72 of them",
+    pass: presetTiles().length === BANNER_PRESET_COUNT && presetTiles().length === 72,
+    detail: `${presetTiles().length} designs`,
+  });
+
+  // a colour dot paints the exact plate that palette used to publish
+  const beforeDot = styleOf(plate());
+  click(pop()?.querySelector<HTMLElement>('button[aria-label="Arcade Flash colourway: Lagoon Mint"]'));
+  out.push({
+    name: "a colour dot recolours the chosen design — the very look that palette used to ship as its own preset",
+    pass:
+      styleOf(plate()).includes("conic-gradient") &&
+      popButton("Banner preset: Arcade Flash")?.getAttribute("aria-pressed") === "true" &&
+      pop()?.querySelector<HTMLElement>('button[aria-label="Arcade Flash colourway: Lagoon Mint"]')?.getAttribute("aria-pressed") === "true",
+    detail: `${beforeDot.slice(0, 34)} → ${styleOf(plate()).slice(0, 34)}`,
   });
 
   click(popButton("Banner preset: Shikho Magenta Pill"));
@@ -426,35 +453,51 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     pass: BANNER_PRESETS.every((p) => stray(p).length === 0),
     detail: BANNER_PRESETS.flatMap((p) => stray(p).map((w) => `${p.name}: ${w}`)).join(" | ") || `${BANNER_PRESETS.length} looks clean`,
   });
-  out.push({
-    name: "every preset is filed under a real group, and every group carries four looks or more",
-    pass:
-      BANNER_PRESETS.every((p) => BANNER_PRESET_GROUPS.includes(p.group)) &&
-      BANNER_PRESET_GROUPS.every((g) => BANNER_PRESETS.filter((p) => p.group === g).length >= 4) &&
-      BANNER_PRESET_GROUPS.every((g) => BANNER_PRESETS.some((p) => p.group === g)),
-    detail: `${BANNER_PRESETS.length} looks · ${BANNER_PRESET_GROUPS.length} groups`,
-  });
   const ORIGINAL_GROUPS = PRESET_GROUPS.slice(0, 14);
   const STUDIO_GROUPS = PRESET_GROUPS.slice(14);
   const STUDIO_LOOKS = BANNER_PRESETS.filter((p) => !ORIGINAL_GROUPS.includes(p.group));
   out.push({
-    name: "the studio collection adds 100+ new looks in twelve real families, ten colourways each",
+    name: "every preset is filed under a real group — the original families keep four looks or more, and each studio family is ONE design carrying its ten colourways",
     pass:
-      STUDIO_TITLE_PRESET_COUNT >= 100 &&
-      STUDIO_LOOKS.length === STUDIO_TITLE_PRESET_COUNT &&
+      BANNER_PRESETS.every((p) => BANNER_PRESET_GROUPS.includes(p.group)) &&
+      BANNER_PRESET_GROUPS.every((g) => BANNER_PRESETS.some((p) => p.group === g)) &&
+      ORIGINAL_GROUPS.every((g) => BANNER_PRESETS.filter((p) => p.group === g).length >= 4) &&
+      STUDIO_GROUPS.every((g) => BANNER_PRESETS.filter((p) => p.group === g).length === 1),
+    detail: `${BANNER_PRESETS.length} designs · ${BANNER_PRESET_GROUPS.length} groups · ${STUDIO_GROUPS.length} studio families, one design each`,
+  });
+  out.push({
+    name: "the studio collection is twelve designs — never the same plate twice — each carrying ten colourways, so all 120 one-click looks are still one dot away",
+    pass:
+      STUDIO_TITLE_PRESET_COUNT === 12 &&
+      STUDIO_TITLE_COLOURWAY_COUNT === 120 &&
+      STUDIO_LOOKS.length === 12 &&
       STUDIO_GROUPS.length === 12 &&
-      STUDIO_GROUPS.every((g) => STUDIO_LOOKS.filter((p) => p.group === g).length === 10) &&
-      new Set(STUDIO_LOOKS.map((p) => p.swatch)).size === STUDIO_LOOKS.length,
-    detail: `${STUDIO_LOOKS.length} studio looks · ${STUDIO_GROUPS.length} families · ${new Set(STUDIO_LOOKS.map((p) => p.swatch)).size} swatches`,
+      STUDIO_LOOKS.every((p) => (p.colourways?.length ?? 0) === 10) &&
+      STUDIO_LOOKS.reduce((n, p) => n + (p.colourways?.length ?? 0), 0) === STUDIO_TITLE_COLOURWAY_COUNT &&
+      new Set(STUDIO_LOOKS.map((p) => p.swatch)).size === STUDIO_LOOKS.length &&
+      STUDIO_LOOKS.every((p) => new Set((p.colourways ?? []).map((c) => c.swatch)).size === 10),
+    detail: `${STUDIO_LOOKS.length} designs · ${STUDIO_LOOKS.reduce((n, p) => n + (p.colourways?.length ?? 0), 0)} colourways · ${new Set(STUDIO_LOOKS.map((p) => p.swatch)).size} lead swatches`,
   });
   const fingerprint = (p: BannerPreset) =>
     JSON.stringify({ ...bannerPresetPatch({ ...DEFAULT_BANNER } as BannerSettings, p), size: undefined, pos: undefined });
+  /**
+   * Every look the gallery can paint: an original plate is its own look, and a
+   * studio design's looks are its ten colourways (its own tile paints the lead
+   * one). No two of them may dress the plate the same way, and no design may
+   * use another design's name.
+   */
+  const ALL_LOOKS: { name: string; preset: BannerPreset }[] = BANNER_PRESETS.flatMap((p) =>
+    p.colourways?.length
+      ? p.colourways.map((c) => ({ name: `${p.name} · ${c.name}`, preset: { ...p, banner: c.banner, colourways: undefined } }))
+      : [{ name: p.name, preset: { ...p, colourways: undefined } }],
+  );
   out.push({
-    name: "no two presets dress the plate the same way, and no name is used twice",
+    name: "no two looks dress the plate the same way — 180 one-click looks over 72 designs — and no design name is used twice",
     pass:
       new Set(BANNER_PRESETS.map((p) => p.name)).size === BANNER_PRESETS.length &&
-      new Set(BANNER_PRESETS.map(fingerprint)).size === BANNER_PRESETS.length,
-    detail: `${new Set(BANNER_PRESETS.map(fingerprint)).size}/${BANNER_PRESETS.length} distinct looks`,
+      ALL_LOOKS.length === 180 &&
+      new Set(ALL_LOOKS.map((l) => fingerprint(l.preset))).size === ALL_LOOKS.length,
+    detail: `${new Set(ALL_LOOKS.map((l) => fingerprint(l.preset))).size}/${ALL_LOOKS.length} distinct looks`,
   });
   out.push({
     name: "every preset paints a plate — a body of its own, or a rule, or a deliberate nothing",
@@ -1317,6 +1360,133 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     detail: `w ${plate()?.style.width ?? ""} · h ${plate()?.style.height ?? ""} · bar ${widthInput?.value ?? ""}`,
   });
   closePop();
+
+  /* --------------------------- design parts -------------------------------- */
+  /* The controlling system: a preset dresses a dozen channels, and this card
+     lists them as parts — each one changeable, removable and restorable. */
+  openCard("Design presets");
+  click(popButton("Banner preset: ACS Violet Slant"));
+  closePop();
+  openCard("Design parts");
+  const partRow = (id: string) => pop()?.querySelector<HTMLElement>(`[data-banner-part="${id}"]`) ?? null;
+  const PART_IDS = [
+    "plate",
+    "paint",
+    "ramp",
+    "glassFill",
+    "metalFill",
+    "pattern",
+    "outline",
+    "outlineLight",
+    "corners",
+    "opacity",
+    "shadow",
+    "glow",
+    "highlight",
+    "decor",
+    "threeD",
+    "bevel",
+    "glass",
+    "blur",
+    "modern",
+    "distortion",
+    "halo",
+    "softness",
+    "shimmer",
+    "headingInk",
+    "headingGlow",
+    "headingShadow",
+  ];
+  out.push({
+    name: "Design parts lists every layer of the plate as one row — plate · paint · ramp · glass · metal · pattern · outline · outline light · corners · transparency · the nine effect families · distortion · halo · softness · shimmer · the heading's accent, glow and shadow",
+    pass:
+      pop()?.getAttribute("data-pop-panel") === "Design parts" &&
+      PART_IDS.length === 26 &&
+      PART_IDS.every((id) => !!partRow(id)) &&
+      (pop()?.querySelectorAll("[data-banner-part]").length ?? 0) === PART_IDS.length &&
+      PART_IDS.every((id) => !!partRow(id)?.querySelector(`button[aria-label^="Change "]`)) &&
+      (pop()?.querySelectorAll("[data-banner-part-group]").length ?? 0) === 5 &&
+      !!partRow("plate")?.querySelector('button[aria-label="Remove Plate"]') &&
+      !partRow("paint")?.querySelector('button[aria-label^="Remove "]'),
+    detail: `${pop()?.querySelectorAll("[data-banner-part]").length ?? 0} parts · ${pop()?.querySelectorAll("[data-banner-part-group]").length ?? 0} groups`,
+  });
+
+  // ✕ Remove takes exactly that part and leaves the rest standing
+  const lineBefore = styleOf(plateLine());
+  const paintBefore = styleOf(plate());
+  click(popButton("Remove Outline"));
+  out.push({
+    name: "✕ Remove takes exactly one part away — the outline leaves, the plate keeps its paint",
+    pass: !plateLine() && !!plate()?.style.background && !!(paintBefore || styleOf(plate())),
+    detail: `line ${!!plateLine()} · paint ${plate()?.style.background?.slice(0, 30) ?? "none"}`,
+  });
+  click(pop()?.querySelector<HTMLElement>('[aria-label="Put Outline back"]'));
+  out.push({
+    name: "…and ↺ Put back returns it exactly as it was — same colour, weight, style and light",
+    pass: !!plateLine() && styleOf(plateLine()) === lineBefore,
+    detail: `${lineBefore.slice(0, 52)} → ${styleOf(plateLine()).slice(0, 52)}`,
+  });
+
+  // the parts' Change walks to the card that owns them
+  click(pop()?.querySelector<HTMLElement>('[aria-label="Change Paint"]'));
+  out.push({
+    name: "Change hands the part to its own card — Paint opens Fill, where the colour and the ramp are edited",
+    pass: pop()?.getAttribute("data-pop-panel") === "Banner fill",
+    detail: pop()?.getAttribute("data-pop-panel") ?? "closed",
+  });
+  openCard("Design parts");
+  click(pop()?.querySelector<HTMLElement>('[aria-label="Change Shadow"]'));
+  out.push({
+    name: "…and every effect part opens the Effects card, where its kind, numbers and colour live",
+    pass: pop()?.getAttribute("data-pop-panel") === "Banner effects",
+    detail: pop()?.getAttribute("data-pop-panel") ?? "closed",
+  });
+
+  // one key strips every effect — the paint and the outline stay
+  openCard("Design parts");
+  const layersBefore = plateLayers().length;
+  const onBefore = pop()?.querySelectorAll('[data-banner-part][data-banner-part-on="1"]').length ?? 0;
+  click(popButton("Remove every effect"));
+  const onAfter = pop()?.querySelectorAll('[data-banner-part][data-banner-part-on="1"]').length ?? 0;
+  out.push({
+    name: "Remove every effect strips the nine effect families, the halo and the shimmer in one go — the paint and the outline stay",
+    pass:
+      partRow("halo")?.getAttribute("data-banner-part-on") === "0" &&
+      partRow("shimmer")?.getAttribute("data-banner-part-on") === "0" &&
+      plateLayers().length === 0 &&
+      !!plate()?.style.background &&
+      !!plateLine() &&
+      onAfter < onBefore,
+    detail: `parts on ${onBefore} → ${onAfter} · layers ${layersBefore} → ${plateLayers().length} · halo ${partRow("halo")?.getAttribute("data-banner-part-on")} · line ${!!plateLine()}`,
+  });
+  click(popButton("Put every part back"));
+  const onRestored = pop()?.querySelectorAll('[data-banner-part][data-banner-part-on="1"]').length ?? 0;
+  out.push({
+    name: "…and Put everything back restores every effect, the halo and the shimmer the card took away",
+    pass: onRestored === onBefore && partRow("halo")?.getAttribute("data-banner-part-on") === "1" && plateLayers().length === layersBefore,
+    detail: `parts on ${onAfter} → ${onRestored} · layers ${plateLayers().length}`,
+  });
+  closePop();
+
+  // the same card rides in the inspector's Title background page
+  const inspectorParts = doc.querySelector<HTMLElement>("aside [data-banner-parts]");
+  click(inspectorParts?.querySelector<HTMLElement>('[aria-label="Change Outline"]'));
+  const borderCard = doc.querySelector<HTMLElement>('[data-banner-card="Banner border"]');
+  out.push({
+    name: "the inspector's Title background page carries the same card, and its Change walks to the card in place — the Border card flashes",
+    pass:
+      !!inspectorParts &&
+      (inspectorParts.querySelectorAll("[data-banner-part]").length ?? 0) === PART_IDS.length &&
+      borderCard?.classList.contains("banner-card-flash") === true,
+    detail: `${inspectorParts?.querySelectorAll("[data-banner-part]").length ?? 0} parts · flash ${borderCard?.classList.contains("banner-card-flash") ?? false}`,
+  });
+  click(inspectorParts?.querySelector<HTMLElement>('[aria-label="Change Shadow"]'));
+  const shadowGroup = doc.querySelector<HTMLElement>('[data-banner-card="Banner effects"] [data-banner-fx-group="shadow"]');
+  out.push({
+    name: "…an effect part goes one step further — Change Shadow lights the Shadow category inside Effects",
+    pass: shadowGroup?.classList.contains("banner-card-flash") === true,
+    detail: `shadow group ${shadowGroup ? "found" : "missing"} · flash ${shadowGroup?.classList.contains("banner-card-flash") ?? false}`,
+  });
 
   /* --------------------------- show / hide --------------------------------- */
   click(doc.querySelector('.context-toolbar [aria-label="Show / hide the banner behind the title"]'));

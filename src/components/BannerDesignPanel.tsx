@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type {
   BannerBorder,
@@ -16,6 +16,7 @@ import {
   BANNER_WIDTH,
   DEFAULT_BANNER,
   DEFAULT_BANNER_BORDER_GLOW,
+  DEFAULT_BANNER_EFFECTS,
   DEFAULT_BANNER_GLASS,
   DEFAULT_BANNER_METALLIC,
   DEFAULT_BANNER_PATTERN,
@@ -56,6 +57,7 @@ import {
   bannerPlateWidth,
   bannerPresetPatch,
   bannerSizeNow,
+  STUDIO_TITLE_COLOURWAY_COUNT,
   bannerBorderStyle,
   baseColor,
   canOutline,
@@ -73,6 +75,7 @@ import {
   takesCorners,
   type BannerEffectDef,
   type BannerPreset,
+  type BannerPresetColourway,
   type BannerPresetGroup,
   type BannerShapeFamily,
 } from "../lib/banner";
@@ -91,14 +94,21 @@ const gradOff = (g?: Gradient): Gradient | undefined => (g ? { ...g, enabled: fa
  * The title background plate's own controls — one card per channel, so the
  * toolbar's buttons each open exactly what they name.
  *
- *   Design presets    180 complete looks in 26 BANNER_PRESETS groups — the
- *                     original 60 Bangladeshi classroom / online-platform
- *                     plates, plus 120 studio designs in twelve families
- *                     (Aurora Glass · Neon Arcade · Editorial Ink · Chrome Lab
- *                     · Soft UI Studio · Retro Print · Botanical Calm · Cosmic
- *                     Mesh · Paper Craft · Heritage Gold · Sports Desk ·
- *                     Minimal Line). Search and group chips keep the larger
- *                     gallery browsable.
+ *   Design presets    72 designs in 26 BANNER_PRESETS groups — the original 60
+ *                     Bangladeshi classroom / online-platform plates, plus
+ *                     twelve studio designs (Aurora Glass · Neon Arcade ·
+ *                     Editorial Ink · Chrome Lab · Soft UI Studio · Retro
+ *                     Print · Botanical Calm · Cosmic Mesh · Paper Craft ·
+ *                     Heritage Gold · Sports Desk · Minimal Line), each
+ *                     carrying its ten colourways as dots instead of ten
+ *                     repeated tiles. Search and group chips keep the gallery
+ *                     browsable.
+ *   Design parts      every layer of the design in one list — plate · paint ·
+ *                     ramp · glass · metal · pattern · outline · outline light
+ *                     · corners · transparency · the nine effect families ·
+ *                     distortion · halo · softness · shimmer · the heading's
+ *                     accent, glow and shadow. Each part can be changed (its
+ *                     own card opens), removed, or put back exactly as it was.
  *   Shape             the silhouettes in thirteen groups      BANNER_SHAPE_GROUPS
  *                     — the shape library (Basic & Clean ·
  *                     Banner Style · Cut & Corner · Modern ·
@@ -508,11 +518,38 @@ export function PositionIcon({ size = 18 }: { size?: number }) {
 /*  Design presets                                                     */
 /* ------------------------------------------------------------------ */
 
-/** one preset drawn as the plate it paints, at thumbnail scale */
-export function BannerPresetTile({ preset, theme, active, onClick }: { preset: BannerPreset; theme: ThemeSettings; active?: boolean; onClick: () => void }) {
+/**
+ * One **design** drawn as the plate it paints, at thumbnail scale — and, for a
+ * design that carries colourways, the dots that recolour it.
+ *
+ * The gallery's shelf used to hold ten tiles of the same plate, one per
+ * palette. Now each design is one tile: the square paints the colourway the
+ * deck wears (or the design's lead look), and the row of dots under the name
+ * applies any of the others — the exact plate that palette used to publish.
+ * The design's own button keeps the `Banner preset: …` name, so a click still
+ * means "paint this design"; a dot says `… colourway: …` and paints that
+ * palette's look.
+ */
+export function BannerPresetTile({
+  preset,
+  theme,
+  active,
+  activeColourway,
+  onClick,
+  onColourway,
+}: {
+  preset: BannerPreset;
+  theme: ThemeSettings;
+  active?: boolean;
+  /** the colourway the deck is wearing, when this design is the active one */
+  activeColourway?: string;
+  onClick: () => void;
+  onColourway?: (colourway: BannerPresetColourway) => void;
+}) {
+  const worn = preset.colourways?.find((c) => c.name === activeColourway);
   const merged: BannerSettings = {
     ...DEFAULT_BANNER,
-    ...bannerPresetPatch(DEFAULT_BANNER, preset),
+    ...bannerPresetPatch(DEFAULT_BANNER, { ...preset, banner: worn?.banner ?? preset.banner, colourways: undefined }),
     size: undefined,
     pos: undefined,
     halo: 0,
@@ -524,35 +561,60 @@ export function BannerPresetTile({ preset, theme, active, onClick }: { preset: B
     merged.shape === "underline"
       ? { left: "8%", bottom: "22%", width: "84%" }
       : { left: "8%", top: "22%", width: "84%", height: "56%" };
+  const dots = preset.colourways ?? [];
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={`Banner preset: ${preset.name}`}
-      aria-pressed={!!active}
-      title={preset.name}
+    <div
+      data-banner-preset-design={preset.name}
       style={{ contentVisibility: "auto", containIntrinsicSize: "58px" } as CSSProperties}
       className={cn(
         "flex flex-col items-center gap-1 rounded-lg border p-1.5 text-[10px] transition-colors",
         active ? "border-amber-400 bg-amber-400/10 text-amber-200" : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/25",
       )}
     >
-      <span className="relative block h-6 w-full overflow-hidden rounded border border-white/10" style={{ background: theme.board }}>
-        {css.halo ? <span className="absolute block" style={{ ...css.halo, left: "8%", top: "-10%", width: "84%", height: "120%", transform: undefined, filter: "none" }} /> : null}
-        {css.layers.map((l, i) => (
-          <span key={i} className="absolute block" data-banner-layer={i} style={{ ...l, ...thumb }} />
-        ))}
-        <span className="absolute block" style={{ ...css.box, ...thumb }} />
-        {css.border ? <span className="absolute block" style={{ ...css.border, ...thumb }} /> : null}
-        {css.overlays.map((l, i) => (
-          <span key={i} className="absolute block" data-banner-overlay={i} style={{ ...l, ...thumb }} />
-        ))}
-      </span>
-      <span className="flex w-full items-center gap-1">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-white/20" style={{ background: preset.swatch }} />
-        <span className="truncate">{preset.name}</span>
-      </span>
-    </button>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Banner preset: ${preset.name}`}
+        aria-pressed={!!active}
+        title={worn ? `${preset.name} · ${worn.name}` : preset.name}
+        className="flex w-full flex-col items-center gap-1 text-left"
+      >
+        <span className="relative block h-6 w-full overflow-hidden rounded border border-white/10" style={{ background: theme.board }}>
+          {css.halo ? <span className="absolute block" style={{ ...css.halo, left: "8%", top: "-10%", width: "84%", height: "120%", transform: undefined, filter: "none" }} /> : null}
+          {css.layers.map((l, i) => (
+            <span key={i} className="absolute block" data-banner-layer={i} style={{ ...l, ...thumb }} />
+          ))}
+          <span className="absolute block" style={{ ...css.box, ...thumb }} />
+          {css.border ? <span className="absolute block" style={{ ...css.border, ...thumb }} /> : null}
+          {css.overlays.map((l, i) => (
+            <span key={i} className="absolute block" data-banner-overlay={i} style={{ ...l, ...thumb }} />
+          ))}
+        </span>
+        <span className="flex w-full items-center gap-1">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-white/20" style={{ background: worn?.swatch ?? preset.swatch }} />
+          <span className="truncate">{preset.name}</span>
+        </span>
+      </button>
+      {dots.length > 1 && onColourway ? (
+        <div className="flex w-full flex-wrap items-center justify-center gap-1 border-t border-white/5 pt-1" data-banner-preset-colourways={preset.name}>
+          {dots.map((c) => (
+            <button
+              key={c.name}
+              type="button"
+              aria-label={`${preset.name} colourway: ${c.name}`}
+              aria-pressed={c.name === activeColourway}
+              title={c.name}
+              onClick={() => onColourway(c)}
+              className={cn(
+                "h-2.5 w-2.5 rounded-full border transition-transform hover:scale-125",
+                c.name === activeColourway ? "border-amber-300 ring-1 ring-amber-300/70" : "border-white/25",
+              )}
+              style={{ background: c.swatch }}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -646,6 +708,12 @@ const PRESET_GROUP_COUNTS: Map<BannerPresetGroup, number> = BANNER_PRESETS.reduc
   return map;
 }, new Map<BannerPresetGroup, number>());
 
+/** the colourways each group carries — the dots under its designs' tiles */
+const PRESET_GROUP_COLOURWAYS: Map<BannerPresetGroup, number> = BANNER_PRESETS.reduce((map, p) => {
+  map.set(p.group, (map.get(p.group) ?? 0) + (p.colourways?.length ?? 0));
+  return map;
+}, new Map<BannerPresetGroup, number>());
+
 /** a look matches the search by name, group, style hint or search keywords */
 function presetMatches(p: BannerPreset, q: string): boolean {
   if (!q) return true;
@@ -658,8 +726,23 @@ export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
   const [filter, setFilter] = useState<PresetFilter>("all");
   const q = query.trim().toLowerCase();
 
-  /** one active look for the whole gallery — no need to re-compare every tile */
-  const activeName = useMemo(() => BANNER_PRESETS.find((p) => presetActive(banner, p))?.name ?? "", [banner]);
+  /**
+   * The one design the deck is wearing, and which of its colourways — found in
+   * a single walk so a tile never compares itself with the deck. A design is
+   * active when its lead look or any of its colourways is (the studio presets
+   * publish one tile per design; the original plates carry no colourways and
+   * match on their own).
+   */
+  const active = useMemo(() => {
+    for (const p of BANNER_PRESETS) {
+      if (presetActive(banner, p)) return { name: p.name, colourway: "" };
+      for (const c of p.colourways ?? []) {
+        if (presetActive(banner, { ...p, banner: c.banner, colourways: undefined })) return { name: p.name, colourway: c.name };
+      }
+    }
+    return { name: "", colourway: "" };
+  }, [banner]);
+  const activeName = active.colourway ? `${active.name} · ${active.colourway}` : active.name;
 
   const groups = useMemo(
     () =>
@@ -676,7 +759,13 @@ export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
 
   return (
     <div className="space-y-3" data-banner-presets="">
-      <Cap hint={activeName ? `${activeName} · ${BANNER_PRESET_COUNT} looks` : `${BANNER_PRESET_COUNT} looks · ${BANNER_PRESET_GROUPS.length} groups`}>
+      <Cap
+        hint={
+          activeName
+            ? `${activeName} · ${BANNER_PRESET_COUNT} designs`
+            : `${BANNER_PRESET_COUNT} designs · ${STUDIO_TITLE_COLOURWAY_COUNT} colourways · ${BANNER_PRESET_GROUPS.length} groups`
+        }
+      >
         Design presets
       </Cap>
 
@@ -686,7 +775,7 @@ export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
           type="search"
           value={query}
           aria-label="Search title background designs"
-          placeholder={`Search ${BANNER_PRESET_COUNT} title plates — glass, neon, gold, paper…`}
+          placeholder={`Search ${BANNER_PRESET_COUNT} designs — glass, neon, gold, paper…`}
           onChange={(e) => setQuery(e.target.value)}
           className="w-full rounded-lg border border-white/10 bg-slate-900/80 px-2.5 py-1.5 text-xs text-slate-200 outline-none placeholder:text-slate-500 focus:border-amber-400/60"
         />
@@ -717,12 +806,17 @@ export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
               )}
             >
               {group} <span className="opacity-60">{PRESET_GROUP_COUNTS.get(group) ?? 0}</span>
+              {(PRESET_GROUP_COLOURWAYS.get(group) ?? 0) > 0 ? (
+                <span className="opacity-40" title="colourways under its designs">
+                  ·{PRESET_GROUP_COLOURWAYS.get(group)}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
         {(q || filter !== "all") && (
           <p className="text-[9.5px] text-slate-500">
-            {shown} {shown === 1 ? "look" : "looks"} shown{filter !== "all" ? ` · ${filter}` : ""}
+            {shown} {shown === 1 ? "design" : "designs"} shown{filter !== "all" ? ` · ${filter}` : ""}
           </p>
         )}
       </div>
@@ -735,7 +829,15 @@ export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
           </div>
           <div className="grid grid-cols-2 gap-1.5">
             {looks.map((p) => (
-              <BannerPresetTile key={p.name} preset={p} theme={theme} active={p.name === activeName} onClick={() => setBanner(bannerPresetPatch(banner, p))} />
+              <BannerPresetTile
+                key={p.name}
+                preset={p}
+                theme={theme}
+                active={p.name === active.name}
+                activeColourway={p.name === active.name ? active.colourway : undefined}
+                onClick={() => setBanner(bannerPresetPatch(banner, p))}
+                onColourway={(c) => setBanner(bannerPresetPatch(banner, { ...p, banner: c.banner, colourways: undefined }))}
+              />
             ))}
           </div>
         </div>
@@ -746,7 +848,566 @@ export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
         </p>
       )}
       <p className="text-[10px] leading-relaxed text-slate-500">
-        A preset repaints the plate, effects, outline and heading accent cleanly while keeping your plate width and heading text.
+        Every design appears once — the dots under a studio tile are its colourways, so the same plate never fills the shelf twice. A click
+        repaints the plate, effects, outline and heading accent cleanly while keeping your plate width and heading text.{" "}
+        <b>Design parts</b> then turns any single layer of that look off, or opens the card that changes it.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Design parts                                                       */
+/* ------------------------------------------------------------------ */
+
+/** the cards a part can be handed over to — the panel's "Change" button */
+export type BannerCardName =
+  | "Design presets"
+  | "Design parts"
+  | "Banner shape"
+  | "Banner effects"
+  | "Banner fill"
+  | "Banner border"
+  | "Banner transparency"
+  | "Banner size"
+  | "Banner position";
+
+type FxKey = "shadow" | "glow" | "blur" | "glass" | "bevel" | "threeD" | "highlight" | "decor" | "modern";
+
+/** what each effect "Add" button switches on when that part is missing */
+const FX_ADD: Record<FxKey, unknown> = {
+  shadow: { kind: "drop", ...BANNER_SHADOW_DEFAULTS.drop },
+  glow: { kind: "outer", ...BANNER_GLOW_DEFAULTS.outer },
+  blur: { kind: "soft", ...BANNER_BLUR_DEFAULTS.soft },
+  glass: { kind: "glass", ...BANNER_GLASS_DEFAULTS.glass },
+  bevel: { kind: "bevel", ...BANNER_BEVEL_DEFAULTS.bevel },
+  threeD: { kind: "extrusion", ...BANNER_3D_DEFAULTS.extrusion },
+  highlight: { kind: "highlight", ...BANNER_HIGHLIGHT_DEFAULTS.highlight },
+  decor: { kind: "vignette", ...BANNER_DECOR_DEFAULT },
+  modern: { kind: "noise", ...BANNER_MODERN_DEFAULT },
+};
+
+/** one line of the parts card — a layer of the design and how to take it away */
+interface BannerPartRow {
+  id: string;
+  label: string;
+  hint: string;
+  group: (typeof PART_GROUPS)[number];
+  card: BannerCardName;
+  on: boolean;
+  summary: string;
+  /** what ✕ writes — taken away for good until "Put back" */
+  remove?: Partial<BannerSettings>;
+  /** what "Add" writes when the part is missing */
+  add?: Partial<BannerSettings>;
+  /**
+   * The part as it is right now, captured the moment it is removed, so "Put
+   * back" can restore it exactly — `next` is the deck at restore time, which
+   * keeps the other channels (the effects object) intact.
+   */
+  take?: (next: BannerSettings) => Partial<BannerSettings>;
+}
+
+const PART_GROUPS = ["The plate", "Outline & corners", "Effects", "Light & motion", "Heading"] as const;
+
+const effectName = <K extends string,>(defs: BannerEffectDef<K>[], kind?: K) => (kind ? defs.find((d) => d.kind === kind)?.label ?? kind : "");
+
+/**
+ * The plate's **Design parts** card — the controlling system behind every
+ * preset.
+ *
+ * A design preset dresses a dozen channels at once: a silhouette, a paint, a
+ * ramp, a pattern, an outline with its own light, four corners, nine effect
+ * families, a halo, a shimmer and the heading's accent, glow and shadow. Before
+ * this card the only way to take one of them away was to hunt through six
+ * different cards for the control that wrote it. Here every part is one row:
+ *
+ *   • the dot says whether the plate is wearing it,
+ *   • **Change** opens the card that owns it (Fill, Border, Effects, Shape…),
+ *   • **✕ Remove** takes exactly that part away and leaves everything else
+ *     alone — the outline without its glow, the shadow without the plate, the
+ *     pattern without its ground,
+ *   • **＋ Add** puts a missing part on with the card's own default, and
+ *   • **↺ Put back** restores what the part wore before it was removed.
+ *
+ * Two bulk keys stand beside the list: **Remove every effect** strips the nine
+ * effect families, the halo and the shimmer in one go (so a busy preset can be
+ * brought back to its bare plate), and **Put everything back** restores every
+ * part removed in this card — the fastest way to compare a design's layers.
+ *
+ * Every removal writes the same `BannerSettings` channels the cards write, so
+ * nothing here is a special mode: the slide, the inspector preview, the toolbar
+ * thumbnail and the export all follow, and the deck stays a plain deck.
+ */
+export function BannerPartsPanel({
+  theme,
+  banner,
+  setBanner,
+  onEdit,
+}: BannerProps & {
+  /**
+   * Open the card that changes a part — the toolbar hands over its own pop-up,
+   * the inspector scrolls to the card. `part` is the row's id, so an effect
+   * part can open its own category inside Effects, not just the card.
+   */
+  onEdit?: (card: BannerCardName, part?: string) => void;
+}) {
+  const fx = bannerEffectsOf(banner);
+  /** what a removed part wore — held for this visit to the card, per part */
+  const memory = useRef<Record<string, (next: BannerSettings) => Partial<BannerSettings>>>({});
+  const shapeLabel = BANNER_SHAPES.find((s) => s.id === banner.shape)?.label ?? banner.shape;
+  const fill = bannerFillMode(banner);
+  const glassFill = { ...DEFAULT_BANNER_GLASS, ...banner.glass };
+  const metalFill = { ...DEFAULT_BANNER_METALLIC, ...banner.metallic };
+  const patternFill = { ...DEFAULT_BANNER_PATTERN, ...banner.pattern };
+  const fillSummary =
+    fill === "gradient"
+      ? `${banner.gradient.type} ramp · ${banner.gradient.stops.length} stops`
+      : fill === "glass"
+        ? `frosted pane · ${glassFill.opacity}%`
+        : fill === "metallic"
+          ? `brushed metal · ${metalFill.polish}% polish`
+          : fill === "pattern"
+            ? `${patternFill.kind} pattern`
+            : banner.color;
+  const shapeFxNow = fx.shape;
+  const distortionOn = !!(
+    shapeFxNow.distortion ||
+    shapeFxNow.wave ||
+    shapeFxNow.curve ||
+    shapeFxNow.slant ||
+    shapeFxNow.skew ||
+    shapeFxNow.rotation ||
+    shapeFxNow.flipH ||
+    shapeFxNow.flipV
+  );
+  const distortionSummary = [
+    shapeFxNow.distortion ? `distort ${shapeFxNow.distortion}` : "",
+    shapeFxNow.wave ? `wave ${shapeFxNow.wave}` : "",
+    shapeFxNow.curve ? `curve ${shapeFxNow.curve}` : "",
+    shapeFxNow.slant ? `slant ${shapeFxNow.slant}` : "",
+    shapeFxNow.skew ? `skew ${shapeFxNow.skew}` : "",
+    shapeFxNow.rotation ? `turn ${shapeFxNow.rotation}°` : "",
+    shapeFxNow.flipH ? "flip H" : "",
+    shapeFxNow.flipV ? "flip V" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  /** one effect family as a row */
+  const fxPart = (key: FxKey, label: string, hint: string, summary: string): BannerPartRow => {
+    const current = fx[key];
+    return {
+      id: key,
+      label,
+      hint,
+      group: "Effects",
+      card: "Banner effects",
+      on: !!current,
+      summary: current ? summary : "off",
+      remove: { effects: { ...fx, [key]: undefined } as BannerEffects },
+      add: { effects: { ...fx, [key]: FX_ADD[key] } as BannerEffects },
+      take: (next) => ({ effects: { ...bannerEffectsOf(next), [key]: current } as BannerEffects }),
+    };
+  };
+
+  const parts: BannerPartRow[] = [
+    /* ------------------------------ the plate ------------------------- */
+    {
+      id: "plate",
+      label: "Plate",
+      hint: "the silhouette the heading sits on",
+      group: "The plate",
+      card: "Banner shape",
+      on: banner.shape !== "none",
+      summary: banner.shape === "none" ? "no plate" : shapeLabel,
+      remove: { shape: "none" },
+      add: { shape: "rounded" },
+      take: () => ({ shape: banner.shape }),
+    },
+    {
+      id: "paint",
+      label: "Paint",
+      hint: "what the plate is painted with — change it in Fill",
+      group: "The plate",
+      card: "Banner fill",
+      on: true,
+      summary: fillSummary,
+    },
+    {
+      id: "ramp",
+      label: "Gradient ramp",
+      hint: "the colour ramp across the plate",
+      group: "The plate",
+      card: "Banner fill",
+      on: fill === "gradient",
+      summary: fill === "gradient" ? `${banner.gradient.type} · ${banner.gradient.stops.length} stops` : "solid colour",
+      remove: { gradient: { ...banner.gradient, enabled: false } },
+      add: { gradient: { ...banner.gradient, enabled: true }, fillMode: "gradient" },
+      take: () => ({ gradient: banner.gradient }),
+    },
+    {
+      id: "glassFill",
+      label: "Glass pane",
+      hint: "the frosted pane paint",
+      group: "The plate",
+      card: "Banner fill",
+      on: fill === "glass",
+      summary: fill === "glass" ? `frost ${glassFill.frost}%` : "solid colour",
+      remove: { fillMode: "solid" },
+      add: { fillMode: "glass" },
+      take: () => ({ fillMode: banner.fillMode, glass: banner.glass }),
+    },
+    {
+      id: "metalFill",
+      label: "Metal sheen",
+      hint: "the brushed-metal paint",
+      group: "The plate",
+      card: "Banner fill",
+      on: fill === "metallic",
+      summary: fill === "metallic" ? `${metalFill.polish}% polish` : "solid colour",
+      remove: { fillMode: "solid" },
+      add: { fillMode: "metallic" },
+      take: () => ({ fillMode: banner.fillMode, metallic: banner.metallic }),
+    },
+    {
+      id: "pattern",
+      label: "Pattern",
+      hint: "the motif inked over the ground",
+      group: "The plate",
+      card: "Banner fill",
+      on: fill === "pattern",
+      summary: fill === "pattern" ? `${patternFill.kind} · ${patternFill.scale}%` : "no pattern",
+      remove: { fillMode: "solid" },
+      add: { fillMode: "pattern" },
+      take: () => ({ fillMode: banner.fillMode, pattern: banner.pattern }),
+    },
+
+    /* --------------------------- outline & corners -------------------- */
+    {
+      id: "outline",
+      label: "Outline",
+      hint: "the line round the plate and its light",
+      group: "Outline & corners",
+      card: "Banner border",
+      on: banner.border.enabled,
+      summary: banner.border.enabled ? `${bannerBorderStyle(banner)} · ${banner.border.width}px` : "no line",
+      remove: { border: { ...banner.border, enabled: false, glow: undefined } },
+      add: { border: { ...banner.border, enabled: true } },
+      take: () => ({ border: banner.border }),
+    },
+    {
+      id: "outlineLight",
+      label: "Outline light",
+      hint: "the glow the outline gives off",
+      group: "Outline & corners",
+      card: "Banner border",
+      on: !!banner.border.enabled && !!banner.border.glow?.enabled,
+      summary: banner.border.glow?.enabled ? `${banner.border.glow.size}px · ${banner.border.glow.intensity}%` : "off",
+      remove: { border: { ...banner.border, glow: undefined } },
+      add: { border: { ...banner.border, enabled: true, glow: { ...DEFAULT_BANNER_BORDER_GLOW } } },
+      take: () => ({ border: banner.border }),
+    },
+    {
+      id: "corners",
+      label: "Corners",
+      hint: "the corner radius, all four or each on its own",
+      group: "Outline & corners",
+      card: "Banner border",
+      on: banner.cornersIndependent || banner.radius > 0,
+      summary: banner.cornersIndependent
+        ? `each · ${bannerCorners(banner).tl}/${bannerCorners(banner).tr}/${bannerCorners(banner).br}/${bannerCorners(banner).bl}px`
+        : `${banner.radius}px`,
+      remove: { radius: 0, cornersIndependent: false },
+      add: { radius: 18 },
+      take: () => ({ radius: banner.radius, cornersIndependent: banner.cornersIndependent, corners: banner.corners }),
+    },
+    {
+      id: "opacity",
+      label: "Shape transparency",
+      hint: "the plate's own transparency (the outline keeps its own)",
+      group: "Outline & corners",
+      card: "Banner transparency",
+      on: banner.opacity < 1,
+      summary: `${Math.round(banner.opacity * 100)}%`,
+      remove: { opacity: 1 },
+      take: () => ({ opacity: banner.opacity }),
+    },
+
+    /* ------------------------------- effects -------------------------- */
+    fxPart("shadow", "Shadow", "the shadow the plate casts", fx.shadow ? `${effectName(BANNER_SHADOW_EFFECTS, fx.shadow.kind)} · y ${fx.shadow.y}px` : ""),
+    fxPart("glow", "Glow", "the light blooming round or inside the plate", fx.glow ? `${effectName(BANNER_GLOW_EFFECTS, fx.glow.kind)} · ${fx.glow.intensity}%` : ""),
+    fxPart("highlight", "Highlight", "the sheen laid over the body", fx.highlight ? `${effectName(BANNER_HIGHLIGHT_EFFECTS, fx.highlight.kind)} · ${fx.highlight.intensity}%` : ""),
+    fxPart("decor", "Decoration", "vignettes, textures, bars, folds and rings", fx.decor ? effectName(BANNER_DECOR_EFFECTS, fx.decor.kind) : ""),
+    fxPart("threeD", "Depth / 3D", "the slabs standing behind the body", fx.threeD ? `${effectName(BANNER_3D_EFFECTS, fx.threeD.kind)} · ${fx.threeD.intensity}%` : ""),
+    fxPart("bevel", "Bevel", "the lit and shaded edges", fx.bevel ? effectName(BANNER_BEVEL_EFFECTS, fx.bevel.kind) : ""),
+    fxPart("glass", "Glass", "the pane and the backdrop blur behind the body", fx.glass ? effectName(BANNER_GLASS_EFFECTS, fx.glass.kind) : ""),
+    fxPart("blur", "Blur", "the body blurred into the board", fx.blur ? `${effectName(BANNER_BLUR_EFFECTS, fx.blur.kind)} · ${fx.blur.blur}px` : ""),
+    fxPart("modern", "Finish", "grain, soft ramps, mesh, holographic and duotone", fx.modern ? effectName(BANNER_MODERN_EFFECTS, fx.modern.kind) : ""),
+    {
+      id: "distortion",
+      label: "Shape distortion",
+      hint: "stretch, wave, curve, slant, skew, turn and the two flips",
+      group: "Effects",
+      card: "Banner effects",
+      on: distortionOn,
+      summary: distortionOn ? distortionSummary : "off",
+      remove: {
+        effects: {
+          ...fx,
+          shape: {
+            ...DEFAULT_BANNER_EFFECTS.shape,
+            radius: shapeFxNow.radius,
+            cornerTL: shapeFxNow.cornerTL,
+            cornerTR: shapeFxNow.cornerTR,
+            cornerBR: shapeFxNow.cornerBR,
+            cornerBL: shapeFxNow.cornerBL,
+            independent: shapeFxNow.independent,
+          },
+        },
+      },
+      add: { effects: { ...fx, shape: { ...shapeFxNow, wave: 12 } } },
+      take: (next) => ({ effects: { ...bannerEffectsOf(next), shape: shapeFxNow } }),
+    },
+
+    /* ---------------------------- light & motion ---------------------- */
+    {
+      id: "halo",
+      label: "Outer halo",
+      hint: "the soft light around the whole plate",
+      group: "Light & motion",
+      card: "Banner effects",
+      on: banner.halo > 0,
+      summary: `${banner.halo}%`,
+      remove: { halo: 0 },
+      add: { halo: 25 },
+      take: () => ({ halo: banner.halo }),
+    },
+    {
+      id: "softness",
+      label: "Soft edge",
+      hint: "the softness of a glow silhouette",
+      group: "Light & motion",
+      card: "Banner effects",
+      on: banner.glow > 0,
+      summary: `${banner.glow}%`,
+      remove: { glow: 0 },
+      add: { glow: 60 },
+      take: () => ({ glow: banner.glow }),
+    },
+    {
+      id: "shimmer",
+      label: "Shimmer",
+      hint: "the slow sheen sweep (screen only)",
+      group: "Light & motion",
+      card: "Banner effects",
+      on: banner.shimmer,
+      summary: banner.shimmer ? "on" : "off",
+      remove: { shimmer: false },
+      add: { shimmer: true },
+      take: () => ({ shimmer: banner.shimmer }),
+    },
+
+    /* ------------------------------- heading -------------------------- */
+    {
+      id: "headingInk",
+      label: "Heading accent",
+      hint: "the ramp the heading's glyphs wear",
+      group: "Heading",
+      card: "Banner effects",
+      on: banner.textGradient.enabled,
+      summary: banner.textGradient.enabled ? `${banner.textGradient.type} ramp` : "solid ink",
+      remove: { textGradient: { ...banner.textGradient, enabled: false } },
+      add: { textGradient: { ...banner.textGradient, enabled: true } },
+      take: () => ({ textGradient: banner.textGradient }),
+    },
+    {
+      id: "headingGlow",
+      label: "Heading glow",
+      hint: "the light behind the glyphs",
+      group: "Heading",
+      card: "Banner effects",
+      on: banner.textGlow > 0,
+      summary: `${banner.textGlow}%`,
+      remove: { textGlow: 0 },
+      add: { textGlow: 12 },
+      take: () => ({ textGlow: banner.textGlow }),
+    },
+    {
+      id: "headingShadow",
+      label: "Heading shadow",
+      hint: "the shadow under the glyphs",
+      group: "Heading",
+      card: "Banner effects",
+      on: !!banner.textShadow,
+      summary: banner.textShadow ? "on" : "off",
+      remove: { textShadow: false },
+      add: { textShadow: true },
+      take: () => ({ textShadow: banner.textShadow }),
+    },
+  ];
+
+  const onCount = parts.filter((p) => p.on).length;
+
+  /** take one part away, keeping what it wore for "Put back" */
+  const removePart = (part: BannerPartRow) => {
+    if (!part.remove) return;
+    if (part.take) memory.current[part.id] = part.take;
+    setBanner(part.remove);
+  };
+
+  const removeEveryEffect = () => {
+    const snapshot = fx;
+    memory.current.everyEffect = (next) => ({
+      effects: { ...bannerEffectsOf(next), ...snapshot, shape: snapshot.shape },
+      halo: banner.halo,
+      shimmer: banner.shimmer,
+    });
+    setBanner({
+      effects: {
+        ...fx,
+        shadow: undefined,
+        glow: undefined,
+        blur: undefined,
+        glass: undefined,
+        bevel: undefined,
+        threeD: undefined,
+        highlight: undefined,
+        decor: undefined,
+        modern: undefined,
+      },
+      halo: 0,
+      shimmer: false,
+    });
+  };
+
+  const putEverythingBack = () => {
+    let patch: Partial<BannerSettings> = {};
+    for (const take of Object.values(memory.current)) patch = { ...patch, ...take({ ...banner, ...patch }) };
+    memory.current = {};
+    if (Object.keys(patch).length) setBanner(patch);
+  };
+
+  const row = (part: BannerPartRow) => {
+    const back = memory.current[part.id];
+    return (
+      <div
+        key={part.id}
+        data-banner-part={part.id}
+        data-banner-part-on={part.on ? "1" : "0"}
+        className={cn(
+          "flex items-start gap-2 rounded-lg border px-2 py-1.5",
+          part.on ? "border-white/10 bg-slate-900/45" : "border-dashed border-white/10 bg-white/[0.015]",
+        )}
+      >
+        <span
+          aria-hidden="true"
+          className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", part.on ? "bg-emerald-400" : "bg-slate-600")}
+        />
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className={cn("truncate text-[11px] font-medium", part.on ? "text-slate-200" : "text-slate-500 line-through")}>{part.label}</span>
+            <span className="truncate text-[9.5px] text-slate-500" title={part.hint}>
+              {part.on ? part.summary : "removed"}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              aria-label={`Change ${part.label}`}
+              title={part.hint}
+              onClick={() => onEdit?.(part.card, part.id)}
+              disabled={!onEdit}
+              className="rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-slate-300 transition-colors hover:border-amber-400/60 hover:text-amber-200 disabled:opacity-40"
+            >
+              Change
+            </button>
+            {part.on && part.remove ? (
+              <button
+                type="button"
+                aria-label={`Remove ${part.label}`}
+                onClick={() => removePart(part)}
+                className="rounded border border-rose-400/25 px-1.5 py-0.5 text-[9px] text-rose-200 transition-colors hover:bg-rose-500/15"
+              >
+                ✕ Remove
+              </button>
+            ) : null}
+            {!part.on && part.add ? (
+              <button
+                type="button"
+                aria-label={`Add ${part.label}`}
+                onClick={() => setBanner(part.add!)}
+                className="rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-slate-300 transition-colors hover:bg-white/10"
+              >
+                ＋ Add
+              </button>
+            ) : null}
+            {!part.on && back ? (
+              <button
+                type="button"
+                aria-label={`Put ${part.label} back`}
+                onClick={() => {
+                  setBanner(back(banner));
+                  delete memory.current[part.id];
+                }}
+                className="rounded border border-emerald-400/25 px-1.5 py-0.5 text-[9px] text-emerald-200 transition-colors hover:bg-emerald-500/15"
+              >
+                ↺ Put back
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-3" data-banner-parts="">
+      <Cap hint={`${onCount} of ${parts.length} parts on`}>Design parts</Cap>
+
+      <BannerPlatePreview banner={banner} theme={theme} height={64} />
+
+      <p className="text-[10px] leading-relaxed text-slate-500">
+        Every layer of the design, in one list. <b>Change</b> opens the card that owns the part, <b>✕ Remove</b> takes just that part away, and{" "}
+        <b>↺ Put back</b> returns it exactly as it was.
+      </p>
+
+      {PART_GROUPS.map((group) => {
+        const rows = parts.filter((p) => p.group === group);
+        return (
+          <div key={group} className="space-y-1.5" data-banner-part-group={group}>
+            <div className="flex items-baseline justify-between gap-2 border-t border-white/5 pt-1.5">
+              <span className="text-[10px] font-semibold text-slate-300">{group}</span>
+              <span className="text-[9.5px] text-slate-500">
+                {rows.filter((p) => p.on).length}/{rows.length}
+              </span>
+            </div>
+            {rows.map(row)}
+          </div>
+        );
+      })}
+
+      <div className="flex flex-wrap gap-1.5 border-t border-white/10 pt-2">
+        <button
+          type="button"
+          aria-label="Remove every effect"
+          onClick={removeEveryEffect}
+          className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-2 py-1 text-[10px] font-medium text-rose-200 transition-colors hover:bg-rose-500/20"
+        >
+          ✕ Remove every effect
+        </button>
+        <button
+          type="button"
+          aria-label="Put every part back"
+          onClick={putEverythingBack}
+          disabled={!Object.keys(memory.current).length}
+          className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-200 transition-colors hover:bg-emerald-500/20 disabled:opacity-40"
+        >
+          ↺ Put everything back
+        </button>
+      </div>
+      <p className="text-[10px] leading-relaxed text-slate-500">
+        The plate always keeps a paint — change it in Fill. Everything else can be taken away and put back, one part at a time.
       </p>
     </div>
   );
