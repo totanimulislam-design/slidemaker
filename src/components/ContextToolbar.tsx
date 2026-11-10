@@ -1305,12 +1305,10 @@ export default function ContextToolbar(p: Props) {
    * The title background line — one button per channel, in the order a plate is
    * dressed:
    *
-   *   Design presets   sixty looks in fourteen groups — eight Bangladeshi
-   *                    EdTech & classroom groups (ACS, Udvash, Redwan,
-   *                    Fahad/Shikho, 10MS/Bondi, Smartboard & Chalk, Badges,
-   *                    Minimal) and six retold from the online design
-   *                    platforms (Canva, Figma, Slidesgo & Visme, Adobe
-   *                    Express & Freepik, Pitch & Gamma, Behance & Dribbble)
+   *   Design presets   180 looks in 26 groups — the original 60 Bangladeshi
+   *                    EdTech / classroom / online-platform plates, plus 120
+   *                    studio looks in twelve new families. The larger gallery
+   *                    has search and a chip per group.
    *   Shape            the silhouettes in thirteen groups — the shape
    *                    library (Basic & Clean · Banner Style · Cut & Corner ·
    *                    Modern · Curved & Wave · Organic / Decorative ·

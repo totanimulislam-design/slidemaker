@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type {
   BannerBorder,
@@ -38,7 +38,9 @@ import {
   BANNER_MODERN_DEFAULT,
   BANNER_MODERN_EFFECTS,
   BANNER_PRESETS,
+  BANNER_PRESET_COUNT,
   BANNER_PRESET_GROUPS,
+  BANNER_PRESET_GROUP_HINTS,
   BANNER_SHADOW_DEFAULTS,
   BANNER_SHADOW_EFFECTS,
   bannerBorderGlowColor,
@@ -89,12 +91,14 @@ const gradOff = (g?: Gradient): Gradient | undefined => (g ? { ...g, enabled: fa
  * The title background plate's own controls — one card per channel, so the
  * toolbar's buttons each open exactly what they name.
  *
- *   Design presets    sixty complete looks, filed in fourteen BANNER_PRESETS
- *                     groups — eight tailored to Bangladeshi classroom,
- *                     smartboard and online-academy title plates, and six
- *                     retold from the online design platforms (Canva · Figma ·
- *                     Slidesgo & Visme · Adobe Express & Freepik · Pitch &
- *                     Gamma · Behance & Dribbble)
+ *   Design presets    180 complete looks in 26 BANNER_PRESETS groups — the
+ *                     original 60 Bangladeshi classroom / online-platform
+ *                     plates, plus 120 studio designs in twelve families
+ *                     (Aurora Glass · Neon Arcade · Editorial Ink · Chrome Lab
+ *                     · Soft UI Studio · Retro Print · Botanical Calm · Cosmic
+ *                     Mesh · Paper Craft · Heritage Gold · Sports Desk ·
+ *                     Minimal Line). Search and group chips keep the larger
+ *                     gallery browsable.
  *   Shape             the silhouettes in thirteen groups      BANNER_SHAPE_GROUPS
  *                     — the shape library (Basic & Clean ·
  *                     Banner Style · Cut & Corner · Modern ·
@@ -527,6 +531,7 @@ export function BannerPresetTile({ preset, theme, active, onClick }: { preset: B
       aria-label={`Banner preset: ${preset.name}`}
       aria-pressed={!!active}
       title={preset.name}
+      style={{ contentVisibility: "auto", containIntrinsicSize: "58px" } as CSSProperties}
       className={cn(
         "flex flex-col items-center gap-1 rounded-lg border p-1.5 text-[10px] transition-colors",
         active ? "border-amber-400 bg-amber-400/10 text-amber-200" : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/25",
@@ -543,7 +548,10 @@ export function BannerPresetTile({ preset, theme, active, onClick }: { preset: B
           <span key={i} className="absolute block" data-banner-overlay={i} style={{ ...l, ...thumb }} />
         ))}
       </span>
-      <span className="truncate">{preset.name}</span>
+      <span className="flex w-full items-center gap-1">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-white/20" style={{ background: preset.swatch }} />
+        <span className="truncate">{preset.name}</span>
+      </span>
     </button>
   );
 }
@@ -630,46 +638,113 @@ export function presetActive(banner: BannerSettings, p: BannerPreset): boolean {
   return true;
 }
 
-/** what each group heading says next to its own name */
-const PRESET_GROUP_HINT: Record<BannerPresetGroup, string> = {
-  "ACS Live & Cycles": "electric cycles & glass",
-  "Udvash & Admission": "pioneer & concept bars",
-  "Redwan & Science Pro": "dotted frost & slants",
-  "Fahad & Shikho Studio": "dashed tags & bright pills",
-  "10MS & Bondi Classroom": "crimson & cream cards",
-  "Smartboard & Chalk": "grids, highlighters & notes",
-  "Layered & Cut Badges": "frames, 3D & metallic",
-  "Minimal & Glow": "halos, rules & clean type",
-  "Canva Trending": "sunset mesh & bold slabs",
-  "Figma Community": "dark panes & blueprint cards",
-  "Slidesgo & Visme": "editorial splits & neon domes",
-  "Adobe Express & Freepik": "chrome, brutal & splash",
-  "Pitch & Gamma": "aurora glass & soft cards",
-  "Behance & Dribbble": "neo-brutal, liquid & Y2K",
-};
+type PresetFilter = BannerPresetGroup | "all";
+
+/** the catalogue's group counts, counted once for the filter chips */
+const PRESET_GROUP_COUNTS: Map<BannerPresetGroup, number> = BANNER_PRESETS.reduce((map, p) => {
+  map.set(p.group, (map.get(p.group) ?? 0) + 1);
+  return map;
+}, new Map<BannerPresetGroup, number>());
+
+/** a look matches the search by name, group, style hint or search keywords */
+function presetMatches(p: BannerPreset, q: string): boolean {
+  if (!q) return true;
+  const haystack = [p.name, p.group, p.hint ?? "", BANNER_PRESET_GROUP_HINTS[p.group] ?? ""].join(" ").toLowerCase();
+  return haystack.includes(q);
+}
 
 export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
-  const inUse = BANNER_PRESETS.find((p) => presetActive(banner, p));
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<PresetFilter>("all");
+  const q = query.trim().toLowerCase();
+
+  /** one active look for the whole gallery — no need to re-compare every tile */
+  const activeName = useMemo(() => BANNER_PRESETS.find((p) => presetActive(banner, p))?.name ?? "", [banner]);
+
+  const groups = useMemo(
+    () =>
+      BANNER_PRESET_GROUPS.map((group) => ({
+        group,
+        looks:
+          filter === "all" || filter === group
+            ? BANNER_PRESETS.filter((p) => p.group === group && presetMatches(p, q))
+            : [],
+      })).filter((entry) => entry.looks.length > 0),
+    [filter, q],
+  );
+  const shown = groups.reduce((n, entry) => n + entry.looks.length, 0);
+
   return (
     <div className="space-y-3" data-banner-presets="">
-      <Cap hint={inUse ? inUse.name : `${BANNER_PRESETS.length} looks · ${BANNER_PRESET_GROUPS.length} groups`}>Design presets</Cap>
-      {BANNER_PRESET_GROUPS.map((g) => {
-        const looks = BANNER_PRESETS.filter((p) => p.group === g);
-        if (!looks.length) return null;
-        return (
-          <div key={g} className="space-y-1.5" data-banner-preset-group={g}>
-            <div className="flex items-baseline justify-between gap-2 border-t border-white/5 pt-1.5">
-              <span className="text-[10px] font-semibold text-slate-300">{g}</span>
-              <span className="text-[9.5px] font-normal text-slate-500">{PRESET_GROUP_HINT[g]}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {looks.map((p) => (
-                <BannerPresetTile key={p.name} preset={p} theme={theme} active={presetActive(banner, p)} onClick={() => setBanner(bannerPresetPatch(banner, p))} />
-              ))}
-            </div>
+      <Cap hint={activeName ? `${activeName} · ${BANNER_PRESET_COUNT} looks` : `${BANNER_PRESET_COUNT} looks · ${BANNER_PRESET_GROUPS.length} groups`}>
+        Design presets
+      </Cap>
+
+      {/* the larger catalogue is searchable and browseable one family at a time */}
+      <div className="sticky top-0 z-10 space-y-2 bg-slate-950/95 pb-2" data-banner-preset-search="">
+        <input
+          type="search"
+          value={query}
+          aria-label="Search title background designs"
+          placeholder={`Search ${BANNER_PRESET_COUNT} title plates — glass, neon, gold, paper…`}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full rounded-lg border border-white/10 bg-slate-900/80 px-2.5 py-1.5 text-xs text-slate-200 outline-none placeholder:text-slate-500 focus:border-amber-400/60"
+        />
+        <div className="flex max-h-20 flex-wrap gap-1 overflow-y-auto pr-0.5">
+          <button
+            type="button"
+            aria-label="Title background designs: All"
+            aria-pressed={filter === "all"}
+            onClick={() => setFilter("all")}
+            className={cn(
+              "rounded border px-1.5 py-0.5 text-[9px] transition-colors",
+              filter === "all" ? "border-amber-400/70 bg-amber-400/15 text-amber-200" : "border-white/10 text-slate-400 hover:bg-white/10",
+            )}
+          >
+            All <span className="opacity-60">{BANNER_PRESET_COUNT}</span>
+          </button>
+          {BANNER_PRESET_GROUPS.map((group) => (
+            <button
+              key={group}
+              type="button"
+              aria-label={`Title background designs: ${group}`}
+              aria-pressed={filter === group}
+              title={BANNER_PRESET_GROUP_HINTS[group]}
+              onClick={() => setFilter(group)}
+              className={cn(
+                "rounded border px-1.5 py-0.5 text-[9px] transition-colors",
+                filter === group ? "border-amber-400/70 bg-amber-400/15 text-amber-200" : "border-white/10 text-slate-400 hover:bg-white/10",
+              )}
+            >
+              {group} <span className="opacity-60">{PRESET_GROUP_COUNTS.get(group) ?? 0}</span>
+            </button>
+          ))}
+        </div>
+        {(q || filter !== "all") && (
+          <p className="text-[9.5px] text-slate-500">
+            {shown} {shown === 1 ? "look" : "looks"} shown{filter !== "all" ? ` · ${filter}` : ""}
+          </p>
+        )}
+      </div>
+
+      {groups.map(({ group, looks }) => (
+        <div key={group} className="space-y-1.5" data-banner-preset-group={group}>
+          <div className="flex items-baseline justify-between gap-2 border-t border-white/5 pt-1.5">
+            <span className="text-[10px] font-semibold text-slate-300">{group}</span>
+            <span className="text-[9.5px] font-normal text-slate-500">{BANNER_PRESET_GROUP_HINTS[group]}</span>
           </div>
-        );
-      })}
+          <div className="grid grid-cols-2 gap-1.5">
+            {looks.map((p) => (
+              <BannerPresetTile key={p.name} preset={p} theme={theme} active={p.name === activeName} onClick={() => setBanner(bannerPresetPatch(banner, p))} />
+            ))}
+          </div>
+        </div>
+      ))}
+      {!shown && (
+        <p className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-6 text-center text-[11px] text-slate-500" data-banner-preset-empty="">
+          No title plate matches “{query}”. Try glass, neon, chrome, paper, gold or a colourway.
+        </p>
+      )}
       <p className="text-[10px] leading-relaxed text-slate-500">
         A preset repaints the plate, effects, outline and heading accent cleanly while keeping your plate width and heading text.
       </p>

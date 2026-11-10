@@ -6,7 +6,8 @@
  * Transparency · Banner size · Banner position · show/hide · Default.
  *
  * These tests pin that order, and then walk every channel to the slide:
- * the fill repaints the plate; the ONE Border card paints the outline on a
+ * the expanded Design presets gallery (180 looks in 26 groups), the fill
+ * repaints the plate; the ONE Border card paints the outline on a
  * layer of its own — its colour (through the shared colour card, stacked on
  * the Border pop-up, closed on its own),
  * style, weight and transparency, the corner radius for all four corners or
@@ -29,7 +30,9 @@ import {
   BANNER_HIGHLIGHT_EFFECTS,
   BANNER_MODERN_EFFECTS,
   BANNER_PRESETS,
+  BANNER_PRESET_COUNT,
   BANNER_PRESET_GROUPS,
+  STUDIO_TITLE_PRESET_COUNT,
   BANNER_SHADOW_EFFECTS,
   bannerCss,
   bannerPresetPatch,
@@ -208,32 +211,46 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   /* ------------------------------ presets ---------------------------------- */
   openCard("Design presets");
   const presetTiles = () => Array.from(pop()?.querySelectorAll<HTMLElement>('button[aria-label^="Banner preset: "]') ?? []);
-  const PRESET_GROUPS = [
-    "ACS Live & Cycles",
-    "Udvash & Admission",
-    "Redwan & Science Pro",
-    "Fahad & Shikho Studio",
-    "10MS & Bondi Classroom",
-    "Smartboard & Chalk",
-    "Layered & Cut Badges",
-    "Minimal & Glow",
-    "Canva Trending",
-    "Figma Community",
-    "Slidesgo & Visme",
-    "Adobe Express & Freepik",
-    "Pitch & Gamma",
-    "Behance & Dribbble",
-  ];
+  const PRESET_GROUPS = BANNER_PRESET_GROUPS;
   out.push({
-    name: "Design presets opens a card of whole academy and design-platform looks, each painted as the plate it brings",
+    name: "Design presets opens 100+ additional studio looks alongside the academy and platform plates, each painted as the plate it brings",
     pass:
       pop()?.getAttribute("data-pop-panel") === "Design presets" &&
-      presetTiles().length === 60 &&
+      presetTiles().length === BANNER_PRESET_COUNT &&
+      BANNER_PRESET_COUNT >= 160 &&
+      STUDIO_TITLE_PRESET_COUNT >= 100 &&
       PRESET_GROUPS.every((g) => !!pop()?.querySelector(`[data-banner-preset-group="${g}"]`)) &&
       PRESET_GROUPS.every((g) => (pop()?.querySelectorAll(`[data-banner-preset-group="${g}"] button[aria-label^="Banner preset: "]`)?.length ?? 0) >= 4) &&
       presetTiles().every((t) => !!t.querySelector("span span")),
-    detail: `${presetTiles().length} presets · ${pop()?.querySelectorAll("[data-banner-preset-group]").length ?? 0} groups`,
+    detail: `${presetTiles().length} presets · ${pop()?.querySelectorAll("[data-banner-preset-group]").length ?? 0} groups · ${STUDIO_TITLE_PRESET_COUNT} studio looks`,
   });
+
+  const searchInput = () => pop()?.querySelector<HTMLInputElement>('input[aria-label="Search title background designs"]');
+  type(searchInput(), "Lagoon");
+  out.push({
+    name: "search narrows the expanded gallery to the colourway across all twelve studio families",
+    pass:
+      presetTiles().length === 12 &&
+      presetTiles().every((t) => /Lagoon/.test(t.getAttribute("aria-label") ?? "")),
+    detail: `${presetTiles().length} Lagoon looks`,
+  });
+  type(searchInput(), "");
+  click(popButton("Title background designs: Neon Arcade"));
+  out.push({
+    name: "a family chip narrows the gallery to that family's ten looks",
+    pass:
+      presetTiles().length === 10 &&
+      !!pop()?.querySelector('[data-banner-preset-group="Neon Arcade"]') &&
+      !pop()?.querySelector('[data-banner-preset-group="Aurora Glass"]'),
+    detail: `${presetTiles().length} neon looks`,
+  });
+  click(popButton("Title background designs: All"));
+  out.push({
+    name: "All brings the whole 180-look gallery back",
+    pass: presetTiles().length === BANNER_PRESET_COUNT,
+    detail: `${presetTiles().length} looks`,
+  });
+
   click(popButton("Banner preset: Shikho Magenta Pill"));
   out.push({
     name: "one click paints that look: a gradient pill, rounded to a full capsule and marked active",
@@ -416,6 +433,19 @@ export async function runBannerTests(): Promise<CaseResult[]> {
       BANNER_PRESET_GROUPS.every((g) => BANNER_PRESETS.filter((p) => p.group === g).length >= 4) &&
       BANNER_PRESET_GROUPS.every((g) => BANNER_PRESETS.some((p) => p.group === g)),
     detail: `${BANNER_PRESETS.length} looks · ${BANNER_PRESET_GROUPS.length} groups`,
+  });
+  const ORIGINAL_GROUPS = PRESET_GROUPS.slice(0, 14);
+  const STUDIO_GROUPS = PRESET_GROUPS.slice(14);
+  const STUDIO_LOOKS = BANNER_PRESETS.filter((p) => !ORIGINAL_GROUPS.includes(p.group));
+  out.push({
+    name: "the studio collection adds 100+ new looks in twelve real families, ten colourways each",
+    pass:
+      STUDIO_TITLE_PRESET_COUNT >= 100 &&
+      STUDIO_LOOKS.length === STUDIO_TITLE_PRESET_COUNT &&
+      STUDIO_GROUPS.length === 12 &&
+      STUDIO_GROUPS.every((g) => STUDIO_LOOKS.filter((p) => p.group === g).length === 10) &&
+      new Set(STUDIO_LOOKS.map((p) => p.swatch)).size === STUDIO_LOOKS.length,
+    detail: `${STUDIO_LOOKS.length} studio looks · ${STUDIO_GROUPS.length} families · ${new Set(STUDIO_LOOKS.map((p) => p.swatch)).size} swatches`,
   });
   const fingerprint = (p: BannerPreset) =>
     JSON.stringify({ ...bannerPresetPatch({ ...DEFAULT_BANNER } as BannerSettings, p), size: undefined, pos: undefined });

@@ -44,6 +44,9 @@ import {
 import { shade, withAlpha } from "./color";
 import { rotateHue } from "./textEffects";
 import { shapeEffectPasses, type ShapeEffectBehind, type ShapeEffectPasses } from "./shapeEffects";
+import { STUDIO_TITLE_GROUP_HINTS, STUDIO_TITLE_PRESETS, STUDIO_TITLE_PRESET_GROUPS } from "./titleBackgroundDesigns";
+
+export { STUDIO_TITLE_PRESET_COUNT } from "./titleBackgroundDesigns";
 
 /* ---------------------------------------------------- silhouette families */
 
@@ -3115,12 +3118,15 @@ export interface BannerPreset {
   /** the gallery's own heading this look is filed under */
   group: BannerPresetGroup;
   swatch: string;
+  /** search words for the larger gallery — materials, moods and colourways */
+  hint?: string;
   banner: Partial<BannerSettings>;
 }
 
 /**
- * The Design presets gallery's headings — authentic Bangladeshi classroom,
- * smartboard and online-academy title plate styles.
+ * The Design presets gallery's headings — the original Bangladeshi classroom,
+ * smartboard, online-academy and design-platform families, plus twelve studio
+ * families of additional one-click title plates.
  */
 export type BannerPresetGroup =
   | "ACS Live & Cycles"
@@ -3138,7 +3144,20 @@ export type BannerPresetGroup =
   | "Slidesgo & Visme"
   | "Adobe Express & Freepik"
   | "Pitch & Gamma"
-  | "Behance & Dribbble";
+  | "Behance & Dribbble"
+  /* twelve studio families — 120 more complete title plates in ten colourways */
+  | "Aurora Glass"
+  | "Neon Arcade"
+  | "Editorial Ink"
+  | "Chrome Lab"
+  | "Soft UI Studio"
+  | "Retro Print"
+  | "Botanical Calm"
+  | "Cosmic Mesh"
+  | "Paper Craft"
+  | "Heritage Gold"
+  | "Sports Desk"
+  | "Minimal Line";
 
 export const BANNER_PRESET_GROUPS: BannerPresetGroup[] = [
   "ACS Live & Cycles",
@@ -3155,7 +3174,27 @@ export const BANNER_PRESET_GROUPS: BannerPresetGroup[] = [
   "Adobe Express & Freepik",
   "Pitch & Gamma",
   "Behance & Dribbble",
+  ...STUDIO_TITLE_PRESET_GROUPS,
 ];
+
+/** the short line beside each gallery heading, shared by the panel and search */
+export const BANNER_PRESET_GROUP_HINTS: Record<BannerPresetGroup, string> = {
+  "ACS Live & Cycles": "electric cycles & glass",
+  "Udvash & Admission": "pioneer & concept bars",
+  "Redwan & Science Pro": "dotted frost & slants",
+  "Fahad & Shikho Studio": "dashed tags & bright pills",
+  "10MS & Bondi Classroom": "crimson & cream cards",
+  "Smartboard & Chalk": "grids, highlighters & notes",
+  "Layered & Cut Badges": "frames, 3D & metallic",
+  "Minimal & Glow": "halos, rules & clean type",
+  "Canva Trending": "sunset mesh & bold slabs",
+  "Figma Community": "dark panes & blueprint cards",
+  "Slidesgo & Visme": "editorial splits & neon domes",
+  "Adobe Express & Freepik": "chrome, brutal & splash",
+  "Pitch & Gamma": "aurora glass & soft cards",
+  "Behance & Dribbble": "neo-brutal, liquid & Y2K",
+  ...STUDIO_TITLE_GROUP_HINTS,
+} as Record<BannerPresetGroup, string>;
 
 export const BANNER_PRESETS: BannerPreset[] = [
   /* -------------------------------------------------------------- */
@@ -4544,7 +4583,13 @@ export const BANNER_PRESETS: BannerPreset[] = [
       textShadow: true,
     },
   },
+  /* 120 studio looks — twelve families × ten colourways, each a full plate
+     recipe generated in `lib/titleBackgroundDesigns` */
+  ...STUDIO_TITLE_PRESETS,
 ];
+
+/** the gallery's count, for headings, chips and tests */
+export const BANNER_PRESET_COUNT = BANNER_PRESETS.length;
 
 /** build a full BannerEffects patch with clean defaults for any preset */
 function fx(part: Omit<Partial<BannerEffects>, "shape"> & { shape?: Partial<BannerShapeFx> }): BannerEffects {
