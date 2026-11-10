@@ -71,7 +71,7 @@ export default function OptionBulletMarker({
   const letter = <TextBgShapeBox shape={tf.bgShape}>{inline ? <span style={inline}>{marker.content}</span> : marker.content}</TextBgShapeBox>;
 
   return (
-    <span style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
+    <span data-option-marker="" style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
       {marker.backplate ? <span style={marker.backplate} /> : null}
       <span
         style={{

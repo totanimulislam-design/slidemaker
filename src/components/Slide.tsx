@@ -26,9 +26,9 @@ import { BANNER_AUTO_FRAME_HEIGHT, DEFAULT_BADGE_PLATE, DEFAULT_BANNER, DEFAULT_
 import { computeFrameCss } from "../lib/frameDesigns";
 import { resolveFrameImageSrc } from "../lib/frameImages";
 import { boxesOverlap } from "../lib/groups";
-import { HANDLES, applyMove, applyResize, applyRotate, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
+import { HANDLES, applyMove, applyResize, applyRotate, frameResizeToBox, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
 import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
-import { measureElement } from "../lib/layoutMeasure";
+import { contentMismatch, fitBoxPatch, measureContent, measureElement } from "../lib/layoutMeasure";
 import MathText from "./MathText";
 import NumberBullet from "./NumberBullet";
 import TextBgShapeBox, { textBgWrap } from "./TextBgShape";
@@ -207,6 +207,18 @@ function SlideBase({
     };
   };
 
+  // Rotated built-ins keep their layout frame: resize math is expressed in the
+  // item's local frame, and a tight DOM frame would otherwise change its pivot.
+  const contentRectOf = (id: ElementId) => {
+    const box = freeRectOf(id);
+    if (Math.abs(box.rot) > 0.01) return null;
+    return measureContent(id);
+  };
+  const selectionRectOf = (id: ElementId) => {
+    const box = freeRectOf(id);
+    return contentRectOf(id) ?? { x: box.x, y: box.y, w: box.w, h: box.h };
+  };
+
   /**
    * Any drag/resize/rotate promotes the element to free mode. The logo (an
    * image) also gets an explicit height so its box no longer depends on the
@@ -304,7 +316,10 @@ function SlideBase({
     if (g.kind === "resize") {
       const keepRatio = id === "logo" ? !e.shiftKey : e.shiftKey;
       const r = applyResize(g, dx, dy, { keepRatio, grid: gridSnap, free: freeMove, minW: 2, minH: 2 });
-      onLayoutChange?.(id, { x: r.x, y: r.y, w: r.w, h: r.h });
+      const boxRect = g.contentStart && g.boxStart
+        ? frameResizeToBox(g.boxStart, g.contentStart, r, { minW: 2, minH: 2 })
+        : r;
+      onLayoutChange?.(id, { x: boxRect.x, y: boxRect.y, w: boxRect.w, h: boxRect.h });
       return;
     }
     onLayoutChange?.(id, { rot: applyRotate(g, e.clientX, e.clientY, e.shiftKey) });
@@ -368,11 +383,14 @@ function SlideBase({
   const startResize = (id: ElementId, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!movable || e.button !== 0 || layerLocked(id)) return;
-    const r = freeRectOf(id);
-    arm({ kind: "resize", id, handle, sx: e.clientX, sy: e.clientY, start: r, ratio: r.h > 0 ? r.w / r.h : 1 }, e, {
-      x: r.x,
-      y: r.y,
-    });
+    const box = freeRectOf(id);
+    const content = contentRectOf(id);
+    const r = content ? { ...content, rot: box.rot } : box;
+    arm({
+      kind: "resize", id, handle, sx: e.clientX, sy: e.clientY, start: r,
+      ratio: r.h > 0 ? r.w / r.h : 1,
+      ...(content ? { contentStart: content, boxStart: box } : {}),
+    }, e, { x: r.x, y: r.y });
   };
 
   const startRotate = (id: ElementId) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -427,15 +445,24 @@ function SlideBase({
     if (!movable || selected !== id || !elementShown(id)) return null;
     const b = L[id];
     const free = isFree(id);
-    const r = freeRectOf(id);
-    const style: CSSProperties = free
-      ? { left: `${b.x}%`, top: `${b.y}%`, width: `${b.w}%`, height: b.h ? `${b.h}%` : `${r.h}%` }
-      : { left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` };
+    const box = freeRectOf(id);
+    const r = selectionRectOf(id);
+    const mismatch = contentRectOf(id);
+    const showFit = !!mismatch && contentMismatch(box, mismatch);
+    const style: CSSProperties = { left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` };
     // a locked layer shows the frame (so you can see what is selected) but no
     // handles at all — there is nothing you could drag
     const locked = layerLocked(id);
     const ink = locked ? "#ffd633" : "#5ef2ff";
     return (
+      <>
+      {showFit && (
+        <div
+          data-el-box-ghost={id}
+          aria-hidden="true"
+          style={{ position: "absolute", left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, border: "1px dashed rgba(255,196,87,.9)", boxSizing: "border-box", pointerEvents: "none", zIndex: BAND_UI + 14 }}
+        />
+      )}
       <div
         data-el-overlay={id}
         data-el-locked={locked ? "true" : undefined}
@@ -476,6 +503,15 @@ function SlideBase({
             <div style={{ position: "absolute", left: "50%", top: -18, width: 2, height: 16, marginLeft: -1, background: "rgba(94,242,255,.8)" }} />
           </>
         )}
+        {showFit && mismatch && !locked && (
+          <button
+            type="button"
+            data-fit-content={id}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onLayoutChange?.(id, fitBoxPatch(mismatch)); onGestureEnd?.(); }}
+            style={{ position: "absolute", right: 0, top: -30, pointerEvents: "auto", whiteSpace: "nowrap", border: "1px solid #ffc457", borderRadius: 4, padding: "3px 7px", background: "#171717", color: "#ffd98a", font: "11px sans-serif", cursor: "pointer" }}
+          >Fit to content</button>
+        )}
         <div
           style={{
             position: "absolute",
@@ -496,6 +532,7 @@ function SlideBase({
           {ELEMENT_LABEL[id]} · {r1(r.x)}, {r1(r.y)} · {r1(r.w)}×{r1(r.h)}{b.rot ? ` · ${b.rot}°` : ""}{free ? "" : " · aligned"}
         </div>
       </div>
+      </>
     );
   };
 
@@ -974,6 +1011,7 @@ function SlideBase({
                   if (!plate.enabled) return <span>{glyphs}</span>;
                   return (
                     <span
+                      data-badge-plate=""
                       style={{
                         display: "inline-block",
                         background: withAlpha(plate.color, plate.opacity),

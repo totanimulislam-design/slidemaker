@@ -36,6 +36,7 @@ const suites = [
   ["named projects (save, update, rename, copy, delete and reopen in the real editor)", "projects.test.tsx", "runProjectTests"],
   ["portable projects (a share link / .mcqdeck file packs slides, pictures and fonts, and opens as an editable copy)", "share.test.tsx", "runShareTests"],
   ["math paste (LaTeX delimiters, set relations and literal answer matching)", "mathpaste.test.ts", "runMathPasteTests"],
+  ["content-fit selection frames and resize mapping", "contentfit.test.ts", "runContentFitTests"],
   ["drag interaction (Slide + ShapeLayer, deck shapes included)", "drag.test.tsx", "runDragTests"],
   ["gesture leak (legacy pattern vs drag session)", "leak.test.tsx", "runLeakTests"],
   ["pointer state machine (lib/dragSession)", "session.test.ts", "runSessionTests"],

@@ -30,7 +30,26 @@ export const HANDLES: { h: Handle; cursor: string; style: React.CSSProperties }[
 
 export type Gesture =
   | { kind: "move"; id: string; dx: number; dy: number }
-  | { kind: "resize"; id: string; handle: Handle; sx: number; sy: number; start: FreeRect; ratio: number }
+  | {
+      kind: "resize";
+      id: string;
+      handle: Handle;
+      sx: number;
+      sy: number;
+      start: FreeRect;
+      ratio: number;
+      /**
+       * Content-tight frame at gesture start (see lib/layoutMeasure
+       * `measureContent`). When present, `start` is that tight frame — the
+       * handles sit on it — and `boxStart` is the layout box the frame was
+       * measured against. The drag resizes the frame first, then the same
+       * size/position delta is applied to the box (`frameResizeToBox`), so
+       * the offset between box and content (centred / right-aligned text,
+       * padding) is preserved while the box grows or shrinks with the frame.
+       */
+      contentStart?: { x: number; y: number; w: number; h: number };
+      boxStart?: FreeRect;
+    }
   | { kind: "rotate"; id: string; cx: number; cy: number; start: number; rot0: number };
 
 export interface SnapTarget {
@@ -155,6 +174,41 @@ export function applyResize(
     } else if (h.includes("s")) hh = opts.grid(y + hh) - y;
   }
   return { x: r1(x), y: r1(y), w: r1(Math.max(minW, w)), h: r1(Math.max(minH, hh)) };
+}
+
+/**
+ * Maps a content-frame resize back onto the layout box.
+ *
+ * The selection frame hugs the painted content, which may sit inside the
+ * layout box (short left-aligned text in a wide box), centred in it, or
+ * overflow it (a nowrap title wider than its box, text clipped by a fixed
+ * height). Dragging a handle resizes the *frame*; the box must follow by
+ * the same delta so the content keeps its offset inside the box:
+ *
+ *   east handle dragged +5%  → frame w +5 → box w +5 (west edge fixed)
+ *   west handle dragged +5%  → frame x +5, w −5 → box x +5, w −5
+ *
+ * Pure and DOM-free so the mapping can be unit-tested without a board.
+ */
+export function frameResizeToBox(
+  boxStart: Pick<FreeRect, "x" | "y" | "w" | "h">,
+  contentStart: Pick<FreeRect, "x" | "y" | "w" | "h">,
+  frameNext: Pick<FreeRect, "x" | "y" | "w" | "h">,
+  opts: { minW?: number; minH?: number } = {},
+): Pick<FreeRect, "x" | "y" | "w" | "h"> {
+  const minW = opts.minW ?? 2;
+  const minH = opts.minH ?? 2;
+  const dw = frameNext.w - contentStart.w;
+  const dh = frameNext.h - contentStart.h;
+  const dx = frameNext.x - contentStart.x;
+  const dy = frameNext.y - contentStart.y;
+  const w = Math.max(minW, boxStart.w + dw);
+  const h = Math.max(minH, boxStart.h + dh);
+  // when the box hit its minimum, the dragged edge stays at the frame's
+  // edge instead of pushing the opposite edge past it
+  const x = w === minW && boxStart.w + dw < minW ? frameNext.x + (boxStart.x - contentStart.x) : boxStart.x + dx;
+  const y = h === minH && boxStart.h + dh < minH ? frameNext.y + (boxStart.y - contentStart.y) : boxStart.y + dy;
+  return { x: r1(x), y: r1(y), w: r1(w), h: r1(h) };
 }
 
 /** Rotation from a drag around the centre, Shift snaps to 15°. */

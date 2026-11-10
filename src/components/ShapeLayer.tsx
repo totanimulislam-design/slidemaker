@@ -3,7 +3,8 @@ import { polygonPoints, type ShapeItem } from "../lib/shapes";
 import { withAlpha } from "../lib/color";
 import { cssBorder, dashArray, hasGradientFill, itemStyle, shapeFill, textInlineStyle, textStyle } from "../lib/shapeDesign";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
-import { applyResize } from "../lib/freeTransform";
+import { applyResize, frameResizeToBox } from "../lib/freeTransform";
+import { contentMismatch, fitBoxPatch, measureShapeContent } from "../lib/layoutMeasure";
 import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
 import {
   fillsBox,
@@ -55,7 +56,7 @@ type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 type Gesture =
   /** the press point and the object position are held by the pointer session */
   | { kind: "move"; id: string; others: ShapeItem[] }
-  | { kind: "resize"; id: string; handle: Handle; sx: number; sy: number; x0: number; y0: number; w0: number; h0: number; ratio: number }
+  | { kind: "resize"; id: string; handle: Handle; sx: number; sy: number; x0: number; y0: number; w0: number; h0: number; ratio: number; contentStart?: { x: number; y: number; w: number; h: number }; boxStart?: { x: number; y: number; w: number; h: number } }
   | { kind: "rotate"; id: string; cx: number; cy: number; start: number; rot0: number }
   /** whole selection (multi / group) — every member gets patched by the same transform */
   | { kind: "set"; mode: "move"; ids: string[]; start: Record<string, MemberGeo> }
@@ -551,7 +552,11 @@ export default function ShapeLayer({
         } else if (hnd.includes("s")) h = snap(y + h) - y;
       }
 
-      onChange?.(g.id, { x: r1(x), y: r1(y), w: r1(Math.max(minW, w)), h: r1(Math.max(minH, h)) });
+      const frame = { x: r1(x), y: r1(y), w: r1(Math.max(minW, w)), h: r1(Math.max(minH, h)) };
+      const box = g.contentStart && g.boxStart
+        ? frameResizeToBox(g.boxStart, g.contentStart, frame, { minW: 1, minH: 0.3 })
+        : frame;
+      onChange?.(g.id, { x: box.x, y: box.y, w: box.w, h: box.h });
       return;
     }
 
@@ -646,7 +651,10 @@ export default function ShapeLayer({
   const resizeDown = (s: ShapeItem, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (e.button !== 0) return;
-    // same rule as a move: the box is only resized once the pointer travels
+    // Text gets a glyph-tight frame; rotated shapes keep their box frame so
+    // resize continues in the established local-axis coordinate system.
+    const content = !s.rot && (s.kind === "text" || !!s.text) ? measureShapeContent(s.id) : null;
+    const start = content ?? { x: s.x, y: s.y, w: s.w, h: s.h };
     arm(
       {
         kind: "resize",
@@ -654,14 +662,15 @@ export default function ShapeLayer({
         handle,
         sx: e.clientX,
         sy: e.clientY,
-        x0: s.x,
-        y0: s.y,
-        w0: s.w,
-        h0: s.h,
-        ratio: s.h > 0 ? s.w / s.h : 1,
+        x0: start.x,
+        y0: start.y,
+        w0: start.w,
+        h0: start.h,
+        ratio: start.h > 0 ? start.w / start.h : 1,
+        ...(content ? { contentStart: content, boxStart: { x: s.x, y: s.y, w: s.w, h: s.h } } : {}),
       },
       e,
-      { x: s.x, y: s.y },
+      { x: start.x, y: start.y },
     );
   };
 
@@ -861,16 +870,33 @@ export default function ShapeLayer({
               o.x < s.x + s.w && o.x + o.w > s.x && o.y < s.y + s.h && o.y + o.h > s.y &&
               (o.kind === "image" || (o.fill && o.fillOpacity > 0.6)),
           );
+          const content = !s.rot && (s.kind === "text" || !!s.text) ? measureShapeContent(s.id) : null;
+          const frame = content ?? { x: s.x, y: s.y, w: s.w, h: s.h };
+          const mismatch = !!content && contentMismatch({ x: s.x, y: s.y, w: s.w, h: s.h }, content);
+          const fitText = () => {
+            const boardRect = board();
+            const px = (s.padding ?? 6) + 4;
+            const py = s.padding ?? 6;
+            const padX = boardRect ? (px * 2 / boardRect.width) * 100 : 0;
+            const padY = boardRect ? (py * 2 / boardRect.height) * 100 : 0;
+            const patch = fitBoxPatch(content!, { x: padX / 2, y: padY / 2 });
+            onChange?.(s.id, { x: patch.x, y: patch.y, w: patch.w, h: patch.h });
+            onGestureEnd?.();
+          };
           return (
+            <>
+            {mismatch && (
+              <div data-shape-box-ghost={s.id} aria-hidden="true" style={{ position: "absolute", left: `${s.x}%`, top: `${s.y}%`, width: `${s.w}%`, height: `${s.h}%`, border: "1px dashed rgba(255,196,87,.9)", boxSizing: "border-box", pointerEvents: "none", zIndex: BAND_UI + 14 }} />
+            )}
             <div
               key={`sel-${s.id}`}
               data-sel={s.id}
               style={{
                 position: "absolute",
-                left: `${s.x}%`,
-                top: `${s.y}%`,
-                width: `${s.w}%`,
-                height: `${s.h}%`,
+                left: `${frame.x}%`,
+                top: `${frame.y}%`,
+                width: `${frame.w}%`,
+                height: `${frame.h}%`,
                 transform: s.rot ? `rotate(${s.rot}deg)` : undefined,
                 transformOrigin: "center center",
                 zIndex: BAND_UI + 15,
@@ -918,6 +944,9 @@ export default function ShapeLayer({
               )}
               {!s.locked && (
                 <>
+                  {mismatch && content && (
+                    <button type="button" data-fit-content={s.id} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); fitText(); }} style={{ position: "absolute", right: 0, top: -30, pointerEvents: "auto", whiteSpace: "nowrap", border: "1px solid #ffc457", borderRadius: 4, padding: "3px 7px", background: "#171717", color: "#ffd98a", font: "11px sans-serif", cursor: "pointer" }}>Fit to content</button>
+                  )}
                   {(thinLine ? HANDLES.filter((h) => h.h === "e" || h.h === "w") : HANDLES).map(({ h, style, cursor }) => (
                     <div
                       key={h}
@@ -983,6 +1012,7 @@ export default function ShapeLayer({
                 </>
               )}
             </div>
+            </>
           );
         })()}
 
