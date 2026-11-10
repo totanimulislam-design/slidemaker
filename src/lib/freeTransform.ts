@@ -49,6 +49,7 @@ export type Gesture =
        */
       contentStart?: { x: number; y: number; w: number; h: number };
       boxStart?: FreeRect;
+      textStart?: { fontSize?: number; scale?: number };
     }
   | { kind: "rotate"; id: string; cx: number; cy: number; start: number; rot0: number };
 
