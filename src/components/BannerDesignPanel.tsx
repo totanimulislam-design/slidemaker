@@ -89,9 +89,12 @@ const gradOff = (g?: Gradient): Gradient | undefined => (g ? { ...g, enabled: fa
  * The title background plate's own controls — one card per channel, so the
  * toolbar's buttons each open exactly what they name.
  *
- *   Design presets    thirty-six complete looks, filed in eight BANNER_PRESETS
- *                     groups tailored to Bangladeshi classroom,
- *                     smartboard and online-academy title plates
+ *   Design presets    sixty complete looks, filed in fourteen BANNER_PRESETS
+ *                     groups — eight tailored to Bangladeshi classroom,
+ *                     smartboard and online-academy title plates, and six
+ *                     retold from the online design platforms (Canva · Figma ·
+ *                     Slidesgo & Visme · Adobe Express & Freepik · Pitch &
+ *                     Gamma · Behance & Dribbble)
  *   Shape             the silhouettes in thirteen groups      BANNER_SHAPE_GROUPS
  *                     — the shape library (Basic & Clean ·
  *                     Banner Style · Cut & Corner · Modern ·
@@ -637,6 +640,12 @@ const PRESET_GROUP_HINT: Record<BannerPresetGroup, string> = {
   "Smartboard & Chalk": "grids, highlighters & notes",
   "Layered & Cut Badges": "frames, 3D & metallic",
   "Minimal & Glow": "halos, rules & clean type",
+  "Canva Trending": "sunset mesh & bold slabs",
+  "Figma Community": "dark panes & blueprint cards",
+  "Slidesgo & Visme": "editorial splits & neon domes",
+  "Adobe Express & Freepik": "chrome, brutal & splash",
+  "Pitch & Gamma": "aurora glass & soft cards",
+  "Behance & Dribbble": "neo-brutal, liquid & Y2K",
 };
 
 export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {

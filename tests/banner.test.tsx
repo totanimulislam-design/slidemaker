@@ -19,8 +19,24 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import App from "../src/App";
-import { bannerCss } from "../src/lib/banner";
-import { DEFAULT_BANNER, DEFAULT_LOGO } from "../src/lib/types";
+import {
+  BANNER_3D_EFFECTS,
+  BANNER_DECOR_EFFECTS,
+  BANNER_BEVEL_EFFECTS,
+  BANNER_BLUR_EFFECTS,
+  BANNER_GLASS_EFFECTS,
+  BANNER_GLOW_EFFECTS,
+  BANNER_HIGHLIGHT_EFFECTS,
+  BANNER_MODERN_EFFECTS,
+  BANNER_PRESETS,
+  BANNER_PRESET_GROUPS,
+  BANNER_SHADOW_EFFECTS,
+  bannerCss,
+  bannerPresetPatch,
+  type BannerPreset,
+} from "../src/lib/banner";
+import { BANNER_SHAPES } from "../src/components/BannerDesignPanel";
+import { DEFAULT_BANNER, DEFAULT_LOGO, type BannerSettings } from "../src/lib/types";
 
 type Win = Window & typeof globalThis;
 const win = window as unknown as Win;
@@ -201,12 +217,18 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     "Smartboard & Chalk",
     "Layered & Cut Badges",
     "Minimal & Glow",
+    "Canva Trending",
+    "Figma Community",
+    "Slidesgo & Visme",
+    "Adobe Express & Freepik",
+    "Pitch & Gamma",
+    "Behance & Dribbble",
   ];
   out.push({
-    name: "Design presets opens a card of whole Bangladeshi academy looks, each painted as the plate it brings",
+    name: "Design presets opens a card of whole academy and design-platform looks, each painted as the plate it brings",
     pass:
       pop()?.getAttribute("data-pop-panel") === "Design presets" &&
-      presetTiles().length === 36 &&
+      presetTiles().length === 60 &&
       PRESET_GROUPS.every((g) => !!pop()?.querySelector(`[data-banner-preset-group="${g}"]`)) &&
       PRESET_GROUPS.every((g) => (pop()?.querySelectorAll(`[data-banner-preset-group="${g}"] button[aria-label^="Banner preset: "]`)?.length ?? 0) >= 4) &&
       presetTiles().every((t) => !!t.querySelector("span span")),
@@ -276,6 +298,63 @@ export async function runBannerTests(): Promise<CaseResult[]> {
       popButton("Banner preset: Metallic Chrome Plate")?.getAttribute("aria-pressed") === "true",
     detail: `${(plate()?.style.clipPath ?? "").slice(0, 28)} · active ${popButton("Banner preset: Metallic Chrome Plate")?.getAttribute("aria-pressed")}`,
   });
+  for (const g of ["Canva Trending", "Figma Community", "Slidesgo & Visme", "Adobe Express & Freepik", "Pitch & Gamma", "Behance & Dribbble"]) {
+    const tiles = Array.from(pop()?.querySelectorAll<HTMLElement>(`[data-banner-preset-group="${g}"] button[aria-label^="Banner preset: "]`) ?? []);
+    out.push({
+      name: `the "${g}" group ships four platform looks, each painted as a live plate in its own tile`,
+      pass: tiles.length === 4 && tiles.every((t) => !!t.querySelector("span > span")),
+      detail: `${tiles.length} tiles`,
+    });
+  }
+  click(popButton("Banner preset: Canva Sunset Mesh"));
+  out.push({
+    name: "a mesh-gradient platform look reaches the slide as melted colour blobs, and marks itself active",
+    pass:
+      (plate()?.style.background ?? "").includes("radial-gradient") &&
+      (plate()?.style.borderRadius ?? "") === "999px" &&
+      popButton("Banner preset: Canva Sunset Mesh")?.getAttribute("aria-pressed") === "true",
+    detail: `${(plate()?.style.background ?? "").slice(0, 40)} · radius ${plate()?.style.borderRadius}`,
+  });
+  click(popButton("Banner preset: Behance Neo-Brutal"));
+  out.push({
+    name: "a platform look carrying four corners of its own, a hard copy and a lean paints all three at once",
+    pass:
+      plate()?.style.borderRadius === "0px 24px 0px 24px" &&
+      (plate()?.style.boxShadow ?? "").includes("12px 12px") &&
+      (plate()?.style.transform ?? "").includes("rotate") &&
+      !!plateLine(),
+    detail: `radius ${plate()?.style.borderRadius} · rotate ${(plate()?.style.transform ?? "").includes("rotate")}`,
+  });
+  click(popButton("Banner preset: Figma Mesh Pour"));
+  out.push({
+    name: "an organic platform plate is cut by a mask and a wave, so the silhouette survives the finish",
+    pass:
+      !!plate()?.style.maskImage &&
+      !!plate()?.style.webkitMaskImage &&
+      popButton("Banner preset: Figma Mesh Pour")?.getAttribute("aria-pressed") === "true",
+    detail: `masked ${!!plate()?.style.maskImage}`,
+  });
+  click(popButton("Banner preset: Behance Y2K Chrome"));
+  out.push({
+    name: "a chrome platform pill paints the brushed bands along its own angle, under a pink-glowing line",
+    pass:
+      (plate()?.style.background ?? "").startsWith("linear-gradient(135deg") &&
+      plate()?.style.borderRadius === "999px" &&
+      (plateLine()?.style.filter ?? "").includes("drop-shadow") &&
+      popButton("Banner preset: Behance Y2K Chrome")?.getAttribute("aria-pressed") === "true",
+    detail: `${(plate()?.style.background ?? "").slice(0, 34)} · line ${!!plateLine()}`,
+  });
+  click(popButton("Banner preset: Pitch Soft Card"));
+  out.push({
+    name: "the quiet platform card lifts on its two soft-UI tones plus its own fall, and keeps the chip at 630px",
+    pass:
+      ((plate()?.style.boxShadow ?? "").match(/rgba?\(/g) ?? []).length >= 3 &&
+      plateOverlays().length === 0 &&
+      (plate()?.style.width ?? "") === "630px" &&
+      popButton("Banner preset: Pitch Soft Card")?.getAttribute("aria-pressed") === "true",
+    detail: `shadows ${(plate()?.style.boxShadow ?? "").slice(0, 44)} · w ${plate()?.style.width}`,
+  });
+
   // back to the borderless pill the rest of the suite dresses — switching back
   // must cleanly reset fillMode, cornersIndependent, border and overlays
   click(popButton("Banner preset: Shikho Magenta Pill"));
@@ -289,6 +368,75 @@ export async function runBannerTests(): Promise<CaseResult[]> {
       popButton("Banner preset: Shikho Magenta Pill")?.getAttribute("aria-pressed") === "true",
     detail: `radius ${plate()?.style.borderRadius} · border ${!!plateLine()} · overlays ${plateOverlays().length}`,
   });
+  /* --------------------- the presets' own catalogue ------------------------- */
+  /* A pure-data walk over BANNER_PRESETS: every look must name a silhouette, an
+     effect and a fill the cards really offer, and must be a look of its own —
+     so adding a group here can never ship a tile that paints nothing. */
+  const EFFECT_KINDS: Record<string, string[]> = {
+    shadow: BANNER_SHADOW_EFFECTS.map((e) => e.kind),
+    glow: BANNER_GLOW_EFFECTS.map((e) => e.kind),
+    blur: BANNER_BLUR_EFFECTS.map((e) => e.kind),
+    glass: BANNER_GLASS_EFFECTS.map((e) => e.kind),
+    bevel: BANNER_BEVEL_EFFECTS.map((e) => e.kind),
+    threeD: BANNER_3D_EFFECTS.map((e) => e.kind),
+    highlight: BANNER_HIGHLIGHT_EFFECTS.map((e) => e.kind),
+    decor: BANNER_DECOR_EFFECTS.map((e) => e.kind),
+    modern: BANNER_MODERN_EFFECTS.map((e) => e.kind),
+  };
+  const SHAPES = new Set(BANNER_SHAPES.map((sh) => sh.id));
+  const FILLS = ["solid", "gradient", "glass", "metallic", "pattern"];
+  const PATTERNS = ["dots", "stripes", "lines", "grid", "checker", "diamonds", "rays", "rings"];
+  const GRAD_TYPES = ["linear", "radial", "mesh", "conic", "reflected"];
+  const BORDER_STYLES = ["solid", "dashed", "dotted", "double", "none"];
+  const stray = (p: BannerPreset): string[] => {
+    const b = p.banner;
+    const bad: string[] = [];
+    if (!SHAPES.has(b.shape!)) bad.push(`shape ${b.shape}`);
+    if (b.fillMode && !FILLS.includes(b.fillMode)) bad.push(`fill ${b.fillMode}`);
+    if (b.fillMode === "pattern" && b.pattern && !PATTERNS.includes(b.pattern.kind)) bad.push(`pattern ${b.pattern.kind}`);
+    if (b.gradient?.enabled && !GRAD_TYPES.includes(b.gradient.type)) bad.push(`gradient ${b.gradient.type}`);
+    if (b.border && b.border.style && !BORDER_STYLES.includes(b.border.style)) bad.push(`border ${b.border.style}`);
+    for (const [group, fx] of Object.entries(b.effects ?? {})) {
+      if (group === "shape" || !fx) continue;
+      const kinds = EFFECT_KINDS[group];
+      if (!kinds) bad.push(`effects.${group}`);
+      else if (!kinds.includes((fx as { kind: string }).kind)) bad.push(`effects.${group}:${(fx as { kind: string }).kind}`);
+    }
+    return bad;
+  };
+  out.push({
+    name: "every preset names a silhouette, a fill, an outline and effects the cards actually offer",
+    pass: BANNER_PRESETS.every((p) => stray(p).length === 0),
+    detail: BANNER_PRESETS.flatMap((p) => stray(p).map((w) => `${p.name}: ${w}`)).join(" | ") || `${BANNER_PRESETS.length} looks clean`,
+  });
+  out.push({
+    name: "every preset is filed under a real group, and every group carries four looks or more",
+    pass:
+      BANNER_PRESETS.every((p) => BANNER_PRESET_GROUPS.includes(p.group)) &&
+      BANNER_PRESET_GROUPS.every((g) => BANNER_PRESETS.filter((p) => p.group === g).length >= 4) &&
+      BANNER_PRESET_GROUPS.every((g) => BANNER_PRESETS.some((p) => p.group === g)),
+    detail: `${BANNER_PRESETS.length} looks · ${BANNER_PRESET_GROUPS.length} groups`,
+  });
+  const fingerprint = (p: BannerPreset) =>
+    JSON.stringify({ ...bannerPresetPatch({ ...DEFAULT_BANNER } as BannerSettings, p), size: undefined, pos: undefined });
+  out.push({
+    name: "no two presets dress the plate the same way, and no name is used twice",
+    pass:
+      new Set(BANNER_PRESETS.map((p) => p.name)).size === BANNER_PRESETS.length &&
+      new Set(BANNER_PRESETS.map(fingerprint)).size === BANNER_PRESETS.length,
+    detail: `${new Set(BANNER_PRESETS.map(fingerprint)).size}/${BANNER_PRESETS.length} distinct looks`,
+  });
+  out.push({
+    name: "every preset paints a plate — a body of its own, or a rule, or a deliberate nothing",
+    pass: BANNER_PRESETS.every((p) => {
+      const merged = { ...DEFAULT_BANNER, ...bannerPresetPatch(DEFAULT_BANNER as BannerSettings, p) } as BannerSettings;
+      const css = bannerCss(merged, "#0f172a");
+      if (merged.shape === "none") return true;
+      return !!(css.box.background || css.box.backgroundColor || css.box.boxShadow || css.layers.length || css.overlays.length);
+    }),
+    detail: `${BANNER_PRESETS.filter((p) => p.group === "Canva Trending" || p.group === "Figma Community" || p.group === "Slidesgo & Visme" || p.group === "Adobe Express & Freepik" || p.group === "Pitch & Gamma" || p.group === "Behance & Dribbble").length} platform looks`,
+  });
+
   closePop();
 
   /* ------------------------------- shape ----------------------------------- */

@@ -3130,7 +3130,15 @@ export type BannerPresetGroup =
   | "10MS & Bondi Classroom"
   | "Smartboard & Chalk"
   | "Layered & Cut Badges"
-  | "Minimal & Glow";
+  | "Minimal & Glow"
+  /* the online design platforms — what Canva, Figma, Slidesgo, Express, Pitch
+     and the project galleries put behind a heading, retold for the board */
+  | "Canva Trending"
+  | "Figma Community"
+  | "Slidesgo & Visme"
+  | "Adobe Express & Freepik"
+  | "Pitch & Gamma"
+  | "Behance & Dribbble";
 
 export const BANNER_PRESET_GROUPS: BannerPresetGroup[] = [
   "ACS Live & Cycles",
@@ -3141,6 +3149,12 @@ export const BANNER_PRESET_GROUPS: BannerPresetGroup[] = [
   "Smartboard & Chalk",
   "Layered & Cut Badges",
   "Minimal & Glow",
+  "Canva Trending",
+  "Figma Community",
+  "Slidesgo & Visme",
+  "Adobe Express & Freepik",
+  "Pitch & Gamma",
+  "Behance & Dribbble",
 ];
 
 export const BANNER_PRESETS: BannerPreset[] = [
@@ -3935,6 +3949,601 @@ export const BANNER_PRESETS: BannerPreset[] = [
       textShadow: true,
     },
   },
+
+  /* -------------------------------------------------------------- */
+  /* Canva Trending — the plate the platform's own gallery keeps on */
+  /* the front page: a sunset mesh, a bold ink slab, a groovy retro */
+  /* arch and a die-cut holographic sticker.                        */
+  /* -------------------------------------------------------------- */
+  {
+    name: "Canva Sunset Mesh",
+    group: "Canva Trending",
+    swatch: "linear-gradient(120deg,#e11d48,#fb923c,#a855f7)",
+    banner: {
+      shape: "pill",
+      gradient: meshGrad(["#e11d48", "#fb7185", "#f97316", "#a855f7"]),
+      opacity: 1,
+      padX: 4,
+      padY: 12,
+      halo: 15,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        highlight: { kind: "sheen", intensity: 45, blur: 20, angle: 25, color: "#ffffff" },
+        shadow: { kind: "colored", x: 0, y: 12, blur: 30, spread: 0, opacity: 38, color: "#fb7185" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#fff1f2", 100]),
+      textGlow: 8,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Canva Bold Slab",
+    group: "Canva Trending",
+    swatch: "linear-gradient(180deg,#111827,#0f172a)",
+    banner: {
+      // the square-cut ink card the platform puts under a loud display heading:
+      // no corner to round, one fat accent rule along the bottom edge and a
+      // flat copy of the plate stepping down-right instead of a blur
+      shape: "rect",
+      radius: 0,
+      color: "#0f172a",
+      gradient: noGrad(),
+      opacity: 1,
+      padX: 6,
+      padY: 13,
+      halo: 0,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        decor: { kind: "bottomBar", intensity: 80, color: "#facc15" },
+        shadow: { kind: "offset", x: 10, y: 10, blur: 0, spread: 0, opacity: 20, color: "#64748b" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#fef9c3", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Canva Groovy Arch",
+    group: "Canva Trending",
+    swatch: "linear-gradient(180deg,#fcd34d,#fb923c,#f472b6)",
+    banner: {
+      shape: "arch",
+      gradient: lin(180, ["#fcd34d", 0], ["#fb923c", 55], ["#f472b6", 100]),
+      opacity: 1,
+      padX: 5,
+      padY: 12,
+      halo: 10,
+      border: { enabled: true, color: "#fff7ed", width: 2, style: "solid", opacity: 0.85 },
+      effects: fx({
+        decor: { kind: "stitch", intensity: 55, color: "#fffbeb" },
+        shadow: { kind: "hard", x: 6, y: 6, blur: 0, spread: 0, opacity: 28, color: "#7c2d12" },
+      }),
+      textGradient: lin(180, ["#7c2d12", 0], ["#9d174d", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Canva Holo Sticker",
+    group: "Canva Trending",
+    swatch: "linear-gradient(120deg,#e0e7ff,#fae8ff,#cffafe)",
+    banner: {
+      shape: "softRounded",
+      radius: 20,
+      // the ramp sweeps round the plate's own centre, so the pastel pair shifts
+      // from lilac to aqua across the width the way a holographic print does
+      gradient: conicGrad(210, ["#e0e7ff", 0], ["#fae8ff", 34], ["#cffafe", 62], ["#e0e7ff", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 10,
+      border: { enabled: true, color: "#a5b4fc", width: 1.5, style: "solid", opacity: 0.7 },
+      effects: fx({
+        modern: { kind: "holographic", intensity: 70, blur: 10, color: "#c7d2fe" },
+        decor: { kind: "sticker", intensity: 65, color: "#ffffff" },
+        shadow: { kind: "soft", x: 0, y: 12, blur: 26, spread: 0, opacity: 26, color: "#4338ca" },
+      }),
+      textGradient: lin(180, ["#4338ca", 0], ["#be185d", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+
+  /* -------------------------------------------------------------- */
+  /* Figma Community — the tokens-driven cards the community files  */
+  /* ship with: an indigo card, a dark-mode pane, a mesh pour on an */
+  /* organic plate and a blueprint outline.                         */
+  /* -------------------------------------------------------------- */
+  {
+    name: "Figma Indigo Card",
+    group: "Figma Community",
+    swatch: "linear-gradient(180deg,#6366f1,#4338ca)",
+    banner: {
+      shape: "rounded",
+      radius: 18,
+      gradient: lin(180, ["#6366f1", 0], ["#4338ca", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 15,
+      border: { enabled: true, color: "#c7d2fe", width: 1.5, style: "solid", opacity: 0.6 },
+      effects: fx({
+        highlight: { kind: "rimLight", intensity: 45, blur: 2, angle: 0, color: "#ffffff" },
+        shadow: { kind: "soft", x: 0, y: 16, blur: 40, spread: 0, opacity: 40, color: "#312e81" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#e0e7ff", 100]),
+      textGlow: 8,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Figma Dark Pane",
+    group: "Figma Community",
+    swatch: "linear-gradient(180deg,#111a2e,#0b1026)",
+    banner: {
+      shape: "softSquare",
+      fillMode: "glass",
+      glass: { color: "#0b1026", opacity: 70, frost: 72 },
+      gradient: noGrad(),
+      opacity: 1,
+      padX: 4,
+      padY: 14,
+      halo: 10,
+      border: { enabled: true, color: "#334155", width: 1.5, style: "solid", opacity: 0.9 },
+      effects: fx({
+        glass: { kind: "frosted", intensity: 55, blur: 10, color: "#60a5fa" },
+        shadow: { kind: "floating", x: 0, y: 14, blur: 30, spread: 4, opacity: 45, color: "#020617" },
+      }),
+      textGradient: lin(180, ["#e2e8f0", 0], ["#93c5fd", 100]),
+      textGlow: 10,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Figma Mesh Pour",
+    group: "Figma Community",
+    swatch: "linear-gradient(135deg,#111827,#4338ca,#0ea5e9,#f472b6)",
+    banner: {
+      shape: "organicPlate",
+      gradient: meshGrad(["#111827", "#4338ca", "#0ea5e9", "#f472b6", "#fbbf24"]),
+      opacity: 1,
+      padX: 6,
+      padY: 13,
+      halo: 20,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        blur: { kind: "bloom", blur: 6, intensity: 35, angle: 0, color: "#818cf8" },
+        shadow: { kind: "soft", x: 0, y: 14, blur: 34, spread: 0, opacity: 40, color: "#312e81" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#e0e7ff", 100]),
+      textGlow: 10,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Figma Blueprint Outline",
+    group: "Figma Community",
+    swatch: "linear-gradient(90deg,#1e3a8a,#2563eb)",
+    banner: {
+      // a hollow plate on graph paper — the wireframe look the community draws
+      // before any paint goes down: nothing inside, the line doing all the work
+      shape: "outlineBanner",
+      color: "#1e3a8a",
+      gradient: noGrad(),
+      opacity: 1,
+      padX: 5,
+      padY: 13,
+      halo: 0,
+      border: { enabled: true, color: "#2563eb", width: 2, style: "dashed", opacity: 0.9 },
+      effects: fx({
+        decor: { kind: "grid", intensity: 26, color: "#60a5fa" },
+      }),
+      // nothing is painted inside a hollow plate, so the glyphs keep the deck's
+      // own ink — a heading on a wireframe must still read on any board
+      textGradient: { enabled: false, type: "linear", angle: 180, stops: [{ color: "#1e3a8a", at: 0 }, { color: "#0f172a", at: 100 }] },
+      textGlow: 0,
+      textShadow: true,
+    },
+  },
+
+  /* -------------------------------------------------------------- */
+  /* Slidesgo & Visme — the deck shops' own headers: an editorial   */
+  /* split bar, a paper ticket, a neon esports hex and a dome lit   */
+  /* from the stage.                                                */
+  /* -------------------------------------------------------------- */
+  {
+    name: "Slidesgo Editorial Split",
+    group: "Slidesgo & Visme",
+    swatch: "linear-gradient(90deg,#0f172a,#1d4ed8)",
+    banner: {
+      shape: "split",
+      gradient: lin(90, ["#0f172a", 0], ["#1d4ed8", 100]),
+      opacity: 1,
+      padX: 5,
+      padY: 13,
+      halo: 10,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        decor: { kind: "leftBar", intensity: 78, color: "#f59e0b" },
+        shadow: { kind: "drop", x: 0, y: 10, blur: 22, spread: 0, opacity: 45, color: "#0b1026" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#cbd5e1", 100]),
+      textGlow: 0,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Slidesgo Paper Ticket",
+    group: "Slidesgo & Visme",
+    swatch: "linear-gradient(180deg,#fffbf2,#fde8c8)",
+    banner: {
+      shape: "ticketBanner",
+      gradient: lin(180, ["#fffbf2", 0], ["#fde8c8", 100]),
+      opacity: 1,
+      padX: 5,
+      padY: 13,
+      halo: 0,
+      border: { enabled: true, color: "#b45309", width: 1.5, style: "dashed", opacity: 0.8 },
+      effects: fx({
+        decor: { kind: "vignette", intensity: 38, color: "#7c2d12" },
+        shadow: { kind: "drop", x: 0, y: 8, blur: 18, spread: 0, opacity: 35, color: "#7c2d12" },
+      }),
+      textGradient: lin(180, ["#7c2d12", 0], ["#b45309", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Visme Neon Esports",
+    group: "Slidesgo & Visme",
+    swatch: "linear-gradient(90deg,#7f1d1d,#ef4444,#f97316)",
+    banner: {
+      shape: "hex",
+      gradient: lin(90, ["#7f1d1d", 0], ["#ef4444", 55], ["#f97316", 100]),
+      opacity: 1,
+      padX: 6,
+      padY: 12,
+      halo: 20,
+      border: {
+        enabled: true,
+        color: "#fecaca",
+        width: 2,
+        style: "solid",
+        opacity: 0.9,
+        glow: { enabled: true, size: 12, intensity: 70, color: "#ef4444" },
+      },
+      effects: fx({
+        glow: { kind: "neon", intensity: 60, blur: 14, color: "#ef4444" },
+        shadow: { kind: "cast", x: 14, y: 20, blur: 0, spread: 0, opacity: 40, color: "#450a0a" },
+        shape: { skew: -6 },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#ffe4e6", 100]),
+      textGlow: 18,
+      textShadow: true,
+      // the bloom keeps breathing in presenter mode
+      shimmer: true,
+    },
+  },
+  {
+    name: "Visme Duotone Dome",
+    group: "Slidesgo & Visme",
+    swatch: "linear-gradient(180deg,#0c4a6e,#0284c7)",
+    banner: {
+      shape: "domeBanner",
+      // the ramp starts under the dome, so the plate is lit from the stage
+      // rather than from a lamp above it
+      gradient: radGrad(50, 118, ["#0284c7", 0], ["#0c4a6e", 58], ["#082f49", 100]),
+      opacity: 1,
+      padX: 5,
+      padY: 13,
+      halo: 15,
+      border: { enabled: true, color: "#bae6fd", width: 1.5, style: "solid", opacity: 0.6 },
+      effects: fx({
+        modern: { kind: "duotone", intensity: 62, blur: 0, color: "#f0abfc" },
+        highlight: { kind: "spotlight", intensity: 55, blur: 18, angle: 0, color: "#ffffff" },
+        shadow: { kind: "floating", x: 0, y: 16, blur: 30, spread: 4, opacity: 40, color: "#082f49" },
+      }),
+      textGradient: lin(180, ["#f0f9ff", 0], ["#ffffff", 100]),
+      textGlow: 8,
+      textShadow: true,
+    },
+  },
+
+  /* -------------------------------------------------------------- */
+  /* Adobe Express & Freepik — the shops' loud end: a chrome        */
+  /* capsule brushed, a brutalist slab, a bar fading to nothing     */
+  /* and a paint splash with its droplets round it.                 */
+  /* -------------------------------------------------------------- */
+  {
+    name: "Express Chrome Retro",
+    group: "Adobe Express & Freepik",
+    swatch: "linear-gradient(110deg,#f8fafc,#cbd5e1,#f1f5f9)",
+    banner: {
+      shape: "capsule",
+      fillMode: "metallic",
+      metallic: { color: "#e2e8f0", angle: 110, polish: 82 },
+      gradient: noGrad(),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 0,
+      border: { enabled: true, color: "#64748b", width: 1.5, style: "solid", opacity: 0.85 },
+      effects: fx({
+        bevel: { kind: "outerBevel", intensity: 50, blur: 2, angle: 0, color: "#ffffff" },
+      }),
+      textGradient: lin(180, ["#0f172a", 0], ["#334155", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Freepik Brutal Slab",
+    group: "Adobe Express & Freepik",
+    swatch: "linear-gradient(90deg,#fde047,#facc15)",
+    banner: {
+      shape: "slant",
+      color: "#fde047",
+      gradient: noGrad(),
+      opacity: 1,
+      padX: 6,
+      padY: 13,
+      halo: 0,
+      border: { enabled: true, color: "#0f172a", width: 3, style: "solid", opacity: 1 },
+      effects: fx({
+        shadow: { kind: "hard", x: 10, y: 10, blur: 0, spread: 0, opacity: 90, color: "#0f172a" },
+      }),
+      textGradient: lin(180, ["#0f172a", 0], ["#1e293b", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Express Aqua Fade",
+    group: "Adobe Express & Freepik",
+    swatch: "linear-gradient(90deg,#22d3ee,rgba(8,145,178,0))",
+    banner: {
+      // one end cut on the bias and the whole ramp run out to nothing — the
+      // fade bar that walks a heading off the edge of the board
+      shape: "singleCut",
+      gradient: lin(90, ["#0891b2", 0], ["#0e7490", 45], ["rgba(14,116,144,0)", 100]),
+      transparentSides: ["right"],
+      opacity: 1,
+      padX: 5,
+      padY: 12,
+      halo: 15,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        glow: { kind: "soft", intensity: 40, blur: 12, color: "#67e8f9" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#cffafe", 100]),
+      textGlow: 12,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Freepik Splash Paint",
+    group: "Adobe Express & Freepik",
+    swatch: "linear-gradient(135deg,#8b5cf6,#ec4899,#f59e0b)",
+    banner: {
+      shape: "splashShape",
+      gradient: lin(135, ["#8b5cf6", 0], ["#ec4899", 55], ["#f59e0b", 100]),
+      opacity: 1,
+      padX: 6,
+      padY: 13,
+      halo: 20,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        glow: { kind: "outer", intensity: 45, blur: 14, color: "#ec4899" },
+        shadow: { kind: "floating", x: 0, y: 16, blur: 30, spread: 6, opacity: 40, color: "#4c1d95" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#fdf4ff", 100]),
+      textGlow: 10,
+      textShadow: true,
+    },
+  },
+
+  /* -------------------------------------------------------------- */
+  /* Pitch & Gamma — how the deck makers light a title now: an      */
+  /* aurora glass plate, a midnight capsule blooming from behind, a */
+  /* soft-UI card and one neon rule.                                */
+  /* -------------------------------------------------------------- */
+  {
+    name: "Pitch Aurora Glass",
+    group: "Pitch & Gamma",
+    swatch: "linear-gradient(120deg,#22d3ee,#818cf8)",
+    banner: {
+      shape: "glassPlate",
+      fillMode: "glass",
+      glass: { color: "#0e7490", opacity: 55, frost: 65 },
+      gradient: noGrad(),
+      opacity: 1,
+      padX: 4,
+      padY: 14,
+      halo: 20,
+      border: { enabled: true, color: "#ffffff", width: 1.5, style: "solid", opacity: 0.5 },
+      effects: fx({
+        glow: { kind: "aurora", intensity: 55, blur: 16, color: "#818cf8" },
+      }),
+      textGradient: lin(180, ["#f0fdff", 0], ["#a5f3fc", 100]),
+      textGlow: 10,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Gamma Midnight Bloom",
+    group: "Pitch & Gamma",
+    swatch: "linear-gradient(180deg,#0b1026,#1e1b4b)",
+    banner: {
+      shape: "capsule",
+      // the ramp mirrored out from the middle, so the capsule is indigo on the
+      // line and falls to black at both ends — the bloom reads as the plate's own light
+      gradient: reflGrad(180, ["#312e81", 0], ["#0b1026", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 25,
+      border: {
+        enabled: true,
+        color: "#4c1d95",
+        width: 1.5,
+        style: "solid",
+        opacity: 0.9,
+        glow: { enabled: true, size: 14, intensity: 65, color: "#a78bfa" },
+      },
+      effects: fx({
+        glow: { kind: "backlight", intensity: 55, blur: 18, color: "#6366f1" },
+      }),
+      textGradient: lin(180, ["#e0e7ff", 0], ["#c4b5fd", 100]),
+      textGlow: 15,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Pitch Soft Card",
+    group: "Pitch & Gamma",
+    swatch: "linear-gradient(180deg,#ffffff,#eef2f7)",
+    banner: {
+      // the quiet one — a card lifted on two shadows instead of a rim, for a
+      // board whose heading is the loudest thing on it already
+      shape: "softSquare",
+      gradient: lin(180, ["#ffffff", 0], ["#f1f5f9", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 0,
+      border: { enabled: true, color: "#e2e8f0", width: 1, style: "solid", opacity: 0.9 },
+      effects: fx({
+        modern: { kind: "softUi", intensity: 60, blur: 10, color: "#e2e8f0" },
+        shadow: { kind: "floating", x: 0, y: 12, blur: 26, spread: 2, opacity: 28, color: "#0f172a" },
+      }),
+      textGradient: lin(180, ["#0f172a", 0], ["#334155", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Gamma Neon Rule",
+    group: "Pitch & Gamma",
+    swatch: "linear-gradient(90deg,#22d3ee,#818cf8,#e879f9)",
+    banner: {
+      shape: "underline",
+      gradient: lin(90, ["#22d3ee", 0], ["#818cf8", 55], ["#e879f9", 100]),
+      radius: 14,
+      opacity: 1,
+      padX: 2,
+      padY: 11,
+      halo: 20,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        glow: { kind: "outlineGlow", intensity: 60, blur: 12, color: "#818cf8" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#e0f2fe", 100]),
+      textGlow: 15,
+      textShadow: true,
+    },
+  },
+
+  /* -------------------------------------------------------------- */
+  /* Behance & Dribbble — what the project galleries post: a        */
+  /* brutal block on four corners of its own, a liquid mesh, a      */
+  /* Y2K chrome pill and a slab stepped out in three layers.        */
+  /* -------------------------------------------------------------- */
+  {
+    name: "Behance Neo-Brutal",
+    group: "Behance & Dribbble",
+    swatch: "linear-gradient(90deg,#ffd60a,#fde047)",
+    banner: {
+      shape: "rect",
+      cornersIndependent: true,
+      corners: { tl: 0, tr: 24, br: 0, bl: 24 },
+      color: "#ffd60a",
+      gradient: noGrad(),
+      opacity: 1,
+      padX: 6,
+      padY: 13,
+      halo: 0,
+      border: { enabled: true, color: "#0f172a", width: 3, style: "solid", opacity: 1 },
+      effects: fx({
+        shadow: { kind: "offset", x: 12, y: 12, blur: 0, spread: 0, opacity: 100, color: "#0f172a" },
+        shape: { rotation: -1.2 },
+      }),
+      textGradient: lin(180, ["#0f172a", 0], ["#111827", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Dribbble Liquid Mesh",
+    group: "Behance & Dribbble",
+    swatch: "linear-gradient(135deg,#5eead4,#38bdf8,#818cf8,#f472b6)",
+    banner: {
+      shape: "liquidShape",
+      gradient: meshGrad(["#0369a1", "#38bdf8", "#818cf8", "#f472b6"]),
+      opacity: 1,
+      padX: 5,
+      padY: 13,
+      halo: 15,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        highlight: { kind: "reflection", intensity: 50, blur: 10, angle: 25, color: "#ffffff" },
+        shadow: { kind: "colored", x: 0, y: 14, blur: 28, spread: 0, opacity: 35, color: "#0ea5e9" },
+        shape: { wave: 22 },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#ecfeff", 100]),
+      textGlow: 8,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Behance Y2K Chrome",
+    group: "Behance & Dribbble",
+    swatch: "linear-gradient(135deg,#f8fafc,#e5e7eb,#f0abfc)",
+    banner: {
+      shape: "pill",
+      fillMode: "metallic",
+      metallic: { color: "#e5e7eb", angle: 135, polish: 90 },
+      gradient: noGrad(),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 10,
+      border: {
+        enabled: true,
+        color: "#f0abfc",
+        width: 2,
+        style: "solid",
+        opacity: 0.95,
+        glow: { enabled: true, size: 12, intensity: 60, color: "#e879f9" },
+      },
+      effects: fx({
+        bevel: { kind: "pillow", intensity: 60, blur: 3, angle: 0, color: "#ffffff" },
+      }),
+      textGradient: lin(180, ["#a21caf", 0], ["#4c1d95", 100]),
+      textGlow: 6,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Dribbble Retro Slab",
+    group: "Behance & Dribbble",
+    swatch: "linear-gradient(180deg,#0d9488,#0f766e)",
+    banner: {
+      shape: "steppedBanner",
+      gradient: lin(180, ["#0d9488", 0], ["#0f766e", 100]),
+      opacity: 1,
+      padX: 5,
+      padY: 13,
+      halo: 10,
+      border: { enabled: true, color: "#99f6e4", width: 1.5, style: "solid", opacity: 0.7 },
+      effects: fx({
+        threeD: { kind: "layered3d", intensity: 55, blur: 0, angle: 135, color: "#134e4a" },
+        highlight: { kind: "gloss", intensity: 45, blur: 4, angle: 0, color: "#ffffff" },
+      }),
+      textGradient: lin(180, ["#f0fdfa", 0], ["#99f6e4", 100]),
+      textGlow: 0,
+      textShadow: true,
+    },
+  },
 ];
 
 /** build a full BannerEffects patch with clean defaults for any preset */
@@ -3953,6 +4562,32 @@ function lin(angle: number, ...stops: [string, number][]): Gradient {
 /** gradient switched off — the preset paints a solid body */
 function noGrad(): Gradient {
   return { ...DEFAULT_GRADIENT(), enabled: false };
+}
+
+/** a radial ramp out from its own centre — the spotlight and stage-light looks */
+function radGrad(cx: number, cy: number, ...stops: [string, number][]): Gradient {
+  return { enabled: true, type: "radial", angle: 90, cx, cy, stops: stops.map(([color, at]) => ({ color, at })) };
+}
+
+/** the mesh: colour blobs melted over the first colour, which holds the base */
+function meshGrad(colors: string[]): Gradient {
+  const step = 100 / Math.max(1, colors.length - 1);
+  return {
+    enabled: true,
+    type: "mesh",
+    angle: 90,
+    stops: colors.map((color, i) => ({ color, at: Math.round(i * step) })),
+  };
+}
+
+/** the angular sweep round the plate's centre, starting from `angle` */
+function conicGrad(angle: number, ...stops: [string, number][]): Gradient {
+  return { enabled: true, type: "conic", angle, stops: stops.map(([color, at]) => ({ color, at })) };
+}
+
+/** the ramp mirrored out from the middle to both ends */
+function reflGrad(angle: number, ...stops: [string, number][]): Gradient {
+  return { enabled: true, type: "reflected", angle, stops: stops.map(([color, at]) => ({ color, at })) };
 }
 
 /**
