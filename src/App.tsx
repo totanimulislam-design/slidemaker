@@ -914,8 +914,9 @@ function AppContent() {
   );
   /** Canvas movement updates the current slide live */
   const moveElement = useCallback(
-    (id: ElementId, patch: Partial<Box>) => scopedPatchLayout(id, patch),
-    [scopedPatchLayout],
+    (id: ElementId, patch: Partial<Box>, fontPatch?: { fontSize?: number; scale?: number }) =>
+      patchLayoutScoped(id, patch, "slide", thisSlideId, "Move element", fontPatch),
+    [patchLayoutScoped, thisSlideId],
   );
 
   const handleApplyDesign = useCallback(

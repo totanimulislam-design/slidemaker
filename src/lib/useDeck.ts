@@ -347,6 +347,7 @@ export function useDeck() {
       scope: "slide" | "selected" | "all",
       slideIds: string[],
       label = "Move element",
+      fontPatch?: { fontSize?: number; scale?: number },
     ) => {
       const ids = new Set(slideIds);
       setDeckH(
@@ -373,6 +374,7 @@ export function useDeck() {
                 ...s,
                 themeOverride: mergeThemeOverride(s.themeOverride, {
                   layout: { ...(s.themeOverride?.layout ?? d.theme.layout), [id]: { ...base, ...patch } },
+                  ...(fontPatch ? { boxFonts: { ...(s.themeOverride?.boxFonts ?? d.theme.boxFonts), [id]: { ...(d.theme.boxFonts?.[id] ?? {}), ...(s.themeOverride?.boxFonts?.[id] ?? {}), ...fontPatch } } } : {}),
                 }),
               };
             }),

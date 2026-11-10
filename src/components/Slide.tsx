@@ -28,7 +28,8 @@ import { resolveFrameImageSrc } from "../lib/frameImages";
 import { boxesOverlap } from "../lib/groups";
 import { HANDLES, applyMove, applyResize, applyRotate, frameResizeToBox, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
 import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
-import { contentMismatch, fitBoxPatch, measureContent, measureElement } from "../lib/layoutMeasure";
+import { measureContent, measureElement } from "../lib/layoutMeasure";
+import { useContentBounds } from "../lib/useContentBounds";
 import MathText from "./MathText";
 import NumberBullet from "./NumberBullet";
 import TextBgShapeBox, { textBgWrap } from "./TextBgShape";
@@ -60,7 +61,7 @@ interface Props {
   total?: number;
   index?: number;
   /** enables drag-to-position and reports the new box */
-  onLayoutChange?: (id: ElementId, patch: Partial<Box>) => void;
+  onLayoutChange?: (id: ElementId, patch: Partial<Box>, fontPatch?: { fontSize?: number; scale?: number }) => void;
   selected?: ElementId | null;
   onSelect?: (id: ElementId | null) => void;
   onSurfaceSelect?: (surface: "frame" | "background") => void;
@@ -136,6 +137,7 @@ function SlideBase({
   const editable = !!onField;
   const movable = !!onLayoutChange;
   const L = theme.layout;
+  const measuredContent = useContentBounds(editable && selected && !L[selected].rot ? selected : null, () => selected ? measureContent(selected) : null);
   /**
    * A PLAIN page: a slide of the user's own (an imported PDF / PowerPoint page,
    * or any slide the toggle in the Slide background panel switches over). None
@@ -216,7 +218,7 @@ function SlideBase({
   };
   const selectionRectOf = (id: ElementId) => {
     const box = freeRectOf(id);
-    return contentRectOf(id) ?? { x: box.x, y: box.y, w: box.w, h: box.h };
+    return (selected === id ? measuredContent : null) ?? { x: box.x, y: box.y, w: box.w, h: box.h };
   };
 
   /**
@@ -314,12 +316,17 @@ function SlideBase({
       return;
     }
     if (g.kind === "resize") {
-      const keepRatio = id === "logo" ? !e.shiftKey : e.shiftKey;
+      const textScale = !!g.textStart && g.handle.length === 2;
+      const keepRatio = textScale || (id === "logo" ? !e.shiftKey : e.shiftKey);
       const r = applyResize(g, dx, dy, { keepRatio, grid: gridSnap, free: freeMove, minW: 2, minH: 2 });
       const boxRect = g.contentStart && g.boxStart
         ? frameResizeToBox(g.boxStart, g.contentStart, r, { minW: 2, minH: 2 })
         : r;
-      onLayoutChange?.(id, { x: boxRect.x, y: boxRect.y, w: boxRect.w, h: boxRect.h });
+      const factor = r.w / g.start.w;
+      const fontPatch = textScale && g.textStart ? (g.textStart.fontSize !== undefined
+        ? { fontSize: Math.max(1, g.textStart.fontSize * factor) }
+        : { scale: Math.max(0.02, (g.textStart.scale ?? 1) * factor) }) : undefined;
+      onLayoutChange?.(id, { x: boxRect.x, y: boxRect.y, w: boxRect.w, h: boxRect.h }, fontPatch);
       return;
     }
     onLayoutChange?.(id, { rot: applyRotate(g, e.clientX, e.clientY, e.shiftKey) });
@@ -389,6 +396,7 @@ function SlideBase({
     arm({
       kind: "resize", id, handle, sx: e.clientX, sy: e.clientY, start: r,
       ratio: r.h > 0 ? r.w / r.h : 1,
+      ...(["title", "badge", "question", "options", "note"].includes(id) ? { textStart: { ...theme.boxFonts?.[id] } } : {}),
       ...(content ? { contentStart: content, boxStart: box } : {}),
     }, e, { x: r.x, y: r.y });
   };
@@ -445,10 +453,7 @@ function SlideBase({
     if (!movable || selected !== id || !elementShown(id)) return null;
     const b = L[id];
     const free = isFree(id);
-    const box = freeRectOf(id);
     const r = selectionRectOf(id);
-    const mismatch = contentRectOf(id);
-    const showFit = !!mismatch && contentMismatch(box, mismatch);
     const style: CSSProperties = { left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` };
     // a locked layer shows the frame (so you can see what is selected) but no
     // handles at all — there is nothing you could drag
@@ -456,13 +461,6 @@ function SlideBase({
     const ink = locked ? "#ffd633" : "#5ef2ff";
     return (
       <>
-      {showFit && (
-        <div
-          data-el-box-ghost={id}
-          aria-hidden="true"
-          style={{ position: "absolute", left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, border: "1px dashed rgba(255,196,87,.9)", boxSizing: "border-box", pointerEvents: "none", zIndex: BAND_UI + 14 }}
-        />
-      )}
       <div
         data-el-overlay={id}
         data-el-locked={locked ? "true" : undefined}
@@ -502,15 +500,6 @@ function SlideBase({
             />
             <div style={{ position: "absolute", left: "50%", top: -18, width: 2, height: 16, marginLeft: -1, background: "rgba(94,242,255,.8)" }} />
           </>
-        )}
-        {showFit && mismatch && !locked && (
-          <button
-            type="button"
-            data-fit-content={id}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); onLayoutChange?.(id, fitBoxPatch(mismatch)); onGestureEnd?.(); }}
-            style={{ position: "absolute", right: 0, top: -30, pointerEvents: "auto", whiteSpace: "nowrap", border: "1px solid #ffc457", borderRadius: 4, padding: "3px 7px", background: "#171717", color: "#ffd98a", font: "11px sans-serif", cursor: "pointer" }}
-          >Fit to content</button>
         )}
         <div
           style={{

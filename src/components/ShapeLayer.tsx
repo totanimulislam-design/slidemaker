@@ -4,7 +4,7 @@ import { withAlpha } from "../lib/color";
 import { cssBorder, dashArray, hasGradientFill, itemStyle, shapeFill, textInlineStyle, textStyle } from "../lib/shapeDesign";
 import { BAND_CONTENT, BAND_UI, safeZ } from "../lib/zorder";
 import { applyResize, frameResizeToBox } from "../lib/freeTransform";
-import { contentMismatch, fitBoxPatch, measureShapeContent } from "../lib/layoutMeasure";
+import { measureShapeContent } from "../lib/layoutMeasure";
 import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
 import {
   fillsBox,
@@ -16,6 +16,7 @@ import {
   selectionBounds,
   type MemberGeo,
 } from "../lib/groups";
+import { useContentBounds } from "../lib/useContentBounds";
 import MathText from "./MathText";
 import { textBgWrap } from "./TextBgShape";
 
@@ -56,7 +57,7 @@ type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 type Gesture =
   /** the press point and the object position are held by the pointer session */
   | { kind: "move"; id: string; others: ShapeItem[] }
-  | { kind: "resize"; id: string; handle: Handle; sx: number; sy: number; x0: number; y0: number; w0: number; h0: number; ratio: number; contentStart?: { x: number; y: number; w: number; h: number }; boxStart?: { x: number; y: number; w: number; h: number } }
+  | { kind: "resize"; id: string; handle: Handle; sx: number; sy: number; x0: number; y0: number; w0: number; h0: number; ratio: number; contentStart?: { x: number; y: number; w: number; h: number }; boxStart?: { x: number; y: number; w: number; h: number }; fontSizeStart?: number }
   | { kind: "rotate"; id: string; cx: number; cy: number; start: number; rot0: number }
   /** whole selection (multi / group) — every member gets patched by the same transform */
   | { kind: "set"; mode: "move"; ids: string[]; start: Record<string, MemberGeo> }
@@ -356,6 +357,7 @@ export default function ShapeLayer({
   /** valid (still-present) shapes of the current selection, any order kept */
   const selectedShapes = shapes.filter((s) => selectedIds.includes(s.id));
   const single = selectedShapes.length === 1 ? selectedShapes[0] : null;
+  const measuredContent = useContentBounds(editable && single?.kind === "text" && !single.rot ? `shape:${single.id}` : null, () => single ? measureShapeContent(single.id) : null);
 
   const emitUpdates = (updates: { id: string; patch: Partial<ShapeItem> }[]) => {
     if (!updates.length) return;
@@ -475,7 +477,7 @@ export default function ShapeLayer({
 
         // corner handles keep the aspect ratio: always for images (Shift frees
         // them), only with Shift for other shapes
-        const keepRatio = hnd.length === 2 && (me?.kind === "image" ? !e.shiftKey : e.shiftKey);
+        const keepRatio = hnd.length === 2 && (me?.kind === "text" || (me?.kind === "image" ? !e.shiftKey : e.shiftKey));
         if (keepRatio) {
           const byW = Math.abs(w - g.w0) >= Math.abs(h - g.h0) * g.ratio;
           if (byW) h = w / g.ratio;
@@ -499,6 +501,7 @@ export default function ShapeLayer({
           y: r1(((ncy - b.top) / b.height) * 100 - h / 2),
           w: r1(w),
           h: r1(h),
+          ...(g.fontSizeStart !== undefined && hnd.length === 2 ? { fontSize: Math.max(1, g.fontSizeStart * w / g.w0) } : {}),
         });
         return;
       }
@@ -518,7 +521,7 @@ export default function ShapeLayer({
 
       // corner handles keep the aspect ratio: always for images (Shift frees
       // them), only with Shift for other shapes
-      const keepRatio = hnd.length === 2 && (me?.kind === "image" ? !e.shiftKey : e.shiftKey);
+      const keepRatio = hnd.length === 2 && (me?.kind === "text" || (me?.kind === "image" ? !e.shiftKey : e.shiftKey));
       if (keepRatio) {
         const byW = Math.abs(w - g.w0) >= Math.abs(h - g.h0) * g.ratio;
         if (byW) h = w / g.ratio;
@@ -556,7 +559,7 @@ export default function ShapeLayer({
       const box = g.contentStart && g.boxStart
         ? frameResizeToBox(g.boxStart, g.contentStart, frame, { minW: 1, minH: 0.3 })
         : frame;
-      onChange?.(g.id, { x: box.x, y: box.y, w: box.w, h: box.h });
+      onChange?.(g.id, { x: box.x, y: box.y, w: box.w, h: box.h, ...(g.fontSizeStart !== undefined && hnd.length === 2 ? { fontSize: Math.max(1, g.fontSizeStart * frame.w / g.w0) } : {}) });
       return;
     }
 
@@ -653,7 +656,7 @@ export default function ShapeLayer({
     if (e.button !== 0) return;
     // Text gets a glyph-tight frame; rotated shapes keep their box frame so
     // resize continues in the established local-axis coordinate system.
-    const content = !s.rot && (s.kind === "text" || !!s.text) ? measureShapeContent(s.id) : null;
+    const content = !s.rot && s.kind === "text" ? measureShapeContent(s.id) : null;
     const start = content ?? { x: s.x, y: s.y, w: s.w, h: s.h };
     arm(
       {
@@ -667,6 +670,7 @@ export default function ShapeLayer({
         w0: start.w,
         h0: start.h,
         ratio: start.h > 0 ? start.w / start.h : 1,
+        ...(s.kind === "text" ? { fontSizeStart: s.fontSize } : {}),
         ...(content ? { contentStart: content, boxStart: { x: s.x, y: s.y, w: s.w, h: s.h } } : {}),
       },
       e,
@@ -870,24 +874,10 @@ export default function ShapeLayer({
               o.x < s.x + s.w && o.x + o.w > s.x && o.y < s.y + s.h && o.y + o.h > s.y &&
               (o.kind === "image" || (o.fill && o.fillOpacity > 0.6)),
           );
-          const content = !s.rot && (s.kind === "text" || !!s.text) ? measureShapeContent(s.id) : null;
+          const content = s.kind === "text" && !s.rot ? measuredContent : null;
           const frame = content ?? { x: s.x, y: s.y, w: s.w, h: s.h };
-          const mismatch = !!content && contentMismatch({ x: s.x, y: s.y, w: s.w, h: s.h }, content);
-          const fitText = () => {
-            const boardRect = board();
-            const px = (s.padding ?? 6) + 4;
-            const py = s.padding ?? 6;
-            const padX = boardRect ? (px * 2 / boardRect.width) * 100 : 0;
-            const padY = boardRect ? (py * 2 / boardRect.height) * 100 : 0;
-            const patch = fitBoxPatch(content!, { x: padX / 2, y: padY / 2 });
-            onChange?.(s.id, { x: patch.x, y: patch.y, w: patch.w, h: patch.h });
-            onGestureEnd?.();
-          };
           return (
             <>
-            {mismatch && (
-              <div data-shape-box-ghost={s.id} aria-hidden="true" style={{ position: "absolute", left: `${s.x}%`, top: `${s.y}%`, width: `${s.w}%`, height: `${s.h}%`, border: "1px dashed rgba(255,196,87,.9)", boxSizing: "border-box", pointerEvents: "none", zIndex: BAND_UI + 14 }} />
-            )}
             <div
               key={`sel-${s.id}`}
               data-sel={s.id}
@@ -944,9 +934,6 @@ export default function ShapeLayer({
               )}
               {!s.locked && (
                 <>
-                  {mismatch && content && (
-                    <button type="button" data-fit-content={s.id} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); fitText(); }} style={{ position: "absolute", right: 0, top: -30, pointerEvents: "auto", whiteSpace: "nowrap", border: "1px solid #ffc457", borderRadius: 4, padding: "3px 7px", background: "#171717", color: "#ffd98a", font: "11px sans-serif", cursor: "pointer" }}>Fit to content</button>
-                  )}
                   {(thinLine ? HANDLES.filter((h) => h.h === "e" || h.h === "w") : HANDLES).map(({ h, style, cursor }) => (
                     <div
                       key={h}
