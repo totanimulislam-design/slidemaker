@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { polygonPoints, type ShapeItem } from "../lib/shapes";
 import { withAlpha } from "../lib/color";
 import { cssBorder, dashArray, hasGradientFill, itemStyle, shapeFill, textInlineStyle, textStyle } from "../lib/shapeDesign";
@@ -17,6 +17,7 @@ import {
   type MemberGeo,
 } from "../lib/groups";
 import { useContentBounds } from "../lib/useContentBounds";
+import SelectionFrame from "./SelectionFrame";
 import MathText from "./MathText";
 import { textBgWrap } from "./TextBgShape";
 
@@ -66,17 +67,6 @@ type Gesture =
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const GUIDE_TOL = 0.8; // % of board
-
-const HANDLES: { h: Handle; style: CSSProperties; cursor: string }[] = [
-  { h: "nw", style: { left: -8, top: -8 }, cursor: "nwse-resize" },
-  { h: "n", style: { left: "50%", top: -8, marginLeft: -8 }, cursor: "ns-resize" },
-  { h: "ne", style: { right: -8, top: -8 }, cursor: "nesw-resize" },
-  { h: "e", style: { right: -8, top: "50%", marginTop: -8 }, cursor: "ew-resize" },
-  { h: "se", style: { right: -8, bottom: -8 }, cursor: "nwse-resize" },
-  { h: "s", style: { left: "50%", bottom: -8, marginLeft: -8 }, cursor: "ns-resize" },
-  { h: "sw", style: { left: -8, bottom: -8 }, cursor: "nesw-resize" },
-  { h: "w", style: { left: -8, top: "50%", marginTop: -8 }, cursor: "ew-resize" },
-];
 
 const MASKS: Record<string, string> = {
   circle: "ellipse(50% 50% at 50% 50%)",
@@ -727,19 +717,6 @@ export default function ShapeLayer({
     );
   };
 
-  const handleBase: CSSProperties = {
-    position: "absolute",
-    width: 16,
-    height: 16,
-    borderRadius: 3,
-    background: "#ffd633",
-    border: "2px solid #0a0a0c",
-    boxShadow: "0 1px 4px rgba(0,0,0,.6)",
-    zIndex: BAND_UI + 20,
-    touchAction: "none",
-    pointerEvents: "auto",
-  };
-
   const bounds = selectionBounds(selectedShapes);
 
   return (
@@ -876,215 +853,77 @@ export default function ShapeLayer({
           );
           const content = s.kind === "text" && !s.rot ? measuredContent : null;
           const frame = content ?? { x: s.x, y: s.y, w: s.w, h: s.h };
-          return (
-            <>
+          const notice = (top: number, bg: string, children: ReactNode) => (
             <div
-              key={`sel-${s.id}`}
-              data-sel={s.id}
               style={{
                 position: "absolute",
-                left: `${frame.x}%`,
-                top: `${frame.y}%`,
-                width: `${frame.w}%`,
-                height: `${frame.h}%`,
-                transform: s.rot ? `rotate(${s.rot}deg)` : undefined,
-                transformOrigin: "center center",
-                zIndex: BAND_UI + 15,
+                left: 0,
+                top,
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: bg,
+                color: "#0a0a0c",
+                fontSize: 11,
+                fontWeight: 700,
+                whiteSpace: "nowrap",
                 pointerEvents: "none",
-                outline: `1.5px ${covered ? "dashed" : "solid"} rgba(255,214,51,.95)`,
-                outlineOffset: thinLine ? 10 : 2,
-                boxSizing: "border-box",
               }}
             >
-              {s.groupId && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: -30,
-                    padding: "2px 6px",
-                    borderRadius: 4,
-                    background: "rgba(94,242,255,.9)",
-                    color: "#0a0a0c",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  ⧉ grouped — double-click edits this item alone
-                </div>
-              )}
-              {covered && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: s.groupId ? -52 : -30,
-                    padding: "2px 6px",
-                    borderRadius: 4,
-                    background: "rgba(255,214,51,.95)",
-                    color: "#0a0a0c",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  behind another item — Alt+click cycles the layers below
-                </div>
-              )}
-              {!s.locked && (
-                <>
-                  {(thinLine ? HANDLES.filter((h) => h.h === "e" || h.h === "w") : HANDLES).map(({ h, style, cursor }) => (
-                    <div
-                      key={h}
-                      data-handle={h}
-                      title="Drag to resize · Shift keeps ratio · Alt disables snapping"
-                      onPointerDown={resizeDown(s, h)}
-                      onPointerUp={end}
-                      onPointerCancel={end}
-                      style={{
-                        ...handleBase,
-                        ...style,
-                        ...(thinLine ? { top: "50%", marginTop: -8 } : {}),
-                        cursor,
-                        borderRadius: h.length === 1 ? 8 : 3,
-                      }}
-                    />
-                  ))}
-                  <div
-                    data-rotate=""
-                    title="Rotate · Shift snaps to 15°"
-                    onPointerDown={rotateDown(s)}
-                    onPointerUp={end}
-                    onPointerCancel={end}
-                    style={{
-                      ...handleBase,
-                      left: "50%",
-                      top: thinLine ? -44 : -34,
-                      marginLeft: -8,
-                      borderRadius: "50%",
-                      background: "#5ef2ff",
-                      cursor: "grab",
-                    }}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: "50%",
-                      top: thinLine ? -28 : -18,
-                      width: 2,
-                      height: 16,
-                      marginLeft: -1,
-                      background: "rgba(94,242,255,.8)",
-                    }}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      bottom: -30,
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                      background: "rgba(0,0,0,.75)",
-                      color: "#ffd633",
-                      fontFamily: "monospace",
-                      fontSize: 11,
-                      whiteSpace: "nowrap",
-                      transform: s.rot ? `rotate(${-s.rot}deg)` : undefined,
-                      transformOrigin: "left top",
-                    }}
-                  >
-                    {r1(s.x)}, {r1(s.y)} · {r1(s.w)}×{r1(s.h)}{s.rot ? ` · ${s.rot}°` : ""}
-                  </div>
-                </>
-              )}
+              {children}
             </div>
-            </>
+          );
+          return (
+            <SelectionFrame
+              key={`sel-${s.id}`}
+              rect={frame}
+              rot={s.rot}
+              accent="#ffd633"
+              dashed={covered}
+              outlineOffset={thinLine ? 10 : 2}
+              handles={thinLine ? ["e", "w"] : undefined}
+              locked={s.locked}
+              rotateTop={thinLine ? -44 : -34}
+              dataAttrs={{ "data-sel": s.id }}
+              onResizeDown={(h) => resizeDown(s, h)}
+              onRotateDown={rotateDown(s)}
+              onPointerUp={end}
+              onPointerCancel={end}
+              badge={
+                s.locked ? undefined : (
+                  <>
+                    {r1(s.x)}, {r1(s.y)} · {r1(s.w)}×{r1(s.h)}{s.rot ? ` · ${s.rot}°` : ""}
+                  </>
+                )
+              }
+              topLabels={
+                <>
+                  {s.groupId && notice(-30, "rgba(94,242,255,.9)", "⧉ grouped — double-click edits this item alone")}
+                  {covered && notice(s.groupId ? -52 : -30, "rgba(255,214,51,.95)", "behind another item — Alt+click cycles the layers below")}
+                </>
+              }
+            />
           );
         })()}
 
       {/* ---- group / multi-selection frame: bounds + handles move the set ---- */}
       {editable && selectedShapes.length > 1 && (
-        <div
-          data-set-frame=""
-          style={{
-            position: "absolute",
-            left: `${bounds.x}%`,
-            top: `${bounds.y}%`,
-            width: `${bounds.w}%`,
-            height: `${bounds.h}%`,
-            zIndex: BAND_UI + 15,
-            pointerEvents: "none",
-            outline: "1.5px solid rgba(255,214,51,.95)",
-            outlineOffset: 3,
-            boxSizing: "border-box",
-          }}
-        >
-          {selectedShapes.some((x) => !x.locked) && (
+        <SelectionFrame
+          rect={bounds}
+          accent="#ffd633"
+          outlineOffset={3}
+          locked={!selectedShapes.some((x) => !x.locked)}
+          dataAttrs={{ "data-set-frame": "" }}
+          onResizeDown={setResizeDown}
+          onRotateDown={setRotateDown}
+          onPointerUp={end}
+          onPointerCancel={end}
+          badge={
             <>
-              {HANDLES.map(({ h, style, cursor }) => (
-                <div
-                  key={h}
-                  data-handle={h}
-                  title="Drag to resize the whole selection"
-                  onPointerDown={setResizeDown(h)}
-                  onPointerUp={end}
-                  onPointerCancel={end}
-                  style={{
-                    ...handleBase,
-                    ...style,
-                    cursor,
-                    borderRadius: h.length === 1 ? 8 : 3,
-                  }}
-                />
-              ))}
-              <div
-                data-rotate=""
-                title="Rotate the whole selection · Shift snaps to 15°"
-                onPointerDown={setRotateDown}
-                onPointerUp={end}
-                onPointerCancel={end}
-                style={{
-                  ...handleBase,
-                  left: "50%",
-                  top: -34,
-                  marginLeft: -8,
-                  borderRadius: "50%",
-                  background: "#5ef2ff",
-                  cursor: "grab",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  left: "50%",
-                  top: -18,
-                  width: 2,
-                  height: 16,
-                  marginLeft: -1,
-                  background: "rgba(94,242,255,.8)",
-                }}
-              />
+              {selectedShapes.length} items{isWholeGroup(shapes, selectedIds) ? " · grouped" : " · selected"} · drag to
+              move all
             </>
-          )}
-          <div
-            style={{
-              position: "absolute",
-              left: 0,
-              bottom: -30,
-              padding: "2px 6px",
-              borderRadius: 4,
-              background: "rgba(0,0,0,.75)",
-              color: "#ffd633",
-              fontFamily: "monospace",
-              fontSize: 11,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {selectedShapes.length} items{isWholeGroup(shapes, selectedIds) ? " · grouped" : " · selected"} · drag to
-            move all
-          </div>
-        </div>
+          }
+        />
       )}
     </>
   );

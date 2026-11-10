@@ -113,7 +113,7 @@ export default function LayoutPanel({ theme, setTheme, patchLayout, transformLay
           {free ? (
             <>
               <b className="text-slate-200">Free:</b> X / Y are the element's own left & top edge. Drag it anywhere —
-              even past the edges (−50 … 150 %) — resize with the yellow corner grip, rotate and layer.
+              even past the edges (−50 … 150 %) — resize with the edge & corner handles, rotate and layer.
             </>
           ) : (
             <>

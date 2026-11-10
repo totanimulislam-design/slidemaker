@@ -190,7 +190,7 @@ function Harness() {
   return createElement(Slide, {
     slide: { ...SLIDE, shapes: [] },
     header: { ...DEFAULT_HEADER, showLogo: false, logo: null },
-    theme: THEME,
+    theme: { ...THEME, layout },
     onField: (f: SlideField | null) => setField(f),
     activeField: field,
     onLayoutChange,
@@ -482,6 +482,180 @@ test("resize handle: a real drag still resizes", () => {
     "size changed by +10% / +10%",
     shapeWrites() >= 2 && Math.abs(after.w - (before.w + 10)) < 0.2 && Math.abs(after.h - (before.h + 10)) < 0.2,
     `${before.w}×${before.h} → ${after.w}×${after.h}`,
+  );
+});
+
+/* ============ 3b. Canva-style edge handles: one axis at a time ============ */
+
+test("handles advertise their resize axis and cursor", () => {
+  selectShape(SHAPE.id);
+  const e = shapeHandle("e");
+  const w = shapeHandle("w");
+  const n = shapeHandle("n");
+  const s = shapeHandle("s");
+  const se = shapeHandle("se");
+  if (!e || !w || !n || !s || !se) {
+    record("selected shape exposes all eight handles", false, `e=${!!e} w=${!!w} n=${!!n} s=${!!s} se=${!!se}`);
+    return;
+  }
+  record(
+    "east/west handles are horizontal (ew cursor, width only)",
+    e.dataset.axis === "h" && w.dataset.axis === "h" && e.style.cursor === "ew-resize" && w.style.cursor === "ew-resize",
+    `e axis=${e.dataset.axis} cursor=${e.style.cursor}`,
+  );
+  record(
+    "north/south handles are vertical (ns cursor, height only)",
+    n.dataset.axis === "v" && s.dataset.axis === "v" && n.style.cursor === "ns-resize" && s.style.cursor === "ns-resize",
+    `s axis=${s.dataset.axis} cursor=${s.style.cursor}`,
+  );
+  record(
+    "corner handles resize both axes",
+    se.dataset.axis === "both" && se.style.cursor === "nwse-resize",
+    `se axis=${se.dataset.axis} cursor=${se.style.cursor}`,
+  );
+});
+
+test("east handle resizes horizontally only (width, not height)", () => {
+  selectShape(SHAPE.id);
+  const h = shapeHandle("e");
+  if (!h) {
+    record("selected shape exposes the e handle", false, "no e handle");
+    return;
+  }
+  const before = { ...at(SHAPE.id) };
+  const hc = centre(h);
+  down(h, hc);
+  held(asWin, { x: hc.x + 64, y: hc.y });
+  held(asWin, { x: hc.x + 128, y: hc.y }); // +10% of board width
+  up(asWin, { x: hc.x + 128, y: hc.y });
+  const after = at(SHAPE.id);
+  record(
+    "width grew by +10%, height and position untouched",
+    shapeWrites() >= 2 &&
+      Math.abs(after.w - (before.w + 10)) < 0.2 &&
+      after.h === before.h &&
+      after.x === before.x &&
+      after.y === before.y,
+    `${before.x},${before.y} ${before.w}×${before.h} → ${after.x},${after.y} ${after.w}×${after.h}`,
+  );
+});
+
+test("west handle moves the left edge (width shrinks, height kept)", () => {
+  selectShape(SHAPE.id);
+  const h = shapeHandle("w");
+  if (!h) {
+    record("selected shape exposes the w handle", false, "no w handle");
+    return;
+  }
+  const before = { ...at(SHAPE.id) };
+  const hc = centre(h);
+  down(h, hc);
+  held(asWin, { x: hc.x + 32, y: hc.y });
+  held(asWin, { x: hc.x + 64, y: hc.y }); // +5% of board width
+  up(asWin, { x: hc.x + 64, y: hc.y });
+  const after = at(SHAPE.id);
+  record(
+    "left edge moved +5%, width shrank by 5%, height kept",
+    shapeWrites() >= 2 &&
+      Math.abs(after.x - (before.x + 5)) < 0.2 &&
+      Math.abs(after.w - (before.w - 5)) < 0.2 &&
+      after.h === before.h &&
+      after.y === before.y,
+    `${before.x},${before.y} ${before.w}×${before.h} → ${after.x},${after.y} ${after.w}×${after.h}`,
+  );
+});
+
+test("south handle resizes vertically only (height, not width)", () => {
+  selectShape(SHAPE.id);
+  const h = shapeHandle("s");
+  if (!h) {
+    record("selected shape exposes the s handle", false, "no s handle");
+    return;
+  }
+  const before = { ...at(SHAPE.id) };
+  const hc = centre(h);
+  down(h, hc);
+  held(asWin, { x: hc.x, y: hc.y + 36 });
+  held(asWin, { x: hc.x, y: hc.y + 72 }); // +10% of board height
+  up(asWin, { x: hc.x, y: hc.y + 72 });
+  const after = at(SHAPE.id);
+  record(
+    "height grew by +10%, width and position untouched",
+    shapeWrites() >= 2 &&
+      Math.abs(after.h - (before.h + 10)) < 0.2 &&
+      after.w === before.w &&
+      after.x === before.x &&
+      after.y === before.y,
+    `${before.x},${before.y} ${before.w}×${before.h} → ${after.x},${after.y} ${after.w}×${after.h}`,
+  );
+});
+
+test("north handle moves the top edge (height shrinks, width kept)", () => {
+  selectShape(SHAPE.id);
+  const h = shapeHandle("n");
+  if (!h) {
+    record("selected shape exposes the n handle", false, "no n handle");
+    return;
+  }
+  const before = { ...at(SHAPE.id) };
+  const hc = centre(h);
+  down(h, hc);
+  held(asWin, { x: hc.x, y: hc.y + 18 });
+  held(asWin, { x: hc.x, y: hc.y + 36 }); // +5% of board height
+  up(asWin, { x: hc.x, y: hc.y + 36 });
+  const after = at(SHAPE.id);
+  record(
+    "top edge moved +5%, height shrank by 5%, width kept",
+    shapeWrites() >= 2 &&
+      Math.abs(after.y - (before.y + 5)) < 0.2 &&
+      Math.abs(after.h - (before.h - 5)) < 0.2 &&
+      after.w === before.w &&
+      after.x === before.x,
+    `${before.x},${before.y} ${before.w}×${before.h} → ${after.x},${after.y} ${after.w}×${after.h}`,
+  );
+});
+
+test("deck element: edge handles resize one axis at a time", () => {
+  const el = elementEl("question");
+  const c = centre(el);
+  down(el, c);
+  up(el, c);
+  clearWrites();
+  const before = { ...api!.layout.question };
+  const e = doc.querySelector('[data-el-overlay] [data-handle="e"]') as HTMLElement | null;
+  if (!e) {
+    record("element overlay exposes the e handle", false, "no e handle");
+    return;
+  }
+  const ec = centre(e);
+  down(e, ec);
+  held(asWin, { x: ec.x + 64, y: ec.y });
+  held(asWin, { x: ec.x + 128, y: ec.y }); // +10% of board width
+  up(asWin, { x: ec.x + 128, y: ec.y });
+  const afterE = { ...api!.layout.question };
+  record(
+    "element width grew by +10%",
+    layoutWrites() >= 2 && Math.abs(afterE.w - (before.w + 10)) < 0.6,
+    `w ${before.w} → ${afterE.w}`,
+  );
+  clearWrites();
+  const s = doc.querySelector('[data-el-overlay] [data-handle="s"]') as HTMLElement | null;
+  if (!s) {
+    record("element overlay exposes the s handle", false, "no s handle");
+    return;
+  }
+  const sc = centre(s);
+  down(s, sc);
+  held(asWin, { x: sc.x, y: sc.y + 36 });
+  held(asWin, { x: sc.x, y: sc.y + 72 }); // +10% of board height
+  up(asWin, { x: sc.x, y: sc.y + 72 });
+  const afterS = { ...api!.layout.question };
+  record(
+    "element height grew by +10%, width kept",
+    layoutWrites() >= 2 &&
+      Math.abs((afterS.h ?? 0) - ((afterE.h ?? 0) + 10)) < 0.6 &&
+      Math.abs(afterS.w - afterE.w) < 0.2,
+    `h ${afterE.h} → ${afterS.h}, w ${afterE.w} → ${afterS.w}`,
   );
 });
 
