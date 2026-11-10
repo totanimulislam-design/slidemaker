@@ -192,18 +192,33 @@ export async function runBannerTests(): Promise<CaseResult[]> {
   /* ------------------------------ presets ---------------------------------- */
   openCard("Design presets");
   const presetTiles = () => Array.from(pop()?.querySelectorAll<HTMLElement>('button[aria-label^="Banner preset: "]') ?? []);
+  const PRESET_GROUPS = [
+    "ACS Live & Cycles",
+    "Udvash & Admission",
+    "Redwan & Science Pro",
+    "Fahad & Shikho Studio",
+    "10MS & Bondi Classroom",
+    "Smartboard & Chalk",
+    "Layered & Cut Badges",
+    "Minimal & Glow",
+  ];
   out.push({
-    name: "Design presets opens a card of whole looks, each painted as the plate it brings",
+    name: "Design presets opens a card of whole Bangladeshi academy looks, each painted as the plate it brings",
     pass:
       pop()?.getAttribute("data-pop-panel") === "Design presets" &&
-      presetTiles().length >= 6 &&
+      presetTiles().length === 36 &&
+      PRESET_GROUPS.every((g) => !!pop()?.querySelector(`[data-banner-preset-group="${g}"]`)) &&
+      PRESET_GROUPS.every((g) => (pop()?.querySelectorAll(`[data-banner-preset-group="${g}"] button[aria-label^="Banner preset: "]`)?.length ?? 0) >= 4) &&
       presetTiles().every((t) => !!t.querySelector("span span")),
-    detail: `${presetTiles().length} presets · ${presetTiles().map((t) => t.getAttribute("aria-label")?.replace("Banner preset: ", "")).slice(0, 3).join(" / ")}`,
+    detail: `${presetTiles().length} presets · ${pop()?.querySelectorAll("[data-banner-preset-group]").length ?? 0} groups`,
   });
-  click(popButton("Banner preset: Royal blue pill"));
+  click(popButton("Banner preset: Shikho Magenta Pill"));
   out.push({
-    name: "one click paints that look: a gradient pill, rounded to a full capsule",
-    pass: styleOf(plate()).includes("linear-gradient") && plate()?.style.borderRadius === "999px",
+    name: "one click paints that look: a gradient pill, rounded to a full capsule and marked active",
+    pass:
+      styleOf(plate()).includes("linear-gradient") &&
+      plate()?.style.borderRadius === "999px" &&
+      popButton("Banner preset: Shikho Magenta Pill")?.getAttribute("aria-pressed") === "true",
     detail: `${styleOf(plate()).slice(0, 46)} · radius ${plate()?.style.borderRadius}`,
   });
   out.push({
@@ -211,41 +226,69 @@ export async function runBannerTests(): Promise<CaseResult[]> {
     pass: plate()?.style.width === "630px" && box(plate()?.style.left ?? "", "calc(50% + 0px - 315px)", "calc(50% - 315px)"),
     detail: `w ${plate()?.style.width ?? ""} · left ${plate()?.style.left ?? ""}`,
   });
-  /* ---- the shape styles: three groups of their own at the end of the card --- */
-  const SHAPE_STYLE_GROUPS = ["Stylish shapes", "Multilayer shapes", "Multilayer gradient"];
+  click(popButton("Banner preset: Merit Double Frame"));
   out.push({
-    name: "the gallery is filed in groups, the last three being the shape styles — Stylish shapes · Multilayer shapes · Multilayer gradient",
-    pass:
-      SHAPE_STYLE_GROUPS.every((g) => !!pop()?.querySelector(`[data-banner-preset-group="${g}"]`)) &&
-      SHAPE_STYLE_GROUPS.every((g) => (pop()?.querySelectorAll(`[data-banner-preset-group="${g}"] button[aria-label^="Banner preset: "]`)?.length ?? 0) >= 5) &&
-      presetTiles().length >= 45,
-    detail: `${presetTiles().length} presets · ${pop()?.querySelectorAll("[data-banner-preset-group]").length ?? 0} groups · ${SHAPE_STYLE_GROUPS.map((g) => `${g.split(" ")[0]} ${pop()?.querySelectorAll(`[data-banner-preset-group="${g}"] button`)?.length ?? 0}`).join(" / ")}`,
-  });
-  click(popButton("Banner preset: Gold double frame"));
-  out.push({
-    name: "a multilayer preset reaches the slide as layers of its own behind the plate — and still dresses the 630px chip",
+    name: "a multilayer frame preset reaches the slide with its own inner layer — and still dresses the 630px chip",
     pass:
       plateLayers().length === 1 &&
       styleOf(plateLayers()[0] ?? null).includes("scale(") &&
       plate()?.style.width === "630px" &&
-      (plate()?.style.boxShadow ?? "").includes("inset"),
+      (plate()?.style.boxShadow ?? "").includes("inset") &&
+      popButton("Banner preset: Merit Double Frame")?.getAttribute("aria-pressed") === "true",
     detail: `${plateLayers().length} layer · ${plateLayers()[0]?.style.transform ?? ""} · inset ${!!(plate()?.style.boxShadow ?? "").includes("inset")}`,
   });
-  click(popButton("Banner preset: Sheen royal"));
+  click(popButton("Banner preset: ACS Dark Gold Glass"));
+  const glassTile = popButton("Banner preset: ACS Dark Gold Glass");
   out.push({
-    name: "a multilayer gradient preset stacks two paints on the one body — a sheen over the look's own gradient",
-    pass: paints(plate()?.style.background ?? "") === 2 && (plate()?.style.background ?? "").includes("115deg"),
-    detail: (plate()?.style.background ?? "").slice(0, 58),
+    name: "a glass preset preserves fillMode: 'glass' on both the slide and its thumbnail, and marks itself active",
+    pass:
+      paints(plate()?.style.background ?? "") === 3 &&
+      !!plateLine() &&
+      glassTile?.getAttribute("aria-pressed") === "true" &&
+      Array.from(glassTile?.querySelectorAll<HTMLElement>("span span") ?? []).some((el) => paints(el.style.background ?? "") === 3),
+    detail: `slide paints ${paints(plate()?.style.background ?? "")} · active ${glassTile?.getAttribute("aria-pressed")}`,
   });
-  // back to the pill the rest of the suite dresses — and the outline back off,
-  // since the multilayer look above brought one with it and the Border card's
-  // own test below switches the line on from off
-  click(popButton("Banner preset: Royal blue pill"));
-  closePop();
-  openCard("Banner border");
-  click(
-    Array.from(pop()?.querySelectorAll<HTMLElement>("button") ?? []).find((b) => (b.textContent ?? "").includes("Outline the plate")),
-  );
+  click(popButton("Banner preset: RMH Cobalt Frost"));
+  const plateOverlays = () => Array.from(titleBox()?.querySelectorAll<HTMLElement>("[data-banner-overlay]") ?? []);
+  out.push({
+    name: "a frosted-glow preset paints its acrylic overlay and glowing border filter — and shows overlays in its tile",
+    pass:
+      plateOverlays().length >= 1 &&
+      (plateLine()?.style.filter ?? "").includes("drop-shadow") &&
+      (popButton("Banner preset: RMH Cobalt Frost")?.querySelectorAll("[data-banner-overlay]").length ?? 0) >= 1 &&
+      popButton("Banner preset: RMH Cobalt Frost")?.getAttribute("aria-pressed") === "true",
+    detail: `overlays ${plateOverlays().length} · filter ${plateLine()?.style.filter ?? ""}`,
+  });
+  click(popButton("Banner preset: Udvash Concept Leaf"));
+  out.push({
+    name: "a preset with independent corners paints all four corners cleanly",
+    pass:
+      plate()?.style.borderRadius === "26px 6px 26px 6px" &&
+      popButton("Banner preset: Udvash Concept Leaf")?.getAttribute("aria-pressed") === "true",
+    detail: plate()?.style.borderRadius ?? "",
+  });
+  click(popButton("Banner preset: Metallic Chrome Plate"));
+  out.push({
+    name: "a metallic preset paints brushed chrome bands on a cut-corner silhouette and stays active",
+    pass:
+      (plate()?.style.clipPath ?? "").startsWith("polygon(") &&
+      (plate()?.style.background ?? "").includes("linear-gradient(") &&
+      popButton("Banner preset: Metallic Chrome Plate")?.getAttribute("aria-pressed") === "true",
+    detail: `${(plate()?.style.clipPath ?? "").slice(0, 28)} · active ${popButton("Banner preset: Metallic Chrome Plate")?.getAttribute("aria-pressed")}`,
+  });
+  // back to the borderless pill the rest of the suite dresses — switching back
+  // must cleanly reset fillMode, cornersIndependent, border and overlays
+  click(popButton("Banner preset: Shikho Magenta Pill"));
+  out.push({
+    name: "switching back to a clean preset resets border, glass/metallic fillMode, independent corners and overlays",
+    pass:
+      plate()?.style.borderRadius === "999px" &&
+      !plateLine() &&
+      plateOverlays().length === 0 &&
+      plateLayers().length === 0 &&
+      popButton("Banner preset: Shikho Magenta Pill")?.getAttribute("aria-pressed") === "true",
+    detail: `radius ${plate()?.style.borderRadius} · border ${!!plateLine()} · overlays ${plateOverlays().length}`,
+  });
   closePop();
 
   /* ------------------------------- shape ----------------------------------- */

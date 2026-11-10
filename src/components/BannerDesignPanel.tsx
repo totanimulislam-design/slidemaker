@@ -89,10 +89,9 @@ const gradOff = (g?: Gradient): Gradient | undefined => (g ? { ...g, enabled: fa
  * The title background plate's own controls — one card per channel, so the
  * toolbar's buttons each open exactly what they name.
  *
- *   Design presets    fifty-one complete looks, filed in ten   BANNER_PRESETS
- *                     groups — the last three are the shape
- *                     styles: Stylish shapes · Multilayer
- *                     shapes · Multilayer gradient
+ *   Design presets    thirty-six complete looks, filed in eight BANNER_PRESETS
+ *                     groups tailored to Bangladeshi classroom,
+ *                     smartboard and online-academy title plates
  *   Shape             the silhouettes in thirteen groups      BANNER_SHAPE_GROUPS
  *                     — the shape library (Basic & Clean ·
  *                     Banner Style · Cut & Corner · Modern ·
@@ -504,14 +503,20 @@ export function PositionIcon({ size = 18 }: { size?: number }) {
 
 /** one preset drawn as the plate it paints, at thumbnail scale */
 export function BannerPresetTile({ preset, theme, active, onClick }: { preset: BannerPreset; theme: ThemeSettings; active?: boolean; onClick: () => void }) {
-  const merged: BannerSettings = { ...DEFAULT_BANNER, ...bannerOf(theme), ...preset.banner, color: preset.banner.color ?? bannerOf(theme).color };
-  // a preset paints the whole plate: the tile shows its own colour / gradient,
-  // never a special fill (glass · metallic · pattern) the plate happens to wear
-  const css = bannerCss({ ...merged, fillMode: undefined, size: undefined, pos: undefined, halo: 0 }, theme.titleColor);
+  const merged: BannerSettings = {
+    ...DEFAULT_BANNER,
+    ...bannerPresetPatch(DEFAULT_BANNER, preset),
+    size: undefined,
+    pos: undefined,
+    halo: 0,
+  };
+  const css = bannerCss(merged, theme.titleColor);
   // the thumbnail lays the plate out itself, so the stage's own box is replaced
-  // here — the layers wear the very same replacement, which is why their offsets
-  // are percentages of the plate rather than px of the board
-  const thumb: CSSProperties = { left: "8%", top: "22%", width: "84%", height: "56%" };
+  // here — layers and overlays wear the very same replacement
+  const thumb: CSSProperties =
+    merged.shape === "underline"
+      ? { left: "8%", bottom: "22%", width: "84%" }
+      : { left: "8%", top: "22%", width: "84%", height: "56%" };
   return (
     <button
       type="button"
@@ -531,48 +536,107 @@ export function BannerPresetTile({ preset, theme, active, onClick }: { preset: B
         ))}
         <span className="absolute block" style={{ ...css.box, ...thumb }} />
         {css.border ? <span className="absolute block" style={{ ...css.border, ...thumb }} /> : null}
+        {css.overlays.map((l, i) => (
+          <span key={i} className="absolute block" data-banner-overlay={i} style={{ ...l, ...thumb }} />
+        ))}
       </span>
       <span className="truncate">{preset.name}</span>
     </button>
   );
 }
 
+function sameGrad(a: Gradient | undefined, b: Gradient | undefined): boolean {
+  const ae = !!a?.enabled;
+  const be = !!b?.enabled;
+  if (ae !== be) return false;
+  if (!ae) return true;
+  if (a!.type !== b!.type || a!.angle !== b!.angle || a!.stops.length !== b!.stops.length) return false;
+  return a!.stops.every((s, i) => s.color === b!.stops[i]?.color && s.at === b!.stops[i]?.at);
+}
+
+function sameData(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => sameData(v, b[i]));
+  }
+  const ao = a as Record<string, unknown>;
+  const bo = b as Record<string, unknown>;
+  const keys = new Set([...Object.keys(ao), ...Object.keys(bo)]);
+  for (const k of keys) {
+    if (ao[k] === undefined && bo[k] === undefined) continue;
+    if (!sameData(ao[k], bo[k])) return false;
+  }
+  return true;
+}
+
 /**
- * Is the plate wearing exactly this look right now? The silhouette has to match,
- * and then the paint — the preset's gradient, stop for stop, or its solid colour
- * when it brings no gradient.
+ * Is the plate wearing this preset right now? Compares silhouette, fill mode
+ * and paint (solid · gradient · glass · metallic · pattern), outline, corners,
+ * effects and heading accent cleanly.
  */
 export function presetActive(banner: BannerSettings, p: BannerPreset): boolean {
-  // a special paint (glass · metallic · pattern) hides every preset's paint
+  const target = { ...DEFAULT_BANNER, ...bannerPresetPatch(DEFAULT_BANNER, p) } as BannerSettings;
+  if (banner.shape !== target.shape) return false;
+
   const mode = bannerFillMode(banner);
-  if (mode === "glass" || mode === "metallic" || mode === "pattern") return false;
-  if (banner.shape !== (p.banner.shape ?? banner.shape)) return false;
-  const want = p.banner.gradient;
-  if (want?.enabled) {
-    const now = banner.gradient;
-    return (
-      now.enabled &&
-      now.type === want.type &&
-      now.angle === want.angle &&
-      now.stops.length === want.stops.length &&
-      now.stops.every((s, i) => s.color === want.stops[i]?.color && s.at === want.stops[i]?.at)
-    );
+  if (mode !== bannerFillMode(target)) return false;
+  if (mode === "gradient") {
+    if (!sameGrad(banner.gradient, target.gradient)) return false;
+  } else if (mode === "glass") {
+    if (!sameData({ ...DEFAULT_BANNER_GLASS, ...banner.glass }, { ...DEFAULT_BANNER_GLASS, ...target.glass })) return false;
+  } else if (mode === "metallic") {
+    if (!sameData({ ...DEFAULT_BANNER_METALLIC, ...banner.metallic }, { ...DEFAULT_BANNER_METALLIC, ...target.metallic })) return false;
+  } else if (mode === "pattern") {
+    if (!sameData({ ...DEFAULT_BANNER_PATTERN, ...banner.pattern }, { ...DEFAULT_BANNER_PATTERN, ...target.pattern })) return false;
+  } else if (banner.shape !== "none") {
+    if (banner.color !== target.color) return false;
   }
-  return !!p.banner.color && p.banner.color === banner.color;
+
+  const ab = banner.border;
+  const tb = target.border;
+  if (!!ab.enabled !== !!tb.enabled) return false;
+  if (ab.enabled) {
+    if (
+      ab.color !== tb.color ||
+      ab.width !== tb.width ||
+      bannerBorderStyle(banner) !== bannerBorderStyle(target) ||
+      (ab.opacity ?? 1) !== (tb.opacity ?? 1) ||
+      !sameData(ab.glow?.enabled ? ab.glow : null, tb.glow?.enabled ? tb.glow : null) ||
+      !sameGrad(ab.gradient, tb.gradient)
+    ) {
+      return false;
+    }
+  }
+
+  if (!!banner.cornersIndependent !== !!target.cornersIndependent) return false;
+  if (banner.cornersIndependent) {
+    if (!sameData(bannerCorners(banner), bannerCorners(target))) return false;
+  } else if (banner.shape !== "none" && banner.radius !== target.radius) {
+    return false;
+  }
+
+  if ((banner.opacity ?? 1) !== (target.opacity ?? 1)) return false;
+  if ((banner.halo ?? 0) !== (target.halo ?? 0)) return false;
+  if (banner.shape === "glow" && banner.glow !== target.glow) return false;
+  if (!sameGrad(banner.textGradient, target.textGradient)) return false;
+  if ((banner.textGlow ?? 0) !== (target.textGlow ?? 0)) return false;
+  if (!!banner.textShadow !== !!target.textShadow) return false;
+  if (!sameData(bannerEffectsOf(banner), bannerEffectsOf(target))) return false;
+
+  return true;
 }
 
 /** what each group heading says next to its own name */
 const PRESET_GROUP_HINT: Record<BannerPresetGroup, string> = {
-  Classic: "the factory looks",
-  Broadcast: "dark stages, gilded type",
-  "Chalk & parchment": "board and paper",
-  "Teal current": "navy on teal",
-  "Campus blue": "lecture header bars",
-  "Merit & highlighter": "admission circuit",
-  "Seminar shelf": "seminar classics",
-  "Stylish shapes": "cut silhouettes",
-  "Multilayer shapes": "plate + layers",
-  "Multilayer gradient": "stacked paints",
+  "ACS Live & Cycles": "electric cycles & glass",
+  "Udvash & Admission": "pioneer & concept bars",
+  "Redwan & Science Pro": "dotted frost & slants",
+  "Fahad & Shikho Studio": "dashed tags & bright pills",
+  "10MS & Bondi Classroom": "crimson & cream cards",
+  "Smartboard & Chalk": "grids, highlighters & notes",
+  "Layered & Cut Badges": "frames, 3D & metallic",
+  "Minimal & Glow": "halos, rules & clean type",
 };
 
 export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
@@ -598,9 +662,7 @@ export function BannerPresetPanel({ theme, banner, setBanner }: BannerProps) {
         );
       })}
       <p className="text-[10px] leading-relaxed text-slate-500">
-        A preset repaints the plate and hands its size and place back to auto — the heading itself is never touched. The last
-        three groups are the <b>shape styles</b>: cut silhouettes, plates with layers of their own, and plates painted from
-        several stacked gradients.
+        A preset repaints the plate, effects, outline and heading accent cleanly while keeping your plate width and heading text.
       </p>
     </div>
   );

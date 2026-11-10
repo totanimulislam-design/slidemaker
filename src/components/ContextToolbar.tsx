@@ -1305,10 +1305,9 @@ export default function ContextToolbar(p: Props) {
    * The title background line — one button per channel, in the order a plate is
    * dressed:
    *
-   *   Design presets   fifty-one complete looks in ten groups, painted as
-   *                    they will be — the last three groups are the shape
-   *                    styles: Stylish shapes · Multilayer shapes ·
-   *                    Multilayer gradient
+   *   Design presets   thirty-six looks in eight Bangladeshi EdTech &
+   *                    classroom groups (ACS, Udvash, Redwan, Fahad/Shikho,
+   *                    10MS/Bondi, Smartboard & Chalk, Badges, Minimal)
    *   Shape            the silhouettes in thirteen groups — the shape
    *                    library (Basic & Clean · Banner Style · Cut & Corner ·
    *                    Modern · Curved & Wave · Organic / Decorative ·
