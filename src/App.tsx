@@ -2044,7 +2044,7 @@ function AppContent() {
                       <Btn
                         size="sm"
                         variant={allFree ? "primary" : "ghost"}
-                        title={`Free align ${allFree ? "on" : "off"}: drag anything anywhere, resize with the corner grip, rotate`}
+                        title={`Free align ${allFree ? "on" : "off"}: drag anything anywhere, resize with the edge & corner handles, rotate`}
                         className="h-8 w-8 shrink-0 p-0"
                         onClick={() => {
                           const mode = allFree ? "align" : "free";
@@ -2092,7 +2092,7 @@ function AppContent() {
                     <span className="sr-only">Delete slide</span>
                   </Btn>
                   <span className="ml-2 hidden min-w-0 truncate whitespace-nowrap text-[11px] text-slate-500 2xl:block">
-                    Drag to move · corner grip to resize · Shift+arrows to nudge · ← → change slides
+                    Drag to move · edge & corner handles to resize · Shift+arrows to nudge · ← → change slides
                   </span>
                 </div>
               </>

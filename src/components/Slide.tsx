@@ -26,7 +26,8 @@ import { BANNER_AUTO_FRAME_HEIGHT, DEFAULT_BADGE_PLATE, DEFAULT_BANNER, DEFAULT_
 import { computeFrameCss } from "../lib/frameDesigns";
 import { resolveFrameImageSrc } from "../lib/frameImages";
 import { boxesOverlap } from "../lib/groups";
-import { HANDLES, applyMove, applyResize, applyRotate, frameResizeToBox, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
+import { applyMove, applyResize, applyRotate, frameResizeToBox, type Gesture as FreeGesture, type Handle } from "../lib/freeTransform";
+import SelectionFrame from "./SelectionFrame";
 import { DRAG_THRESHOLD_PX, usePointerDrag, type DragState } from "../lib/dragSession";
 import { measureContent, measureElement } from "../lib/layoutMeasure";
 import { useContentBounds } from "../lib/useContentBounds";
@@ -435,93 +436,36 @@ function SlideBase({
   const hit = (_field: SlideField): CSSProperties => ({});
   void hit;
 
-  const handleBase: CSSProperties = {
-    position: "absolute",
-    width: 16,
-    height: 16,
-    borderRadius: 3,
-    background: "#ffd633",
-    border: "2px solid #0a0a0c",
-    boxShadow: "0 1px 4px rgba(0,0,0,.6)",
-    zIndex: BAND_UI + 20,
-    touchAction: "none",
-    pointerEvents: "auto",
-  };
-
   /** selection frame + 8 handles + rotate for the selected built-in element */
   const ElementOverlay = ({ id }: { id: ElementId }) => {
     if (!movable || selected !== id || !elementShown(id)) return null;
     const b = L[id];
     const free = isFree(id);
     const r = selectionRectOf(id);
-    const style: CSSProperties = { left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` };
     // a locked layer shows the frame (so you can see what is selected) but no
     // handles at all — there is nothing you could drag
     const locked = layerLocked(id);
     const ink = locked ? "#ffd633" : "#5ef2ff";
     return (
-      <>
-      <div
-        data-el-overlay={id}
-        data-el-locked={locked ? "true" : undefined}
-        style={{
-          position: "absolute",
-          ...style,
-          transform: b.rot ? `rotate(${b.rot}deg)` : undefined,
-          transformOrigin: "center center",
-          zIndex: BAND_UI + 15,
-          pointerEvents: "none",
-          outline: locked ? `1.5px dashed ${ink}` : "1.5px solid rgba(94,242,255,.95)",
-          outlineOffset: 3,
-          boxSizing: "border-box",
-        }}
-      >
-        {!locked &&
-          HANDLES.map(({ h, cursor, style: hs }) => (
-            <div
-              key={h}
-              data-handle={h}
-              title="Drag to resize · Shift keeps ratio · Alt disables snapping"
-              onPointerDown={startResize(id, h)}
-              onPointerUp={end}
-              onPointerCancel={end}
-              style={{ ...handleBase, ...hs, cursor, background: "#5ef2ff", borderRadius: h.length === 1 ? 8 : 3 }}
-            />
-          ))}
-        {!locked && (
+      <SelectionFrame
+        rect={r}
+        rot={b.rot ?? 0}
+        accent={ink}
+        dashed={locked}
+        outlineOffset={3}
+        locked={locked}
+        dataAttrs={{ "data-el-overlay": id, "data-el-locked": locked ? "true" : undefined }}
+        onResizeDown={(h) => startResize(id, h)}
+        onRotateDown={startRotate(id)}
+        onPointerUp={end}
+        onPointerCancel={end}
+        badge={
           <>
-            <div
-              data-rotate=""
-              title="Rotate · Shift snaps to 15°"
-              onPointerDown={startRotate(id)}
-              onPointerUp={end}
-              onPointerCancel={end}
-              style={{ ...handleBase, left: "50%", top: -34, marginLeft: -8, borderRadius: "50%", background: "#5ef2ff", cursor: "grab" }}
-            />
-            <div style={{ position: "absolute", left: "50%", top: -18, width: 2, height: 16, marginLeft: -1, background: "rgba(94,242,255,.8)" }} />
+            {locked ? "🔒 " : ""}
+            {ELEMENT_LABEL[id]} · {r1(r.x)}, {r1(r.y)} · {r1(r.w)}×{r1(r.h)}{b.rot ? ` · ${b.rot}°` : ""}{free ? "" : " · aligned"}
           </>
-        )}
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            bottom: -30,
-            padding: "2px 6px",
-            borderRadius: 4,
-            background: "rgba(0,0,0,.75)",
-            color: ink,
-            fontFamily: "monospace",
-            fontSize: 11,
-            whiteSpace: "nowrap",
-            transform: b.rot ? `rotate(${-b.rot}deg)` : undefined,
-            transformOrigin: "left top",
-          }}
-        >
-          {locked ? "🔒 " : ""}
-          {ELEMENT_LABEL[id]} · {r1(r.x)}, {r1(r.y)} · {r1(r.w)}×{r1(r.h)}{b.rot ? ` · ${b.rot}°` : ""}{free ? "" : " · aligned"}
-        </div>
-      </div>
-      </>
+        }
+      />
     );
   };
 

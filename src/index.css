@@ -65,6 +65,31 @@ input[type="text"] {
   background-color: rgba(255, 255, 255, 0.04);
 }
 
+/* Canva-style selection grips (SelectionFrame): the white grip grows and
+   fills with the frame's accent colour on hover / while dragging, so the
+   grabbable edge reads at a glance. The accent rides in --sel-accent. */
+.sel-handle-visual,
+.sel-rotate-visual {
+  transition: transform 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.sel-handle:hover .sel-handle-visual,
+.sel-handle:active .sel-handle-visual {
+  transform: scale(1.25);
+  background: var(--sel-accent, #ffd633);
+}
+.sel-rotate:hover .sel-rotate-visual,
+.sel-rotate:active .sel-rotate-visual {
+  transform: scale(1.2);
+  background: var(--sel-accent, #ffd633);
+  color: #0a0a0c;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sel-handle-visual,
+  .sel-rotate-visual {
+    transition: none;
+  }
+}
+
 .print-root {
   display: none;
 }
