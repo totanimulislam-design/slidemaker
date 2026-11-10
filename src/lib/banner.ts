@@ -7,6 +7,7 @@ import {
   DEFAULT_BANNER_GLASS,
   DEFAULT_BANNER_METALLIC,
   DEFAULT_BANNER_PATTERN,
+  cloneBanner,
   type Banner3DFx,
   type Banner3DKind,
   type BannerBevelFx,
@@ -3118,919 +3119,831 @@ export interface BannerPreset {
 }
 
 /**
- * The Design presets gallery's headings, in the order the card reads them. The
- * last three are the shape styles: **stylish** silhouettes, **multilayer**
- * plates and **multilayer gradient** plates.
+ * The Design presets gallery's headings — authentic Bangladeshi classroom,
+ * smartboard and online-academy title plate styles.
  */
 export type BannerPresetGroup =
-  | "Classic"
-  | "Broadcast"
-  | "Chalk & parchment"
-  | "Teal current"
-  | "Campus blue"
-  | "Merit & highlighter"
-  | "Seminar shelf"
-  | "Stylish shapes"
-  | "Multilayer shapes"
-  | "Multilayer gradient";
+  | "ACS Live & Cycles"
+  | "Udvash & Admission"
+  | "Redwan & Science Pro"
+  | "Fahad & Shikho Studio"
+  | "10MS & Bondi Classroom"
+  | "Smartboard & Chalk"
+  | "Layered & Cut Badges"
+  | "Minimal & Glow";
 
 export const BANNER_PRESET_GROUPS: BannerPresetGroup[] = [
-  "Classic",
-  "Broadcast",
-  "Chalk & parchment",
-  "Teal current",
-  "Campus blue",
-  "Merit & highlighter",
-  "Seminar shelf",
-  "Stylish shapes",
-  "Multilayer shapes",
-  "Multilayer gradient",
+  "ACS Live & Cycles",
+  "Udvash & Admission",
+  "Redwan & Science Pro",
+  "Fahad & Shikho Studio",
+  "10MS & Bondi Classroom",
+  "Smartboard & Chalk",
+  "Layered & Cut Badges",
+  "Minimal & Glow",
 ];
 
 export const BANNER_PRESETS: BannerPreset[] = [
+  /* -------------------------------------------------------------- */
+  /* ACS Live & Cycles — electric slants, glossy sky capsules,      */
+  /* dark gold-trimmed glass and FRB crimson revision bars.         */
+  /* -------------------------------------------------------------- */
   {
-    name: "Classic glow",
-    group: "Classic",
-    swatch: "radial-gradient(circle, #1f5fd0, transparent 70%)",
-    banner: { shape: "glow", color: "#1f5fd0", glow: 65, halo: 0, gradient: { ...DEFAULT_GRADIENT(), enabled: false } },
+    name: "ACS Violet Slant",
+    group: "ACS Live & Cycles",
+    swatch: "linear-gradient(90deg,#9333ea,#c026d3)",
+    banner: {
+      shape: "slant",
+      gradient: lin(90, ["#9333ea", 0], ["#c026d3", 100]),
+      opacity: 1,
+      padX: 6,
+      padY: 12,
+      halo: 20,
+      border: { enabled: true, color: "#f5d0fe", width: 1.5, style: "solid", opacity: 0.75 },
+      effects: fx({
+        highlight: { kind: "highlight", intensity: 65, blur: 6, angle: 180, color: "#ffffff" },
+        threeD: { kind: "extrusion", intensity: 35, blur: 0, angle: 135, color: "#4c1d95" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#fae8ff", 100]),
+      textGlow: 10,
+      textShadow: true,
+    },
   },
   {
-    name: "Royal blue pill",
-    group: "Classic",
-    swatch: "linear-gradient(90deg,#0f3fb8,#3b7bff)",
+    name: "ACS Cyan Gloss Pill",
+    group: "ACS Live & Cycles",
+    swatch: "linear-gradient(90deg,#0284c7,#0ea5e9,#2563eb)",
     banner: {
       shape: "pill",
-      gradient: { enabled: true, type: "linear", angle: 90, stops: [{ color: "#0f3fb8", at: 0 }, { color: "#3b7bff", at: 100 }] },
-      opacity: 1, padX: 4, padY: 11, halo: 20,
+      gradient: lin(90, ["#0284c7", 0], ["#0ea5e9", 55], ["#2563eb", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 12,
+      halo: 20,
+      border: { enabled: true, color: "#e0f2fe", width: 1.5, style: "solid", opacity: 0.85 },
+      effects: fx({
+        highlight: { kind: "gloss", intensity: 55, blur: 6, angle: 180, color: "#ffffff" },
+        glow: { kind: "outer", intensity: 45, blur: 10, color: "#38bdf8" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#e0f2fe", 100]),
+      textGlow: 10,
+      textShadow: true,
     },
   },
   {
-    name: "Gold ribbon",
-    group: "Classic",
-    swatch: "linear-gradient(180deg,#ffd35a,#b8860b)",
+    name: "ACS Sky Dashed Pill",
+    group: "ACS Live & Cycles",
+    swatch: "linear-gradient(90deg,#0ea5e9,#1d4ed8)",
     banner: {
-      shape: "ribbon",
-      gradient: { enabled: true, type: "linear", angle: 180, stops: [{ color: "#ffd35a", at: 0 }, { color: "#e0a800", at: 55 }, { color: "#b8860b", at: 100 }] },
-      opacity: 1, padX: 4, padY: 12, halo: 15,
-      border: { enabled: false, color: "#fff", width: 1 },
+      shape: "pill",
+      gradient: lin(90, ["#0ea5e9", 0], ["#1d4ed8", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 12,
+      halo: 15,
+      border: { enabled: true, color: "#e0f2fe", width: 2, style: "dashed", opacity: 0.9 },
+      effects: fx({
+        shadow: { kind: "soft", x: 0, y: 10, blur: 24, spread: 0, opacity: 40, color: "#0369a1" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#f0f9ff", 100]),
+      textGlow: 0,
+      textShadow: true,
     },
   },
   {
-    name: "Neon",
-    group: "Classic",
-    swatch: "linear-gradient(90deg,#7c3aed,#06b6d4)",
+    name: "ACS Dark Gold Glass",
+    group: "ACS Live & Cycles",
+    swatch: "linear-gradient(180deg,#1e293b,#0b1026)",
     banner: {
       shape: "rounded",
       radius: 14,
-      gradient: { enabled: true, type: "linear", angle: 90, stops: [{ color: "#7c3aed", at: 0 }, { color: "#06b6d4", at: 100 }] },
-      opacity: 0.95, padX: 3, padY: 12, halo: 45,
-      border: { enabled: true, color: "#e9d5ff", width: 1.5 },
-      textGlow: 60,
-    },
-  },
-  {
-    name: "Emerald",
-    group: "Classic",
-    swatch: "linear-gradient(135deg,#065f46,#10b981)",
-    banner: {
-      shape: "glow",
-      glow: 80,
-      gradient: { enabled: true, type: "linear", angle: 135, stops: [{ color: "#065f46", at: 0 }, { color: "#10b981", at: 100 }] },
-      halo: 25,
-    },
-  },
-  {
-    name: "Sunset",
-    group: "Classic",
-    swatch: "linear-gradient(90deg,#f97316,#ec4899)",
-    banner: {
-      shape: "pill",
-      gradient: { enabled: true, type: "linear", angle: 90, stops: [{ color: "#f97316", at: 0 }, { color: "#ec4899", at: 100 }] },
-      padX: 4, padY: 11, halo: 30,
-    },
-  },
-  {
-    name: "Underline",
-    group: "Classic",
-    swatch: "linear-gradient(90deg,transparent 0 40%,#ffd633 40% 60%,transparent 60%)",
-    banner: { shape: "underline", color: "#ffd633", radius: 14, padX: 1, padY: 11, halo: 0, gradient: { ...DEFAULT_GRADIENT(), enabled: false } },
-  },
-  {
-    name: "Minimal (none)",
-    group: "Classic",
-    swatch: "transparent",
-    banner: { shape: "none", halo: 0 },
-  },
-
-  /* -------------------------------------------------------------- */
-  /* Broadcast looks — dark space stages with gilded lettering,      */
-  /* dashed-outline tags and white pill captions, as seen on the     */
-  /* big online academic channels' class slides.                     */
-  /* -------------------------------------------------------------- */
-  {
-    name: "Orbit gold",
-    group: "Broadcast",
-    swatch: "radial-gradient(circle, #312e81, transparent 70%)",
-    banner: {
-      shape: "glow",
-      color: "#312e81",
-      glow: 75,
-      halo: 35,
+      fillMode: "glass",
+      glass: { color: "#0b1026", opacity: 72, frost: 60 },
       gradient: noGrad(),
-      padX: 4,
-      padY: 13,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#fff2a8", 0], ["#ffb800", 100]),
-      textGlow: 25,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Violet nebula tag",
-    group: "Broadcast",
-    swatch: "linear-gradient(90deg,#4c1d95,#6d28d9)",
-    banner: {
-      shape: "pill",
-      gradient: lin(90, ["#4c1d95", 0], ["#6d28d9", 100]),
       opacity: 1,
       padX: 4,
-      padY: 12,
-      halo: 30,
-      border: { enabled: true, color: "#ffffff", width: 2, style: "dashed", opacity: 0.85 },
-      textGradient: lin(180, ["#ffffff", 0], ["#e9d5ff", 100]),
+      padY: 13,
+      halo: 10,
+      border: { enabled: true, color: "#eab308", width: 1.5, style: "solid", opacity: 0.95 },
+      effects: fx({
+        shadow: { kind: "floating", x: 0, y: 14, blur: 26, spread: 6, opacity: 45, color: "#000000" },
+      }),
+      textGradient: lin(180, ["#fef08a", 0], ["#f59e0b", 100]),
       textGlow: 15,
       textShadow: true,
     },
   },
   {
-    name: "Deep space plate",
-    group: "Broadcast",
-    swatch: "linear-gradient(180deg,#0b1026,#1e1b4b)",
+    name: "FRB Crimson Batch",
+    group: "ACS Live & Cycles",
+    swatch: "linear-gradient(180deg,#991b1b,#7f1d1d)",
     banner: {
       shape: "rounded",
       radius: 12,
-      gradient: lin(180, ["#0b1026", 0], ["#1e1b4b", 100]),
+      gradient: lin(180, ["#991b1b", 0], ["#7f1d1d", 100]),
       opacity: 1,
       padX: 4,
       padY: 13,
-      halo: 20,
-      border: { enabled: true, color: "#ffd633", width: 2, style: "solid", opacity: 0.9 },
-      textGradient: lin(180, ["#fff2a8", 0], ["#fbbf24", 100]),
-      textGlow: 20,
+      halo: 15,
+      border: { enabled: true, color: "#fca5a5", width: 1.5, style: "solid", opacity: 0.55 },
+      effects: fx({
+        bevel: { kind: "bevel", intensity: 45, blur: 3, angle: 0, color: "#f87171" },
+        shadow: { kind: "drop", x: 0, y: 10, blur: 24, spread: 0, opacity: 50, color: "#450a0a" },
+      }),
+      textGradient: lin(180, ["#fef08a", 0], ["#facc15", 100]),
+      textGlow: 15,
       textShadow: true,
     },
   },
 
   /* -------------------------------------------------------------- */
-  /* Chalk & parchment — blackboard tops, cream paper and burnt      */
-  /* orange chapter pills, the printed-lecture look.                 */
+  /* Udvash & Admission — Pioneer deep marine bars, Trial amber,    */
+  /* steel lecture headers, Unmesh maroon & Concept Book leaves.    */
   /* -------------------------------------------------------------- */
   {
-    name: "Chalkboard glow",
-    group: "Chalk & parchment",
-    swatch: "radial-gradient(circle, #123524, transparent 70%)",
+    name: "Udvash Pioneer Navy",
+    group: "Udvash & Admission",
+    swatch: "linear-gradient(180deg,#0a2856,#103f7a,#081e42)",
     banner: {
-      shape: "glow",
-      color: "#123524",
-      glow: 70,
-      halo: 20,
-      gradient: noGrad(),
+      shape: "rounded",
+      radius: 16,
+      gradient: lin(180, ["#0a2856", 0], ["#103f7a", 55], ["#081e42", 100]),
+      opacity: 1,
       padX: 4,
       padY: 13,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#ffffff", 0], ["#cbd5e1", 100]),
-      textGlow: 25,
+      halo: 20,
+      border: { enabled: true, color: "#60a5fa", width: 1.5, style: "solid", opacity: 0.5 },
+      effects: fx({
+        highlight: { kind: "highlight", intensity: 70, blur: 8, angle: 180, color: "#ffffff" },
+        shadow: { kind: "floating", x: 0, y: 14, blur: 28, spread: 6, opacity: 50, color: "#020617" },
+      }),
+      textGradient: lin(180, ["#fef08a", 0], ["#facc15", 100]),
+      textGlow: 10,
       textShadow: true,
     },
   },
   {
-    name: "Burnt orange card",
-    group: "Chalk & parchment",
-    swatch: "linear-gradient(180deg,#c2711d,#a05a15)",
+    name: "Udvash Trial Gold",
+    group: "Udvash & Admission",
+    swatch: "linear-gradient(180deg,#fde047,#f59e0b)",
     banner: {
       shape: "rounded",
-      radius: 10,
-      gradient: lin(180, ["#c2711d", 0], ["#a05a15", 100]),
+      radius: 12,
+      gradient: lin(180, ["#fde047", 0], ["#f59e0b", 100]),
       opacity: 1,
       padX: 4,
-      padY: 14,
+      padY: 13,
+      halo: 10,
+      border: { enabled: true, color: "#fef9c3", width: 1.5, style: "solid", opacity: 0.8 },
+      effects: fx({
+        bevel: { kind: "bevel", intensity: 55, blur: 2, angle: 0, color: "#ffffff" },
+        shadow: { kind: "drop", x: 0, y: 10, blur: 20, spread: 0, opacity: 45, color: "#000000" },
+      }),
+      textGradient: lin(180, ["#09090b", 0], ["#1e293b", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Udvash Steel Lecture",
+    group: "Udvash & Admission",
+    swatch: "linear-gradient(180deg,#27496d,#3a6186)",
+    banner: {
+      shape: "classicBanner",
+      gradient: lin(180, ["#27496d", 0], ["#3a6186", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
       halo: 0,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#fff7ed", 0], ["#ffedd5", 100]),
+      border: { enabled: true, color: "#f8fafc", width: 2, style: "solid", opacity: 0.9 },
+      effects: fx({
+        shadow: { kind: "drop", x: 0, y: 6, blur: 16, spread: 0, opacity: 40, color: "#0f172a" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#e2e8f0", 100]),
       textGlow: 0,
       textShadow: true,
     },
   },
   {
-    name: "Parchment ink",
-    group: "Chalk & parchment",
-    swatch: "linear-gradient(180deg,#faf3e3,#efe4cb)",
+    name: "Unmesh Medical Maroon",
+    group: "Udvash & Admission",
+    swatch: "linear-gradient(90deg,#89253e,#be123c,#881337)",
+    banner: {
+      shape: "ribbon",
+      gradient: lin(90, ["#89253e", 0], ["#be123c", 50], ["#881337", 100]),
+      opacity: 1,
+      padX: 5,
+      padY: 12,
+      halo: 15,
+      border: { enabled: true, color: "#fde68a", width: 1.5, style: "solid", opacity: 0.75 },
+      effects: fx({
+        highlight: { kind: "highlight", intensity: 40, blur: 6, angle: 180, color: "#ffffff" },
+        threeD: { kind: "extrusion", intensity: 30, blur: 0, angle: 135, color: "#4c0519" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#fef3c7", 100]),
+      textGlow: 0,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Udvash Concept Leaf",
+    group: "Udvash & Admission",
+    swatch: "linear-gradient(180deg,#ffffff,#e2e8f0)",
     banner: {
       shape: "rounded",
-      radius: 12,
-      gradient: lin(180, ["#faf3e3", 0], ["#efe4cb", 100]),
+      cornersIndependent: true,
+      corners: { tl: 26, tr: 6, br: 26, bl: 6 },
+      gradient: lin(180, ["#ffffff", 0], ["#f1f5f9", 100]),
       opacity: 1,
       padX: 4,
       padY: 13,
       halo: 0,
-      border: { enabled: true, color: "#b3611f", width: 2, style: "solid", opacity: 0.9 },
-      textGradient: lin(180, ["#9a3412", 0], ["#7c2d12", 100]),
+      border: { enabled: true, color: "#2563eb", width: 2, style: "solid", opacity: 0.85 },
+      effects: fx({
+        shadow: { kind: "offset", x: 7, y: 7, blur: 0, spread: 0, opacity: 85, color: "#1d4ed8" },
+      }),
+      textGradient: lin(180, ["#dc2626", 0], ["#991b1b", 100]),
       textGlow: 0,
       textShadow: false,
     },
   },
 
   /* -------------------------------------------------------------- */
-  /* Teal current — navy plates with ice lettering on teal stages,   */
-  /* silver bars with teal blocks.                                   */
+  /* Redwan & Science Pro — dotted teal glass, cobalt neon frost,   */
+  /* slanted indigo bars and midnight dashed science pills.         */
   /* -------------------------------------------------------------- */
   {
-    name: "Navy frost",
-    group: "Teal current",
-    swatch: "linear-gradient(180deg,#0a1f44,#123a6b)",
-    banner: {
-      shape: "rounded",
-      radius: 18,
-      gradient: lin(180, ["#0a1f44", 0], ["#123a6b", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 14,
-      halo: 30,
-      border: { enabled: true, color: "#38bdf8", width: 1.5, style: "solid", opacity: 0.7 },
-      textGradient: lin(180, ["#e0f2fe", 0], ["#7dd3fc", 100]),
-      textGlow: 20,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Glacier pill",
-    group: "Teal current",
-    swatch: "linear-gradient(90deg,#082032,#0e3a53)",
+    name: "RMH Teal Dotted",
+    group: "Redwan & Science Pro",
+    swatch: "linear-gradient(180deg,#0f766e,#0d3b3e)",
     banner: {
       shape: "pill",
-      gradient: lin(90, ["#082032", 0], ["#0e3a53", 100]),
+      fillMode: "glass",
+      glass: { color: "#0d3b3e", opacity: 64, frost: 45 },
+      gradient: noGrad(),
       opacity: 1,
       padX: 4,
       padY: 12,
-      halo: 25,
-      border: { enabled: true, color: "#7dd3fc", width: 2, style: "dashed", opacity: 0.8 },
-      textGradient: lin(180, ["#f0f9ff", 0], ["#bae6fd", 100]),
-      textGlow: 15,
+      halo: 15,
+      border: { enabled: true, color: "#99f6e4", width: 2, style: "dotted", opacity: 0.9 },
+      effects: fx({
+        shadow: { kind: "soft", x: 0, y: 8, blur: 20, spread: 0, opacity: 40, color: "#042f2e" },
+      }),
+      textGradient: lin(180, ["#f0fdfa", 0], ["#67e8f9", 100]),
+      textGlow: 10,
       textShadow: true,
     },
   },
   {
-    name: "Silver mint bar",
-    group: "Teal current",
-    swatch: "linear-gradient(180deg,#f8fafc,#cbd5e1)",
+    name: "RMH Cobalt Frost",
+    group: "Redwan & Science Pro",
+    swatch: "linear-gradient(90deg,#1d4ed8,#0284c7,#1e40af)",
     banner: {
-      shape: "rect",
-      radius: 6,
-      gradient: lin(180, ["#f8fafc", 0], ["#cbd5e1", 100]),
-      opacity: 1,
-      padX: 3,
-      padY: 12,
-      halo: 0,
-      border: { enabled: true, color: "#0f766e", width: 2, style: "solid", opacity: 0.9 },
-      textGradient: lin(90, ["#0f766e", 0], ["#0d9488", 100]),
-      textGlow: 0,
-      textShadow: false,
-    },
-  },
-
-  /* -------------------------------------------------------------- */
-  /* Campus blue & tangerine — deep blue header bars with orange     */
-  /* rules, the classic coaching-institute lecture look.             */
-  /* -------------------------------------------------------------- */
-  {
-    name: "Lecture header",
-    group: "Campus blue",
-    swatch: "linear-gradient(90deg,#00357e,#0057b8)",
-    banner: {
-      shape: "rect",
-      radius: 4,
-      gradient: lin(90, ["#00357e", 0], ["#0057b8", 100]),
+      shape: "rounded",
+      radius: 16,
+      gradient: lin(90, ["#1d4ed8", 0], ["#0284c7", 50], ["#1e40af", 100]),
       opacity: 1,
       padX: 4,
       padY: 13,
-      halo: 0,
-      border: { enabled: true, color: "#f7941d", width: 3, style: "solid", opacity: 1 },
+      halo: 20,
+      border: {
+        enabled: true,
+        color: "#93c5fd",
+        width: 1.5,
+        style: "solid",
+        opacity: 0.85,
+        glow: { enabled: true, size: 12, intensity: 65, color: "#38bdf8" },
+      },
+      effects: fx({
+        glass: { kind: "acrylic", intensity: 40, blur: 8, color: "#38bdf8" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#bfdbfe", 100]),
+      textGlow: 10,
+      textShadow: true,
+    },
+  },
+  {
+    name: "RMH Indigo Slant",
+    group: "Redwan & Science Pro",
+    swatch: "linear-gradient(90deg,#3730a3,#4f46e5)",
+    banner: {
+      shape: "slant",
+      gradient: lin(90, ["#3730a3", 0], ["#4f46e5", 100]),
+      opacity: 1,
+      padX: 6,
+      padY: 12,
+      halo: 15,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        threeD: { kind: "extrusion", intensity: 45, blur: 0, angle: 135, color: "#1e1b4b" },
+      }),
       textGradient: lin(180, ["#ffffff", 0], ["#e0e7ff", 100]),
       textGlow: 0,
       textShadow: true,
     },
   },
   {
-    name: "Tangerine double",
-    group: "Campus blue",
-    swatch: "linear-gradient(90deg,#00418f,#005bbf)",
+    name: "RMH Midnight Dashed",
+    group: "Redwan & Science Pro",
+    swatch: "linear-gradient(180deg,#0f172a,#1e1b4b)",
     banner: {
       shape: "pill",
-      gradient: lin(90, ["#00418f", 0], ["#005bbf", 100]),
+      gradient: lin(180, ["#0f172a", 0], ["#1e1b4b", 100]),
       opacity: 1,
       padX: 4,
       padY: 12,
-      halo: 15,
-      border: { enabled: true, color: "#f7941d", width: 4, style: "double", opacity: 1 },
-      textGradient: lin(180, ["#ffffff", 0], ["#fff7ed", 100]),
-      textGlow: 0,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Sky bar",
-    group: "Campus blue",
-    swatch: "linear-gradient(90deg,#38bdf8,#0284c7)",
-    banner: {
-      shape: "pill",
-      gradient: lin(90, ["#38bdf8", 0], ["#0284c7", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 12,
-      halo: 25,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#ffffff", 0], ["#f0f9ff", 100]),
-      textGlow: 0,
+      halo: 20,
+      border: { enabled: true, color: "#ffffff", width: 2, style: "dashed", opacity: 0.85 },
+      effects: fx({
+        shadow: { kind: "surround", x: 0, y: 0, blur: 18, spread: 4, opacity: 35, color: "#6366f1" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#e2e8f0", 100]),
+      textGlow: 10,
       textShadow: true,
     },
   },
 
   /* -------------------------------------------------------------- */
-  /* Merit & highlighter — yellow highlighter plates with navy ink,  */
-  /* crimson ribbons and merit bars, the admission-circuit look.     */
+  /* Fahad & Shikho Studio — dashed royal pills, slanted instructor */
+  /* lower-thirds, maroon tags and Shikho magenta-indigo plates.    */
   /* -------------------------------------------------------------- */
   {
-    name: "Highlighter",
-    group: "Merit & highlighter",
-    swatch: "linear-gradient(90deg,#fde047,#facc15)",
-    banner: {
-      shape: "rect",
-      radius: 4,
-      gradient: lin(90, ["#fde047", 0], ["#facc15", 100]),
-      opacity: 1,
-      padX: 2,
-      padY: 10,
-      halo: 0,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#1e3a8a", 0], ["#172554", 100]),
-      textGlow: 0,
-      textShadow: false,
-    },
-  },
-  {
-    name: "Crimson ribbon",
-    group: "Merit & highlighter",
-    swatch: "linear-gradient(90deg,#be123c,#9f1239)",
-    banner: {
-      shape: "ribbon",
-      gradient: lin(90, ["#be123c", 0], ["#9f1239", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 12,
-      halo: 15,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#fff1f2", 0], ["#ffe4e6", 100]),
-      textGlow: 0,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Merit red card",
-    group: "Merit & highlighter",
-    swatch: "linear-gradient(180deg,#dc2626,#b91c1c)",
-    banner: {
-      shape: "rounded",
-      radius: 8,
-      gradient: lin(180, ["#dc2626", 0], ["#b91c1c", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
-      halo: 10,
-      border: { enabled: true, color: "#ffffff", width: 2, style: "solid", opacity: 0.85 },
-      textGradient: lin(180, ["#ffffff", 0], ["#fef2f2", 100]),
-      textGlow: 0,
-      textShadow: true,
-    },
-  },
-
-  /* -------------------------------------------------------------- */
-  /* Seminar shelf — chalk pills, maroon & gold, midnight doubles,   */
-  /* circuit outlines and print-lecture paper.                       */
-  /* -------------------------------------------------------------- */
-  {
-    name: "Emerald chalk pill",
-    group: "Seminar shelf",
-    swatch: "linear-gradient(90deg,#064e3b,#047857)",
+    name: "FT Indigo Dashed",
+    group: "Fahad & Shikho Studio",
+    swatch: "linear-gradient(90deg,#2200cc,#4338ca)",
     banner: {
       shape: "pill",
-      gradient: lin(90, ["#064e3b", 0], ["#047857", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 12,
-      halo: 15,
-      border: { enabled: true, color: "#a7f3d0", width: 2, style: "dashed", opacity: 0.8 },
-      textGradient: lin(180, ["#ecfdf5", 0], ["#a7f3d0", 100]),
-      textGlow: 10,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Maroon & gold",
-    group: "Seminar shelf",
-    swatch: "linear-gradient(90deg,#7f1d1d,#991b1b)",
-    banner: {
-      shape: "pill",
-      gradient: lin(90, ["#7f1d1d", 0], ["#991b1b", 100]),
+      gradient: lin(90, ["#2200cc", 0], ["#4338ca", 100]),
       opacity: 1,
       padX: 4,
       padY: 12,
       halo: 20,
-      border: { enabled: true, color: "#ffd633", width: 2, style: "solid", opacity: 0.95 },
-      textGradient: lin(180, ["#fff2a8", 0], ["#fbbf24", 100]),
-      textGlow: 15,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Midnight double",
-    group: "Seminar shelf",
-    swatch: "linear-gradient(180deg,#0b0b0f,#15151c)",
-    banner: {
-      shape: "rect",
-      radius: 10,
-      gradient: lin(180, ["#0b0b0f", 0], ["#15151c", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
-      halo: 10,
-      border: { enabled: true, color: "#ffd633", width: 4, style: "double", opacity: 1 },
-      textGradient: lin(180, ["#fde68a", 0], ["#f59e0b", 100]),
-      textGlow: 25,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Mint glow",
-    group: "Seminar shelf",
-    swatch: "radial-gradient(circle, #0d9488, transparent 70%)",
-    banner: {
-      shape: "glow",
-      color: "#0d9488",
-      glow: 80,
-      halo: 20,
-      gradient: noGrad(),
-      padX: 4,
-      padY: 13,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#ffffff", 0], ["#ccfbf1", 100]),
-      textGlow: 20,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Sunrise underline",
-    group: "Seminar shelf",
-    swatch: "linear-gradient(90deg,#f59e0b,#ef4444)",
-    banner: {
-      shape: "underline",
-      color: "#f59e0b",
-      gradient: lin(90, ["#f59e0b", 0], ["#ef4444", 100]),
-      radius: 14,
-      padX: 2,
-      padY: 11,
-      halo: 15,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#fff7ed", 0], ["#fdba74", 100]),
-      textGlow: 10,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Cyan circuit",
-    group: "Seminar shelf",
-    swatch: "linear-gradient(90deg,#164e63,#0e7490)",
-    banner: {
-      shape: "rounded",
-      radius: 14,
-      gradient: lin(90, ["#164e63", 0], ["#0e7490", 100]),
-      opacity: 0.35,
-      padX: 4,
-      padY: 13,
-      halo: 0,
-      border: { enabled: true, color: "#22d3ee", width: 2, style: "solid", opacity: 0.95 },
-      textGradient: lin(90, ["#a5f3fc", 0], ["#22d3ee", 100]),
-      textGlow: 55,
-      textShadow: false,
-    },
-  },
-  {
-    name: "Royal violet",
-    group: "Seminar shelf",
-    swatch: "linear-gradient(90deg,#581c87,#7e22ce)",
-    banner: {
-      shape: "pill",
-      gradient: lin(90, ["#581c87", 0], ["#7e22ce", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 12,
-      halo: 40,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#f5f3ff", 0], ["#ddd6fe", 100]),
-      textGlow: 20,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Coral sunrise",
-    group: "Seminar shelf",
-    swatch: "linear-gradient(90deg,#fb923c,#e11d48)",
-    banner: {
-      shape: "pill",
-      gradient: lin(90, ["#fb923c", 0], ["#e11d48", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 12,
-      halo: 20,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#fff7ed", 0], ["#ffe4e6", 100]),
+      border: { enabled: true, color: "#e0e7ff", width: 2, style: "dashed", opacity: 0.9 },
+      effects: fx({
+        glow: { kind: "outer", intensity: 40, blur: 10, color: "#4f46e5" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#f8fafc", 100]),
       textGlow: 0,
       textShadow: true,
     },
   },
   {
-    name: "Slate print",
-    group: "Seminar shelf",
-    swatch: "linear-gradient(180deg,#e2e8f0,#cbd5e1)",
+    name: "FT Instructor Cut",
+    group: "Fahad & Shikho Studio",
+    swatch: "linear-gradient(90deg,#1d4ed8,#0ea5e9)",
     banner: {
-      shape: "rounded",
-      radius: 8,
-      gradient: lin(180, ["#e2e8f0", 0], ["#cbd5e1", 100]),
-      opacity: 1,
-      padX: 3,
-      padY: 12,
-      halo: 0,
-      border: { enabled: true, color: "#64748b", width: 1.5, style: "solid", opacity: 0.9 },
-      textGradient: lin(180, ["#0f172a", 0], ["#334155", 100]),
-      textGlow: 0,
-      textShadow: false,
-    },
-  },
-
-  /* -------------------------------------------------------------- */
-  /* Stylish shapes — one plate, cut to another silhouette: the      */
-  /* hexagon badge, the cut corners, the chevron's arrow, the        */
-  /* swallowtail's V, the slant, the tab and the arch.               */
-  /* -------------------------------------------------------------- */
-  {
-    name: "Hex badge",
-    group: "Stylish shapes",
-    swatch: "linear-gradient(90deg,#10245e,#2f6fe4)",
-    banner: {
-      shape: "hex",
-      gradient: lin(90, ["#10245e", 0], ["#2f6fe4", 100]),
-      opacity: 1,
-      padX: 5,
-      padY: 13,
-      halo: 20,
-      border: { enabled: true, color: "#ffd633", width: 2, style: "solid", opacity: 0.95 },
-      textGradient: lin(180, ["#fff2a8", 0], ["#fbbf24", 100]),
-      textGlow: 15,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Cut corner card",
-    group: "Stylish shapes",
-    swatch: "linear-gradient(135deg,#0f172a,#334155)",
-    banner: {
-      shape: "notch",
-      gradient: lin(135, ["#0f172a", 0], ["#334155", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
-      halo: 10,
-      border: { enabled: true, color: "#22d3ee", width: 1.5, style: "solid", opacity: 0.85 },
-      textGradient: lin(180, ["#e0f2fe", 0], ["#7dd3fc", 100]),
-      textGlow: 20,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Chevron tag",
-    group: "Stylish shapes",
-    swatch: "linear-gradient(90deg,#be123c,#f43f5e)",
-    banner: {
-      shape: "chevron",
-      gradient: lin(90, ["#be123c", 0], ["#f43f5e", 100]),
-      opacity: 1,
-      padX: 5,
-      padY: 12,
-      halo: 25,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#ffffff", 0], ["#ffe4e6", 100]),
-      textGlow: 0,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Swallowtail flag",
-    group: "Stylish shapes",
-    swatch: "linear-gradient(90deg,#064e3b,#10b981)",
-    banner: {
-      shape: "swallow",
-      gradient: lin(90, ["#064e3b", 0], ["#10b981", 100]),
+      shape: "singleCut",
+      gradient: lin(90, ["#1d4ed8", 0], ["#0ea5e9", 100]),
       opacity: 1,
       padX: 5,
       padY: 12,
       halo: 15,
-      border: { enabled: true, color: "#ffffff", width: 1.5, style: "dashed", opacity: 0.7 },
-      textGradient: lin(180, ["#ecfdf5", 0], ["#a7f3d0", 100]),
-      textGlow: 10,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Slant plate",
-    group: "Stylish shapes",
-    swatch: "linear-gradient(90deg,#5b21b6,#06b6d4)",
-    banner: {
-      shape: "slant",
-      gradient: lin(90, ["#5b21b6", 0], ["#06b6d4", 100]),
-      opacity: 1,
-      padX: 6,
-      padY: 12,
-      halo: 35,
       border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#f5f3ff", 0], ["#a5f3fc", 100]),
-      textGlow: 25,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Sky tab",
-    group: "Stylish shapes",
-    swatch: "linear-gradient(180deg,#38bdf8,#0369a1)",
-    banner: {
-      shape: "tab",
-      radius: 16,
-      gradient: lin(180, ["#38bdf8", 0], ["#0369a1", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
-      halo: 0,
-      border: { enabled: true, color: "#f0f9ff", width: 2, style: "solid", opacity: 0.9 },
+      effects: fx({
+        highlight: { kind: "sheen", intensity: 50, blur: 14, angle: 25, color: "#ffffff" },
+        threeD: { kind: "extrusion", intensity: 35, blur: 0, angle: 135, color: "#0c4a6e" },
+      }),
       textGradient: lin(180, ["#ffffff", 0], ["#e0f2fe", 100]),
       textGlow: 0,
       textShadow: true,
     },
   },
   {
-    name: "Gold arch",
-    group: "Stylish shapes",
-    swatch: "linear-gradient(180deg,#fbbf24,#b45309)",
+    name: "FT Maroon Dashed",
+    group: "Fahad & Shikho Studio",
+    swatch: "linear-gradient(90deg,#4c0519,#881337)",
     banner: {
-      shape: "arch",
-      gradient: lin(180, ["#fbbf24", 0], ["#b45309", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
-      halo: 20,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#451a03", 0], ["#7c2d12", 100]),
-      textGlow: 0,
-      textShadow: false,
-    },
-  },
-
-  /* -------------------------------------------------------------- */
-  /* Multilayer shapes — the plate plus painted plates of its own    */
-  /* behind it: a paper stack, a double frame, an accent block, an   */
-  /* offset outline and a long shadow.                               */
-  /* -------------------------------------------------------------- */
-  {
-    name: "Paper stack",
-    group: "Multilayer shapes",
-    swatch: "linear-gradient(180deg,#faf3e3,#e7d8b8)",
-    banner: {
-      shape: "stack",
-      radius: 10,
-      color: "#f6ead0",
-      gradient: lin(180, ["#faf3e3", 0], ["#e7d8b8", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
-      halo: 0,
-      border: { enabled: true, color: "#a16207", width: 1.5, style: "solid", opacity: 0.7 },
-      textGradient: lin(180, ["#7c2d12", 0], ["#431407", 100]),
-      textGlow: 0,
-      textShadow: false,
-    },
-  },
-  {
-    name: "Neon stack",
-    group: "Multilayer shapes",
-    swatch: "linear-gradient(90deg,#4c1d95,#22d3ee)",
-    banner: {
-      shape: "stack",
-      radius: 14,
-      gradient: lin(90, ["#4c1d95", 0], ["#7c3aed", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
-      halo: 40,
-      border: { enabled: true, color: "#22d3ee", width: 2, style: "solid", opacity: 0.9 },
-      textGradient: lin(180, ["#ecfeff", 0], ["#a5f3fc", 100]),
-      textGlow: 55,
-      textShadow: false,
-    },
-  },
-  {
-    name: "Gold double frame",
-    group: "Multilayer shapes",
-    swatch: "linear-gradient(180deg,#0b1026,#1e1b4b)",
-    banner: {
-      shape: "frame",
-      radius: 12,
-      gradient: lin(180, ["#0b1026", 0], ["#1e1b4b", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
-      halo: 15,
-      border: { enabled: true, color: "#ffd633", width: 2, style: "solid", opacity: 0.95 },
-      textGradient: lin(180, ["#fff2a8", 0], ["#fbbf24", 100]),
-      textGlow: 20,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Mint offset",
-    group: "Multilayer shapes",
-    swatch: "linear-gradient(90deg,#0f766e,#14b8a6)",
-    banner: {
-      shape: "offsetLine",
-      radius: 10,
-      gradient: lin(90, ["#0f766e", 0], ["#14b8a6", 100]),
+      shape: "pill",
+      gradient: lin(90, ["#4c0519", 0], ["#881337", 100]),
       opacity: 1,
       padX: 4,
       padY: 12,
-      halo: 0,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#f0fdfa", 0], ["#ccfbf1", 100]),
+      halo: 15,
+      border: { enabled: true, color: "#fda4af", width: 2, style: "dashed", opacity: 0.85 },
+      effects: fx({
+        shadow: { kind: "drop", x: 0, y: 8, blur: 20, spread: 0, opacity: 45, color: "#000000" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#ffe4e6", 100]),
       textGlow: 0,
       textShadow: true,
     },
   },
   {
-    name: "Amber accent card",
-    group: "Multilayer shapes",
-    swatch: "linear-gradient(90deg,#f59e0b 0 16%,#0a1f44 16%)",
+    name: "Shikho Magenta Pill",
+    group: "Fahad & Shikho Studio",
+    swatch: "linear-gradient(90deg,#ec4899,#6d28d9)",
     banner: {
-      shape: "accent",
-      radius: 8,
-      gradient: lin(90, ["#0a1f44", 0], ["#123a6b", 100]),
-      opacity: 1,
-      padX: 6,
-      padY: 13,
-      halo: 0,
-      border: { enabled: true, color: "#f59e0b", width: 2, style: "solid", opacity: 0.85 },
-      textGradient: lin(180, ["#ffffff", 0], ["#fde68a", 100]),
-      textGlow: 0,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Long shadow blue",
-    group: "Multilayer shapes",
-    swatch: "linear-gradient(135deg,#1d4ed8,#60a5fa)",
-    banner: {
-      shape: "longShadow",
-      radius: 12,
-      gradient: lin(135, ["#1d4ed8", 0], ["#60a5fa", 100]),
+      shape: "pill",
+      gradient: lin(90, ["#ec4899", 0], ["#6d28d9", 100]),
       opacity: 1,
       padX: 4,
-      padY: 13,
-      halo: 0,
-      border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#ffffff", 0], ["#dbeafe", 100]),
-      textGlow: 0,
-      textShadow: true,
-    },
-  },
-
-  /* -------------------------------------------------------------- */
-  /* Multilayer gradient shapes — one plate painted from several     */
-  /* stacked gradients (a sheen, a hard split, a gloss, a stripe     */
-  /* weave), and the stacked plates each wearing a gradient.         */
-  /* -------------------------------------------------------------- */
-  {
-    name: "Sheen royal",
-    group: "Multilayer gradient",
-    swatch: "linear-gradient(115deg,#1e3a8a,#3b82f6 46%,#1e3a8a)",
-    banner: {
-      shape: "sheen",
-      radius: 14,
-      gradient: lin(90, ["#1e3a8a", 0], ["#3b82f6", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
+      padY: 11,
       halo: 25,
-      border: { enabled: true, color: "#bfdbfe", width: 1.5, style: "solid", opacity: 0.7 },
-      textGradient: lin(180, ["#ffffff", 0], ["#dbeafe", 100]),
-      textGlow: 15,
-      textShadow: true,
-    },
-  },
-  {
-    name: "Split sunset",
-    group: "Multilayer gradient",
-    swatch: "linear-gradient(118deg,#fdba74 0 50%,#be123c 50%)",
-    banner: {
-      shape: "split",
-      radius: 10,
-      gradient: lin(90, ["#f97316", 0], ["#ec4899", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
-      halo: 20,
       border: { enabled: false, color: "#ffffff", width: 1 },
-      textGradient: lin(180, ["#fff7ed", 0], ["#ffe4e6", 100]),
+      effects: fx({
+        shadow: { kind: "floating", x: 0, y: 12, blur: 24, spread: 4, opacity: 45, color: "#500724" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#fdf2f8", 100]),
       textGlow: 10,
       textShadow: true,
     },
   },
   {
-    name: "Gloss emerald",
-    group: "Multilayer gradient",
-    swatch: "linear-gradient(180deg,#a7f3d0,#047857 60%,#064e3b)",
+    name: "Shikho Indigo Amber",
+    group: "Fahad & Shikho Studio",
+    swatch: "linear-gradient(90deg,#1e0b5e,#31108f)",
     banner: {
-      shape: "gloss",
-      radius: 16,
-      gradient: lin(180, ["#047857", 0], ["#064e3b", 100]),
+      shape: "rounded",
+      radius: 14,
+      gradient: lin(90, ["#1e0b5e", 0], ["#31108f", 100]),
       opacity: 1,
       padX: 4,
       padY: 13,
-      halo: 20,
-      border: { enabled: true, color: "#d1fae5", width: 1.5, style: "solid", opacity: 0.6 },
-      textGradient: lin(180, ["#f0fdf4", 0], ["#a7f3d0", 100]),
-      textGlow: 15,
+      halo: 15,
+      border: { enabled: true, color: "#facc15", width: 2, style: "solid", opacity: 0.95 },
+      effects: fx({
+        shadow: { kind: "drop", x: 0, y: 8, blur: 20, spread: 0, opacity: 45, color: "#0f0729" },
+      }),
+      textGradient: lin(180, ["#fef08a", 0], ["#facc15", 100]),
+      textGlow: 10,
+      textShadow: true,
+    },
+  },
+
+  /* -------------------------------------------------------------- */
+  /* 10MS & Bondi Classroom — signature crimson impact, sky bars,   */
+  /* Bangla emerald & gold, and Bondi Pathshala cream chapter cards.*/
+  /* -------------------------------------------------------------- */
+  {
+    name: "10MS Crimson Impact",
+    group: "10MS & Bondi Classroom",
+    swatch: "linear-gradient(90deg,#ef4444,#dc2626,#b91c1c)",
+    banner: {
+      shape: "rect",
+      radius: 6,
+      gradient: lin(90, ["#ef4444", 0], ["#dc2626", 60], ["#b91c1c", 100]),
+      opacity: 1,
+      padX: 5,
+      padY: 12,
+      halo: 0,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        shadow: { kind: "hard", x: 7, y: 7, blur: 0, spread: 0, opacity: 80, color: "#450a0a" },
+        shape: { skew: -10 },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#fef2f2", 100]),
+      textGlow: 0,
       textShadow: true,
     },
   },
   {
-    name: "Striped steel",
-    group: "Multilayer gradient",
-    swatch: "repeating-linear-gradient(115deg,#475569 0 6px,#1e293b 6px 12px)",
+    name: "10MS Sky Lecture",
+    group: "10MS & Bondi Classroom",
+    swatch: "linear-gradient(90deg,#38bdf8,#0284c7)",
     banner: {
-      shape: "stripes",
-      radius: 8,
-      gradient: lin(90, ["#1e293b", 0], ["#475569", 100]),
+      shape: "rounded",
+      radius: 12,
+      gradient: lin(90, ["#38bdf8", 0], ["#0284c7", 100]),
       opacity: 1,
       padX: 4,
       padY: 13,
       halo: 0,
-      border: { enabled: true, color: "#22d3ee", width: 2, style: "solid", opacity: 0.8 },
+      border: { enabled: true, color: "#1e3a8a", width: 2.5, style: "solid", opacity: 0.95 },
+      effects: fx({
+        shadow: { kind: "offset", x: 0, y: 6, blur: 0, spread: 0, opacity: 85, color: "#1e3a8a" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#f0f9ff", 100]),
+      textGlow: 0,
+      textShadow: true,
+    },
+  },
+  {
+    name: "10MS Emerald & Gold",
+    group: "10MS & Bondi Classroom",
+    swatch: "linear-gradient(90deg,#0b6b33,#15803d)",
+    banner: {
+      shape: "rounded",
+      radius: 12,
+      gradient: lin(90, ["#0b6b33", 0], ["#15803d", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 10,
+      border: { enabled: true, color: "#ffd633", width: 2, style: "solid", opacity: 0.95 },
+      effects: fx({
+        shadow: { kind: "drop", x: 0, y: 8, blur: 18, spread: 0, opacity: 45, color: "#052e16" },
+      }),
+      textGradient: lin(180, ["#fef08a", 0], ["#ffd633", 100]),
+      textGlow: 10,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Bondi Cream Card",
+    group: "10MS & Bondi Classroom",
+    swatch: "linear-gradient(180deg,#fffdf7,#fef3c7)",
+    banner: {
+      shape: "rounded",
+      radius: 10,
+      gradient: lin(180, ["#fffdf7", 0], ["#fef3c7", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 0,
+      border: { enabled: true, color: "#f59e0b", width: 1.5, style: "solid", opacity: 0.65 },
+      effects: fx({
+        shadow: { kind: "floating", x: 0, y: 12, blur: 24, spread: 4, opacity: 40, color: "#000000" },
+      }),
+      textGradient: lin(180, ["#312e81", 0], ["#1e1b4b", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Bondi Crimson Card",
+    group: "10MS & Bondi Classroom",
+    swatch: "linear-gradient(180deg,#ffffff,#fff1f2)",
+    banner: {
+      shape: "rounded",
+      radius: 10,
+      gradient: lin(180, ["#ffffff", 0], ["#fff1f2", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 0,
+      border: { enabled: true, color: "#e11d48", width: 2, style: "solid", opacity: 0.85 },
+      effects: fx({
+        shadow: { kind: "drop", x: 0, y: 8, blur: 18, spread: 0, opacity: 40, color: "#4c0519" },
+      }),
+      textGradient: lin(180, ["#be123c", 0], ["#881337", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+
+  /* -------------------------------------------------------------- */
+  /* Smartboard & Chalk — blackboard grids, highlighter strokes,    */
+  /* tech cyber grids and stacked paper lecture sheets.             */
+  /* -------------------------------------------------------------- */
+  {
+    name: "Chalkboard Grid",
+    group: "Smartboard & Chalk",
+    swatch: "linear-gradient(180deg,#12472f,#0b291a)",
+    banner: {
+      shape: "rounded",
+      radius: 12,
+      fillMode: "pattern",
+      pattern: { kind: "grid", color: "#1a5c3c", back: "#0b291a", scale: 55 },
+      gradient: noGrad(),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 0,
+      border: { enabled: true, color: "#d1fae5", width: 2, style: "dashed", opacity: 0.75 },
+      effects: fx({
+        shadow: { kind: "inner", x: 0, y: 4, blur: 16, spread: 0, opacity: 50, color: "#022c22" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#d1fae5", 100]),
+      textGlow: 0,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Yellow Highlighter",
+    group: "Smartboard & Chalk",
+    swatch: "linear-gradient(90deg,#fef08a,#fde047,#facc15)",
+    banner: {
+      shape: "highlightStrip",
+      gradient: lin(90, ["#fef08a", 0], ["#fde047", 50], ["#facc15", 100]),
+      opacity: 1,
+      padX: 3,
+      padY: 11,
+      halo: 0,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      effects: fx({
+        shape: { skew: -6 },
+      }),
+      textGradient: lin(180, ["#0f172a", 0], ["#1e293b", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+  {
+    name: "Cyber Grid Navy",
+    group: "Smartboard & Chalk",
+    swatch: "linear-gradient(135deg,#071126,#0f2454)",
+    banner: {
+      shape: "notch",
+      gradient: lin(135, ["#071126", 0], ["#0f2454", 100]),
+      opacity: 1,
+      padX: 5,
+      padY: 13,
+      halo: 15,
+      border: {
+        enabled: true,
+        color: "#22d3ee",
+        width: 1.5,
+        style: "solid",
+        opacity: 0.9,
+        glow: { enabled: true, size: 10, intensity: 60, color: "#22d3ee" },
+      },
+      effects: fx({
+        decor: { kind: "grid", intensity: 28, color: "#38bdf8" },
+      }),
       textGradient: lin(180, ["#ecfeff", 0], ["#67e8f9", 100]),
       textGlow: 20,
       textShadow: true,
     },
   },
   {
-    name: "Stacked gradient",
-    group: "Multilayer gradient",
-    swatch: "linear-gradient(90deg,#4c1d95,#06b6d4)",
+    name: "Lecture Sheet Stack",
+    group: "Smartboard & Chalk",
+    swatch: "linear-gradient(180deg,#fffdf5,#f3e8d2)",
     banner: {
-      shape: "gradStack",
-      radius: 14,
-      gradient: lin(90, ["#4c1d95", 0], ["#06b6d4", 100]),
+      shape: "stack",
+      radius: 10,
+      color: "#f3e8d2",
+      gradient: lin(180, ["#fffdf5", 0], ["#f3e8d2", 100]),
       opacity: 1,
       padX: 4,
       padY: 13,
-      halo: 30,
-      border: { enabled: true, color: "#ffffff", width: 1.5, style: "solid", opacity: 0.55 },
-      textGradient: lin(180, ["#ffffff", 0], ["#ddd6fe", 100]),
+      halo: 0,
+      border: { enabled: true, color: "#1e3a8a", width: 1.5, style: "solid", opacity: 0.85 },
+      textGradient: lin(180, ["#0f172a", 0], ["#1e3a8a", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+
+  /* -------------------------------------------------------------- */
+  /* Layered & Cut Badges — double merit frames, 3D extruded slabs, */
+  /* pointed sheen chevrons and brushed metallic chrome plates.     */
+  /* -------------------------------------------------------------- */
+  {
+    name: "Merit Double Frame",
+    group: "Layered & Cut Badges",
+    swatch: "linear-gradient(180deg,#090d1e,#172554)",
+    banner: {
+      shape: "frame",
+      radius: 12,
+      gradient: lin(180, ["#090d1e", 0], ["#172554", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 15,
+      border: { enabled: true, color: "#ffd633", width: 2, style: "solid", opacity: 0.95 },
+      effects: fx({
+        glow: { kind: "soft", intensity: 40, blur: 10, color: "#f59e0b" },
+      }),
+      textGradient: lin(180, ["#fff2a8", 0], ["#f59e0b", 100]),
+      textGlow: 15,
+      textShadow: true,
+    },
+  },
+  {
+    name: "3D Physics Slab",
+    group: "Layered & Cut Badges",
+    swatch: "linear-gradient(180deg,#2563eb,#1d4ed8)",
+    banner: {
+      shape: "plate3d",
+      radius: 12,
+      gradient: lin(180, ["#2563eb", 0], ["#1d4ed8", 100]),
+      opacity: 1,
+      padX: 4,
+      padY: 13,
+      halo: 10,
+      border: { enabled: true, color: "#93c5fd", width: 1.5, style: "solid", opacity: 0.75 },
+      effects: fx({
+        highlight: { kind: "edgeHighlight", intensity: 50, blur: 0, angle: 0, color: "#ffffff" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#dbeafe", 100]),
+      textGlow: 0,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Royal Sheen Chevron",
+    group: "Layered & Cut Badges",
+    swatch: "linear-gradient(90deg,#0f766e,#0284c7)",
+    banner: {
+      shape: "chevron",
+      gradient: lin(90, ["#0f766e", 0], ["#0284c7", 100]),
+      opacity: 1,
+      padX: 5,
+      padY: 12,
+      halo: 15,
+      border: { enabled: true, color: "#a5f3fc", width: 1.5, style: "solid", opacity: 0.75 },
+      effects: fx({
+        highlight: { kind: "sheen", intensity: 55, blur: 14, angle: 25, color: "#ffffff" },
+      }),
+      textGradient: lin(180, ["#ffffff", 0], ["#ecfeff", 100]),
+      textGlow: 0,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Metallic Chrome Plate",
+    group: "Layered & Cut Badges",
+    swatch: "linear-gradient(120deg,#f1f5f9,#94a3b8,#e2e8f0)",
+    banner: {
+      shape: "cutCorner",
+      fillMode: "metallic",
+      metallic: { color: "#cbd5e1", angle: 120, polish: 70 },
+      gradient: noGrad(),
+      opacity: 1,
+      padX: 5,
+      padY: 13,
+      halo: 0,
+      border: { enabled: true, color: "#475569", width: 2, style: "solid", opacity: 0.9 },
+      effects: fx({
+        bevel: { kind: "bevel", intensity: 40, blur: 2, angle: 0, color: "#ffffff" },
+      }),
+      textGradient: lin(180, ["#0f172a", 0], ["#1e293b", 100]),
+      textGlow: 0,
+      textShadow: false,
+    },
+  },
+
+  /* -------------------------------------------------------------- */
+  /* Minimal & Glow — ambient stage spotlights, underlined rules    */
+  /* and clean bare typography over the slide canvas.               */
+  /* -------------------------------------------------------------- */
+  {
+    name: "Spotlight Stage Glow",
+    group: "Minimal & Glow",
+    swatch: "radial-gradient(circle,#1e3a8a,transparent 70%)",
+    banner: {
+      shape: "glow",
+      color: "#1e3a8a",
+      glow: 72,
+      halo: 25,
+      gradient: noGrad(),
+      padX: 4,
+      padY: 13,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      textGradient: lin(180, ["#fff2a8", 0], ["#fbbf24", 100]),
       textGlow: 25,
       textShadow: true,
     },
   },
   {
-    name: "Maroon sheen",
-    group: "Multilayer gradient",
-    swatch: "linear-gradient(115deg,#7f1d1d,#dc2626 46%,#7f1d1d)",
+    name: "Gold Underline Rule",
+    group: "Minimal & Glow",
+    swatch: "linear-gradient(90deg,transparent 0 20%,#fbbf24 50%,transparent 80%)",
     banner: {
-      shape: "sheen",
-      radius: 12,
-      gradient: lin(90, ["#7f1d1d", 0], ["#dc2626", 100]),
-      opacity: 1,
-      padX: 4,
-      padY: 13,
-      halo: 20,
-      border: { enabled: true, color: "#ffd633", width: 2, style: "solid", opacity: 0.9 },
-      textGradient: lin(180, ["#fff2a8", 0], ["#fbbf24", 100]),
-      textGlow: 15,
+      shape: "underline",
+      color: "#f59e0b",
+      gradient: lin(90, ["#fbbf24", 0], ["#f59e0b", 55], ["#ef4444", 100]),
+      radius: 14,
+      padX: 2,
+      padY: 11,
+      halo: 15,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      textGradient: lin(180, ["#ffffff", 0], ["#fef3c7", 100]),
+      textGlow: 10,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Aqua Underline Rule",
+    group: "Minimal & Glow",
+    swatch: "linear-gradient(90deg,transparent 0 20%,#22d3ee 50%,transparent 80%)",
+    banner: {
+      shape: "underline",
+      color: "#06b6d4",
+      gradient: lin(90, ["#22d3ee", 0], ["#0ea5e9", 100]),
+      radius: 14,
+      padX: 2,
+      padY: 11,
+      halo: 15,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      textGradient: lin(180, ["#ffffff", 0], ["#cffafe", 100]),
+      textGlow: 12,
+      textShadow: true,
+    },
+  },
+  {
+    name: "Minimal (none)",
+    group: "Minimal & Glow",
+    swatch: "transparent",
+    banner: {
+      shape: "none",
+      halo: 0,
+      border: { enabled: false, color: "#ffffff", width: 1 },
+      textGradient: { enabled: false, type: "linear", angle: 180, stops: [{ color: "#fff2a8", at: 0 }, { color: "#ffb800", at: 100 }] },
+      textGlow: 25,
       textShadow: true,
     },
   },
 ];
+
+/** build a full BannerEffects patch with clean defaults for any preset */
+function fx(part: Omit<Partial<BannerEffects>, "shape"> & { shape?: Partial<BannerShapeFx> }): BannerEffects {
+  return {
+    ...part,
+    shape: { ...DEFAULT_BANNER_EFFECTS.shape, ...(part.shape ?? {}) },
+  };
+}
 
 /** a linear gradient literal for the preset gallery */
 function lin(angle: number, ...stops: [string, number][]): Gradient {
@@ -4043,27 +3956,59 @@ function noGrad(): Gradient {
 }
 
 /**
- * What a design preset writes: its own channels over the current plate, plus
- * the plate's *place* handed back to auto — a preset is a whole look, so a size
- * or nudge left over from the last one must not follow it around.
+ * What a design preset writes: a clean reset of plate paint, outline,
+ * independent corners and effects dressed with the preset's own channels,
+ * plus the plate's *place* handed back to auto — a preset is a whole look,
+ * so leftovers from an earlier look never leak across.
  *
  * The plate's width is the one thing a preset does not touch: it dresses the
  * 630 px chip, it does not resize it, so the shape stays 630 px across after
- * any of the fifty-one looks. A width the teacher set by hand survives too,
- * and the height goes back to hugging the line.
+ * any of the presets. A width the teacher set by hand survives too, and the
+ * height goes back to hugging the line.
  */
 export function bannerPresetPatch(
   current: BannerSettings,
   preset: BannerPreset,
 ): Partial<BannerSettings> {
+  const fresh = cloneBanner(DEFAULT_BANNER);
+  const pb = preset.banner;
+  const gradColor = pb.gradient?.enabled && pb.gradient.stops[0]?.color;
+  const fillTint =
+    pb.fillMode === "glass"
+      ? pb.glass?.color
+      : pb.fillMode === "metallic"
+        ? pb.metallic?.color
+        : pb.fillMode === "pattern"
+          ? pb.pattern?.back || pb.pattern?.color
+          : undefined;
+  const color = pb.color ?? (gradColor || fillTint || fresh.color);
+  const baseEffects = cloneBanner(DEFAULT_BANNER).effects!;
   return {
-    ...JSON.parse(JSON.stringify(current)) as BannerSettings,
+    ...fresh,
     size: { w: bannerPlateWidth(current) },
     pos: undefined,
-    ...preset.banner,
-    // a preset paints the whole plate: the special fills (glass · metallic ·
-    // pattern) step aside so the preset's own colour / gradient is worn
-    fillMode: undefined,
+    transparentSides: undefined,
+    cornersIndependent: undefined,
+    corners: undefined,
+    ...pb,
+    color,
+    fillMode: pb.fillMode,
+    glass: pb.glass ? { ...fresh.glass!, ...pb.glass } : fresh.glass,
+    metallic: pb.metallic ? { ...fresh.metallic!, ...pb.metallic } : fresh.metallic,
+    pattern: pb.pattern ? { ...fresh.pattern!, ...pb.pattern } : fresh.pattern,
+    border: {
+      ...fresh.border,
+      glow: undefined,
+      gradient: undefined,
+      ...(pb.border ?? {}),
+    },
+    effects: pb.effects
+      ? {
+          ...baseEffects,
+          ...pb.effects,
+          shape: { ...DEFAULT_BANNER_EFFECTS.shape, ...(pb.effects.shape ?? {}) },
+        }
+      : baseEffects,
   };
 }
 
