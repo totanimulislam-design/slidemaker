@@ -4,12 +4,14 @@ import {
   BannerBorderPanel,
   BannerEffectsPanel,
   BannerFillPanel,
+  BannerPartsPanel,
   BannerPositionPanel,
   BannerPresetPanel,
   BannerShapePanel,
   BannerSizePanel,
   BannerTransparencyPanel,
   bannerOf,
+  type BannerCardName,
 } from "./BannerDesignPanel";
 import { boxStack } from "../lib/boxFonts";
 import ElementPosition from "./ElementPosition";
@@ -69,6 +71,27 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
   const css = bannerCss(b, theme.titleColor);
 
   const cards = { theme, banner: b, setBanner: set, documentColors: titleBackgroundDocumentColors(theme, b) };
+  /**
+   * The parts card's **Change** walks down this panel: every card below wears
+   * `data-banner-card`, so a part opens the card that owns it instead of the
+   * user hunting for it. An effect part goes one step further and lights its
+   * own category inside the Effects card. The target is scrolled into view and
+   * flashed.
+   */
+  const flash = (el: HTMLElement | null) => {
+    if (!el) return;
+    el.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    el.classList.add("banner-card-flash");
+    window.setTimeout(() => el.classList.remove("banner-card-flash"), 900);
+  };
+  const openCard = (card: BannerCardName, part?: string) => {
+    if (typeof document === "undefined") return;
+    const cardEl = document.querySelector<HTMLElement>(`[data-banner-card="${card}"]`);
+    const group = part === "distortion" ? "shape" : part;
+    const target =
+      card === "Banner effects" && group ? cardEl?.querySelector<HTMLElement>(`[data-banner-fx-group="${group}"]`) ?? cardEl : cardEl;
+    flash(target);
+  };
 
   return (
     <div className="space-y-4">
@@ -122,14 +145,35 @@ export default function TitleBackgroundPanel({ theme, header, setTheme, setHeade
       />
 
       {/* ------------------------- the plate, channel by channel ------------- */}
-      <BannerPresetPanel {...cards} />
-      <BannerShapePanel {...cards} />
-      <BannerEffectsPanel {...cards} />
-      <BannerFillPanel {...cards} />
-      <BannerBorderPanel {...cards} />
-      <BannerTransparencyPanel banner={b} setBanner={set} />
-      <BannerSizePanel {...cards} />
-      <BannerPositionPanel banner={b} setBanner={set} />
+      <div data-banner-card="Design presets">
+        <BannerPresetPanel {...cards} />
+      </div>
+      {/* every part of the design, one row each — removable and one click from
+          the card that changes it */}
+      <div data-banner-card="Design parts">
+        <BannerPartsPanel {...cards} onEdit={openCard} />
+      </div>
+      <div data-banner-card="Banner shape">
+        <BannerShapePanel {...cards} />
+      </div>
+      <div data-banner-card="Banner effects">
+        <BannerEffectsPanel {...cards} />
+      </div>
+      <div data-banner-card="Banner fill">
+        <BannerFillPanel {...cards} />
+      </div>
+      <div data-banner-card="Banner border">
+        <BannerBorderPanel {...cards} />
+      </div>
+      <div data-banner-card="Banner transparency">
+        <BannerTransparencyPanel banner={b} setBanner={set} />
+      </div>
+      <div data-banner-card="Banner size">
+        <BannerSizePanel {...cards} />
+      </div>
+      <div data-banner-card="Banner position">
+        <BannerPositionPanel banner={b} setBanner={set} />
+      </div>
 
       <ElementPosition theme={theme} id="title" patchLayout={patchLayout} label="Title block" />
 

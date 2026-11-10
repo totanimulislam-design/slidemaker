@@ -2,12 +2,17 @@
  * Title background ▸ Design presets — the studio collection.
  *
  * The original sixty academy / platform looks live in `lib/banner.ts`. This
- * module adds **120 more one-click title plates**, arranged as twelve design
- * families of ten colourways each. A family is a complete recipe: silhouette,
- * paint (solid · linear · radial · mesh · conic · reflected · glass · metallic
- * · pattern), outline, effects, corners, padding and heading accents. Every
- * palette changes the recipe's colours, angle, radius and finishing values, so
- * all 120 looks have their own fingerprint as well as their own live tile.
+ * module adds **twelve studio designs**, each carrying **ten colourways** — 120
+ * one-click title plates under twelve gallery headings. A family is a complete
+ * recipe: silhouette, paint (solid · linear · radial · mesh · conic · reflected
+ * · glass · metallic · pattern), outline, effects, corners, padding and heading
+ * accents. Every palette changes the recipe's colours, angle, radius and
+ * finishing values, so all 120 looks have their own fingerprint.
+ *
+ * A family is published as ONE preset, not ten: the gallery shows each design
+ * once, with its colourways as dots under the tile, so the same plate can never
+ * fill the shelf twice. Each dot applies exactly the look the palette used to
+ * publish on its own, silhouette and all.
  *
  * The recipes deliberately use the same `BannerSettings` channels the cards
  * edit — nothing here is a special renderer. `bannerPresetPatch()` applies one
@@ -27,7 +32,7 @@ import {
   type Gradient,
   type GradientType,
 } from "./types";
-import type { BannerPreset, BannerPresetGroup } from "./banner";
+import type { BannerPreset, BannerPresetColourway, BannerPresetGroup } from "./banner";
 
 type Stop = [string, number];
 
@@ -559,15 +564,48 @@ export const STUDIO_TITLE_GROUP_HINTS: Record<string, string> = Object.fromEntri
   STUDIO_RECIPES.map((r) => [r.group, r.hint]),
 ) as Record<string, string>;
 
-/** 120 distinct one-click title plates, ten in each new family */
-export const STUDIO_TITLE_PRESETS: BannerPreset[] = STUDIO_RECIPES.flatMap((recipe, recipeIndex) =>
-  STUDIO_PALETTES.map((palette, paletteIndex): BannerPreset => ({
-    name: `${palette.name} ${recipe.label}`,
-    group: recipe.group,
+/** the palette a family leads with — rotated so no two neighbours look alike */
+const leadPaletteIndex = (recipeIndex: number) => recipeIndex % STUDIO_PALETTES.length;
+
+/** the ten colourways a recipe can wear — the very looks it used to publish */
+function studioColourways(recipe: StudioRecipe, recipeIndex: number): BannerPresetColourway[] {
+  return STUDIO_PALETTES.map((palette, paletteIndex) => ({
+    name: palette.name,
     swatch: `linear-gradient(${90 + recipeIndex * 13}deg,${palette.a},${palette.b},${palette.c})`,
-    hint: `${recipe.hint} · ${recipe.keywords} · ${palette.name}`,
     banner: recipe.build(palette, paletteIndex, recipe.shapes[paletteIndex]),
-  })),
-);
+  }));
+}
+
+/**
+ * Twelve designs — one tile per family, never the same plate twice.
+ *
+ * The collection used to publish every colourway as its own preset, so the
+ * gallery carried 120 tiles that were twelve designs repeated ten times over.
+ * A family is now ONE preset carrying its ten colourways (`colourways`), which
+ * the tile shows as colour dots: the same one-click looks, filed by design
+ * instead of by paint, and the designer can recolour the design they chose
+ * without wading through nine near-twins of it. Every dot still applies the
+ * exact plate it used to apply, silhouette and all.
+ */
+export const STUDIO_TITLE_PRESETS: BannerPreset[] = STUDIO_RECIPES.map((recipe, recipeIndex): BannerPreset => {
+  const colourways = studioColourways(recipe, recipeIndex);
+  const lead = colourways[leadPaletteIndex(recipeIndex)];
+  return {
+    name: recipe.label,
+    group: recipe.group,
+    swatch: lead.swatch,
+    // every palette name stays searchable, exactly as when each colourway was
+    // a tile of its own — searching "Lagoon" still finds all twelve designs
+    hint: `${recipe.hint} · ${recipe.keywords} · ${STUDIO_PALETTES.map((p) => p.name).join(" · ")}`,
+    banner: lead.banner,
+    colourways,
+  };
+});
 
 export const STUDIO_TITLE_PRESET_COUNT = STUDIO_TITLE_PRESETS.length;
+
+/** how many one-click looks the twelve designs carry between them (120) */
+export const STUDIO_TITLE_COLOURWAY_COUNT = STUDIO_TITLE_PRESETS.reduce(
+  (n, preset) => n + (preset.colourways?.length ?? 0),
+  0,
+);

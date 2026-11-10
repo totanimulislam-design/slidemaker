@@ -139,6 +139,17 @@ input[type="text"] {
   100% { background-position: -120% 0; }
 }
 
+/* the card a Design part's "Change" walked to — a short amber pulse, so the
+   eye lands on the controls the part opened */
+.banner-card-flash {
+  animation: bannerCardFlash 0.9s ease-out 1;
+  border-radius: 12px;
+}
+@keyframes bannerCardFlash {
+  0% { box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.8); }
+  100% { box-shadow: 0 0 0 2px rgba(251, 191, 36, 0); }
+}
+
 /* ------------------------------------------------------------------ *
  * The slide the editor is showing wears a moving gradient border.
  *
